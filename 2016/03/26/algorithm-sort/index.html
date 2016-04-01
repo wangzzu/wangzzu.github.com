@@ -1,0 +1,1148 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="java,algorithm," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="排序算法是算法中基础的部分，也是面试中经常被问到的地方。因此，根据对《算法》和《算法导论》关于这部分的学习，做一下总结，以后再遇到排序方面的问题就可以直接看一下博文就行了（文中算法用java实现）。
+
+
+选择排序
+插入排序
+希尔排序
+冒泡排序
+归并排序
+快速排序
+堆排序
+计数排序
+基数排序
+桶排序
+
+
+性能评估指标
+运行时间：排序的成本模型：在研究排序算法时，需要计算比较和交换的数量，对于不交换元">
+<meta property="og:type" content="article">
+<meta property="og:title" content="排序算法总结">
+<meta property="og:url" content="http://wangzzu.github.io/2016/03/26/algorithm-sort/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="排序算法是算法中基础的部分，也是面试中经常被问到的地方。因此，根据对《算法》和《算法导论》关于这部分的学习，做一下总结，以后再遇到排序方面的问题就可以直接看一下博文就行了（文中算法用java实现）。
+
+
+选择排序
+插入排序
+希尔排序
+冒泡排序
+归并排序
+快速排序
+堆排序
+计数排序
+基数排序
+桶排序
+
+
+性能评估指标
+运行时间：排序的成本模型：在研究排序算法时，需要计算比较和交换的数量，对于不交换元">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/Selection_sort_animation.gif">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/Insertion_sort_animation.gif">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/shell.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/Sorting_shellsort_anim.gif">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/Bubble_sort_animation.gif">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= \frac{N*\lg{N}}{2}">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= N\lg{N}">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= 6N*lg{N}">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= \lfloor\frac{n}{2}\rfloor">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= \lfloor\frac{n}{4}\rfloor">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= \frac{N*\lg{N}}{2}">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= N*\lg{N}">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= 6N*\lg{N}">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/Sorting_quicksort_anim.gif">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= \frac{n^2}{2}">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= 2i">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= \lfloor\frac{i}{2}\rfloor">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/Sorting_heapsort_anim.gif">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n \lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-03-26-sort/bucketSort.jpg">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(k*n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(1)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(1)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n \lg{n}) \~ O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^1.3)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(1)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(1)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(\lg{n}) \~ O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(1)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(kn)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
+<meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(k)">
+<meta property="og:updated_time" content="2016-04-01T15:55:22.478Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="排序算法总结">
+<meta name="twitter:description" content="排序算法是算法中基础的部分，也是面试中经常被问到的地方。因此，根据对《算法》和《算法导论》关于这部分的学习，做一下总结，以后再遇到排序方面的问题就可以直接看一下博文就行了（文中算法用java实现）。
+
+
+选择排序
+插入排序
+希尔排序
+冒泡排序
+归并排序
+快速排序
+堆排序
+计数排序
+基数排序
+桶排序
+
+
+性能评估指标
+运行时间：排序的成本模型：在研究排序算法时，需要计算比较和交换的数量，对于不交换元">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/2016-03-26-sort/Selection_sort_animation.gif">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> 排序算法总结 | Matt's Blog </title>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                排序算法总结
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-03-26T00:00:00+08:00" content="2016-03-26">
+              2016-03-26
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/algorithm/" itemprop="url" rel="index">
+                    <span itemprop="name">algorithm</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2016/03/26/algorithm-sort/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/03/26/algorithm-sort/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>排序算法是算法中基础的部分，也是面试中经常被问到的地方。因此，根据对《算法》和《算法导论》关于这部分的学习，做一下总结，以后再遇到排序方面的问题就可以直接看一下博文就行了（文中算法用java实现）。</p>
+<blockquote>
+<ul>
+<li>选择排序</li>
+<li>插入排序</li>
+<li>希尔排序</li>
+<li>冒泡排序</li>
+<li>归并排序</li>
+<li>快速排序</li>
+<li>堆排序</li>
+<li>计数排序</li>
+<li>基数排序</li>
+<li>桶排序</li>
+</ul>
+</blockquote>
+<h2 id="性能评估指标"><a href="#性能评估指标" class="headerlink" title="性能评估指标"></a>性能评估指标</h2><ol>
+<li>运行时间：<strong>排序的成本模型</strong>：在研究排序算法时，需要计算比较和交换的数量，对于不交换元素的算法，我们会计算访问数组的次数。</li>
+<li>额外的内存使用：排序算法分为两种：除了函数调用的栈和固定数目的实例变量之外无需额外内存的<code>原地排序算法</code>，以及需要额外内存空间存储另一份数组副本的其他排序算法。</li>
+</ol>
+<p>代码中使用基本方法的实现如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">less</span><span class="params">(Comparable v, Comparable w)</span></span>&#123;</span><br><span class="line">    <span class="keyword">return</span> v.compareTo(w) &lt; <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">exch</span><span class="params">(Comparable[] a, <span class="keyword">int</span> i, <span class="keyword">int</span> j)</span></span>&#123;</span><br><span class="line">    Comparable tmp = a[i];</span><br><span class="line">    a[i] = a[j];</span><br><span class="line">    a[j] = a[i];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">show</span><span class="params">(Comparable[] a)</span></span>&#123;</span><br><span class="line">    <span class="keyword">for</span>(<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; a.length; i++)</span><br><span class="line">        System.out.print(a[i] + <span class="string">" "</span>)</span><br><span class="line">    System.out.println();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//默认按升序排列</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">isSorted</span><span class="params">(Comparable[] a)</span></span>&#123;</span><br><span class="line">    <span class="keyword">for</span>(<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; a.length; i++)&#123;</span><br><span class="line">        <span class="keyword">if</span>(less(a[i],a[i-<span class="number">1</span>]))</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="一、选择排序"><a href="#一、选择排序" class="headerlink" title="一、选择排序"></a>一、选择排序</h2><h4 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h4><p>首先在未排序序列中找到最小（大）元素，存放到排序序列的起始位置，然后，再从剩余未排序元素中继续寻找最小（大）元素，然后放到已排序序列的末尾。以此类推，直到所有元素均排序完毕。</p>
+<h4 id="步骤"><a href="#步骤" class="headerlink" title="步骤"></a>步骤</h4><ol>
+<li>先找到数组中最小的那个元素；</li>
+<li>将它和数组中第一个元素交换位置（如果第一个元素是自己，和自己交换）；</li>
+<li>在剩下的数组中找到最小的元素，将它和第二个元素交换位置，以此类推。</li>
+</ol>
+<h4 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(Comparable[] a)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> N = a.length;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; N; i++) &#123;</span><br><span class="line">        <span class="keyword">int</span> min = i;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> j = i + <span class="number">1</span>; j &lt; N; j++) &#123;</span><br><span class="line">            <span class="keyword">if</span> (less(a[j], a[min]))</span><br><span class="line">                min = j;</span><br><span class="line">        &#125;</span><br><span class="line">        exch(a, i, min);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/Selection.java" target="_blank" rel="external">Selection.java</a></p>
+<p>排序效果如下图所示（原图来自<a href="https://zh.wikipedia.org/wiki/%E9%80%89%E6%8B%A9%E6%8E%92%E5%BA%8F" target="_blank" rel="external">维基百科之选择排序</a>）</p>
+<p><img src="/images/2016-03-26-sort/Selection_sort_animation.gif" alt="selection_sort"></p>
+<h4 id="性能分析"><a href="#性能分析" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
+<li>复杂度分析：<ol>
+<li>对于长度为N的数组，选择排序需要大约<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$\frac{N^2}{2}$</script>次比较和<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$N$</script>次交换；</li>
+<li>最好的情况：已经有序，交换0次；</li>
+<li>最坏的情况：逆序，交换<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$N-1$</script>次。</li>
+</ol>
+</li>
+<li>特点：<ol>
+<li>运行时间与输入无关，即使对于一个有序数组，依然需要扫描全部元素而且运行时间与随机数组一样；</li>
+<li>数据移动是最少的。交换次数与数组大小成线性关系。</li>
+</ol>
+</li>
+</ul>
+<h2 id="二、插入排序"><a href="#二、插入排序" class="headerlink" title="二、插入排序"></a>二、插入排序</h2><h4 id="原理-1"><a href="#原理-1" class="headerlink" title="原理"></a>原理</h4><p>通过构建有序序列，对于未排序数据，在已排序序列中从后向前扫描，找到相应位置并插入。</p>
+<h4 id="步骤-1"><a href="#步骤-1" class="headerlink" title="步骤"></a>步骤</h4><ol>
+<li>从第一个元素开始，该元素可以认为已经被排序；</li>
+<li>取出下一个元素，在已经排序的元素序列中从后向前扫描；</li>
+<li>如果被扫描的元素（已排序）大于新元素，将该元素后移一位；</li>
+<li>重复步骤3，直到找到已排序的元素小于或者等于新元素的位置；</li>
+<li>将新元素插入到该位置后；</li>
+<li>重复步骤2~5。</li>
+</ol>
+<h4 id="实现-1"><a href="#实现-1" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(Comparable[] a)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> N = a.length;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; N; i++) &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> j = i; j &gt; <span class="number">0</span>; j--) &#123;</span><br><span class="line">            <span class="keyword">if</span>(less(a[j], a[j - <span class="number">1</span>]))</span><br><span class="line">                exch(a, j, j - <span class="number">1</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/Insertion.java" target="_blank" rel="external">Insertion.java</a></p>
+<p>排序效果如下图所示（原图来自<a href="https://zh.wikipedia.org/wiki/%E6%8F%92%E5%85%A5%E6%8E%92%E5%BA%8F" target="_blank" rel="external">维基百科之插入排序</a>）</p>
+<p><img src="/images/2016-03-26-sort/Insertion_sort_animation.gif" alt="Insertion_sort"></p>
+<h4 id="性能分析-1"><a href="#性能分析-1" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
+<li>复杂度分析：<ol>
+<li>平均来说，插入排序的复杂度为<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$O(n^2)$</script> ;</li>
+<li>最好的情况：已经有序，只需要比较操作<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$N-1$</script>次即可；</li>
+<li>最坏的情况：逆序，需要比较<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$\frac{N(N-1)}{2}$</script>次。</li>
+</ol>
+</li>
+<li>特点：<ol>
+<li>插入排序很适合部分有序的数组和规模较小的数组；</li>
+<li>插入排序不适合对于数据量比较大的排序应用.</li>
+</ol>
+</li>
+</ul>
+<h2 id="三、希尔排序"><a href="#三、希尔排序" class="headerlink" title="三、希尔排序"></a>三、希尔排序</h2><h4 id="原理-2"><a href="#原理-2" class="headerlink" title="原理"></a>原理</h4><p>也称为递减增量排序算法，它是对插入排序的一种快速算法，插入排序相当于h=1的情况。（希尔排序的思想是使数组中任意间隔为h的元素都是有序的）</p>
+<p>希尔排序是基于插入排序的以下两点性质而提出改进方法的：</p>
+<ol>
+<li>插入排序在对几乎已经排好序的数据操作时， 效率高， 即可以达到线性排序的效率；</li>
+<li>但插入排序一般来说是低效的， 因为插入排序每次只能将数据移动一位。</li>
+</ol>
+<h4 id="步骤-2"><a href="#步骤-2" class="headerlink" title="步骤"></a>步骤</h4><p>算法最重要的部分是<strong>步长</strong>，当步长为1时就是插入排序。</p>
+<ol>
+<li>最开始以一定的步长进行排序；</li>
+<li>然后会继续以一定步长进行排序；</li>
+<li>最终算法以步长为1进行排序。</li>
+</ol>
+<p>当步长为1时，算法变为插入排序，这就保证了数据一定会被排序。</p>
+<p>步长的设置，影响着希尔排序算法的复杂度，具体可参考<a href="https://zh.wikipedia.org/wiki/%E5%B8%8C%E5%B0%94%E6%8E%92%E5%BA%8F" target="_blank" rel="external">维基百科之希尔排序</a>，这里给出一个步长序列与复杂度的关系表：</p>
+<p><img src="/images/2016-03-26-sort/shell.png" alt="shell"></p>
+<h4 id="实现-2"><a href="#实现-2" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(Comparable[] a)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> N = a.length;</span><br><span class="line">    <span class="keyword">int</span> h = <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">while</span> (h &lt; N / <span class="number">3</span>)</span><br><span class="line">        h = <span class="number">3</span> * h + <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">while</span> (h &gt;= <span class="number">1</span>) &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = h; i &lt; N; i++) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> j = i; j &gt;= h &amp;&amp; less(a[j], a[j - h]); j -= h) &#123;</span><br><span class="line">                exch(a, j, j - h);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        h = h / <span class="number">3</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/Shell.java" target="_blank" rel="external">Shell.java</a></p>
+<p>排序效果如下图所示（原图来自<a href="https://zh.wikipedia.org/wiki/%E5%B8%8C%E5%B0%94%E6%8E%92%E5%BA%8F" target="_blank" rel="external">维基百科之希尔排序</a>）</p>
+<p><img src="/images/2016-03-26-sort/Sorting_shellsort_anim.gif" alt="shellsort"></p>
+<h4 id="性能分析-2"><a href="#性能分析-2" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
+<li>复杂度分析：参见上表</li>
+<li>特点：<ol>
+<li>排序最重要的地方在于当用较小步长排序后，以前用的较大步长仍然是有序的。比如，如果一个数列以步长5进行了排序然后再以步长3进行排序，那么该数列不仅是以步长3有序，而且是以步长5有序。</li>
+</ol>
+</li>
+</ul>
+<h2 id="四、冒泡排序"><a href="#四、冒泡排序" class="headerlink" title="四、冒泡排序"></a>四、冒泡排序</h2><h4 id="原理-3"><a href="#原理-3" class="headerlink" title="原理"></a>原理</h4><p>冒泡排序是一种简单的排序算法。它每次去从开始去比较两个元素，如果顺序错误就交换过来，当比较到最后一个元素时，就会把最小（最大）的元素找出来；然后在重复比较，前面已经找到的就不再参与比较。元素越小（大）的元素会经过交换慢慢“浮”到数列顶端。</p>
+<h4 id="步骤-3"><a href="#步骤-3" class="headerlink" title="步骤"></a>步骤</h4><ol>
+<li>比较相邻的元素。如果第一个比第二个大，就交换他们两个；</li>
+<li>对每一对相邻元素作同样的工作，从开始第一对到结尾的最后一对。在这一点，最后的元素应该会是最大的数；</li>
+<li>针对所有的元素重复以上的步骤，除了最后一个；</li>
+<li>持续每次对越来越少的元素重复上面的步骤，直到没有任何一对数字需要比较。</li>
+</ol>
+<h4 id="实现-3"><a href="#实现-3" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(Comparable[] a)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> N=a.length-<span class="number">1</span>;</span><br><span class="line">    <span class="keyword">while</span>(N&gt;<span class="number">0</span>)&#123;</span><br><span class="line">        <span class="keyword">for</span>(<span class="keyword">int</span> i=<span class="number">1</span>;i&lt;=N;i++)&#123;</span><br><span class="line">            <span class="keyword">if</span>(less(a[i],a[i-<span class="number">1</span>]))</span><br><span class="line">                exch(a,i,i-<span class="number">1</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        N--;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/Bubble.java" target="_blank" rel="external">Bubble.java</a></p>
+<p>排序效果如下图所示（原图来自<a href="https://zh.wikipedia.org/wiki/%E6%8F%92%E5%85%A5%E6%8E%92%E5%BA%8F" target="_blank" rel="external">维基百科之插入排序</a>）</p>
+<p><img src="/images/2016-03-26-sort/Bubble_sort_animation.gif" alt="Bubble_sort"></p>
+<h2 id="五、归并排序"><a href="#五、归并排序" class="headerlink" title="五、归并排序"></a>五、归并排序</h2><h3 id="1-原地归并排序"><a href="#1-原地归并排序" class="headerlink" title="1.原地归并排序"></a>1.原地归并排序</h3><h4 id="介绍"><a href="#介绍" class="headerlink" title="介绍"></a>介绍</h4><p>对两个有序数组进行归并。</p>
+<h4 id="步骤-4"><a href="#步骤-4" class="headerlink" title="步骤"></a>步骤</h4><p>原地归并排序主要是对于有序数组而言，这里只需要额外申请一段数据空间，来进行合并数组即可（迭代法）。</p>
+<ol>
+<li>申请空间，使其大小为两个已经排序序列之和，该空间用来存放合并后的序列；</li>
+<li>设定两个指针，最初位置分别为两个已经排序序列的起始位置；</li>
+<li>比较两个指针所指向的元素，选择相对小的元素放入到合并空间，并移动指针到下一位置；</li>
+<li>重复步骤3直到某一指针到达序列尾；</li>
+<li>将另一序列剩下的所有元素直接复制到合并序列尾。</li>
+</ol>
+<h4 id="实现-4"><a href="#实现-4" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//迭代法(第一个有序数组为lo~mid，第二个有序数组为mid+1~hi)</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">merge</span><span class="params">(Comparable[] a, <span class="keyword">int</span> lo, <span class="keyword">int</span> mid, <span class="keyword">int</span> hi)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> i = lo;</span><br><span class="line">    <span class="keyword">int</span> j = mid + <span class="number">1</span>;</span><br><span class="line">    Comparable[] aux = <span class="keyword">new</span> Comparable[a.length];</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> k = lo; k &lt;= hi; k++)</span><br><span class="line">        aux[k] = a[k];</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> k = lo; k &lt;= hi; k++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (i &gt; mid)</span><br><span class="line">            a[k] = aux[j++];</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (j &gt; hi)</span><br><span class="line">            a[k] = aux[i++];</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (less(aux[j], aux[i]))</span><br><span class="line">            a[k] = aux[j++];</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            a[k] = aux[i++];</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="2-自顶向下"><a href="#2-自顶向下" class="headerlink" title="2.自顶向下"></a>2.自顶向下</h3><h4 id="原理-4"><a href="#原理-4" class="headerlink" title="原理"></a>原理</h4><p>首先要知道原地归并排序算法，这个是将两个有序的数组归并到一个数组中，然后使用递归算法，每次都对对并一半的数据（直到把数据间隔减少到1为止，从上往下切分）进行归并排序，这样就是递归地调用归并排序。</p>
+<h4 id="步骤-5"><a href="#步骤-5" class="headerlink" title="步骤"></a>步骤</h4><ol>
+<li>将序列分成两部分，然后对部分分别进行归并；</li>
+<li>再将这部分分成两部分进行归并；</li>
+<li>重复步骤2，直到把每部分分成为大小为1的数组。</li>
+</ol>
+<h4 id="实现-5"><a href="#实现-5" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(Comparable[] a, <span class="keyword">int</span> lo, <span class="keyword">int</span> hi)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (hi &lt;= lo)</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    <span class="keyword">int</span> mid = lo + (hi - lo) / <span class="number">2</span>;</span><br><span class="line">    sort(a, lo, mid);</span><br><span class="line">    sort(a, mid + <span class="number">1</span>, hi);</span><br><span class="line">    merge(a, lo, mid, hi);<span class="comment">// 归并两个有序数组</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="性能分析-3"><a href="#性能分析-3" class="headerlink" title="性能分析"></a>性能分析</h4><ol>
+<li>对于长度为N的任意数组，自顶向下的归并排序需要<br><img src="http://chart.googleapis.com/chart?cht=tx&chl= \frac{N*\lg{N}}{2}" style="border:none;">至<br><img src="http://chart.googleapis.com/chart?cht=tx&chl= N\lg{N}" style="border:none;">次比较；</li>
+<li>对于长度为N的任意数组，自顶向下的归并排序最多需要访问数组<img src="http://chart.googleapis.com/chart?cht=tx&chl= 6N*lg{N}" style="border:none;">次。</li>
+</ol>
+<ul>
+<li>缺点：其辅助数组所使用的额外空间和N的大小成正比。</li>
+</ul>
+<h3 id="3-自低向上"><a href="#3-自低向上" class="headerlink" title="3.自低向上"></a>3.自低向上</h3><h4 id="原理-5"><a href="#原理-5" class="headerlink" title="原理"></a>原理</h4><p>从最下面的长度为1数组开始往上进行合并，直到最后数组变成两个有序数组，再进行最后依次合并。</p>
+<h4 id="步骤-6"><a href="#步骤-6" class="headerlink" title="步骤"></a>步骤</h4><ol>
+<li>将序列每相邻两个数字进行归并操作，形成<img src="http://chart.googleapis.com/chart?cht=tx&chl= \lfloor\frac{n}{2}\rfloor" style="border:none;">个序列，排序后每个序列包含两个元素；</li>
+<li>将上述序列再次归并，形成<img src="http://chart.googleapis.com/chart?cht=tx&chl= \lfloor\frac{n}{4}\rfloor" style="border:none;">个序列，每个序列包含四个元素；</li>
+<li>重复步骤2，直到所有元素排序完毕。</li>
+</ol>
+<h4 id="实现-6"><a href="#实现-6" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sortBU</span><span class="params">(Comparable[] a)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> N = a.length;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> sz = <span class="number">1</span>; sz &lt; N; sz = sz + sz) &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> lo = <span class="number">0</span>; lo &lt; N - sz; lo += sz + sz)</span><br><span class="line">            merge(a, lo, lo + sz - <span class="number">1</span>, Math.min(lo + sz + sz - <span class="number">1</span>, N - <span class="number">1</span>));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="性能分析-4"><a href="#性能分析-4" class="headerlink" title="性能分析"></a>性能分析</h4><ol>
+<li>对于长度为N的任意数组，自低向上的归并排序需要<img src="http://chart.googleapis.com/chart?cht=tx&chl= \frac{N*\lg{N}}{2}" style="border:none;">至<img src="http://chart.googleapis.com/chart?cht=tx&chl= N*\lg{N}" style="border:none;">次比较，最多需要访问数组<img src="http://chart.googleapis.com/chart?cht=tx&chl= 6N*\lg{N}" style="border:none;">次。</li>
+<li>与自顶向下是相同的，只是顺序不同而已。</li>
+</ol>
+<h2 id="六、快速排序"><a href="#六、快速排序" class="headerlink" title="六、快速排序"></a>六、快速排序</h2><h4 id="原理-6"><a href="#原理-6" class="headerlink" title="原理"></a>原理</h4><p>分治思想，将数组分成两个子数组，独自进行排序。最简单的递归切分：指针i从数组的最左端开始扫描直到找到一个大于等于它的元素，指针j从数组的最右端开始扫描直到找到一个小于等于它的元素，然后交换它们的位置，直到指针相遇。</p>
+<p>注意：</p>
+<ol>
+<li>终止循环：一个常见的错误就是没有考虑到数组中可能包含和切分元素的值相同的其他元素。</li>
+</ol>
+<h4 id="步骤-7"><a href="#步骤-7" class="headerlink" title="步骤"></a>步骤</h4><ol>
+<li>选择一个基准元素,通常选择第一个元素或者最后一个元素;</li>
+<li>通过一趟排序将待排序的记录分割成独立的两部分，其中一部分记录的元素值均比基准元素值小。另一部分记录的 元素值比基准值大;</li>
+<li>此时基准元素在其排好序后的正确位置;</li>
+<li>然后分别对这两部分记录用同样的方法继续进行排序，直到整个序列有序。</li>
+</ol>
+<h4 id="实现-7"><a href="#实现-7" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(Comparable[] a, <span class="keyword">int</span> low, <span class="keyword">int</span> high)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> l = low;</span><br><span class="line">    <span class="keyword">int</span> h = high;</span><br><span class="line">    Comparable key = a[l];</span><br><span class="line">    <span class="keyword">while</span> (l &lt; h) &#123;</span><br><span class="line">        <span class="keyword">while</span> (l &lt; h &amp;&amp; less(key, a[h]))</span><br><span class="line">            h--;</span><br><span class="line">        <span class="keyword">if</span> (l &lt; h) &#123;</span><br><span class="line">            exch(a, l, h);</span><br><span class="line">            l++;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">while</span> (l &lt; h &amp;&amp; less(a[l], key))</span><br><span class="line">            l++;</span><br><span class="line">        <span class="keyword">if</span> (l &lt; h) &#123;</span><br><span class="line">            exch(a, l, h);</span><br><span class="line">            h--;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (l &gt; low)</span><br><span class="line">        sort(a, low, l - <span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (h &lt; high)</span><br><span class="line">        sort(a, l + <span class="number">1</span>, high);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/Quick.java" target="_blank" rel="external">Quick.java</a></p>
+<p>排序效果如下图所示（原图来自<a href="https://zh.wikipedia.org/wiki/%E5%BF%AB%E9%80%9F%E6%8E%92%E5%BA%8F#.E9.81.B8.E6.93.87.E7.9A.84.E9.97.9C.E9.80.A3.E6.80.A7" target="_blank" rel="external">维基百科之快速排序</a>）</p>
+<p><img src="/images/2016-03-26-sort/Sorting_quicksort_anim.gif" alt="quick_sort"></p>
+<h4 id="性能分析-5"><a href="#性能分析-5" class="headerlink" title="性能分析"></a>性能分析</h4><ol>
+<li>快速排序的内循环会用一个递增的索引将数组元素和一个定值进行比较，其他的几种排序还需要再内循环中移动元素；</li>
+<li>它的比较次数较少；</li>
+<li>排序的效率取决于切分的效果，而不是切分元素的值，最好的效果是每次都能将数组对半分，在切分不平衡时，程序就会变得比较低效；</li>
+<li>对于长度为N的无重复数组排序，快速排序平均需要～2NlnN次比较（以及1/6次交换）；</li>
+<li>快速排序最多需要约<img src="http://chart.googleapis.com/chart?cht=tx&chl= \frac{n^2}{2}" style="border:none;">次比较，随机打乱数组可以预防这种情况（当切分时，每次两个子数组之一为空才会出现这种情况）；</li>
+<li>三向切分：主要对于有大量元素相等的情况。</li>
+</ol>
+<h4 id="快排算法改进"><a href="#快排算法改进" class="headerlink" title="快排算法改进"></a>快排算法改进</h4><ol>
+<li>小数组时（hi&lt;lo+M），切换到插入排序。对于小数组，快排比插入排序要慢；</li>
+<li>三取样切分。使用子数组的一小部分的中位数来切分数组，这样做得到切分效果更好，但是代价是需要计算中位数；</li>
+<li>三向切分，主要是对于有重复元素的情况下，将数组切分为三部分，分别是小于，等于和大于切分元素的数组元素。</li>
+</ol>
+<h2 id="七、堆排序"><a href="#七、堆排序" class="headerlink" title="七、堆排序"></a>七、堆排序</h2><h4 id="原理-7"><a href="#原理-7" class="headerlink" title="原理"></a>原理</h4><p>先构造一个最大堆（最小堆），然后将根节点的最大值（最小值）与最后一位交换，再对第一位进行下沉（上浮）操作，依次类推（下次与倒数第二位进行交换），最后得到的数组即为有序数组。</p>
+<p>最大堆的特点：</p>
+<ol>
+<li>一棵大小为N的完全二叉树的高度为不小于的lgN最小整数；</li>
+<li>当一棵二叉树的每个节点都大于等于它的两个子节点时，被称为<strong>堆有序</strong>；</li>
+<li>根节点是最大的节点；</li>
+<li>对于节点i，左移一位算出<img src="http://chart.googleapis.com/chart?cht=tx&chl= 2i" style="border:none;">节点（即为左子节点），左移一位并在低位加1得到2i+1节点（右子节点），右移一位得到<img src="http://chart.googleapis.com/chart?cht=tx&chl= \lfloor\frac{i}{2}\rfloor" style="border:none;">（父节点）。</li>
+</ol>
+<h4 id="实现-8"><a href="#实现-8" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(Comparable[] pq)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">int</span> N = pq.length;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> k = N / <span class="number">2</span>; k &gt;= <span class="number">1</span>; k--)</span><br><span class="line">			sink(pq, k, N);</span><br><span class="line">		<span class="keyword">while</span> (N &gt; <span class="number">1</span>) &#123;</span><br><span class="line">			exch(pq, <span class="number">1</span>, N);</span><br><span class="line">			N--;</span><br><span class="line">			sink(pq, <span class="number">1</span>, N);</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sink</span><span class="params">(Comparable[] pq, <span class="keyword">int</span> k, <span class="keyword">int</span> N)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">while</span> (<span class="number">2</span> * k &lt;= N) &#123;</span><br><span class="line">			<span class="keyword">int</span> j = <span class="number">2</span> * k;</span><br><span class="line">			<span class="keyword">if</span> (j + <span class="number">1</span> &lt;= N) &#123;</span><br><span class="line">				<span class="keyword">if</span> (j &lt; N &amp;&amp; less(pq, j, j + <span class="number">1</span>))</span><br><span class="line">					j++;</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">if</span> (!less(pq, k, j))</span><br><span class="line">				<span class="keyword">break</span>;</span><br><span class="line">			exch(pq, k, j);</span><br><span class="line">			k = j;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">exch</span><span class="params">(Comparable[] pq, <span class="keyword">int</span> i, <span class="keyword">int</span> j)</span> </span>&#123;</span><br><span class="line">		Comparable swap = pq[i - <span class="number">1</span>];</span><br><span class="line">		pq[i - <span class="number">1</span>] = pq[j - <span class="number">1</span>];</span><br><span class="line">		pq[j - <span class="number">1</span>] = swap;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">less</span><span class="params">(Comparable[] pq, <span class="keyword">int</span> i, <span class="keyword">int</span> j)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">return</span> pq[i - <span class="number">1</span>].compareTo(pq[j - <span class="number">1</span>]) &lt; <span class="number">0</span>;</span><br><span class="line">	&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/Heap.java" target="_blank" rel="external">Quick.java</a></p>
+<p>排序效果如下图所示（原图来自<a href="https://zh.wikipedia.org/wiki/%E5%A0%86%E6%8E%92%E5%BA%8F" target="_blank" rel="external">维基百科之快速排序</a>）</p>
+<p><img src="/images/2016-03-26-sort/Sorting_heapsort_anim.gif" alt="heap_sort"></p>
+<h4 id="性能分析-6"><a href="#性能分析-6" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
+<li>复杂度分析：<ol>
+<li>构造堆的时间复杂度为<img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;">；</li>
+<li>堆排序的时间复杂度为<img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n \lg{n})" style="border:none;">;</li>
+</ol>
+</li>
+<li>特点：<ol>
+<li>排序算法使用的是最大堆，最小堆通常用于优先队列（当然也可以反过来）；</li>
+<li>将一个数组构造为一个最大堆时，使用递归循环通过下沉（<code>sink</code>方法）将所有有子节点的父节点下沉到给定位置，它的时间复杂度为<img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;">；</li>
+<li>最大优先队列的一个典型应用就是共享计算机系统中的作业调度。</li>
+</ol>
+</li>
+</ul>
+<h2 id="八、计数排序"><a href="#八、计数排序" class="headerlink" title="八、计数排序"></a>八、计数排序</h2><h4 id="原理-8"><a href="#原理-8" class="headerlink" title="原理"></a>原理</h4><p>对于每个输入元素x，确定小于x的元素个数，利用这个信息可以直接把x放在输出数组中的位置上了。</p>
+<h4 id="步骤-8"><a href="#步骤-8" class="headerlink" title="步骤"></a>步骤</h4><p>参考<a href="https://zh.wikipedia.org/wiki/%E8%AE%A1%E6%95%B0%E6%8E%92%E5%BA%8F" target="_blank" rel="external">CountingSort</a>，其步骤为：</p>
+<ol>
+<li>找出待排序的数组中最大和最小的元素；</li>
+<li>统计数组中每个值为i的元素出现的次数，存入数组 C 的第 i 项；</li>
+<li>对所有的计数累加（从C中的第一个元素开始，每一项和前一项相加）；</li>
+<li>反向填充目标数组：将每个元素i放在新数组的第C(i)项，每放一个元素就将C(i)减去1。</li>
+</ol>
+<h4 id="实现-9"><a href="#实现-9" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] sort(<span class="keyword">int</span>[] a) &#123;</span><br><span class="line">	<span class="keyword">int</span>[] b = <span class="keyword">new</span> <span class="keyword">int</span>[a.length];</span><br><span class="line">	<span class="keyword">int</span> min = a[<span class="number">0</span>];</span><br><span class="line">	<span class="keyword">int</span> max = a[<span class="number">0</span>];</span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i : a) &#123;</span><br><span class="line">		<span class="keyword">if</span> (i &gt; max)</span><br><span class="line">			max = i;</span><br><span class="line">		<span class="keyword">if</span> (i &lt; min)</span><br><span class="line">			min = i;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">int</span> size = max - min + <span class="number">1</span>;</span><br><span class="line">	<span class="keyword">int</span>[] c = <span class="keyword">new</span> <span class="keyword">int</span>[size];</span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; a.length; i++) &#123;</span><br><span class="line">		c[a[i] - min]++;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; c.length; i++) &#123;</span><br><span class="line">		c[i] = c[i] + c[i - <span class="number">1</span>];</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = a.length - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--) &#123;</span><br><span class="line">		b[--c[a[i] - min]] = a[i];</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/CountingSort.java" target="_blank" rel="external">CountingSort.java</a></p>
+<h4 id="性能分析-7"><a href="#性能分析-7" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
+<li>复杂度分析：<ol>
+<li>时间复杂度为O(k+n).</li>
+</ol>
+</li>
+<li>特点：<ol>
+<li>用运算确定次序，而非比较来确定；</li>
+<li><strong>稳定</strong>：具有相同值的元素在输出数组中的相对次序与它们在输入数组中的相对次序是相同的。</li>
+</ol>
+</li>
+</ul>
+<h2 id="九、基数排序（Radix-Sort）"><a href="#九、基数排序（Radix-Sort）" class="headerlink" title="九、基数排序（Radix Sort）"></a>九、基数排序（Radix Sort）</h2><p>将整数按位数切割成不同的数字，然后按每个位数分别比较。</p>
+<h4 id="原理-9"><a href="#原理-9" class="headerlink" title="原理"></a>原理</h4><p>将所有待比较数值（正整数）统一为同样的数位长度，数位较短的数前面补零。然后，从最低位开始，依次进行一次排序。这样从最低位排序直到最高位排序完成以后，数列就变成了一个有序序列。</p>
+<h4 id="步骤-9"><a href="#步骤-9" class="headerlink" title="步骤"></a>步骤</h4><p>对于n个d位数，每个数位有k个可能的取值（比如十进制数每位有10个可能的取值）。</p>
+<ol>
+<li>先按最低位对数进行排序（可以是计数排序）；</li>
+<li>再次低位进行排序</li>
+<li>重复第2步，直到最后一步按照最高位进行排序。</li>
+</ol>
+<p>从最低位开始排序，保证排序算法的稳定性（如果遇到该位数值相同的话，就按输入顺序）。可以参考<a href="http://baike.baidu.com/view/1170573.htm#1" target="_blank" rel="external">百度百科之基数排序</a>中例子。</p>
+<h4 id="实现-10"><a href="#实现-10" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(<span class="keyword">int</span>[] a, <span class="keyword">int</span> d)</span> </span>&#123;<span class="comment">// d最大值多少位</span></span><br><span class="line">	<span class="keyword">int</span> index = <span class="number">0</span>;</span><br><span class="line">	<span class="keyword">int</span> m = <span class="number">1</span>;</span><br><span class="line">	<span class="keyword">int</span> n = <span class="number">1</span>;</span><br><span class="line">	<span class="keyword">int</span>[][] tmp = <span class="keyword">new</span> <span class="keyword">int</span>[<span class="number">10</span>][a.length];</span><br><span class="line">	<span class="keyword">int</span>[] num = <span class="keyword">new</span> <span class="keyword">int</span>[<span class="number">10</span>];</span><br><span class="line">	<span class="keyword">while</span> (m &lt;= d) &#123;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> i : a) &#123;</span><br><span class="line">			<span class="keyword">int</span> lsd = (i / n) % <span class="number">10</span>;</span><br><span class="line">			tmp[lsd][num[lsd]] = i;</span><br><span class="line">			num[lsd]++;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">10</span>; i++) &#123;</span><br><span class="line">			<span class="keyword">if</span> (num[i] != <span class="number">0</span>) &#123;</span><br><span class="line">				<span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; num[i]; j++) &#123;</span><br><span class="line">					a[index] = tmp[i][j];</span><br><span class="line">					index++;</span><br><span class="line">				&#125;</span><br><span class="line">				num[i] = <span class="number">0</span>;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		n *= <span class="number">10</span>;</span><br><span class="line">		index = <span class="number">0</span>;</span><br><span class="line">		m++;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/RadixSort.java" target="_blank" rel="external">RadixSort.java</a></p>
+<h4 id="性能分析-8"><a href="#性能分析-8" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
+<li>复杂度分析：<ol>
+<li>使用稳定排序方法耗时O(k+n)，那么就可以在O(d*(k+n))时间内将这些数排好序。</li>
+</ol>
+</li>
+<li>特点：<ol>
+<li>基数排序利用的计数排序不是原址排序，而快排是原址排序。</li>
+</ol>
+</li>
+</ul>
+<h2 id="十、桶排序"><a href="#十、桶排序" class="headerlink" title="十、桶排序"></a>十、桶排序</h2><p>也即是箱排序。</p>
+<h4 id="原理-10"><a href="#原理-10" class="headerlink" title="原理"></a>原理</h4><p>将数组分到有限数量的桶子里。每个桶子再个别排序。</p>
+<h4 id="步骤-10"><a href="#步骤-10" class="headerlink" title="步骤"></a>步骤</h4><ol>
+<li>设置一个合适数量的数组作为空桶子；</li>
+<li>寻访序列，并且把项目一个一个放到对应的桶子里；</li>
+<li>对每个不是空桶子进行排序；</li>
+<li>从不是空的桶子里把项目再放回原来的序列中。</li>
+</ol>
+<p>排序效果如下图所示（原图来自<a href="http://baike.baidu.com/link?url=0bNJEspxIkXRmUyeUSZPfOG5N2YcfhFT00DXysI-k0IVGq7IkaGxs1ronj3iQasuVTLrEvIY3A_POP3V8eTWma" target="_blank" rel="external">百度百科之桶排序</a>）</p>
+<p><img src="/images/2016-03-26-sort/bucketSort.jpg" alt="bucket_sort"></p>
+<h4 id="实现-11"><a href="#实现-11" class="headerlink" title="实现"></a>实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sort</span><span class="params">(<span class="keyword">int</span> a[])</span> </span>&#123;</span><br><span class="line">	<span class="keyword">int</span> n = a.length;</span><br><span class="line">	<span class="keyword">int</span> bask[][] = <span class="keyword">new</span> <span class="keyword">int</span>[<span class="number">10</span>][n];</span><br><span class="line">	<span class="keyword">int</span> index[] = <span class="keyword">new</span> <span class="keyword">int</span>[<span class="number">10</span>];</span><br><span class="line">	<span class="keyword">int</span> max = Integer.MIN_VALUE;</span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; n; i++) &#123;</span><br><span class="line">		max = max &gt; (Integer.toString(a[i]).length()) ? max : (Integer.toString(a[i]).length());</span><br><span class="line">	&#125;</span><br><span class="line">	String str;</span><br><span class="line">	<span class="keyword">for</span> (<span class="keyword">int</span> i = max - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--) &#123;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; n; j++) &#123;</span><br><span class="line">			str = <span class="string">""</span>;</span><br><span class="line">			<span class="keyword">if</span> (Integer.toString(a[j]).length() &lt; max) &#123;</span><br><span class="line">				<span class="keyword">for</span> (<span class="keyword">int</span> k = <span class="number">0</span>; k &lt; max - Integer.toString(a[j]).length(); k++)</span><br><span class="line">					str += <span class="string">"0"</span>;</span><br><span class="line">			&#125;</span><br><span class="line">			str += Integer.toString(a[j]);</span><br><span class="line">			bask[str.charAt(i) - <span class="string">'0'</span>][index[str.charAt(i) - <span class="string">'0'</span>]++] = a[j];</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">int</span> pos = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; <span class="number">10</span>; j++) &#123;</span><br><span class="line">			<span class="keyword">for</span> (<span class="keyword">int</span> k = <span class="number">0</span>; k &lt; index[j]; k++) &#123;</span><br><span class="line">				a[pos++] = bask[j][k];</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> x = <span class="number">0</span>; x &lt; <span class="number">10</span>; x++)</span><br><span class="line">			index[x] = <span class="number">0</span>;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>完整代码参考<a href="https://github.com/wangzzu/algorithms/blob/master/Algorithms-4th/src/main/java/sort_two/BucketSort.java" target="_blank" rel="external">BucketSort.java</a></p>
+<h4 id="性能分析-9"><a href="#性能分析-9" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
+<li>复杂度分析：<ol>
+<li>平均时间复杂度为 O(k+n)；</li>
+<li>最差时间复杂度：<img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;">;</li>
+<li>最差空间复杂度：<img src="http://chart.googleapis.com/chart?cht=tx&chl= O(k*n)" style="border:none;">；</li>
+</ol>
+</li>
+<li>特点：<ol>
+<li>感觉相当于先进行hash，然后再进行排序，这种思想在海量数据排序中经常会使用到。</li>
+</ol>
+</li>
+</ul>
+<hr>
+<h2 id="算法性能总结"><a href="#算法性能总结" class="headerlink" title="算法性能总结"></a>算法性能总结</h2><table>
+<thead>
+<tr>
+<th>算法名称</th>
+<th>平均时间复杂度</th>
+<th>最坏情况时间复杂度</th>
+<th>最好情况时间复杂度</th>
+<th>辅助空间</th>
+<th>稳定性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>选择排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(1)" style="border:none;"></td>
+<td>不稳定</td>
+</tr>
+<tr>
+<td>插入排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(1)" style="border:none;"></td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>希尔排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n \lg{n}) \~ O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^1.3)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(1)" style="border:none;"></td>
+<td>不稳定</td>
+</tr>
+<tr>
+<td>冒泡排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(1)" style="border:none;"></td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>自底向上归并排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>自顶向下归并排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>快速排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(\lg{n}) \~ O(n)" style="border:none;"></td>
+<td>不稳定</td>
+</tr>
+<tr>
+<td>堆排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n\lg{n})" style="border:none;"></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(1)" style="border:none;"></td>
+<td>不稳定</td>
+</tr>
+<tr>
+<td>计数排序</td>
+<td>O(n+k)</td>
+<td></td>
+<td></td>
+<td>O(n + k)</td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>基数排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(kn)" style="border:none;"></td>
+<td></td>
+<td></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n)" style="border:none;"></td>
+<td>稳定</td>
+</tr>
+<tr>
+<td>桶排序</td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)" style="border:none;"></td>
+<td></td>
+<td></td>
+<td><img src="http://chart.googleapis.com/chart?cht=tx&chl= O(k)" style="border:none;"></td>
+<td>稳定</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<p>参考资料：</p>
+<ol>
+<li><a href="http://www.amazon.cn/%E5%9B%BE%E7%81%B5%E7%A8%8B%E5%BA%8F%E8%AE%BE%E8%AE%A1%E4%B8%9B%E4%B9%A6-%E7%AE%97%E6%B3%95-%E5%A1%9E%E5%A5%87%E5%A8%81%E5%85%8B/dp/B009OCFQ0O/ref=sr_1_1?ie=UTF8&amp;qid=1458988861&amp;sr=8-1&amp;keywords=%E7%AE%97%E6%B3%95" target="_blank" rel="external">《算法 第四版》</a></li>
+<li><a href="http://www.amazon.cn/%E7%AE%97%E6%B3%95%E5%AF%BC%E8%AE%BA-Thomas-H-Cormen/dp/B00AK7BYJY/ref=sr_1_3?ie=UTF8&amp;qid=1458988861&amp;sr=8-3&amp;keywords=%E7%AE%97%E6%B3%95" target="_blank" rel="external">《算法导论 第三版》</a></li>
+<li><a href="https://zh.wikipedia.org/wiki/%E6%8E%92%E5%BA%8F%E7%AE%97%E6%B3%95" target="_blank" rel="external">维基百科之排序</a></li>
+</ol>
+
+      
+    </div>
+
+    <div>
+      
+        
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/java/" rel="tag">#java</a>
+          
+            <a href="/tags/algorithm/" rel="tag">#algorithm</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2016/03/22/java-learn/" rel="next" title="Java工程师成神之路【转】">
+                <i class="fa fa-chevron-left"></i> Java工程师成神之路【转】
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2016/03/30/hello-world/" rel="prev" title="Hello World">
+                Hello World <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2016/03/26/algorithm-sort/"
+     data-title="排序算法总结"
+     data-content=""
+     data-url="http://wangzzu.github.io/2016/03/26/algorithm-sort/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2016/03/26/algorithm-sort/"
+           data-title="排序算法总结" data-url="http://wangzzu.github.io/2016/03/26/algorithm-sort/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">25</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">9</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">10</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu/profile?rightmod=1&wvr=6&mod=personinfo" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#性能评估指标"><span class="nav-number">1.</span> <span class="nav-text">性能评估指标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#一、选择排序"><span class="nav-number">2.</span> <span class="nav-text">一、选择排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理"><span class="nav-number">2.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤"><span class="nav-number">2.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现"><span class="nav-number">2.0.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析"><span class="nav-number">2.0.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#二、插入排序"><span class="nav-number">3.</span> <span class="nav-text">二、插入排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-1"><span class="nav-number">3.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-1"><span class="nav-number">3.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-1"><span class="nav-number">3.0.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-1"><span class="nav-number">3.0.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#三、希尔排序"><span class="nav-number">4.</span> <span class="nav-text">三、希尔排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-2"><span class="nav-number">4.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-2"><span class="nav-number">4.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-2"><span class="nav-number">4.0.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-2"><span class="nav-number">4.0.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#四、冒泡排序"><span class="nav-number">5.</span> <span class="nav-text">四、冒泡排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-3"><span class="nav-number">5.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-3"><span class="nav-number">5.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-3"><span class="nav-number">5.0.3.</span> <span class="nav-text">实现</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#五、归并排序"><span class="nav-number">6.</span> <span class="nav-text">五、归并排序</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-原地归并排序"><span class="nav-number">6.1.</span> <span class="nav-text">1.原地归并排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#介绍"><span class="nav-number">6.1.1.</span> <span class="nav-text">介绍</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-4"><span class="nav-number">6.1.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-4"><span class="nav-number">6.1.3.</span> <span class="nav-text">实现</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-自顶向下"><span class="nav-number">6.2.</span> <span class="nav-text">2.自顶向下</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-4"><span class="nav-number">6.2.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-5"><span class="nav-number">6.2.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-5"><span class="nav-number">6.2.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-3"><span class="nav-number">6.2.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-自低向上"><span class="nav-number">6.3.</span> <span class="nav-text">3.自低向上</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-5"><span class="nav-number">6.3.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-6"><span class="nav-number">6.3.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-6"><span class="nav-number">6.3.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-4"><span class="nav-number">6.3.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#六、快速排序"><span class="nav-number">7.</span> <span class="nav-text">六、快速排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-6"><span class="nav-number">7.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-7"><span class="nav-number">7.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-7"><span class="nav-number">7.0.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-5"><span class="nav-number">7.0.4.</span> <span class="nav-text">性能分析</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#快排算法改进"><span class="nav-number">7.0.5.</span> <span class="nav-text">快排算法改进</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#七、堆排序"><span class="nav-number">8.</span> <span class="nav-text">七、堆排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-7"><span class="nav-number">8.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-8"><span class="nav-number">8.0.2.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-6"><span class="nav-number">8.0.3.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#八、计数排序"><span class="nav-number">9.</span> <span class="nav-text">八、计数排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-8"><span class="nav-number">9.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-8"><span class="nav-number">9.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-9"><span class="nav-number">9.0.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-7"><span class="nav-number">9.0.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#九、基数排序（Radix-Sort）"><span class="nav-number">10.</span> <span class="nav-text">九、基数排序（Radix Sort）</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-9"><span class="nav-number">10.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-9"><span class="nav-number">10.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-10"><span class="nav-number">10.0.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-8"><span class="nav-number">10.0.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#十、桶排序"><span class="nav-number">11.</span> <span class="nav-text">十、桶排序</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#原理-10"><span class="nav-number">11.0.1.</span> <span class="nav-text">原理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#步骤-10"><span class="nav-number">11.0.2.</span> <span class="nav-text">步骤</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#实现-11"><span class="nav-number">11.0.3.</span> <span class="nav-text">实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能分析-9"><span class="nav-number">11.0.4.</span> <span class="nav-text">性能分析</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#算法性能总结"><span class="nav-number">12.</span> <span class="nav-text">算法性能总结</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+      tex2jax: {
+        inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+        processEscapes: true,
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    });
+  </script>
+
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+      var all = MathJax.Hub.getAllJax(), i;
+      for (i=0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+    });
+  </script>
+
+  
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/MathJax.js"></script>
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/config/TeX-AMS-MML_HTMLorMML.js"></script>
+  
+
+
+  
+
+  
+
+</body>
+</html>

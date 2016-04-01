@@ -1,0 +1,784 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="storm," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。
+Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。
+1.storm基本配置
+storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Storm之配置文件">
+<meta property="og:url" content="http://wangzzu.github.io/2015/07/27/storm-configuration/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。
+Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。
+1.storm基本配置
+storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
+<meta property="og:updated_time" content="2016-03-31T15:52:04.861Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Storm之配置文件">
+<meta name="twitter:description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。
+Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。
+1.storm基本配置
+storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Storm之配置文件 | Matt's Blog </title>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Storm之配置文件
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2015-07-27T00:00:00+08:00" content="2015-07-27">
+              2015-07-27
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/storm/" itemprop="url" rel="index">
+                    <span itemprop="name">storm</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2015/07/27/storm-configuration/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2015/07/27/storm-configuration/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>Storm的配置文件一般存放在<code>$STORM_HOME/conf</code>下，通常名为<code>storm.yaml</code>，它符合yaml格式要求。</p>
+<p>Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。</p>
+<h3 id="1-storm基本配置"><a href="#1-storm基本配置" class="headerlink" title="1.storm基本配置"></a>1.storm基本配置</h3><ul>
+<li><strong>storm.local.dir</strong>: nimbus 和supervisor进程存储一些状态信息（conf或者jars）的本地路径，需要每台storm node单独创建该目录并保证该目录有正确的读写权限;</li>
+<li><strong>storm.log4j2.conf.dir</strong>： log4j的配置目录;</li>
+<li><strong>storm.zookeeper.servers</strong>: storm严重依赖zookeeper存储状态信息，要保证zookeeper的高可用，最好设置多个zk地址;</li>
+<li><strong>storm.zookeeper.port</strong>: 默认2181;</li>
+<li><strong>storm.zookeeper.root</strong>: 在zookeeper中存储的根目录，如果多个storm集群公用一个zk集群，需要修改其根目录名称即可;</li>
+<li><strong>storm.session.timeout</strong>: 默认20s，nimbus和supervisor和zk的session超时时间，如果log中常用sessiontimeout错误，考虑增加其值或者修改gc参数。该值并不能无限设置，zk有自己的最大session时间（默认20 ticktime）；</li>
+<li><strong>storm.zookeeper.connection.timeout</strong>：连接超时时间；</li>
+<li><strong>storm.zookeeper.retry.times</strong>: 默认5，执行zk操作重试次数；</li>
+<li><strong>storm.zookeeper.retry.interval</strong>: 默认1000，即间隔1s；</li>
+<li><strong>storm.zookeeper.retry.intervalceiling.millis</strong>: 300000 （5分钟）执行重试的时间间隔最长时间；</li>
+<li><strong>storm.messaging.transport</strong>：”backtype.storm.messaging.netty.Context” task之间的消息传输协议，默认使用netty传输；</li>
+<li><strong>storm.cluster.mode</strong>: “distributed” storm集群模式；</li>
+<li><strong>storm.id</strong>：运行中拓扑的id,由storm name和一个唯一随机数组成；</li>
+<li><strong>storm.local.mode.zmq</strong>：Local模式下是否使用ZeroMQ作消息系统，如果设置为false则使用java消息系统。默认为false；<br>注：Storm严重依赖zookeeper，而且zk在分布式使用中扮演了非常重要的角色。</li>
+</ul>
+<h3 id="2-nimbus相关设置"><a href="#2-nimbus相关设置" class="headerlink" title="2.nimbus相关设置"></a>2.nimbus相关设置</h3><ul>
+<li><strong>storm.nimbus.retry.times</strong>： 5 nimbus操作的重试次数</li>
+<li><strong>storm.nimbus.retry.interval.millis</strong>： 2s 重试间隔</li>
+<li><strong>storm.nimbus.retry.intervalceiling.millis</strong>: 60000 最大重试时间 10分钟</li>
+<li><strong>nimbus.seeds</strong>: [] 用于leader nimbus发现的nimbus hosts 列表，解决nimbus的单点故障问题，代替了原来的nimbus.host 配置</li>
+<li><strong>nimbus.thrift.port</strong>: 6627 nimbus工作的thrift端口，客户端上传jar和提交拓扑的端口（nimbus的thrift监听端口）</li>
+<li><strong>nimbus.thrift.threads</strong>: 64 nimbus thrift 线程数目</li>
+<li><strong>nimbus.thrift.max_buffer_size</strong>: 1048576 1m</li>
+<li><strong>nimbus.childopts</strong>: “-Xmx1024m” nimbus java 进程jvm设置</li>
+<li><strong>nimbus.task.timeout.secs</strong>：30 与task没有心跳时多久nimbus可以认为该task已经死掉并且可以重新分配该task</li>
+<li><strong>nimbus.supervisor.timeout.secs</strong>: 60 一分钟没有心跳 nimbus可以认为该supervisor已经dead，不会分配新的work</li>
+<li><strong>nimbus.monitor.freq.secs</strong>: 10 nimbus多久查询下supervisor心跳信息并且重新分配工作。注意当一台机子曾经挂掉，nimbus会立即采取一些操作</li>
+<li><strong>nimbus.reassign</strong>：当发现task失败时nimbus是否重新分配执行。默认为真，不建议修改。</li>
+<li><strong>nimbus.cleanup.inbox.freq.secs</strong>: 600 多久时间启动清理inbox文件的线程</li>
+<li><strong>nimbus.inbox.jar.expiration.secs</strong>: 3600 一个小时 jar过期时间</li>
+<li><strong>nimbus.code.sync.freq.secs</strong>: 300 5分钟同步一次未执行的拓扑的代码</li>
+<li><strong>nimbus.task.launch.secs</strong>: 120 用于task 第一次启动时的超时时间</li>
+<li><strong>nimbus.file.copy.expiration.secs</strong>: 600 上传下载文件超时时间</li>
+<li><strong>nimbus.topology.validator</strong>: “backtype.storm.nimbus.DefaultTopologyValidator” 拓扑验证，控制该拓扑是否可以执行</li>
+<li><strong>topology.min.replication.count</strong>: 1 当nimbus seeds中该拓扑代码的备份达到最小数目时leader nimbus才可以执行拓扑动作。</li>
+<li><strong>topology.max.replication.wait.time.sec</strong>: 60 当代码备份在nimbus list中达到topology.min.replication.count设置的最大等待时间，如果超时，不管有没有最小备份个数，都要执行该拓扑</li>
+</ul>
+<h3 id="3-supervisor相关配置"><a href="#3-supervisor相关配置" class="headerlink" title="3.supervisor相关配置"></a>3.supervisor相关配置</h3><ul>
+<li><strong>supervisor.slots.ports</strong>: 设置当台机子上可跑的worker数目，每个worker对应一个port，通常情况下多少个cpu core就设置多少个worker，类似与hadoop中nodemanager中slot的设置</li>
+<li><strong>supervisor.childopts</strong>: “-Xmx256m” supervisor jvm参数设置</li>
+<li><strong>supervisor.worker.start.timeout.secs</strong>: 120 supervisor等待worker启动的最长时间</li>
+<li><strong>supervisor.worker.timeout.secs</strong>: 30 worker的最长超时时间</li>
+<li><strong>supervisor.worker.shutdown.sleep.secs</strong>: 1秒 supervisor shutdown worker需要等待的时间</li>
+<li><strong>supervisor.monitor.frequency.secs</strong>: 3s检查一次worker的心跳确保是否要重启这些worker</li>
+<li><strong>supervisor.heartbeat.frequency.secs</strong>: 5s supervisor和nimbus心跳的频率</li>
+<li><strong>supervisor.enable</strong>: true supervisor是否要启动分配它的worker</li>
+</ul>
+<h3 id="4-worker-配置"><a href="#4-worker-配置" class="headerlink" title="4.worker 配置"></a>4.worker 配置</h3><ul>
+<li><strong>worker.childopts</strong>: “-Xmx768m”</li>
+<li><strong>worker.gc.childopts</strong>: “” worker gc set 可以被topology.worker.gc.childopts.覆盖</li>
+<li><strong>worker.heartbeat.frequency.secs</strong>: 1 worker 和supervisor的heartbeat时间</li>
+<li><strong>topology.worker.receiver.thread.count</strong>: 1 每个worker设置的receiver 线程个数</li>
+<li><strong>task.heartbeat.frequency.secs</strong>: 3s task向nimbus发送心跳的频率</li>
+<li><strong>task.refresh.poll.secs</strong>: 10 多久和其他task同步连接（如果task重新分配，发往该task信息的那些task需要重练他们之间的连接）</li>
+</ul>
+<h3 id="5-message传递相关参数"><a href="#5-message传递相关参数" class="headerlink" title="5.message传递相关参数"></a>5.message传递相关参数</h3><ul>
+<li><strong>storm.messaging.netty.server_worker_threads</strong>：1， server端接收信息的线程个数</li>
+<li><strong>storm.messaging.netty.client_worker_threads</strong>: 1， client端发送信息的线程个数</li>
+<li><strong>storm.messaging.netty.buffer_size</strong>: 5M，netty buffer大小</li>
+<li><strong>storm.messaging.netty.max_retries</strong>: 300 重试次数</li>
+<li><strong>storm.messaging.netty.max_wait_ms</strong>: 1000ms=1s 最大等待时间要大于task launchtime and worker launch time默认120s，重连间隔要大于zk的sessiontimeout 以确保worker是否已挂</li>
+<li><strong>storm.messaging.netty.min_wait_ms</strong>: 100</li>
+<li><strong>storm.messaging.netty.transfer.batch.size</strong>: 262144 如果netty 发送消息非常忙，client客户端可以batch发送消息，否则尽快的flush消息以减少延迟。</li>
+</ul>
+<p>注：我们的使用场景是storm kafka读取kafka里面的数据，发现运行一段时间以后，kafka消费的offset不再更新（2s更新一次消费的offset），spout 中的task不断重启导致offset一直不更新，查看log发现task失败的原因是gc设置不对以致netty连接超时，task会重新分配。在生产环境中应该调大该值，我们在线上设置该值为20s，并且调整worker的gc参数。</p>
+<h3 id="6-topology相关的设置，-针对特定拓扑的配置"><a href="#6-topology相关的设置，-针对特定拓扑的配置" class="headerlink" title="6.topology相关的设置， 针对特定拓扑的配置"></a>6.topology相关的设置， 针对特定拓扑的配置</h3><p>正如上一讲的，以下参数控制消息是否被完全处理：</p>
+<ul>
+<li><strong>topology.enable.message.timeouts</strong>: true 保证数据完全处理；</li>
+<li><strong>topology.acker.executors</strong>: null 设置acker线程个数；</li>
+<li><strong>topology.message.timeout.secs</strong>: 30 当一个消息的处理超时多长时间多少认为该tuple处理失败；</li>
+<li><strong>topology.max.spout.pending</strong>: null 当spout 发送一个tuple时会将该tuple放到一个pending list，此字段控制在storm中处理的spout tuple数，可以根据超时时间以及每秒处理的消息数估算；</li>
+</ul>
+<p>下面这几个参数和拓扑的并行度（parallelism)，并行度的概念就是为该拓扑启动的线程数，TopologyBuilder#setSpout() 和TopologyBuilder#setbolt()中可以指定excutor数目，该excutor是从worker进程spawn的线程，task是处理数据的实际工作单元，跑在一个excutor上。</p>
+<ul>
+<li><strong>topology.workers</strong>: 1，Config#setNumWorkers，设置worker数，一个worker执行一个拓扑的一个子集任务，其上可以跑多个excutors，可能是多个bolt或者spout；</li>
+<li><strong>topology.tasks</strong>: null，top.setNumtasks，设置task数目；</li>
+<li><strong>topology.max.task.parallelism</strong>: null，拓扑最大线程数；</li>
+</ul>
+<p>worker <strong>gc设置</strong></p>
+<ul>
+<li><strong>topology.worker.childopts</strong>: null；</li>
+<li><strong>topology.worker.logwriter.childopts</strong>: “-Xmx64m”；</li>
+<li><strong>topology.worker.shared.thread.pool.size</strong>: 4 worker task 共享线程池大小；</li>
+</ul>
+<p>worker内消息传送的参数，与disruptor相关：</p>
+<ul>
+<li><strong>topology.executor.receive.buffer.size</strong>: 1024 #batched；</li>
+<li><strong>topology.executor.send.buffer.size</strong>: 1024 #individual messages；</li>
+<li><strong>topology.transfer.buffer.size</strong>: 1024 # batched；</li>
+<li><strong>topology.disruptor.wait.strategy</strong>:com.lmax.disruptor.BlockingWaitStrategy 延迟和吞吐率权衡；</li>
+<li><strong>topology.disruptor.wait.timeout.millis</strong>: 1000 延迟和cpu使用权衡，使用长延时时会减少cpu使用，减少等待时间可以保证延时小，但cpu负载高；</li>
+</ul>
+<p>其他参数配置：</p>
+<ul>
+<li><strong>topology.debug</strong>: false debug模式关闭；</li>
+<li><strong>topology.tick.tuple.freq.secs</strong>: null 用于定时处理逻辑的拓扑使用；</li>
+<li><strong>topology.spout.wait.strategy</strong>: “backtype.storm.spout.SleepSpoutWaitStrategy” 两种情形下等待1. no data 2. 达到最大pending大小；</li>
+<li><strong>topology.sleep.spout.wait.strategy.time.ms</strong>: 1 sleep时间；</li>
+</ul>
+<p>drpc logview ui的设置就不介绍了。</p>
+<p>通过上面所讲的设置参数，可以发现gc设置和zookeeper设置非常重要，而且在message传输的相关设置中，有一系列参数如：receiver buffer size 、transfer buffer size，transfer buffer size，以及netty receiver thread 和worker receiver count 又有什么关系，上面提到到disruptor是什么东东，还有很多问题。所以在设置参数这个主题下还会再详细介绍下面三个问题：</p>
+<ul>
+<li>jvm 参数设置和调整，这个对于java程序的稳定运行至关重要（尤其是在大数据平台下，因为目前开源的大数据工具大部分都是java写的，jvm调优是必不可少的;</li>
+<li>zookeeper的维护和管理，在hadoop生态系统以及分布式系统中中必不可少的工具</li>
+<li>storm worker间和worker内的消息传递，包含disruptor的使用，通过这一节的介绍就会知道buffer size 设置为啥都是2的幂次方，这里buffer size 的单位是字节还是其他等等一些疑惑</li>
+</ul>
+
+      
+    </div>
+
+    <div>
+      
+        
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/storm/" rel="tag">#storm</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2015/07/13/json/" rel="next" title="Json文件的读取">
+                <i class="fa fa-chevron-left"></i> Json文件的读取
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2015/09/27/Travel-to-Qinghai-Lake/" rel="prev" title="Travel to Qinghai Lake | 青海湖骑行之旅">
+                Travel to Qinghai Lake | 青海湖骑行之旅 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2015/07/27/storm-configuration/"
+     data-title="Storm之配置文件"
+     data-content=""
+     data-url="http://wangzzu.github.io/2015/07/27/storm-configuration/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2015/07/27/storm-configuration/"
+           data-title="Storm之配置文件" data-url="http://wangzzu.github.io/2015/07/27/storm-configuration/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">25</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">9</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">10</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu/profile?rightmod=1&wvr=6&mod=personinfo" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-storm基本配置"><span class="nav-number">1.</span> <span class="nav-text">1.storm基本配置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-nimbus相关设置"><span class="nav-number">2.</span> <span class="nav-text">2.nimbus相关设置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-supervisor相关配置"><span class="nav-number">3.</span> <span class="nav-text">3.supervisor相关配置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-worker-配置"><span class="nav-number">4.</span> <span class="nav-text">4.worker 配置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-message传递相关参数"><span class="nav-number">5.</span> <span class="nav-text">5.message传递相关参数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#6-topology相关的设置，-针对特定拓扑的配置"><span class="nav-number">6.</span> <span class="nav-text">6.topology相关的设置， 针对特定拓扑的配置</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+      tex2jax: {
+        inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+        processEscapes: true,
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    });
+  </script>
+
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+      var all = MathJax.Hub.getAllJax(), i;
+      for (i=0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+    });
+  </script>
+
+  
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/MathJax.js"></script>
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/config/TeX-AMS-MML_HTMLorMML.js"></script>
+  
+
+
+  
+
+  
+
+</body>
+</html>

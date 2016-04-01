@@ -1,0 +1,782 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="maven," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="徐晓斌的《Maven实战》，实在是一本很不错的书，本文也是在我读过这本书的仓库一章后，根据自己的经验，做的一个总结。
+1.仓库先介绍一个构件和仓库的概念。
+构件：在Maven中，任何一个依赖、插件或者项目构建的输出，都是一个构件。如：依赖包是一个构件、编译的插件是一个构件；
+仓库：Maven在某个位置统一存储所有Maven项目共享的构件，这个统一的位置就是仓库。
+2.仓库的分类对于Maven来说，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Maven之仓库配置">
+<meta property="og:url" content="http://wangzzu.github.io/2015/10/14/the-setting-of-repertory-maven/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="徐晓斌的《Maven实战》，实在是一本很不错的书，本文也是在我读过这本书的仓库一章后，根据自己的经验，做的一个总结。
+1.仓库先介绍一个构件和仓库的概念。
+构件：在Maven中，任何一个依赖、插件或者项目构建的输出，都是一个构件。如：依赖包是一个构件、编译的插件是一个构件；
+仓库：Maven在某个位置统一存储所有Maven项目共享的构件，这个统一的位置就是仓库。
+2.仓库的分类对于Maven来说，">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-10-14-theSettingOfRepertoryOfMaven/repertory.jpg">
+<meta property="og:updated_time" content="2016-04-01T15:51:34.511Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Maven之仓库配置">
+<meta name="twitter:description" content="徐晓斌的《Maven实战》，实在是一本很不错的书，本文也是在我读过这本书的仓库一章后，根据自己的经验，做的一个总结。
+1.仓库先介绍一个构件和仓库的概念。
+构件：在Maven中，任何一个依赖、插件或者项目构建的输出，都是一个构件。如：依赖包是一个构件、编译的插件是一个构件；
+仓库：Maven在某个位置统一存储所有Maven项目共享的构件，这个统一的位置就是仓库。
+2.仓库的分类对于Maven来说，">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/2015-10-14-theSettingOfRepertoryOfMaven/repertory.jpg">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Maven之仓库配置 | Matt's Blog </title>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Maven之仓库配置
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2015-10-14T00:00:00+08:00" content="2015-10-14">
+              2015-10-14
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/maven/" itemprop="url" rel="index">
+                    <span itemprop="name">maven</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2015/10/14/the-setting-of-repertory-maven/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2015/10/14/the-setting-of-repertory-maven/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>徐晓斌的《Maven实战》，实在是一本很不错的书，本文也是在我读过这本书的仓库一章后，根据自己的经验，做的一个总结。</p>
+<h2 id="1-仓库"><a href="#1-仓库" class="headerlink" title="1.仓库"></a>1.仓库</h2><p>先介绍一个构件和仓库的概念。</p>
+<p>构件：在Maven中，任何一个依赖、插件或者项目构建的输出，都是一个构件。如：依赖包是一个构件、编译的插件是一个构件；</p>
+<p>仓库：Maven在某个位置统一存储所有Maven项目共享的构件，这个统一的位置就是仓库。</p>
+<h2 id="2-仓库的分类"><a href="#2-仓库的分类" class="headerlink" title="2.仓库的分类"></a>2.仓库的分类</h2><p>对于Maven来说，仓库只有两种：本地仓库和远程仓库。但是还有一类特殊的远程仓库——私服，它是在局域网内架设的私有仓库服务器。</p>
+<p><img src="/images/2015-10-14-theSettingOfRepertoryOfMaven/repertory.jpg" alt="Repertory"></p>
+<h3 id="2-1-本地仓库"><a href="#2-1-本地仓库" class="headerlink" title="2.1.本地仓库"></a>2.1.本地仓库</h3><h4 id="2-1-1-配置"><a href="#2-1-1-配置" class="headerlink" title="2.1.1.配置"></a>2.1.1.配置</h4><p>默认情况下，不管在window还是在Linux系统上，每一个用户在自己用户目录下都有一个<code>.m2/repository/</code>的仓库目录。</p>
+<p>当然，Maven是允许我们自定义本地仓库目录地址的，在Maven的安装目录的<code>conf</code>下找到<code>settings.xml</code>文件，配置如下：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">settings</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">localRepository</span>&gt;</span>/home/matt/maven/repo<span class="tag">&lt;/<span class="name">localRepository</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">settings</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>这样本地仓库就被设置在<code>/home/matt/maven/repo</code>下。</p>
+<p>关于<code>settings.xml</code>文件，有一点需要注意的是：</p>
+<ul>
+<li><code>$M2_HOME/conf/settings.xml</code>：是全局范围的，整台机器上的所有用户都会直接受到该配置的影响；</li>
+<li><code>~/.m2/settings.xml</code>：是用户范围的，只有当前用户才会受到该配置的影响（若目录下没有此文件，可将上个<code>settings.xml</code>复制一份到本目录下再去修改）。</li>
+</ul>
+<h4 id="2-1-2-本地项目安装到本地仓库"><a href="#2-1-2-本地项目安装到本地仓库" class="headerlink" title="2.1.2.本地项目安装到本地仓库"></a>2.1.2.本地项目安装到本地仓库</h4><p>在这个本地项目下，执行</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mvn clwan install</span><br></pre></td></tr></table></figure>
+<p>Install插件的install目标就是将项目的构建输出文件安装到本地仓库。</p>
+<h3 id="2-2-中央仓库"><a href="#2-2-中央仓库" class="headerlink" title="2.2.中央仓库"></a>2.2.中央仓库</h3><p>最原始的本地仓库是空的，Maven的安装文件中自带了中央仓库的配置。在Maven的安装目录下的<code>/lib/maven-model-builder-XX.jar</code>的jar包中的<code>pom-4.0.0.xml</code>中有如下的配置：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">repositories</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">repository</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">id</span>&gt;</span>central<span class="tag">&lt;/<span class="name">id</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">name</span>&gt;</span>Central Repository<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">url</span>&gt;</span>https://repo.maven.apache.org/maven2<span class="tag">&lt;/<span class="name">url</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">layout</span>&gt;</span>default<span class="tag">&lt;/<span class="name">layout</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">snapshots</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">enabled</span>&gt;</span>false<span class="tag">&lt;/<span class="name">enabled</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">snapshots</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">repository</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">repositories</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>配置了默认的中央仓库，所有的Maven项目都会继承这个POM，所以都会有这个配置。该中央仓库包含了世界上绝大多数流行的开源Java构件，以及源码、作者信息、SCM、信息、许可证等。上面的<code>snapshots</code>元素的子元素<code>enabled</code>设置为<code>false</code>，表示不会从该中央仓库下载快照版本的构件。</p>
+<h3 id="2-3-私服"><a href="#2-3-私服" class="headerlink" title="2.3.私服"></a>2.3.私服</h3><p>私服是架设在局域网内的仓库服务，私服代理广域网上的远程仓库，供局域网用户使用。当Maven需要下载构件的时候，他从私服请求，如果私服不存在当前构件，则从外部的远程仓库缓存到私服上之后再为Maven的下载请求提供服务，此外一些无法从外部仓库下载到的构件也可以手工上传到私服上供大家使用。</p>
+<p>它主要有以下几个优点：</p>
+<ul>
+<li>节省外网带宽；</li>
+<li>加速Maven构建；</li>
+<li>部署第三方构件（尤其是组织内部的构件）；</li>
+<li>提高稳定性，增强控制；</li>
+<li>降低中央仓库的负荷。</li>
+</ul>
+<h2 id="3-远程仓库的配置"><a href="#3-远程仓库的配置" class="headerlink" title="3.远程仓库的配置"></a>3.远程仓库的配置</h2><h3 id="3-1-配置远程仓库"><a href="#3-1-配置远程仓库" class="headerlink" title="3.1.配置远程仓库"></a>3.1.配置远程仓库</h3><p>很多情况下，默认的中央仓库无法满足项目的需求，可能项目需要的构件存在于另外一个远程仓库，可以在<code>POM</code>进行配置：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">repositories</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">repository</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">id</span>&gt;</span>jboss<span class="tag">&lt;/<span class="name">id</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">name</span>&gt;</span>JBoss Repository<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">url</span>&gt;</span>http://repository.jboss.com/maven2/<span class="tag">&lt;/<span class="name">url</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">releases</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">enabled</span>&gt;</span>true<span class="tag">&lt;/<span class="name">enabled</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">releases</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">snapshots</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">enabled</span>&gt;</span>false<span class="tag">&lt;/<span class="name">enabled</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">snapshots</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">repository</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">repositories</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>关于配置远程仓库，主要有以下几点需要注意：</p>
+<ul>
+<li>任何仓库的<code>id</code>必须唯一；</li>
+<li>在<code>repositories</code>元素下，可以使用<code>repository</code>子元素声明一个或者多个远程仓库；</li>
+<li>元素<code>releases</code>和<code>snapshots</code>用来控制Maven对于发布版本构件和快照版构件的下载。</li>
+</ul>
+<p>对于元素<code>releases</code>和<code>snapshots</code>，除了<code>enabled</code>子元素外，它们还包括另外两个子元素<code>updatePolicy</code>和<code>checksumPolicy</code>：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">snapshots</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">enabled</span>&gt;</span>false<span class="tag">&lt;/<span class="name">enabled</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">checksumPolicy</span>&gt;</span>ignore<span class="tag">&lt;/<span class="name">checksumPolicy</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">updatePolicy</span>&gt;</span>daily<span class="tag">&lt;/<span class="name">updatePolicy</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">snapshots</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li><code>updatePolicy</code>:配置Maven从远程仓库检查更新的频率，默认值是<code>daily</code>（<code>never</code>：从不检查、<code>always</code>：每次构建时都检查、<code>interval：X</code>：每隔X分钟检查一次）；</li>
+<li><code>checksumPolicy</code>：配置Maven检验和文件的策略，默认值为<code>warn</code>：在执行构建时输出警告信息（<code>ignore</code>：完全忽略校验和错误，<code>fail</code>：遇到校验和错误就让构建失败）。</li>
+</ul>
+<h3 id="3-2-认证"><a href="#3-2-认证" class="headerlink" title="3.2.认证"></a>3.2.认证</h3><p>有些远程仓库基于安全的考虑需要提供认证信息才可以访问。配置认证信息需要在<code>settings.xml</code>文件中配置：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">server</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">id</span>&gt;</span>deploymentRepo<span class="tag">&lt;/<span class="name">id</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">username</span>&gt;</span>repouser<span class="tag">&lt;/<span class="name">username</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">password</span>&gt;</span>repopwd<span class="tag">&lt;/<span class="name">password</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">server</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>Maven使用<code>settings.xml</code>文件中并不显而易见的<code>server</code>子元素配置仓库认证信息。</p>
+<p>配置认证信息和配置仓库信息不同，仓库信息可以这配置在<code>POM</code>文件中，但是认证信息必须配置在<code>settings.xml</code>文件中。、</p>
+<h3 id="3-3-部署到远程仓库"><a href="#3-3-部署到远程仓库" class="headerlink" title="3.3.部署到远程仓库"></a>3.3.部署到远程仓库</h3><p>Maven除了对项目进行编译，测试和打包之外，还能将项目部署到仓库中，首先编辑POM文件添加<code>distributionManagementy</code>元素。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">distributionManagement</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">repository</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">id</span>&gt;</span>proj-releases<span class="tag">&lt;/<span class="name">id</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">name</span>&gt;</span>Proj Releases Repository<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">url</span>&gt;</span>http://192.168.1.100/content/repositories/proj-releases<span class="tag">&lt;/<span class="name">url</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;/<span class="name">repository</span>&gt;</span></span><br><span class="line">	<span class="tag">&lt;<span class="name">snapshotRepository</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">id</span>&gt;</span>proj-snapshots<span class="tag">&lt;/<span class="name">id</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">name</span>&gt;</span>Proj Snapshots Repository<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;<span class="name">url</span>&gt;</span>http://192.168.1.100/content/repositories/proj-snapshots<span class="tag">&lt;/<span class="name">url</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">snapshotRepository</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p><code>distributionManagement</code>包含<code>repository</code>和<code>snapshotRepository</code>子元素，前者表示发布版本构件的仓库，后者表示快照版本的仓库。这两个元素下都需要配置<code>id</code>、<code>name</code>和<code>url</code>，<code>id</code>为该仓库的唯一标识，<code>name</code>是为了方便人阅读，关键的<code>url</code>表示该仓库的地址。</p>
+<p>配置正确后，执行：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mvn clean deploy</span><br></pre></td></tr></table></figure>
+<p>Maven就会将构建输出的构件部署到配置对应的远程仓库，如果项目当前的版本是快照版本，则部署到快照版本仓库地址，否则就部署到发布版本仓库地址。</p>
+<h2 id="4-镜像"><a href="#4-镜像" class="headerlink" title="4.镜像"></a>4.镜像</h2><p>如果仓库X可以提供仓库Y存储的所有内容，那么就可以认为X是Y的镜像。配置如下：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">mirrors</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">mirror</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">id</span>&gt;</span>mirrorId<span class="tag">&lt;/<span class="name">id</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">mirrorOf</span>&gt;</span>repositoryId<span class="tag">&lt;/<span class="name">mirrorOf</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">name</span>&gt;</span>Human Readable Name for this Mirror.<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">url</span>&gt;</span>http://my.repository.com/repo/path<span class="tag">&lt;/<span class="name">url</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">mirror</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">mirrors</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p><code>&lt;mirrorOf&gt; central&lt;/mirrorOf&gt;</code>表示只为central仓库做镜像，如果想为所有的仓库做镜像那么可以改为：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">mirrorOf</span>&gt;</span>*<span class="tag">&lt;/<span class="name">mirrorOf</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p><code>mirrorOf</code>可选择的配置主要有以下几个：</p>
+<ul>
+<li><strong>*</strong>：配置所有的仓库；</li>
+<li><strong>external*</strong>：匹配所有的远程仓库，使用localhost的除外，使用<code>file：//</code>的除外；</li>
+<li><strong>repo1,repo2</strong>：匹配仓库repo1和repo2，使用逗号分隔多个仓库；</li>
+<li><strong>*,!repo1</strong>：匹配所有的远程仓库除了repo1.</li>
+</ul>
+<h2 id="5-仓库的内部机制"><a href="#5-仓库的内部机制" class="headerlink" title="5.仓库的内部机制"></a>5.仓库的内部机制</h2><p>这一部分主要介绍一下Maven仓库的三个内部机制，一个仓库的布局方式，两个是仓库的解析机制和更新策略。</p>
+<h3 id="5-1-仓库的布局方式"><a href="#5-1-仓库的布局方式" class="headerlink" title="5.1.仓库的布局方式"></a>5.1.仓库的布局方式</h3><p>任何一个构件都有其唯一的坐标，根据这个坐标可以定义其在仓库中的唯一存储路径，这便是Maven仓库布局方式。例如，<code>log4j:log4j:1.2.15</code>这一依赖，其对应的仓库路径为<code>log4j/log4j/1.2.15/log4j-1.2.15.jar</code>。该路径与坐标的大致对应关系为<code>groupId/artifactId/version/artifactId-version.packaging</code>。</p>
+<p>具体的可以参看Maven参考布局的源码部分，也可以参考<a href="http://www.amazon.cn/Maven%E5%AE%9E%E6%88%98-%E8%AE%B8%E6%99%93%E6%96%8C/dp/B004CLZ7BA/ref=sr_1_1?ie=UTF8&amp;qid=1444818561&amp;sr=8-1&amp;keywords=maven%E5%AE%9E%E6%88%98" target="_blank" rel="external">《Maven实战》</a>P76-77。</p>
+<h3 id="5-2-仓库解析依赖机制"><a href="#5-2-仓库解析依赖机制" class="headerlink" title="5.2. 仓库解析依赖机制"></a>5.2. 仓库解析依赖机制</h3><p>Maven是根据怎么的跪着从仓库解析并使用依赖构件的呢？</p>
+<p>当本地仓库没有依赖构件的时候，Maven会自动从远程仓库下载相应构件，当依赖版本为快照版本的时候，Maven会自动找到最新的快照。详细的依赖机制为：</p>
+<ol>
+<li>当依赖的范围是<code>system</code>的时候，Maven直接从本地文件系统解析构件；</li>
+<li>根据依赖坐标计算仓库路径后，尝试直接从本地仓库寻找构件，如果发现相应构件，则解析成功;</li>
+<li>在本地仓库不存在相应构件的情况下，如果依赖的版本是显式的发布版本构件，如：1.2，2.1等，则遍历所有的远程仓库，发现后，下载并解析使用;</li>
+<li>如果依赖的版本是<code>RELEASE</code>或者<code>LATEST</code>，则基于更新策略读取所有远程仓库的元数据<code>groupId/artifactId/mavenmetadata.xml</code>，将其与本地仓库的对应元数据合并后，计算出<code>RELEASE</code>或者<code>LATEST</code>真实的值，然后基于这个真实的值检查本地和远程仓库，如步骤1和3;</li>
+<li>如果依赖的版本是<code>SNAPSHOT</code>，则基于更新策略读取所有远程仓库的元数据<code>groupId/artifactId/version/mavenmetadata.xml</code>，将其与本地仓库的对应元数据合并后，得到最新快照版本的值，然后基于该值检查本地仓库，或者从远程仓库下载;</li>
+<li>.如果最后解析得到的构件版本是时间戳格式的快照，如：<code>1.4-20091104.121450-121</code>,则复制其时间戳格式的文件到非时间戳格式，如：<code>SNAPSHOT</code>，并使用该非时间戳格式的构件.</li>
+</ol>
+<p>当依赖的版本不明晰的时候，如:<code>RELEASE</code>,<code>LATEST</code>和<code>SNAPSHOT</code>，Maven就需要基于更新远程仓库的更新策略来检查更新。</p>
+<h3 id="5-3-仓库的更新策略"><a href="#5-3-仓库的更新策略" class="headerlink" title="5.3.仓库的更新策略"></a>5.3.仓库的更新策略</h3><p>主要有以下几个配置与Maven仓库的更新有关：</p>
+<ul>
+<li>首先是<code>&lt;releases&gt;&lt;enabled&gt;</code>和<code>&lt;snapshots&gt;&lt;enabled&gt;</code>，只有仓库开启了对于发布版本的支持时，才能访问该仓库的发布版本构件信息，对于快照版本也是同理；</li>
+<li>其次要注意的是<br><code>&lt;releases&gt;</code>和<code>&lt;snapshots&gt;</code>的子元素<code>&lt;updatePolicy&gt;</code>，该元素配置了检查更新的频率;</li>
+<li>最后，用户还可以从命令行加入参数<code>-U</code>,强制检查更新，使用参数后，Maven就会忽略<code>&lt;updatePolicy&gt;</code>的配置。</li>
+</ul>
+<p>当Maven检查完更新策略，并决定检查依赖更新的时候，就需要检查仓库元数据<code>maven-metadata.xml</code>。前面提到的<code>RELEASE</code>和<code>LATEST</code>版本，它们分别对应了仓库中存在的该构件的最新发布版本和最新版本(包含快照)，而这两个”最新”是基于<code>groupId/artifactId/maven-metadata.xml</code>计算出来的，如：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span><br><span class="line"><span class="tag">&lt;<span class="name">metadata</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.sonatype.nexus<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>nexus<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">versioning</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">latest</span>&gt;</span>1.4.2-SNAPSHOT<span class="tag">&lt;/<span class="name">latest</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">release</span>&gt;</span>1.4.0<span class="tag">&lt;/<span class="name">release</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">versions</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.3.5<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.3.6<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.4.0-SNAPSHOT<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.4.0<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.4.0.1-SNAPSHOT<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.4.1-SNAPSHOT<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.4.2-SNAPSHOT<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">versions</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">versioning</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">metadata</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>在XML文件列出了仓库中存在的该构件所有可用的版本，同时<code>latest</code>元素指向了这些版本中最新的那个版本。而<code>release</code>元素指向了这些版本中最新的发布版本。Maven通过合并多个远程仓库及本地仓库的元数据，就能计算出基于所有仓库的<code>latest</code>和<code>release</code>分别是什么，然后再解析具体的构件。</p>
+<p> 有几点需要的注意的：</p>
+<ul>
+<li>在依赖声明中使用LATEST和RELEASE是<strong>不推荐</strong>的做法（因为Maven随时都可能解析到不同的构件，可能今天<code>LATEST</code>是<code>1.3.6</code>,明天就成了<code>1.4.0-SNAPSHOT</code>了，且Maven不会明确告诉用户这样的变化）；</li>
+<li>Maven3不再支持在插件配置中使用<code>LATEST</code>和<code>RELEASE</code>；</li>
+<li>如果不设置插件版本，其效果就和RELEASE一样，Maven只会解析最新的发布版本构件；</li>
+</ul>
+<p>当依赖的版本设为<strong>快照版本</strong>的时候，Maven也需要检查更新，这时，Maven会检查仓库元数据<code>groupId/artifactId/version/maven-metadata.xml</code>，这个与发布版本的有所不同。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span><br><span class="line"><span class="tag">&lt;<span class="name">metadata</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.sonatype.nexus<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>nexus<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.4.2-SNAPSHOT<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">versioning</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">snapshot</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">timestamp</span>&gt;</span>20091214.221414<span class="tag">&lt;/<span class="name">timestamp</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">buildNumber</span>&gt;</span>13<span class="tag">&lt;/<span class="name">buildNumber</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">snapshot</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">lastUpdated</span>&gt;</span>20091214221558<span class="tag">&lt;/<span class="name">lastUpdated</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">versioning</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">metadata</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>该xml文件的<code>snapshot</code>元素包含<code>timestamp</code>和<code>buildNumber</code>两个子元素，分别代表了这一快照的时间戳和构建号，基于这两个元素可以得到该仓库中此快照的最新构件版本实际为<code>1.4.2-20091213.221414-13</code>。通过合并所有远程仓库和本地仓库的元数据，Maven就能知道所有仓库中该构件的最新快照。 </p>
+<h2 id="6-快照版本"><a href="#6-快照版本" class="headerlink" title="6.快照版本"></a>6.快照版本</h2><p>在Maven的世界中，任何一个项目或者构件都必须有自己的版本。版本的值可能是<code>1.0.0,1.3-alpha-4</code>,<code>2.0</code>,<code>2.1-SNAPSHOT</code>或者<code>2.1-20091214.221414-13</code>。其中，<code>1.0</code>、<code>1.3-alpha-4</code>和<code>2.0</code>是稳定的发布版本，而<code>2.1-SNAPSHOT</code>和<code>2.1-20091214.221414-13</code>是不稳定的快照版本。</p>
+<p>快照版本对于Maven来说是很重要的，下面举个例子来说明。小张在开发模块A的2.1版本，该版本还未正式发布，与模块A一同开发的还有模块B，它由小张的同事季MM开发，B的功能依赖于A。在开发的过程中，小张需要经常将自己最新的构建输出，交给季MM，供她开发和集成调试，问题是，这个工作如何进行呢？如果不停更新版本2.1.1、2.1.2、2.1.3….呢？首先，小张和季MM两人都需要频繁地更改POM，如果有更多的模块依赖于模块A，就会涉及更多的POM更改；其次，大量的版本其实仅仅包含了微小的差异，这样也会造成为版本号的滥用。</p>
+<p>Maven的快照版本机制就是为了解决上述问题。在该例中，小张只需要将模块A的版本设定为<code>2.1-SNAPSHOT</code>，然后发布到私服中，在发布的过程中，Maven会自动为构件打上时间戳。比如:<code>2.1-20091214.221414-13</code>就表示2009年12月14日 22点14分14秒的第13次快照。有了该时间戳，Maven就能随时找到仓库中该构件<code>2.1-SNAPSHOT</code>版本最新的文件。这时，季MM配置对于模块A的<code>2.1-SNAPSHOT</code>版本的依赖，当她构件模块B的时候，Maven会自动从仓库中检查模块A的<code>2.1-SNAPSHOT</code>的最新构件，当发现有更新时便进行下载。默认情况下，Maven每天检查一次更新(由仓库配置的<code>updatePolicy</code>控制)，用户也可以使用命令行-U参数强制让Maven检查更新，如：<code>mvn clean install-U</code>。</p>
+<p>基于快照版本机制，小张在构建成功之后才能将构件部署至仓库，而季MM可以完全不用考虑模块A的构建，并且她能确保随时得到模块A的最新可用的快照构件，而这一切都不需要额外的手工操作。</p>
+<p>最后要注意的是，快照版本一般只在组织内部的项目或模块间依赖使用，而且项目不应该依赖于组织外部的快照版本依赖（因为快照版本是不稳定的）。</p>
+
+      
+    </div>
+
+    <div>
+      
+        
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/maven/" rel="tag">#maven</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2015/10/11/the-dependency-of-maven/" rel="next" title="JMaven之依赖">
+                <i class="fa fa-chevron-left"></i> JMaven之依赖
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2015/10/17/The-keyword-of-java/" rel="prev" title="Java关键字之final和static">
+                Java关键字之final和static <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2015/10/14/the-setting-of-repertory-maven/"
+     data-title="Maven之仓库配置"
+     data-content=""
+     data-url="http://wangzzu.github.io/2015/10/14/the-setting-of-repertory-maven/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2015/10/14/the-setting-of-repertory-maven/"
+           data-title="Maven之仓库配置" data-url="http://wangzzu.github.io/2015/10/14/the-setting-of-repertory-maven/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">25</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">9</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">10</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu/profile?rightmod=1&wvr=6&mod=personinfo" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-仓库"><span class="nav-number">1.</span> <span class="nav-text">1.仓库</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-仓库的分类"><span class="nav-number">2.</span> <span class="nav-text">2.仓库的分类</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-本地仓库"><span class="nav-number">2.1.</span> <span class="nav-text">2.1.本地仓库</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-1-配置"><span class="nav-number">2.1.1.</span> <span class="nav-text">2.1.1.配置</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-2-本地项目安装到本地仓库"><span class="nav-number">2.1.2.</span> <span class="nav-text">2.1.2.本地项目安装到本地仓库</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-中央仓库"><span class="nav-number">2.2.</span> <span class="nav-text">2.2.中央仓库</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-3-私服"><span class="nav-number">2.3.</span> <span class="nav-text">2.3.私服</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-远程仓库的配置"><span class="nav-number">3.</span> <span class="nav-text">3.远程仓库的配置</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#3-1-配置远程仓库"><span class="nav-number">3.1.</span> <span class="nav-text">3.1.配置远程仓库</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-2-认证"><span class="nav-number">3.2.</span> <span class="nav-text">3.2.认证</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-3-部署到远程仓库"><span class="nav-number">3.3.</span> <span class="nav-text">3.3.部署到远程仓库</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-镜像"><span class="nav-number">4.</span> <span class="nav-text">4.镜像</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-仓库的内部机制"><span class="nav-number">5.</span> <span class="nav-text">5.仓库的内部机制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#5-1-仓库的布局方式"><span class="nav-number">5.1.</span> <span class="nav-text">5.1.仓库的布局方式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-2-仓库解析依赖机制"><span class="nav-number">5.2.</span> <span class="nav-text">5.2. 仓库解析依赖机制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-3-仓库的更新策略"><span class="nav-number">5.3.</span> <span class="nav-text">5.3.仓库的更新策略</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-快照版本"><span class="nav-number">6.</span> <span class="nav-text">6.快照版本</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+      tex2jax: {
+        inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+        processEscapes: true,
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    });
+  </script>
+
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+      var all = MathJax.Hub.getAllJax(), i;
+      for (i=0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+    });
+  </script>
+
+  
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/MathJax.js"></script>
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/config/TeX-AMS-MML_HTMLorMML.js"></script>
+  
+
+
+  
+
+  
+
+</body>
+</html>

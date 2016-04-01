@@ -1,0 +1,740 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="kafka," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="这篇文章主要是简单地把Kafka的背景，基础知识和应用场景介绍一下，算是一篇入门的文章。
+1.kafka介绍关于kafka入门的文章最好的就莫过于kafka的官方文档了，这上面对kafka的定义是：
+
+Kafka is a distributed, partitioned, replicated commit log service. It provides the functionality o">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka的简单介绍">
+<meta property="og:url" content="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="这篇文章主要是简单地把Kafka的背景，基础知识和应用场景介绍一下，算是一篇入门的文章。
+1.kafka介绍关于kafka入门的文章最好的就莫过于kafka的官方文档了，这上面对kafka的定义是：
+
+Kafka is a distributed, partitioned, replicated commit log service. It provides the functionality o">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/kafka">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/pull">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/log.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/topic.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/consumerGroup.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/produce.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/consumer.png">
+<meta property="og:updated_time" content="2016-04-01T15:52:33.581Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kafka的简单介绍">
+<meta name="twitter:description" content="这篇文章主要是简单地把Kafka的背景，基础知识和应用场景介绍一下，算是一篇入门的文章。
+1.kafka介绍关于kafka入门的文章最好的就莫过于kafka的官方文档了，这上面对kafka的定义是：
+
+Kafka is a distributed, partitioned, replicated commit log service. It provides the functionality o">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/kafka">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Kafka的简单介绍 | Matt's Blog </title>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Kafka的简单介绍
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2015-11-14T00:00:00+08:00" content="2015-11-14">
+              2015-11-14
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/kafka/" itemprop="url" rel="index">
+                    <span itemprop="name">kafka</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2015/11/14/The-Introduce-of-Kafka/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2015/11/14/The-Introduce-of-Kafka/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>这篇文章主要是简单地把Kafka的背景，基础知识和应用场景介绍一下，算是一篇入门的文章。</p>
+<h2 id="1-kafka介绍"><a href="#1-kafka介绍" class="headerlink" title="1.kafka介绍"></a>1.kafka介绍</h2><p>关于kafka入门的文章最好的就莫过于kafka的<a href="http://kafka.apache.org/documentation.html" target="_blank" rel="external">官方文档</a>了，这上面对kafka的定义是：</p>
+<blockquote>
+<p>Kafka is a distributed, partitioned, replicated commit log service. It provides the functionality of a messaging system, but with a unique design.</p>
+</blockquote>
+<p>kafka是一个分布式的，可分区的，可备份的日志提交服务，它使用独特的设计实现了一个消息系统的功能。</p>
+<p>到底kafka使用什么独特的设计可以让它在消息处理领域独占鳌头呢？这就涉及到kafka的内部机制，这些我会在后续的文章中向大家慢慢介绍，这里先介绍一下kafka集群的基本结构和kafka的一些专业术语。</p>
+<h3 id="1-1-kafka集群的基本架构"><a href="#1-1-kafka集群的基本架构" class="headerlink" title="1.1.kafka集群的基本架构"></a>1.1.kafka集群的基本架构</h3><p>一个典型的kafka集群架构如下图所示：</p>
+<p><img src="/images/2015-11-14-kafka-introduce/kafka" alt="kafka"></p>
+<p>kafka集群常用的场景就是，producer把日志信息推送（push）到broker节点上，然后consumer（可以是写入到hdfs或者其他的一些应用）再从broker拉取（pull）信息。kafka的push&amp;pull机制如下图所示，具体的这样设计的原因我会在后续的文章中进行介绍。</p>
+<p><img src="/images/2015-11-14-kafka-introduce/pull" alt="pull"></p>
+<p>作为一个message system，kafka遵循了传统的方式，选择由kafka的producer向broker push信息，而consumer从broker pull信息。kafka的consumer之所以没有采用push模式，主要是因为push模式很难适应速率不同的consumer，因为消息发送速率是由broker决定的。push模式的目标就是尽可能以最快速度传递消息，但是这样很容易造成consumer来不及处理消息，典型的表现就是拒绝服务以及网络拥塞，而pull模式则可以根据consumer的消费能力以适当的速率消费message。</p>
+<h3 id="1-2-专业术语"><a href="#1-2-专业术语" class="headerlink" title="1.2.专业术语"></a>1.2.专业术语</h3><p>kafka使用的一些主要的专业术语：</p>
+<ul>
+<li><strong>Topic</strong>：特指Kafka处理的消息源的不同分类，其实也可以理解为对不同消息源的区分的一个标识；</li>
+<li><strong>Partition</strong>：Topic物理上的分组，一个topic可以设置为多个partition，每个partition都是一个有序的队列，partition中的每条消息都会被分配一个有序的id（offset）；</li>
+<li><strong>Message</strong>：消息，是通信的基本单位，每个producer可以向一个topic（主题）发送一些消息；</li>
+<li><strong>Producers</strong>：消息和数据生产者，向Kafka的一个topic发送消息的过程叫做producers（producer可以选择向topic哪一个partition发送数据）。</li>
+<li><strong>Consumers</strong>：消息和数据消费者，接收topics并处理其发布的消息的过程叫做consumer，同一个topic的数据可以被多个consumer接收；</li>
+<li><strong>Broker</strong>：缓存代理，Kafka集群中的一台或多台服务器统称为broker。</li>
+</ul>
+<p>理解了上述概念之后，再来看kafka就容易了。</p>
+<h3 id="1-3-kafka的应用场景"><a href="#1-3-kafka的应用场景" class="headerlink" title="1.3.kafka的应用场景"></a>1.3.kafka的应用场景</h3><p>Kafka主要用于处理流式数据。流式数据在web网站应用中非常常见，这些数据包括网站的pv、用户访问了什么内容，搜索了什么内容等。这些数据通常以日志的形式记录下来，然后每隔一段时间进行一次统计处理。Kafka的作用类似于缓存，能够很好地处理实时和离线应用。</p>
+<h2 id="2-组件详解"><a href="#2-组件详解" class="headerlink" title="2.组件详解"></a>2.组件详解</h2><h3 id="2-1-topic"><a href="#2-1-topic" class="headerlink" title="2.1.topic"></a>2.1.topic</h3><p>正如前面介绍的，topic是kafka发送消息的一个标识，一般以目录的形式存在，对于一个有三个partition的topic而言，它日志信息结构大概如下图所示：</p>
+<p><img src="/images/2015-11-14-kafka-introduce/log.png" alt="log"></p>
+<p>每一个partition实际上都是一个有序的，不可变的消息序列，producer发送到broker的消息会写入到相应的partition目录下，每个partition都会有一个有序的id（<code>offset</code>），这个offset确定这个消息在partition中的具体位置。</p>
+<p>举一个例子，我们在一个kafka集群中建立的名为<code>wangzzu</code>，partition数为3的topic，kafka就会在broker的<code>/tmp/kafka-logs</code>（目录可以修改，可参考我<a href="http://wangzzu.github.io/2015/11/13/kafka-install/">kafka集群安装与配置</a>）新建三个目录，这里我们直接指定将三个partition建立在同一个broker上，如下图所示：</p>
+<p><img src="/images/2015-11-14-kafka-introduce/topic.png" alt="topic"></p>
+<p>当启动producer程序时，就会向kafka集群发送信息，而kafka就会把中间信息存储在这三个目录下，具体的发送方式和消息存储结构会在以后的文章中介绍。</p>
+<h3 id="2-2-producer"><a href="#2-2-producer" class="headerlink" title="2.2.producer"></a>2.2.producer</h3><p>producer这部分相比较而言，是比较简单的，就是把消息发送给它所选择的topic，也可以具体指定发给这个topic的哪个一个partition，否则producer就会使用<code>hashing-based partitioner</code>来决定发送到哪个partition，这个问题还是需要多说一些，之前我在测试kafka速度的时候就遇到了这个问题，当我们增加broker的数量时，kafka的发送速度并没有线性增加，最后发现就是因为这个原因，没有指明发送数据到哪个partition，具体的解释我就引用官网<a href="https://cwiki.apache.org/confluence/display/KAFKA/FAQ" target="_blank" rel="external">WIKI</a>中给出回答：</p>
+<blockquote>
+<p>In Kafka producer, a partition key can be specified to indicate the destination partition of the message. By default, a hashing-based partitioner is used to determine the partition id given the key, and people can use customized partitioners also.<br>To reduce # of open sockets, in 0.8.0(<a href="https://issues.apache.org/jira/browse/KAFKA-1017" target="_blank" rel="external">High number of open file handles in 0.8 producer</a>), when the partitioning key is not specified or null, a producer will pick a random partition and stick to it for some time (default is 10 mins) before switching to another one. So, if there are fewer producers than partitions, at a given point of time, some partitions may not receive any data. To alleviate this problem, one can either reduce the metadata refresh interval or specify a message key and a customized random partitioner. For more detail see <a href="http://mail-archives.apache.org/mod_mbox/kafka-dev/201310.mbox/%3CCAFbh0Q0aVh%2Bvqxfy7H-%2BMnRFBt6BnyoZk1LWBoMspwSmTqUKMg%40mail.gmail.com%3E" target="_blank" rel="external">this thread</a></p>
+</blockquote>
+<h3 id="2-3-consumer"><a href="#2-3-consumer" class="headerlink" title="2.3.consumer"></a>2.3.consumer</h3><p>这里的consumer部分，主要是以<code>High Level Consumer API</code>为例。</p>
+<p>consumer是一个抽象的概念，调用<code>Consumer API</code>的程序都可以称作为一个consumer，它从broker端订阅某个topic的消息。如果只有一个consumer的话，该topic（可能含有多个partition）下所有消息都会被这个consumer接收。但是在分布式的环境中，我们可能会遇到这样一种情景，对于一个有多个partition的topic，我们希望启动多个consumer去消费这些partition（如果发送速度较快，一个consumer是无法消费完的），并且要求topic的一条消息只能发给其中一个consumer，不希望这些conusmer出现重复接收一条消息的情况。对于这种情况，我们应该怎么办呢？kafka给我们提供了一种机制，可以很好来适应这种情况，那就是<strong>consumer group</strong>（当然也可以应用在第一种情况，实际上，如果只有一个consumer时，是不需要指定consumer group，这时kafka会自动给这个consumer生成一个group名）。</p>
+<p>在调用conusmer API时，一般都会指定一个consumer group，该group订阅的topic的每一条消息都发送到这个group的某一台机器上。借用官网一张图来详细介绍一下这种情况，假如kafka集群有两台broker，集群上有一个topic，它有4个partition，partition 0和1在broker1上，partition 2和3在broker2上，这时有两个consumer group同时订阅这个topic，其中一个group有2个consumer，另一个consumer有4个consumer，则它们的订阅消息情况如下图所示：</p>
+<p><img src="/images/2015-11-14-kafka-introduce/consumerGroup.png" alt="consumerGroup"></p>
+<p>因为group A只有两个consumer，所以一个consumer会消费两个partition；而group B有4个consumer，一个consumer会去消费一个partition。这里要注意的是，kafka可以保证一个<strong>partition内的数据是有序的</strong>，所以group B中的consumer收到的数据是可以保证有序的，但是Group A中的consumer就无法保证了。</p>
+<p>group读取topic，<strong>partition分配</strong>机制是：</p>
+<ul>
+<li>如果group中的consumer数小于topic中的partition数，那么group中的consumer就会消费多个partition；</li>
+<li>如果group中的consumer数等于topic中的partition数，那么group中的一个consumer就会消费topic中的一个partition；</li>
+<li>如果group中的consumer数大于topic中的partition数，那么group中就会有一部分的consumer处于空闲状态。</li>
+</ul>
+<h2 id="3-kafka的简单使用"><a href="#3-kafka的简单使用" class="headerlink" title="3.kafka的简单使用"></a>3.kafka的简单使用</h2><p>这部分是利用kafka自带的<code>kafka-console-producer.sh</code>和<code>kafka-console-consumer.sh</code>来发送和接收消息，而具体如何调用 kafka  API使用kafka会在后续的文章中介绍。</p>
+<p>首先要启动kafka和建立topic，可参考<a href="http://wangzzu.github.io/2015/05/20/KafkaOrder/">Kafka常用的一些命令</a></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nohup bin/kafka-server-start.sh config/server.properties &amp; <span class="comment">#启动kafka，并且使用nohup将日志输出到当前目录的nohup.out中，使用&amp;后台运行</span></span><br></pre></td></tr></table></figure>
+<p>topic还接着使用<code>wangzzu</code>（建立topic命令参考2.1中的图片），下面开启<code>kafka-console-producer.sh</code>并发送几条消息</p>
+<p><img src="/images/2015-11-14-kafka-introduce/produce.png" alt="producer"></p>
+<p>然后，启动<code>kafka-console-consumer.sh</code>就可以收到我们发送的这几条消息</p>
+<p><img src="/images/2015-11-14-kafka-introduce/consumer.png" alt="consumer"></p>
+<p>这个就是kafka的最简单的使用情况了。</p>
+<p>希望这篇文章对初学者能有所帮助（<code>转载请注明出处</code>）。</p>
+<hr>
+<h4 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h4><ul>
+<li><a href="http://kafka.apache.org/documentation.html" target="_blank" rel="external">Kafka官方文档</a></li>
+</ul>
+
+      
+    </div>
+
+    <div>
+      
+        
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/kafka/" rel="tag">#kafka</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2015/11/13/kafka-install/" rel="next" title="Kafka集群的安装与配置">
+                <i class="fa fa-chevron-left"></i> Kafka集群的安装与配置
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2015/11/27/kafka-code1/" rel="prev" title="Kafka程序设计之Producer">
+                Kafka程序设计之Producer <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2015/11/14/The-Introduce-of-Kafka/"
+     data-title="Kafka的简单介绍"
+     data-content=""
+     data-url="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2015/11/14/The-Introduce-of-Kafka/"
+           data-title="Kafka的简单介绍" data-url="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">25</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">9</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">10</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu/profile?rightmod=1&wvr=6&mod=personinfo" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-kafka介绍"><span class="nav-number">1.</span> <span class="nav-text">1.kafka介绍</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-1-kafka集群的基本架构"><span class="nav-number">1.1.</span> <span class="nav-text">1.1.kafka集群的基本架构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-2-专业术语"><span class="nav-number">1.2.</span> <span class="nav-text">1.2.专业术语</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-3-kafka的应用场景"><span class="nav-number">1.3.</span> <span class="nav-text">1.3.kafka的应用场景</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-组件详解"><span class="nav-number">2.</span> <span class="nav-text">2.组件详解</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-topic"><span class="nav-number">2.1.</span> <span class="nav-text">2.1.topic</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-producer"><span class="nav-number">2.2.</span> <span class="nav-text">2.2.producer</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-3-consumer"><span class="nav-number">2.3.</span> <span class="nav-text">2.3.consumer</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-kafka的简单使用"><span class="nav-number">3.</span> <span class="nav-text">3.kafka的简单使用</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#参考"><span class="nav-number">3.0.1.</span> <span class="nav-text">参考</span></a></li></ol></li></ol></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+      tex2jax: {
+        inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+        processEscapes: true,
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    });
+  </script>
+
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+      var all = MathJax.Hub.getAllJax(), i;
+      for (i=0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+    });
+  </script>
+
+  
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/MathJax.js"></script>
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/config/TeX-AMS-MML_HTMLorMML.js"></script>
+  
+
+
+  
+
+  
+
+</body>
+</html>

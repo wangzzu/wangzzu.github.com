@@ -1,0 +1,716 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="kafka," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="1.KafkaOffsetMonitor1.1.下载安装
+源码下载地址
+jar下载地址
+
+1.2.使用方法This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.
+1java -cp Kafka">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kafka监控软件介绍">
+<meta property="og:url" content="http://wangzzu.github.io/2015/12/08/2015-12-8-kafka-monitor/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="1.KafkaOffsetMonitor1.1.下载安装
+源码下载地址
+jar下载地址
+
+1.2.使用方法This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.
+1java -cp Kafka">
+<meta property="og:updated_time" content="2016-03-31T15:41:13.216Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kafka监控软件介绍">
+<meta name="twitter:description" content="1.KafkaOffsetMonitor1.1.下载安装
+源码下载地址
+jar下载地址
+
+1.2.使用方法This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.
+1java -cp Kafka">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Kafka监控软件介绍 | Matt's Blog </title>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Kafka监控软件介绍
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2015-12-08T00:00:00+08:00" content="2015-12-08">
+              2015-12-08
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/kafka/" itemprop="url" rel="index">
+                    <span itemprop="name">kafka</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2015/12/08/2015-12-8-kafka-monitor/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2015/12/08/2015-12-8-kafka-monitor/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h2 id="1-KafkaOffsetMonitor"><a href="#1-KafkaOffsetMonitor" class="headerlink" title="1.KafkaOffsetMonitor"></a>1.KafkaOffsetMonitor</h2><h3 id="1-1-下载安装"><a href="#1-1-下载安装" class="headerlink" title="1.1.下载安装"></a>1.1.下载安装</h3><ul>
+<li><a href="https://github.com/quantifind/KafkaOffsetMonitor" target="_blank" rel="external">源码下载地址</a></li>
+<li><a href="https://github.com/quantifind/KafkaOffsetMonitor/releases/download/v0.2.1/KafkaOffsetMonitor-assembly-0.2.1.jar" target="_blank" rel="external">jar下载地址</a></li>
+</ul>
+<h3 id="1-2-使用方法"><a href="#1-2-使用方法" class="headerlink" title="1.2.使用方法"></a>1.2.使用方法</h3><p>This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">java -cp KafkaOffsetMonitor-assembly-0.2.1.jar com.quantifind.kafka.offsetapp.OffsetGetterWeb --zk serveIp1,serveIp2,serveIp3 --port 8080 --refresh 10.seconds --retain 2.days</span><br></pre></td></tr></table></figure>
+<p>The arguments are:</p>
+<ul>
+<li><strong>ZK</strong>: the ZooKeeper hosts;</li>
+<li><strong>port</strong>: on what port will the app be available;</li>
+<li><strong>refresh</strong>: how often should the app refresh and store a point in the DB;</li>
+<li><strong>retain</strong>: how long should points be kept in the DB;</li>
+<li><strong>dbName</strong>: where to store the history (default ‘offsetapp’);</li>
+</ul>
+<h2 id="2-Kafka-Manager"><a href="#2-Kafka-Manager" class="headerlink" title="2.Kafka Manager"></a>2.Kafka Manager</h2><p><a href="https://github.com/yahoo/kafka-manager" target="_blank" rel="external">源码地址</a></p>
+<h3 id="2-1-安装"><a href="#2-1-安装" class="headerlink" title="2.1.安装"></a>2.1.安装</h3><p><a href="http://hengyunabc.github.io/kafka-manager-install/" target="_blank" rel="external">Kafka Manager安装</a></p>
+<h4 id="2-1-1-sbt安装"><a href="#2-1-1-sbt安装" class="headerlink" title="2.1.1.sbt安装"></a>2.1.1.sbt安装</h4><p><a href="http://www.scala-sbt.org/download.html" target="_blank" rel="external">sbt安装</a></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">curl https://bintray.com/sbt/rpm/rpm &gt; bintray-sbt-rpm.repo</span><br><span class="line">sudo mv bintray-sbt-rpm.repo /etc/yum.repos.d/</span><br><span class="line">sudo yum install sbt</span><br></pre></td></tr></table></figure>
+<h4 id="2-1-2-下载，编译"><a href="#2-1-2-下载，编译" class="headerlink" title="2.1.2.下载，编译"></a>2.1.2.下载，编译</h4><p>下载，并编译源码：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">git <span class="built_in">clone</span> https://github.com/yahoo/kafka-manager</span><br><span class="line"><span class="built_in">cd</span> kafka-manager</span><br><span class="line">sbt clean dist</span><br></pre></td></tr></table></figure>
+<p>生成的包会在<code>kafka-manager/target/universal</code> 下面。生成的包只需要java环境就可以运行了，在部署的机器上不需要安装sbt.</p>
+<h4 id="2-1-3-打包部署"><a href="#2-1-3-打包部署" class="headerlink" title="2.1.3.打包部署"></a>2.1.3.打包部署</h4><p>打好包好，在部署机器上解压，修改好配置文件，就可以运行了。</p>
+<p>解压：<br><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">unzip kafka-manager-1.0-SNAPSHOT.zip</span><br></pre></td></tr></table></figure></p>
+<h3 id="2-2-配置运行"><a href="#2-2-配置运行" class="headerlink" title="2.2.配置运行"></a>2.2.配置运行</h3><h4 id="2-2-1-配置"><a href="#2-2-1-配置" class="headerlink" title="2.2.1.配置"></a>2.2.1.配置</h4><p>修改<code>conf/application.conf</code>，把<code>kafka-manager.zkhosts</code>改为自己的zookeeper服务器地址</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kafka-manager.zkhosts=<span class="string">"localhost:2181"</span></span><br></pre></td></tr></table></figure>
+<h4 id="2-2-2-启动"><a href="#2-2-2-启动" class="headerlink" title="2.2.2.启动"></a>2.2.2.启动</h4><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./bin/kafka-manager -Dconfig.file=./conf/application.conf -Dhttp.port=8080</span><br></pre></td></tr></table></figure>
+<h4 id="2-2-3-kafka-manager其他方面"><a href="#2-2-3-kafka-manager其他方面" class="headerlink" title="2.2.3.kafka-manager其他方面"></a>2.2.3.kafka-manager其他方面</h4><p>查看帮助</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./bin/kafka-manager -h</span><br></pre></td></tr></table></figure>
+<p>后台运行</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nohup ./kafka-manager -Dconfig.file=../conf/application.conf &gt;/dev/null 2&gt;&amp;1 &amp;</span><br></pre></td></tr></table></figure>
+<p>默认http端口是9000，可以修改配置文件里的http.port的值，或者通过命令行参数传递：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./kafka-manager -Dhttp.port=9001</span><br></pre></td></tr></table></figure>
+<p>如果不想自己编译源文件，也可以通过下面的地址直接下载，<a href="http://pan.baidu.com/s/1kTtFpGV" target="_blank" rel="external">kafka-manager-1.0-SNAPSHOT.zip下载地址</a></p>
+<h3 id="3-Kafka-web-console"><a href="#3-Kafka-web-console" class="headerlink" title="3.Kafka-web-console"></a>3.Kafka-web-console</h3><p><a href="https://github.com/claudemamo/kafka-web-console" target="_blank" rel="external">源码地址</a></p>
+<p>不过这个项目好像不再进行更新了，想了解这个项目的话可以进入github主页去研究研究。</p>
+
+      
+    </div>
+
+    <div>
+      
+        
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/kafka/" rel="tag">#kafka</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2015/11/27/kafka-code1/" rel="next" title="Kafka程序设计之Producer">
+                <i class="fa fa-chevron-left"></i> Kafka程序设计之Producer
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2015/12/21/kafka-learn/" rel="prev" title="关于Kafka学习的一些资料">
+                关于Kafka学习的一些资料 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2015/12/08/2015-12-8-kafka-monitor/"
+     data-title="Kafka监控软件介绍"
+     data-content=""
+     data-url="http://wangzzu.github.io/2015/12/08/2015-12-8-kafka-monitor/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2015/12/08/2015-12-8-kafka-monitor/"
+           data-title="Kafka监控软件介绍" data-url="http://wangzzu.github.io/2015/12/08/2015-12-8-kafka-monitor/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">25</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">9</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">10</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu/profile?rightmod=1&wvr=6&mod=personinfo" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-KafkaOffsetMonitor"><span class="nav-number">1.</span> <span class="nav-text">1.KafkaOffsetMonitor</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-1-下载安装"><span class="nav-number">1.1.</span> <span class="nav-text">1.1.下载安装</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-2-使用方法"><span class="nav-number">1.2.</span> <span class="nav-text">1.2.使用方法</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-Kafka-Manager"><span class="nav-number">2.</span> <span class="nav-text">2.Kafka Manager</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-安装"><span class="nav-number">2.1.</span> <span class="nav-text">2.1.安装</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-1-sbt安装"><span class="nav-number">2.1.1.</span> <span class="nav-text">2.1.1.sbt安装</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-2-下载，编译"><span class="nav-number">2.1.2.</span> <span class="nav-text">2.1.2.下载，编译</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-3-打包部署"><span class="nav-number">2.1.3.</span> <span class="nav-text">2.1.3.打包部署</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-配置运行"><span class="nav-number">2.2.</span> <span class="nav-text">2.2.配置运行</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#2-2-1-配置"><span class="nav-number">2.2.1.</span> <span class="nav-text">2.2.1.配置</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-2-2-启动"><span class="nav-number">2.2.2.</span> <span class="nav-text">2.2.2.启动</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-2-3-kafka-manager其他方面"><span class="nav-number">2.2.3.</span> <span class="nav-text">2.2.3.kafka-manager其他方面</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-Kafka-web-console"><span class="nav-number">2.3.</span> <span class="nav-text">3.Kafka-web-console</span></a></li></ol></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+      tex2jax: {
+        inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+        processEscapes: true,
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    });
+  </script>
+
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+      var all = MathJax.Hub.getAllJax(), i;
+      for (i=0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+    });
+  </script>
+
+  
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/MathJax.js"></script>
+    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/config/TeX-AMS-MML_HTMLorMML.js"></script>
+  
+
+
+  
+
+  
+
+</body>
+</html>
