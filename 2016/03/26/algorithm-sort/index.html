@@ -7,7 +7,7 @@
 
 <html class="theme-next mist use-motion">
 <head>
-  <meta charset="UTF-8"/>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
 
@@ -155,7 +155,7 @@
 <meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n)">
 <meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(n^2)">
 <meta property="og:image" content="http://chart.googleapis.com/chart?cht=tx&chl= O(k)">
-<meta property="og:updated_time" content="2016-04-01T15:55:22.478Z">
+<meta property="og:updated_time" content="2016-04-04T13:55:05.797Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="排序算法总结">
 <meta name="twitter:description" content="排序算法是算法中基础的部分，也是面试中经常被问到的地方。因此，根据对《算法》和《算法导论》关于这部分的学习，做一下总结，以后再遇到排序方面的问题就可以直接看一下博文就行了（文中算法用java实现）。
@@ -193,7 +193,7 @@
   };
 </script>
 
-  <title> 排序算法总结 | Matt's Blog </title>
+  <title> 排序算法总结 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
 </head>
 
 <body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -204,7 +204,7 @@
 
 
 
-  <script type="text/javascript">
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
     (function() {
       var hm = document.createElement("script");
       hm.src = "//tajs.qq.com/stats?sId=55364149";
@@ -456,7 +456,7 @@
 <p><img src="/images/2016-03-26-sort/Selection_sort_animation.gif" alt="selection_sort"></p>
 <h4 id="性能分析"><a href="#性能分析" class="headerlink" title="性能分析"></a>性能分析</h4><ul>
 <li>复杂度分析：<ol>
-<li>对于长度为N的数组，选择排序需要大约<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$\frac{N^2}{2}$</script>次比较和<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$N$</script>次交换；</li>
+<li>对于长度为N的数组，选择排序需要大约$\frac{N^2}{2}$次比较和$N$次交换；</li>
 <li>最好的情况：已经有序，交换0次；</li>
 <li>最坏的情况：逆序，交换<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default">$N-1$</script>次。</li>
 </ol>
@@ -1050,6 +1050,8 @@
 
 
 
+
+
       </div>
     </footer>
 
@@ -1141,30 +1143,65 @@
 
   
   
-  
-  <script type="text/x-mathjax-config">
-    MathJax.Hub.Config({
-      tex2jax: {
-        inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
-        processEscapes: true,
-        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-      }
-    });
-  </script>
+  1
 
-  <script type="text/x-mathjax-config">
-    MathJax.Hub.Queue(function() {
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
       var all = MathJax.Hub.getAllJax(), i;
-      for (i=0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
       }
-    });
-  </script>
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
 
-  
-    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/MathJax.js"></script>
-    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/config/TeX-AMS-MML_HTMLorMML.js"></script>
-  
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({"tex2jax":{"inlineMath":[["$","$"],["\\(","\\)"]],"skipTags":["script","noscript","style","textarea","pre","code"],"processEscapes":true},"TeX":{"equationNumbers":{"autoNumber":"AMS"}}});
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
 
 
   

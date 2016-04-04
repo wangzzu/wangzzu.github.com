@@ -7,7 +7,7 @@
 
 <html class="theme-next mist use-motion">
 <head>
-  <meta charset="UTF-8"/>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
 
@@ -66,7 +66,7 @@
 <meta property="og:description" content="Who am I
 中文名字：王蒙英文名字：Matt（寓意：The Gift from God）爱好：技术，旅行，读书，跑步，旅行座右铭：静以修心，勤以明志个人简介：目前北京邮电大学研究生在读，热爱技术热爱旅行，主要从事Java开发（大数据流处理方向），主要使用Kafka/Storm/Hadoop/Spark等数据处理工具，对这方面有较多的研究。个人非常喜欢旅行，去年曾与好友们一起环骑青海湖，对这种">
 <meta property="og:image" content="http://wangzzu.github.io/images/face.jpg">
-<meta property="og:updated_time" content="2016-04-03T03:05:22.072Z">
+<meta property="og:updated_time" content="2016-04-03T15:49:21.375Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="about">
 <meta name="twitter:description" content="Who am I
@@ -95,7 +95,7 @@
   
     about | Matt's Blog
   
-</title>
+</title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
 </head>
 
 <body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -106,7 +106,7 @@
 
 
 
-  <script type="text/javascript">
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
     (function() {
       var hm = document.createElement("script");
       hm.src = "//tajs.qq.com/stats?sId=55364149";
@@ -394,6 +394,8 @@
 
 
 
+
+
       </div>
     </footer>
 
@@ -480,30 +482,65 @@
 
   
   
-  
-  <script type="text/x-mathjax-config">
-    MathJax.Hub.Config({
-      tex2jax: {
-        inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
-        processEscapes: true,
-        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-      }
-    });
-  </script>
+  1
 
-  <script type="text/x-mathjax-config">
-    MathJax.Hub.Queue(function() {
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
       var all = MathJax.Hub.getAllJax(), i;
-      for (i=0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
       }
-    });
-  </script>
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
 
-  
-    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/MathJax.js"></script>
-    <script type="text/javascript" src="http://cdn.staticfile.org/mathjax/2.4.0/config/TeX-AMS-MML_HTMLorMML.js"></script>
-  
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({"tex2jax":{"inlineMath":[["$","$"],["\\(","\\)"]],"skipTags":["script","noscript","style","textarea","pre","code"],"processEscapes":true},"TeX":{"equationNumbers":{"autoNumber":"AMS"}}});
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
 
 
   
