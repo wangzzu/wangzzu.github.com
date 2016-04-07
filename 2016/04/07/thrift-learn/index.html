@@ -1,0 +1,851 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="java,rpc,thrift," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="本文主要是对Thrift学习的一些总结，主要讲述了Thrift的开发、基本数据类型服务类型的介绍，然后会通过两个例子来学习如何使用Thrift进行开发，同时会介绍Thrift在大数据框架方面的应用。
+thrift 介绍Apache Thrift 是由 Facebook 开发的一种远程服务调用（RPC Remote Procedure Call）的框架。下面应用官网的一句话对其进行介绍：
+IThe">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Thrift之学习笔记">
+<meta property="og:url" content="http://wangzzu.github.io/2016/04/07/thrift-learn/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="本文主要是对Thrift学习的一些总结，主要讲述了Thrift的开发、基本数据类型服务类型的介绍，然后会通过两个例子来学习如何使用Thrift进行开发，同时会介绍Thrift在大数据框架方面的应用。
+thrift 介绍Apache Thrift 是由 Facebook 开发的一种远程服务调用（RPC Remote Procedure Call）的框架。下面应用官网的一句话对其进行介绍：
+IThe">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-04-07-thrift/thrift.png">
+<meta property="og:updated_time" content="2016-04-07T08:55:21.048Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Thrift之学习笔记">
+<meta name="twitter:description" content="本文主要是对Thrift学习的一些总结，主要讲述了Thrift的开发、基本数据类型服务类型的介绍，然后会通过两个例子来学习如何使用Thrift进行开发，同时会介绍Thrift在大数据框架方面的应用。
+thrift 介绍Apache Thrift 是由 Facebook 开发的一种远程服务调用（RPC Remote Procedure Call）的框架。下面应用官网的一句话对其进行介绍：
+IThe">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/2016-04-07-thrift/thrift.png">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Thrift之学习笔记 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-guestbook">
+          <a href="/guestbook" rel="section">
+            
+              <i class="menu-item-icon fa fa-book fa-fw"></i> <br />
+            
+            留言
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Thrift之学习笔记
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-04-07T14:32:01+08:00" content="2016-04-07">
+              2016-04-07
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/RPC/" itemprop="url" rel="index">
+                    <span itemprop="name">RPC</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2016/04/07/thrift-learn/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/04/07/thrift-learn/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>本文主要是对Thrift学习的一些总结，主要讲述了Thrift的开发、基本数据类型服务类型的介绍，然后会通过两个例子来学习如何使用Thrift进行开发，同时会介绍Thrift在大数据框架方面的应用。</p>
+<h2 id="thrift-介绍"><a href="#thrift-介绍" class="headerlink" title="thrift 介绍"></a>thrift 介绍</h2><p>Apache Thrift 是由 Facebook 开发的一种远程服务调用（RPC Remote Procedure Call）的框架。下面应用官网的一句话对其进行介绍：</p>
+<blockquote class="blockquote-center">IThe Apache Thrift software framework, for scalable cross-language services development, combines a software stack with a code generation engine to build services that work efficiently and seamlessly between C++, Java, Python, PHP, Ruby, Erlang, Perl, Haskell, C#, Cocoa, JavaScript, Node.js, Smalltalk, OCaml and Delphi and other languages.</blockquote>
+
+<p>简而言之，Thrift是一种支持多语言的软件框架，在各个服务之间的RPC通信领域应用非常广泛。<strong>RPC</strong>（远程过程调用）是一个计算机通信协议，该协议允许运行于一台计算机的程序调用另一台计算机的子程序，而程序员无需额外地为这个交互作用编程。（参考<a href="https://zh.wikipedia.org/wiki/%E9%81%A0%E7%A8%8B%E9%81%8E%E7%A8%8B%E8%AA%BF%E7%94%A8" target="_blank" rel="external">远程过程调用</a>）。</p>
+<p>Thrift通过一个中间语言(IDL, 接口定义语言)来定义RPC的接口和数据类型，然后通过一个编译器生成不同语言的代码（目前支持C++,Java, Python, PHP, Ruby, Erlang, Perl, Haskell, C#, Cocoa, Smalltalk和OCaml）,并由生成的代码负责RPC协议层和传输层的实现。</p>
+<h3 id="Thrift安装"><a href="#Thrift安装" class="headerlink" title="Thrift安装"></a>Thrift安装</h3><p>安装可以参考<a href="https://thrift.apache.org/docs/install/" target="_blank" rel="external">Apache Thrift Install</a>，我使用的是CentOS7.1，直接使用yum安装即可。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#安装</span></span><br><span class="line">$ sudo yum install thrift</span><br><span class="line"></span><br><span class="line"><span class="comment">#查看版本</span></span><br><span class="line">$ thrift -version</span><br><span class="line"></span><br><span class="line"><span class="comment"># Output： Thrift version 0.9.1</span></span><br></pre></td></tr></table></figure>
+<h2 id="Thrift-Type"><a href="#Thrift-Type" class="headerlink" title="Thrift Type"></a>Thrift Type</h2><p>使用Thrift时，涉及到了<code>.thrift</code>文件（也就是服务）的编写，因此，需要了解一下Thrift Types，它包含了基本类型，自定义的结构体，容器，异常等。关于这部分，<a href="http://wuchong.me/blog/2015/10/07/thrift-induction/" target="_blank" rel="external">Thrift 入门</a>这篇文章，总结很不错，我这里也就直接使用了拿来主义，首稍微有些修改。</p>
+<h3 id="基本类型（Base-Types）"><a href="#基本类型（Base-Types）" class="headerlink" title="基本类型（Base Types）"></a>基本类型（Base Types）</h3><ul>
+<li>bool: 布尔变量（A boolean value, one byte）；</li>
+<li>byte: 8位有符号整数（A signed byte）；</li>
+<li>i16: 16位有符号整数（A 16-bit signed integer）；</li>
+<li>i32: 32位有符号整数（A 32-bit signed integer）；</li>
+<li>i64: 64位有符号整数（A 64-bit signed integer）；</li>
+<li>double: 64位浮点数（A 64-bit floating point number）；</li>
+<li>binary: byte数组（A byte array）；</li>
+<li>string: 字符串（Encoding agnostic text or binary string）；</li>
+</ul>
+<p><em>Note：Thrift 不支持无符号整数，因为有些语言也不支持无符号整数，比如Java</em></p>
+<h3 id="容器类型（Containers）"><a href="#容器类型（Containers）" class="headerlink" title="容器类型（Containers）"></a>容器类型（Containers）</h3><ul>
+<li>list<t>: 一系列由T类型的数据组成的有序列表，元素可以重复；</t></li>
+<li>set<t>: 一系列由T类型的数据组成的无序集合，元素不可重复</t></li>
+<li>map<t1,t2>: 一个字典结构，key为T1类型，value为T2类型；</t1,t2></li>
+</ul>
+<p><em>Note：这些集合中的元素可以是除了服务的任何Thrift类型（包括结构体和异常）。</em></p>
+<h3 id="结构体（Struct）"><a href="#结构体（Struct）" class="headerlink" title="结构体（Struct）"></a>结构体（Struct）</h3><p>结构体中包含一系列的强类型域，等同于无继承的class。可以看出struct写法很类似C语言的结构体。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">struct Example &#123;</span><br><span class="line">  1:i32 number=10,</span><br><span class="line">  2:i64 bigNumber,</span><br><span class="line">  3:list&lt;double&gt; decimals,</span><br><span class="line">  4:string name=&quot;thrifty&quot;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="可选与必选"><a href="#可选与必选" class="headerlink" title="可选与必选"></a>可选与必选</h3><p>Thrift提供两个关键字<code>required</code>，<code>optional</code>，分别用于表示对应的字段时必填的还是可选的。例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">struct People &#123;</span><br><span class="line">    1: required string name;</span><br><span class="line">    2: optional i32 age;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>表示name是必填的，age是可选的。</p>
+<h3 id="联合-Union"><a href="#联合-Union" class="headerlink" title="联合(Union)"></a>联合(Union)</h3><p>在一个结构体中，如果field之间的关系是互斥的，即<strong>只能有一个field</strong>被使用被赋值。在这种情况下，我们可以使用<code>union</code>来声明这个结构体，而不是一堆堆optional的field，语意上也更明确了。例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">union JavaObjectArg &#123;</span><br><span class="line">  1: i32 int_arg;</span><br><span class="line">  2: i64 long_arg;</span><br><span class="line">  3: string string_arg;</span><br><span class="line">  4: bool bool_arg;</span><br><span class="line">  5: binary binary_arg;</span><br><span class="line">  6: double double_arg;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="异常-Exceptions"><a href="#异常-Exceptions" class="headerlink" title="异常(Exceptions)"></a>异常(Exceptions)</h3><p>可以自定义异常类型，所定义的异常会继承对应语言的异常基类，例如java，就会继承 <code>java.lang.Exception</code>.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">exception InvalidOperation &#123;</span><br><span class="line">  1: i32 what,</span><br><span class="line">  2: string why</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="服务-service"><a href="#服务-service" class="headerlink" title="服务(service)"></a>服务(service)</h3><p>Thrift定义服务相当于Java中创建Interface一样，创建的service经过代码生成命令之后就会生成客户端和服务端的框架代码。定义形式如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">service Hello&#123;</span><br><span class="line">  string helloString(1:string para)</span><br><span class="line">  i32 helloInt(1:i32 para)</span><br><span class="line">  bool helloBoolean(1:bool para)</span><br><span class="line">  void helloVoid()</span><br><span class="line">  string helloNull()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="命名空间-namespace"><a href="#命名空间-namespace" class="headerlink" title="命名空间(namespace)"></a>命名空间(namespace)</h3><p>Thrift的命名空间相当于Java中的package的意思，主要目的是组织代码。thrift使用关键字namespace定义命名空间，如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">namespace java service.demo</span><br></pre></td></tr></table></figure>
+<p>注意末尾不能有分号，由此生成的代码，其包路径结构为<code>service.demo</code>.</p>
+<h2 id="Thrift支持的数据传输格式、数据传输方式和服务模型"><a href="#Thrift支持的数据传输格式、数据传输方式和服务模型" class="headerlink" title="Thrift支持的数据传输格式、数据传输方式和服务模型"></a>Thrift支持的数据传输格式、数据传输方式和服务模型</h2><h3 id="协议（传输格式）"><a href="#协议（传输格式）" class="headerlink" title="协议（传输格式）"></a>协议（传输格式）</h3><ul>
+<li>TBinaryProtocol： 二进制格式；</li>
+<li>TCompactProtocol：高效率的、密集的二进制编码格式进行数据传输；</li>
+<li>TJSONProtocol：JSON格式；</li>
+<li>TSimpleJSONProtocol：提供JSON只写协议, 生成的文件很容易通过脚本语言解析；</li>
+<li>TDebugProtocol：使用易懂的可读的文本格式，以便于debug。</li>
+</ul>
+<h3 id="传输层（数据传输方式）"><a href="#传输层（数据传输方式）" class="headerlink" title="传输层（数据传输方式）"></a>传输层（数据传输方式）</h3><ul>
+<li>TSocket：阻塞式socker；</li>
+<li>TFramedTransport：使用非阻塞方式，以frame为单位进行传输。</li>
+<li>TFileTransport：以文件形式进行传输。</li>
+<li>TMemoryTransport：将内存用于I/O. java实现时内部实际使用了简单的ByteArrayOutputStream。</li>
+<li>TZlibTransport：使用zlib进行压缩， 与其他传输方式联合使用。当前无java实现。</li>
+<li>TNonblockingTransport —— 使用非阻塞方式，用于构建异步客户端</li>
+</ul>
+<h3 id="服务模型"><a href="#服务模型" class="headerlink" title="服务模型"></a>服务模型</h3><ul>
+<li>TSimpleServer：单线程服务器端使用标准的阻塞式 I/O，简单的单线程服务模型，常用于测试；</li>
+<li>TThreadPoolServer：多线程服务模型，使用标准的阻塞式IO；</li>
+<li>TNonblockingServer：多线程服务模型，使用非阻塞式IO（需使用TFramedTransport数据传输方式）。</li>
+</ul>
+<h2 id="Thrift-简单使用"><a href="#Thrift-简单使用" class="headerlink" title="Thrift 简单使用"></a>Thrift 简单使用</h2><p>这里我们使用两个Thrift的示例来讲述Thrift的使用，第一例子比较简单，类似于Hello World这种。第二例子，我们会使用阻塞单线程多线程、非阻塞、半同步半阻塞等方式。</p>
+<p>这里Maven工程的<code>pom.xml</code>文件的配置为：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.thrift<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>libthrift<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>0.9.3<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.slf4j<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>slf4j-log4j12<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.7.21<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<h3 id="Thrift之Hello-World"><a href="#Thrift之Hello-World" class="headerlink" title="Thrift之Hello World"></a>Thrift之Hello World</h3><p>本例是一个简单Thrift示例，具体代码参见<a href="https://github.com/wangzzu/java_learn/tree/master/thrift/src/main/java/matt/thrifthello" target="_blank" rel="external">thrifthello</a></p>
+<h4 id="1-接口定义"><a href="#1-接口定义" class="headerlink" title="1.接口定义"></a>1.接口定义</h4><p>我们来编写一个thrift文件，定义服务端的接口定义个服务接口（<code>hello.thrift</code>）.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">namespace java hello.thrift</span><br><span class="line">service Hello&#123;</span><br><span class="line"> string helloString(1:string para)</span><br><span class="line"> i32 helloInt(1:i32 para)</span><br><span class="line"> bool helloBoolean(1:bool para)</span><br><span class="line"> void helloVoid()</span><br><span class="line"> string helloNull()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里我们定义了5个不同的接口，接着使用Thrift对文件进行编译，产生对应的程序文件，以Java为例。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">thrift —gen java hello.thrift</span><br></pre></td></tr></table></figure>
+<p>命令执行完成后，就会在<code>gen-java/hello/thrift</code>生成一个Hello.java的文件，将这个java文件放到<code>hello/thrift</code>中。</p>
+<h4 id="2-接口实现"><a href="#2-接口实现" class="headerlink" title="2.接口实现"></a>2.接口实现</h4><p>前面只是定义了接口的签名，现在我们来对接口进行实现，实现类需要实现<code>Hello.Iface</code>接口，代码如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> matt.thrifthello;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.TException;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HelloServiceImpl</span> <span class="keyword">implements</span> <span class="title">Hello</span>.<span class="title">Iface</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">helloBoolean</span><span class="params">(<span class="keyword">boolean</span> para)</span> <span class="keyword">throws</span> TException </span>&#123;</span><br><span class="line">        System.out.printf(<span class="string">"hello true/false"</span>);</span><br><span class="line">        <span class="keyword">return</span> para;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">helloInt</span><span class="params">(<span class="keyword">int</span> para)</span> <span class="keyword">throws</span> TException </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"hello times: "</span> + para);</span><br><span class="line">        <span class="keyword">return</span> para;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">helloNull</span><span class="params">()</span> <span class="keyword">throws</span> TException </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"hello null"</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">helloString</span><span class="params">(String para)</span> <span class="keyword">throws</span> TException </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"hello "</span> + para);</span><br><span class="line">        <span class="keyword">return</span> para;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">helloVoid</span><span class="params">()</span> <span class="keyword">throws</span> TException </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"Hello World"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="3-服务端代码的实现"><a href="#3-服务端代码的实现" class="headerlink" title="3.服务端代码的实现"></a>3.服务端代码的实现</h4><p>下面来编写服务器端的代码</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> matt.thrifthello;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.TProcessor;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.server.TServer;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.server.TThreadPoolServer;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TServerSocket;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TTransportException;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HelloServiceServer</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 设置服务端口为 9527</span></span><br><span class="line">            TServerSocket serverTransport = <span class="keyword">new</span> TServerSocket(<span class="number">9527</span>);</span><br><span class="line">            <span class="comment">// 关联处理器与 Hello 服务的实现</span></span><br><span class="line">            TProcessor processor = <span class="keyword">new</span> Hello.Processor(<span class="keyword">new</span> HelloServiceImpl());</span><br><span class="line">            TServer server = <span class="keyword">new</span> TThreadPoolServer(<span class="keyword">new</span> TThreadPoolServer.Args(serverTransport).processor(processor));</span><br><span class="line"></span><br><span class="line">            System.out.println(<span class="string">"Start server on port 9527..."</span>);</span><br><span class="line">            server.serve();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (TTransportException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="4-客户端的实现"><a href="#4-客户端的实现" class="headerlink" title="4.客户端的实现"></a>4.客户端的实现</h4><p>下面来编写客户端的代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> matt.thrifthello;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.TException;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.protocol.TBinaryProtocol;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.protocol.TProtocol;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TSocket;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TTransport;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TTransportException;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HelloServiceClient</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 设置调用的服务地址为本地，端口为 9527</span></span><br><span class="line">            TTransport transport = <span class="keyword">new</span> TSocket(<span class="string">"localhost"</span>, <span class="number">9527</span>);</span><br><span class="line">            transport.open();</span><br><span class="line">            <span class="comment">// 设置传输协议为 TBinaryProtocol</span></span><br><span class="line">            TProtocol protocol = <span class="keyword">new</span> TBinaryProtocol(transport);</span><br><span class="line">            Hello.Client client = <span class="keyword">new</span> Hello.Client(protocol);</span><br><span class="line">            <span class="comment">// 调用服务的 helloVoid 方法，向server发送数据</span></span><br><span class="line">            client.helloVoid();</span><br><span class="line"></span><br><span class="line">            transport.close();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (TTransportException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (TException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="运行"><a href="#运行" class="headerlink" title="运行"></a>运行</h4><p>代码完成后，可以先运行<code>HelloServiceServer</code>（会一直运行，需要手动关闭），然后再运行<code>HelloServiceClient</code>（调用一次<code>helloVoid()</code>方法之后，就会退出，不过可以重复运行，这样就可以在server端看到多次输出了），就可以在<code>HelloServiceServer</code>的输出结果中看到客户端打印的<code>Hello World</code>字符串。</p>
+<h3 id="Thrift之Account"><a href="#Thrift之Account" class="headerlink" title="Thrift之Account"></a>Thrift之Account</h3><p>本例是关于用户帐号的示例，会涉及到用户帐号的添加登陆注册以及查询等，详细的代码参考<a href="https://github.com/wangzzu/java_learn/tree/master/thrift/src/main/java/matt/thrift/account" target="_blank" rel="external">Thrift_Account</a>.</p>
+<h4 id="1-接口定义-1"><a href="#1-接口定义-1" class="headerlink" title="1.接口定义"></a>1.接口定义</h4><p>这里我们编写一个thrift文件，定义服务接口，先定义一个操作状态有两种选项登陆或者注册；然后定一个结构体User，它有四个属性；再声明一个自定义的异常类，最后定义服务接口的一些方法。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">namespace java matt.thrift.account</span><br><span class="line"></span><br><span class="line">enum Operation&#123;</span><br><span class="line">	LOGIN=1,</span><br><span class="line">	REGISTER=2</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct User&#123;</span><br><span class="line">	1: required i32 userId,</span><br><span class="line">	2: required string username,</span><br><span class="line">	3: required string password,</span><br><span class="line">	4: Operation op</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">exception InvalidOperation&#123;</span><br><span class="line">	1: i32 code,</span><br><span class="line">	2: string reason</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">service Account&#123;</span><br><span class="line">	void addUser(1:User user) throws (1: InvalidOperation e)</span><br><span class="line">	User queryUser(1:i32 id)</span><br><span class="line">	list&lt;User&gt; queryUserList()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>接着对Thrift对文件进行编译，产生对应的程序文件，以Java为例。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br></pre></td><td class="code"><pre><span class="line">thrift —gen java Account.thrift</span><br><span class="line">``</span><br><span class="line"></span><br><span class="line">命令执行完成后，就会在`gen-java/matt/thrift/account`生成多个java的文件，将这些java文件放到`matt/thrift/account`中。</span><br><span class="line"></span><br><span class="line"><span class="comment">#### 2.接口实现</span></span><br><span class="line"></span><br><span class="line">这里定义`AccountService`类来实现`Account.Iface`接口，主要实现了三个方法。</span><br><span class="line"></span><br><span class="line">```java</span><br><span class="line">package matt.thrift.account;</span><br><span class="line"></span><br><span class="line">import java.util.ArrayList;</span><br><span class="line">import java.util.HashMap;</span><br><span class="line">import java.util.List;</span><br><span class="line">import java.util.Map;</span><br><span class="line"></span><br><span class="line">import org.apache.thrift.TException;</span><br><span class="line"></span><br><span class="line">public class AccountService implements Account.Iface &#123;</span><br><span class="line">	private static Map&lt;String, String&gt; namePw = new HashMap&lt;&gt;();</span><br><span class="line">	private static Map&lt;String, Integer&gt; nameId = new HashMap&lt;&gt;();</span><br><span class="line">	private static Map&lt;String, Operation&gt; nameOp = new HashMap&lt;&gt;();</span><br><span class="line">	private static Map&lt;Integer, String&gt; idname = new HashMap&lt;&gt;();</span><br><span class="line"></span><br><span class="line">	@Override</span><br><span class="line">	public void addUser(User user) throws TException &#123;</span><br><span class="line">		int id = user.getUserId();</span><br><span class="line">		String name = user.getUsername();</span><br><span class="line">		String pass = user.getPassword();</span><br><span class="line">		Operation op = user.getOp();</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (name == null || name.length() == 0) &#123;</span><br><span class="line">			throw new InvalidOperation(100, <span class="string">"The name should not be empty!"</span>);</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> (namePw.containsKey(name)) &#123;</span><br><span class="line">			throw new InvalidOperation(101, <span class="string">"The name has been used, please change the name!"</span>);</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> (nameId.containsValue(id) || id &lt;= 0) &#123;</span><br><span class="line">			throw new InvalidOperation(102, <span class="string">"The id has been used or the id is invalid, please change the id!"</span>);</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (op == Operation.LOGIN) &#123;</span><br><span class="line">			String password = namePw.get(name);</span><br><span class="line">			<span class="keyword">if</span> (password != null &amp;&amp; password.equals(pass)) &#123;</span><br><span class="line">				System.out.println(<span class="string">"Login success!! Hello "</span> + name);</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				System.out.println(<span class="string">"Login failed!! please check your username and password"</span>);</span><br><span class="line">			&#125;</span><br><span class="line">		&#125; <span class="keyword">else</span> <span class="keyword">if</span> (op == Operation.REGISTER) &#123;</span><br><span class="line">			<span class="keyword">if</span> (namePw.containsKey(name)) &#123;</span><br><span class="line">				System.out.println(<span class="string">"The username "</span> + name + <span class="string">" has been registered, please change one."</span>);</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				namePw.put(name, pass);</span><br><span class="line">				nameId.put(name, id);</span><br><span class="line">				nameOp.put(name, op);</span><br><span class="line">				idname.put(id, name);</span><br><span class="line">				System.out.println(<span class="string">"Register success!! Hello "</span> + name);</span><br><span class="line">			&#125;</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			throw new InvalidOperation(103, <span class="string">"unknown operation: "</span> + op.getValue());</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	@Override</span><br><span class="line">	public User queryUser(int id) throws TException &#123;</span><br><span class="line">		System.out.println(id);</span><br><span class="line">		<span class="keyword">if</span> (idname.containsKey(id)) &#123;</span><br><span class="line">			User user = new User();</span><br><span class="line">			user.userId = id;</span><br><span class="line">			String name = idname.get(id);</span><br><span class="line">			user.username = name;</span><br><span class="line">			user.password = namePw.get(name);</span><br><span class="line">			user.op = nameOp.get(name);</span><br><span class="line">			<span class="built_in">return</span> user;</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			System.out.println(<span class="string">"The id: "</span> + id + <span class="string">" does not exist!"</span>);</span><br><span class="line">			User user = new User();</span><br><span class="line">			user.userId = 0;</span><br><span class="line">			user.username = <span class="string">""</span>;</span><br><span class="line">			user.password = <span class="string">"123456"</span>;</span><br><span class="line">			user.op = Operation.LOGIN;</span><br><span class="line">			<span class="built_in">return</span> user;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	@Override</span><br><span class="line">	public List&lt;User&gt; queryUserList() throws TException &#123;</span><br><span class="line">		List&lt;User&gt; list = new ArrayList&lt;User&gt;();</span><br><span class="line">		<span class="keyword">for</span> (String name : namePw.keySet()) &#123;</span><br><span class="line">			User user = new User();</span><br><span class="line">			user.userId = nameId.get(name);</span><br><span class="line">			user.username = name;</span><br><span class="line">			user.password = namePw.get(name);</span><br><span class="line">			user.op = nameOp.get(name);</span><br><span class="line">			list.add(user);</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="built_in">return</span> list;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="3-服务端代码的实现-1"><a href="#3-服务端代码的实现-1" class="headerlink" title="3.服务端代码的实现"></a>3.服务端代码的实现</h4><p>这里是服务器端的实现，主要使用多种方式来实现，这几种方式实现的差别是使用API的不同。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> matt.thrift.account;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.TProcessor;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.protocol.TBinaryProtocol;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.protocol.TCompactProtocol;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.server.THsHaServer;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.server.TNonblockingServer;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.server.TServer;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.server.TSimpleServer;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.server.TThreadPoolServer;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TFramedTransport;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TNonblockingServerSocket;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TNonblockingServerTransport;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TServerSocket;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TTransportException;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AccountServer</span> </span>&#123;</span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span> port = <span class="number">8090</span>;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span><br><span class="line">	 * 简单服务器类型 阻塞单线程</span><br><span class="line">	 * </span><br><span class="line">	 * <span class="doctag">@author</span> matt</span><br><span class="line">	 * <span class="doctag">@since</span> Apr 7, 2016</span><br><span class="line">	 * <span class="doctag">@throws</span> 无</span><br><span class="line">	 *             void</span><br><span class="line">	 */</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">startSimpleServer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		TProcessor tprocessor = <span class="keyword">new</span> Account.Processor(<span class="keyword">new</span> AccountService());</span><br><span class="line">		<span class="keyword">try</span> &#123;</span><br><span class="line">			<span class="comment">// 创建trsnaport 阻塞通信</span></span><br><span class="line">			TServerSocket serverTransport = <span class="keyword">new</span> TServerSocket(port);</span><br><span class="line">			<span class="comment">// 创建protocol</span></span><br><span class="line">			TBinaryProtocol.Factory protocol = <span class="keyword">new</span> TBinaryProtocol.Factory();</span><br><span class="line">			<span class="comment">// 将processor transport protocol设入到服务器server中</span></span><br><span class="line">			TServer.Args args = <span class="keyword">new</span> TServer.Args(serverTransport);</span><br><span class="line">			args.processor(tprocessor);</span><br><span class="line">			args.protocolFactory(protocol);</span><br><span class="line">			<span class="comment">// 定义服务器类型 设定参数</span></span><br><span class="line">			TServer server = <span class="keyword">new</span> TSimpleServer(args);</span><br><span class="line">			<span class="comment">// 开启服务</span></span><br><span class="line">			System.out.println(<span class="string">"Starting the Account server..."</span>);</span><br><span class="line">			server.serve();</span><br><span class="line">		&#125; <span class="keyword">catch</span> (TTransportException e) &#123;</span><br><span class="line">			<span class="comment">// TODO Auto-generated catch block</span></span><br><span class="line">			e.printStackTrace();</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span><br><span class="line">	 * 多线程服务器 阻塞多线程</span><br><span class="line">	 * </span><br><span class="line">	 * <span class="doctag">@author</span> matt</span><br><span class="line">	 * <span class="doctag">@since</span> Apr 7, 2016</span><br><span class="line">	 * <span class="doctag">@throws</span> 无</span><br><span class="line">	 *             void</span><br><span class="line">	 */</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">startThreadPoolServer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		<span class="comment">// 创建processor</span></span><br><span class="line">		TProcessor tprocessor = <span class="keyword">new</span> Account.Processor(<span class="keyword">new</span> AccountService());</span><br><span class="line">		<span class="keyword">try</span> &#123;</span><br><span class="line">			<span class="comment">// 创建transport 阻塞通信</span></span><br><span class="line">			TServerSocket serverTransport = <span class="keyword">new</span> TServerSocket(port);</span><br><span class="line">			<span class="comment">// 创建protocol 数据传输协议</span></span><br><span class="line">			TBinaryProtocol.Factory protocol = <span class="keyword">new</span> TBinaryProtocol.Factory();</span><br><span class="line">			TThreadPoolServer.Args args = <span class="keyword">new</span> TThreadPoolServer.Args(serverTransport);</span><br><span class="line">			args.processor(tprocessor);</span><br><span class="line">			args.protocolFactory(protocol);</span><br><span class="line">			<span class="comment">// 创建服务器类型 多线程</span></span><br><span class="line">			TServer server = <span class="keyword">new</span> TThreadPoolServer(args);</span><br><span class="line">			<span class="comment">// 开启服务</span></span><br><span class="line">			System.out.println(<span class="string">"Starting the Account server..."</span>);</span><br><span class="line">			server.serve();</span><br><span class="line">		&#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">			e.printStackTrace();</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span><br><span class="line">	 * 非阻塞I/O</span><br><span class="line">	 * </span><br><span class="line">	 * <span class="doctag">@author</span> matt</span><br><span class="line">	 * <span class="doctag">@since</span> Apr 7, 2016</span><br><span class="line">	 * <span class="doctag">@throws</span> 无</span><br><span class="line">	 *             void</span><br><span class="line">	 */</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">startTNonblockingServer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		<span class="comment">// 创建processor</span></span><br><span class="line">		TProcessor tprocessor = <span class="keyword">new</span> Account.Processor(<span class="keyword">new</span> AccountService());</span><br><span class="line">		<span class="keyword">try</span> &#123;</span><br><span class="line">			<span class="comment">// 创建transport 非阻塞 nonblocking</span></span><br><span class="line">			TNonblockingServerTransport serverTransport = <span class="keyword">new</span> TNonblockingServerSocket(port);</span><br><span class="line">			<span class="comment">// 创建protocol 数据传输协议</span></span><br><span class="line">			TCompactProtocol.Factory protocol = <span class="keyword">new</span> TCompactProtocol.Factory();</span><br><span class="line">			<span class="comment">// 创建transport 数据传输方式 非阻塞需要用这种方式传输</span></span><br><span class="line">			TFramedTransport.Factory transport = <span class="keyword">new</span> TFramedTransport.Factory();</span><br><span class="line">			TNonblockingServer.Args args = <span class="keyword">new</span> TNonblockingServer.Args(serverTransport);</span><br><span class="line">			args.processor(tprocessor);</span><br><span class="line">			args.transportFactory(transport);</span><br><span class="line">			args.protocolFactory(protocol);</span><br><span class="line">			<span class="comment">// 创建服务器 类型是非阻塞</span></span><br><span class="line">			TServer server = <span class="keyword">new</span> TNonblockingServer(args);</span><br><span class="line">			<span class="comment">// 开启服务</span></span><br><span class="line">			System.out.println(<span class="string">"Starting the Account server..."</span>);</span><br><span class="line">			server.serve();</span><br><span class="line">		&#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">			e.printStackTrace();</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span><br><span class="line">	 * 半同步半异步的非阻塞I/O</span><br><span class="line">	 */</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">startTHsHaServer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		<span class="comment">// 创建processor</span></span><br><span class="line">		TProcessor tprocessor = <span class="keyword">new</span> Account.Processor(<span class="keyword">new</span> AccountService());</span><br><span class="line">		<span class="keyword">try</span> &#123;</span><br><span class="line">			<span class="comment">// 创建transport 非阻塞</span></span><br><span class="line">			TNonblockingServerTransport serverTransport = <span class="keyword">new</span> TNonblockingServerSocket(port);</span><br><span class="line">			<span class="comment">// 非阻塞需要的传输方式</span></span><br><span class="line">			TFramedTransport.Factory transport = <span class="keyword">new</span> TFramedTransport.Factory();</span><br><span class="line">			<span class="comment">// 数据传输协议</span></span><br><span class="line">			TCompactProtocol.Factory protocol = <span class="keyword">new</span> TCompactProtocol.Factory();</span><br><span class="line">			<span class="comment">// 创建半同步半异步服务</span></span><br><span class="line">			THsHaServer.Args args = <span class="keyword">new</span> THsHaServer.Args(serverTransport);</span><br><span class="line">			args.processor(tprocessor);</span><br><span class="line">			args.transportFactory(transport);</span><br><span class="line">			args.protocolFactory(protocol);</span><br><span class="line">			<span class="comment">// 创建 服务类型</span></span><br><span class="line">			TServer server = <span class="keyword">new</span> THsHaServer(args);</span><br><span class="line">			<span class="comment">// 开启服务</span></span><br><span class="line">			System.out.println(<span class="string">"Starting the Account server..."</span>);</span><br><span class="line">			server.serve();</span><br><span class="line">		&#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">			e.printStackTrace();</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String args[])</span> </span>&#123;</span><br><span class="line">		<span class="comment">// 开启简单服务器</span></span><br><span class="line">		<span class="comment">// AccountServer.startSimpleServer();</span></span><br><span class="line">		<span class="comment">// 开启多线程服务器</span></span><br><span class="line">		<span class="comment">// AccountServer.startThreadPoolServer();</span></span><br><span class="line">		<span class="comment">// 非阻塞I/O</span></span><br><span class="line">		AccountServer.startTNonblockingServer();</span><br><span class="line">		<span class="comment">// 半同步半异步的非阻塞I/O</span></span><br><span class="line">		<span class="comment">// AccountServer.startTHsHaServer();</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="4-客户端的实现-1"><a href="#4-客户端的实现-1" class="headerlink" title="4.客户端的实现"></a>4.客户端的实现</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> matt.thrift.account;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.protocol.TBinaryProtocol;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.protocol.TCompactProtocol;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.protocol.TProtocol;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TFramedTransport;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TSocket;</span><br><span class="line"><span class="keyword">import</span> org.apache.thrift.transport.TTransport;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AccountClient</span> </span>&#123;</span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> String ip = <span class="string">"localhost"</span>;</span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span> port = <span class="number">8090</span>;</span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span> time_out = <span class="number">30000</span>;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span><br><span class="line">	 * 使用阻塞式socket</span><br><span class="line">	 * </span><br><span class="line">	 * <span class="doctag">@author</span> matt</span><br><span class="line">	 * <span class="doctag">@since</span> Apr 7, 2016</span><br><span class="line">	 * <span class="doctag">@throws</span> 无</span><br><span class="line">	 *             void</span><br><span class="line">	 */</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">startSimpleClient</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		TTransport transport = <span class="keyword">null</span>;</span><br><span class="line">		<span class="keyword">try</span> &#123;</span><br><span class="line">			<span class="comment">// 创建Transport</span></span><br><span class="line">			transport = <span class="keyword">new</span> TSocket(ip, port, time_out);</span><br><span class="line">			<span class="comment">// 创建TProtocol</span></span><br><span class="line">			TProtocol protocol = <span class="keyword">new</span> TBinaryProtocol(transport);</span><br><span class="line">			<span class="comment">// 基于TTransport和TProtocol创建Client</span></span><br><span class="line">			Account.Client client = <span class="keyword">new</span> Account.Client(protocol);</span><br><span class="line">			transport.open();</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 正常添加用户</span></span><br><span class="line">			User user1 = <span class="keyword">new</span> User(<span class="number">001</span>, <span class="string">"matt1"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user1);</span><br><span class="line">			User user2 = <span class="keyword">new</span> User(<span class="number">002</span>, <span class="string">"matt2"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user2);</span><br><span class="line">			User user3 = <span class="keyword">new</span> User(<span class="number">003</span>, <span class="string">"matt3"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user3);</span><br><span class="line">			User user4 = <span class="keyword">new</span> User(<span class="number">004</span>, <span class="string">"matt4"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user4);</span><br><span class="line">			User user5 = <span class="keyword">new</span> User(<span class="number">005</span>, <span class="string">"matt5"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user5);</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 查看全部用户</span></span><br><span class="line">			List&lt;User&gt; list = client.queryUserList();</span><br><span class="line">			System.out.println(<span class="string">"There are "</span> + list.size() + <span class="string">" users in total."</span>);</span><br><span class="line">			<span class="keyword">for</span> (User user : list) &#123;</span><br><span class="line">				System.out.println(user.userId + <span class="string">" "</span> + user.username + <span class="string">" "</span> + user.password);</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="comment">// 查询用户</span></span><br><span class="line">			User userq1 = client.queryUser(<span class="number">1</span>);</span><br><span class="line">			<span class="keyword">if</span> (userq1 != <span class="keyword">null</span>) &#123;</span><br><span class="line">				System.out.println(<span class="string">"Query: "</span> + userq1.userId + <span class="string">" "</span> + userq1.username + <span class="string">" "</span> + userq1.password);</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				System.out.println(<span class="string">"The id: 1 does not exist!"</span>);</span><br><span class="line">			&#125;</span><br><span class="line">			User userq2 = client.queryUser(<span class="number">8</span>);</span><br><span class="line">			<span class="keyword">if</span> (userq2 != <span class="keyword">null</span>) &#123;</span><br><span class="line">				System.out.println(<span class="string">"Query: "</span> + userq2.userId + <span class="string">" "</span> + userq2.username + <span class="string">" "</span> + userq2.password);</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				System.out.println(<span class="string">"The id: 8 does not exist!"</span>);</span><br><span class="line">			&#125;</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 登陆用户</span></span><br><span class="line">			User users = <span class="keyword">new</span> User(<span class="number">005</span>, <span class="string">"matt5"</span>, <span class="string">"123456"</span>, Operation.LOGIN);</span><br><span class="line">			client.addUser(users);</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 添加异常用户</span></span><br><span class="line">			User user6 = <span class="keyword">new</span> User(<span class="number">006</span>, <span class="string">""</span>, <span class="string">"123456"</span>, Operation.REGISTER);<span class="comment">// name=null</span></span><br><span class="line">			client.addUser(user6);</span><br><span class="line">			User user7 = <span class="keyword">new</span> User(<span class="number">006</span>, <span class="string">"matt1"</span>, <span class="string">"123456"</span>, Operation.REGISTER);<span class="comment">// name存在</span></span><br><span class="line">			client.addUser(user7);</span><br><span class="line">			User user8 = <span class="keyword">new</span> User(<span class="number">005</span>, <span class="string">"matt6"</span>, <span class="string">"123456"</span>, Operation.REGISTER);<span class="comment">// id异常</span></span><br><span class="line">			client.addUser(user8);</span><br><span class="line">		&#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">			e.printStackTrace();</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/**</span><br><span class="line">	 * 非阻塞</span><br><span class="line">	 * </span><br><span class="line">	 * <span class="doctag">@author</span> matt</span><br><span class="line">	 * <span class="doctag">@since</span> Apr 7, 2016</span><br><span class="line">	 * <span class="doctag">@throws</span> 无</span><br><span class="line">	 *             void</span><br><span class="line">	 */</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">startNonblockingClient</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		TTransport transport = <span class="keyword">null</span>;</span><br><span class="line">		<span class="keyword">try</span> &#123;</span><br><span class="line">			transport = <span class="keyword">new</span> TFramedTransport(<span class="keyword">new</span> TSocket(ip, port));</span><br><span class="line">			TCompactProtocol protocol = <span class="keyword">new</span> TCompactProtocol(transport);</span><br><span class="line">			Account.Client client = <span class="keyword">new</span> Account.Client(protocol);</span><br><span class="line">			transport.open();</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 正常添加用户</span></span><br><span class="line">			User user1 = <span class="keyword">new</span> User(<span class="number">001</span>, <span class="string">"matt1"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user1);</span><br><span class="line">			User user2 = <span class="keyword">new</span> User(<span class="number">002</span>, <span class="string">"matt2"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user2);</span><br><span class="line">			User user3 = <span class="keyword">new</span> User(<span class="number">003</span>, <span class="string">"matt3"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user3);</span><br><span class="line">			User user4 = <span class="keyword">new</span> User(<span class="number">004</span>, <span class="string">"matt4"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user4);</span><br><span class="line">			User user5 = <span class="keyword">new</span> User(<span class="number">005</span>, <span class="string">"matt5"</span>, <span class="string">"123456"</span>, Operation.REGISTER);</span><br><span class="line">			client.addUser(user5);</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 查看全部用户</span></span><br><span class="line">			List&lt;User&gt; list = client.queryUserList();</span><br><span class="line">			System.out.println(<span class="string">"There are "</span> + list.size() + <span class="string">" users in total."</span>);</span><br><span class="line">			<span class="keyword">for</span> (User user : list) &#123;</span><br><span class="line">				System.out.println(user.userId + <span class="string">" "</span> + user.username + <span class="string">" "</span> + user.password);</span><br><span class="line">			&#125;</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 查询用户</span></span><br><span class="line">			User userq1 = client.queryUser(<span class="number">1</span>);</span><br><span class="line">			<span class="keyword">if</span> (!userq1.username.equals(<span class="string">""</span>)) &#123;</span><br><span class="line">				System.out.println(<span class="string">"Query: "</span> + userq1.userId + <span class="string">" "</span> + userq1.username + <span class="string">" "</span> + userq1.password);</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				System.out.println(<span class="string">"The id: 1 does not exist!"</span>);</span><br><span class="line">			&#125;</span><br><span class="line">			User userq2 = client.queryUser(<span class="number">8</span>);</span><br><span class="line">			<span class="keyword">if</span> (!userq2.username.equals(<span class="string">""</span>)) &#123;</span><br><span class="line">				System.out.println(<span class="string">"Query: "</span> + userq2.userId + <span class="string">" "</span> + userq2.username + <span class="string">" "</span> + userq2.password);</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				System.out.println(<span class="string">"The id: 8 does not exist!"</span>);</span><br><span class="line">			&#125;</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 登陆用户</span></span><br><span class="line">			User users = <span class="keyword">new</span> User(<span class="number">005</span>, <span class="string">"matt5"</span>, <span class="string">"123456"</span>, Operation.LOGIN);</span><br><span class="line">			client.addUser(users);</span><br><span class="line"></span><br><span class="line">			<span class="comment">// 添加异常用户</span></span><br><span class="line">			User user6 = <span class="keyword">new</span> User(<span class="number">006</span>, <span class="string">""</span>, <span class="string">"123456"</span>, Operation.REGISTER);<span class="comment">// name=null</span></span><br><span class="line">			client.addUser(user6);</span><br><span class="line">			User user7 = <span class="keyword">new</span> User(<span class="number">006</span>, <span class="string">"matt1"</span>, <span class="string">"123456"</span>, Operation.REGISTER);<span class="comment">// name存在</span></span><br><span class="line">			client.addUser(user7);</span><br><span class="line">			User user8 = <span class="keyword">new</span> User(<span class="number">005</span>, <span class="string">"matt6"</span>, <span class="string">"123456"</span>, Operation.REGISTER);<span class="comment">// id异常</span></span><br><span class="line">			client.addUser(user8);</span><br><span class="line">		&#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">			e.printStackTrace();</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		<span class="comment">// AccountClient.startSimpleClient();</span></span><br><span class="line">		AccountClient.startNonblockingClient();</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="运行-1"><a href="#运行-1" class="headerlink" title="运行"></a>运行</h4><p>代码完成后，可以先运行<code>AccountServer</code>（会一直运行，需要手动关闭），然后再运行<code>AccountClient</code>。</p>
+<p>上面程序服务器端的运行的结果为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Starting the Account server...</span><br><span class="line">Register success!! Hello matt1</span><br><span class="line">Register success!! Hello matt2</span><br><span class="line">Register success!! Hello matt3</span><br><span class="line">Register success!! Hello matt4</span><br><span class="line">Register success!! Hello matt5</span><br><span class="line">1</span><br><span class="line">8</span><br><span class="line">The id: 8 does not exist!</span><br></pre></td></tr></table></figure>
+<p>客户端运行的结果为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">There are 5 users in total.</span><br><span class="line">1 matt1 123456</span><br><span class="line">3 matt3 123456</span><br><span class="line">2 matt2 123456</span><br><span class="line">5 matt5 123456</span><br><span class="line">4 matt4 123456</span><br><span class="line">Query: 1 matt1 123456</span><br><span class="line">The id: 8 does not exist!</span><br><span class="line">InvalidOperation(code:101, reason:The name has been used, please change the name!)</span><br><span class="line">	at matt.thrift.account.Account$addUser_result$addUser_resultStandardScheme.read(Account.java:1165)</span><br><span class="line">	at matt.thrift.account.Account$addUser_result$addUser_resultStandardScheme.read(Account.java:1)</span><br><span class="line">	at matt.thrift.account.Account$addUser_result.read(Account.java:1101)</span><br><span class="line">	at org.apache.thrift.TServiceClient.receiveBase(TServiceClient.java:86)</span><br><span class="line">	at matt.thrift.account.Account$Client.recv_addUser(Account.java:93)</span><br><span class="line">	at matt.thrift.account.Account$Client.addUser(Account.java:80)</span><br><span class="line">	at matt.thrift.account.AccountClient.startNonblockingClient(AccountClient.java:135)</span><br><span class="line">	at matt.thrift.account.AccountClient.main(AccountClient.java:151)</span><br></pre></td></tr></table></figure>
+<h2 id="Thrift结构"><a href="#Thrift结构" class="headerlink" title="Thrift结构"></a>Thrift结构</h2><p>Thrift包含了一个完整的堆栈结构用于构建客户端和服务器端，下面描述了Thrift的整体的架构。</p>
+<p><img src="/images/2016-04-07-thrift/thrift.png" alt="selection_sort"></p>
+<ul>
+<li>黄色部分：是用户实现的业务逻辑；</li>
+<li>褐色部分：是根据 Thrift 定义的服务接口描述文件生成的客户端和服务器端代码框架；</li>
+<li>红色部分：是根据 Thrift 文件生成代码实现数据的读写操作；</li>
+<li>TProtocol：是协议层, 定义数据传输格式，可以为二进制或者XML等；</li>
+<li>TTransport：是传输层，定义数据传输方式，可以为TCP/IP传输，内存共享或者文件共享等。</li>
+</ul>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://thrift.apache.org/" target="_blank" rel="external">Apache Thrift</a></li>
+<li><a href="http://thrift-tutorial.readthedocs.org/en/latest/index.html" target="_blank" rel="external">Thrift Tutorial</a></li>
+<li><a href="http://dongxicheng.org/recommend/" target="_blank" rel="external">董的博客 五.Apache Thrift</a></li>
+<li><a href="https://www.ibm.com/developerworks/cn/java/j-lo-apachethrift/" target="_blank" rel="external">Apache Thrift - 可伸缩的跨语言服务开发框架</a></li>
+<li><a href="https://diwakergupta.github.io/thrift-missing-guide/" target="_blank" rel="external">Thrift: The Missing Guide</a></li>
+<li><a href="http://zhaozhiming.github.io/blog/2015/01/25/hello-thrift/" target="_blank" rel="external">Apache Thrift的简单代码示例</a></li>
+<li><a href="http://wuchong.me/blog/2015/10/07/thrift-induction/" target="_blank" rel="external">Thrift 入门</a></li>
+</ul>
+
+      
+    </div>
+
+    <div>
+      
+        
+<div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center">
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
+  <button id="rewardButton", disable="enable", onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}", style="cursor: pointer; border: 0; outline: 0; border-radius: 100%; padding: 0; margin: 0; letter-spacing: normal; text-transform: none; text-indent: 0px; text-shadow: none">
+    <span onmouseover="this.style.color='rgb(236,96,0)';this.style.background='rgb(204,204,204)'" onMouseOut="this.style.color='#fff';this.style.background='rgb(236,96,0)'" style="display: inline-block; width: 70px; height: 70px; border-radius: 100%; line-height: 81px; color: #fff; font: 400 35px/75px 'microsofty'; background: rgb(236,96,0)">赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/pay/weixinpay.jpg" alt="Matt WeChat Pay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>微信打赏</p>
+      </div>
+    
+    
+      <div id="alipay" style="display: inline-block">
+        <img id="alipay_qr" src="/images/pay/alipay.jpg" alt="Matt Alipay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>支付宝打赏</p>
+      </div>
+    
+  </div>
+<div>
+
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/java/" rel="tag">#java</a>
+          
+            <a href="/tags/rpc/" rel="tag">#rpc</a>
+          
+            <a href="/tags/thrift/" rel="tag">#thrift</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2016/03/26/algorithm-sort/" rel="next" title="排序算法总结">
+                <i class="fa fa-chevron-left"></i> 排序算法总结
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2016/04/07/thrift-learn/"
+     data-title="Thrift之学习笔记"
+     data-content=""
+     data-url="http://wangzzu.github.io/2016/04/07/thrift-learn/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2016/04/07/thrift-learn/"
+           data-title="Thrift之学习笔记" data-url="http://wangzzu.github.io/2016/04/07/thrift-learn/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">25</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">11</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">13</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#thrift-介绍"><span class="nav-number">1.</span> <span class="nav-text">thrift 介绍</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Thrift安装"><span class="nav-number">1.1.</span> <span class="nav-text">Thrift安装</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Thrift-Type"><span class="nav-number">2.</span> <span class="nav-text">Thrift Type</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#基本类型（Base-Types）"><span class="nav-number">2.1.</span> <span class="nav-text">基本类型（Base Types）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#容器类型（Containers）"><span class="nav-number">2.2.</span> <span class="nav-text">容器类型（Containers）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#结构体（Struct）"><span class="nav-number">2.3.</span> <span class="nav-text">结构体（Struct）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#可选与必选"><span class="nav-number">2.4.</span> <span class="nav-text">可选与必选</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#联合-Union"><span class="nav-number">2.5.</span> <span class="nav-text">联合(Union)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#异常-Exceptions"><span class="nav-number">2.6.</span> <span class="nav-text">异常(Exceptions)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#服务-service"><span class="nav-number">2.7.</span> <span class="nav-text">服务(service)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#命名空间-namespace"><span class="nav-number">2.8.</span> <span class="nav-text">命名空间(namespace)</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Thrift支持的数据传输格式、数据传输方式和服务模型"><span class="nav-number">3.</span> <span class="nav-text">Thrift支持的数据传输格式、数据传输方式和服务模型</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#协议（传输格式）"><span class="nav-number">3.1.</span> <span class="nav-text">协议（传输格式）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#传输层（数据传输方式）"><span class="nav-number">3.2.</span> <span class="nav-text">传输层（数据传输方式）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#服务模型"><span class="nav-number">3.3.</span> <span class="nav-text">服务模型</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Thrift-简单使用"><span class="nav-number">4.</span> <span class="nav-text">Thrift 简单使用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Thrift之Hello-World"><span class="nav-number">4.1.</span> <span class="nav-text">Thrift之Hello World</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-接口定义"><span class="nav-number">4.1.1.</span> <span class="nav-text">1.接口定义</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-接口实现"><span class="nav-number">4.1.2.</span> <span class="nav-text">2.接口实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-服务端代码的实现"><span class="nav-number">4.1.3.</span> <span class="nav-text">3.服务端代码的实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-客户端的实现"><span class="nav-number">4.1.4.</span> <span class="nav-text">4.客户端的实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#运行"><span class="nav-number">4.1.5.</span> <span class="nav-text">运行</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Thrift之Account"><span class="nav-number">4.2.</span> <span class="nav-text">Thrift之Account</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-接口定义-1"><span class="nav-number">4.2.1.</span> <span class="nav-text">1.接口定义</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-服务端代码的实现-1"><span class="nav-number">4.2.2.</span> <span class="nav-text">3.服务端代码的实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-客户端的实现-1"><span class="nav-number">4.2.3.</span> <span class="nav-text">4.客户端的实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#运行-1"><span class="nav-number">4.2.4.</span> <span class="nav-text">运行</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Thrift结构"><span class="nav-number">5.</span> <span class="nav-text">Thrift结构</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  1
+
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
+      var all = MathJax.Hub.getAllJax(), i;
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
+
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config("");
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="custom_mathjax_source">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
+
+
+  
+
+  
+
+</body>
+</html>
