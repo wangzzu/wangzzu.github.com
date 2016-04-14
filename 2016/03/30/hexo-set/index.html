@@ -65,7 +65,7 @@ HexoHexo 是一个快速、简洁且高效的博客框架。Hex">
 <meta property="og:site_name" content="Matt's Blog">
 <meta property="og:description" content="之前的博客，是使用Jekyll搭建的，因为学过一些ruby，也会一些ruby on rails，所以对Jekyll有天生的好感，看不上wordpress、hexo之类的。不过后来当我看到了hexo的next主题时，被它的简洁所吸引，因此决定转向hexo，本文记录使用hexo构建博客的方法（PS；我只是一个搬运工，针对Linux用户而言）。
 HexoHexo 是一个快速、简洁且高效的博客框架。Hex">
-<meta property="og:updated_time" content="2016-04-07T09:18:59.253Z">
+<meta property="og:updated_time" content="2016-04-14T02:19:27.500Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="从Jekyll转向Hexo">
 <meta name="twitter:description" content="之前的博客，是使用Jekyll搭建的，因为学过一些ruby，也会一些ruby on rails，所以对Jekyll有天生的好感，看不上wordpress、hexo之类的。不过后来当我看到了hexo的next主题时，被它的简洁所吸引，因此决定转向hexo，本文记录使用hexo构建博客的方法（PS；我只是一个搬运工，针对Linux用户而言）。
@@ -396,6 +396,8 @@ HexoHexo 是一个快速、简洁且高效的博客框架。Hex">
 <p>新建一个网站。如果没有设置 <code>folder</code> ，Hexo 默认在目前的文件夹建立网站。</p>
 <h4 id="new"><a href="#new" class="headerlink" title="new"></a>new</h4><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new [layout] &lt;title&gt;</span><br></pre></td></tr></table></figure>
 <p>新建一篇文章。如果没有设置 <code>layout</code> 的话，默认使用 <code>_config.yml</code> 中的 <code>default_layout</code> 参数代替。如果标题包含空格的话，请使用引号括起来。</p>
+<p>草稿的使用：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new draft <span class="string">"new draft"</span> <span class="comment">#新建草稿</span></span><br><span class="line">$ hexo publish [layout] &lt;title&gt; <span class="comment">#变成正式文章</span></span><br></pre></td></tr></table></figure>
 <h4 id="generate"><a href="#generate" class="headerlink" title="generate"></a>generate</h4><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br><span class="line">$ hexo g</span><br></pre></td></tr></table></figure>
 <p>生成静态文件。</p>
 <table>
@@ -654,7 +656,7 @@ HexoHexo 是一个快速、简洁且高效的博客框架。Hex">
           
             <div class="site-state-item site-state-categories">
               <a href="/categories">
-                <span class="site-state-item-count">12</span>
+                <span class="site-state-item-count">13</span>
                 <span class="site-state-item-name">分类</span>
               </a>
             </div>
@@ -663,7 +665,7 @@ HexoHexo 是一个快速、简洁且高效的博客框架。Hex">
           
             <div class="site-state-item site-state-tags">
               <a href="/tags">
-                <span class="site-state-item-count">14</span>
+                <span class="site-state-item-count">18</span>
                 <span class="site-state-item-name">标签</span>
               </a>
             </div>
