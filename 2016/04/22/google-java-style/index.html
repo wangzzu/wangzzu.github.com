@@ -1,0 +1,1018 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="java," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="这份文档是Google Java编程风格规范的定义。在平时编写代码时应该养成一个良好的习惯，按照这个标准去编写容易维护的代码。当且仅当一个Java源文件符合此文档中的规则，我们才认为它符合Google的Java编程风格。
+源文件基础源文件名源文件以其最顶层的类名来命名，大小写敏感，文件扩展名为.java。
+文件编码源文件编码格式为：UTF-8。
+特殊字符空白字符除了行结束符序列，ASCII水平空格">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Google Java Style">
+<meta property="og:url" content="http://wangzzu.github.io/2016/04/22/google-java-style/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="这份文档是Google Java编程风格规范的定义。在平时编写代码时应该养成一个良好的习惯，按照这个标准去编写容易维护的代码。当且仅当一个Java源文件符合此文档中的规则，我们才认为它符合Google的Java编程风格。
+源文件基础源文件名源文件以其最顶层的类名来命名，大小写敏感，文件扩展名为.java。
+文件编码源文件编码格式为：UTF-8。
+特殊字符空白字符除了行结束符序列，ASCII水平空格">
+<meta property="og:updated_time" content="2016-04-22T01:31:43.909Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Google Java Style">
+<meta name="twitter:description" content="这份文档是Google Java编程风格规范的定义。在平时编写代码时应该养成一个良好的习惯，按照这个标准去编写容易维护的代码。当且仅当一个Java源文件符合此文档中的规则，我们才认为它符合Google的Java编程风格。
+源文件基础源文件名源文件以其最顶层的类名来命名，大小写敏感，文件扩展名为.java。
+文件编码源文件编码格式为：UTF-8。
+特殊字符空白字符除了行结束符序列，ASCII水平空格">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Google Java Style | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-guestbook">
+          <a href="/guestbook" rel="section">
+            
+              <i class="menu-item-icon fa fa-book fa-fw"></i> <br />
+            
+            留言
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="#" class="st-search-show-outputs">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <form class="site-search-form">
+  <input type="text" id="st-search-input" class="st-search-input st-default-search-input" />
+</form>
+
+<script type="text/javascript">
+  (function(w,d,t,u,n,s,e){w['SwiftypeObject']=n;w[n]=w[n]||function(){
+    (w[n].q=w[n].q||[]).push(arguments);};s=d.createElement(t);
+    e=d.getElementsByTagName(t)[0];s.async=1;s.src=u;e.parentNode.insertBefore(s,e);
+  })(window,document,'script','//s.swiftypecdn.com/install/v2/st.js','_st');
+
+  _st('install', 'KoerDBxT5G5M48ZPYkzN','2.0.0');
+</script>
+
+
+
+    </div>
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Google Java Style
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-04-22T09:31:43+08:00" content="2016-04-22">
+              2016-04-22
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/java/" itemprop="url" rel="index">
+                    <span itemprop="name">java</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2016/04/22/google-java-style/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/04/22/google-java-style/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+	  
+              <span>&nbsp; | &nbsp;
+                   <span id="busuanzi_value_page_pv" ></span>次阅读
+              </span>    
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>这份文档是Google Java编程风格规范的定义。在平时编写代码时应该养成一个良好的习惯，按照这个标准去编写容易维护的代码。当且仅当一个Java源文件符合此文档中的规则，我们才认为它符合Google的Java编程风格。</p>
+<h1 id="源文件基础"><a href="#源文件基础" class="headerlink" title="源文件基础"></a>源文件基础</h1><h2 id="源文件名"><a href="#源文件名" class="headerlink" title="源文件名"></a>源文件名</h2><p>源文件以其最顶层的类名来命名，大小写敏感，文件扩展名为<code>.java</code>。</p>
+<h2 id="文件编码"><a href="#文件编码" class="headerlink" title="文件编码"></a>文件编码</h2><p>源文件编码格式为：<strong>UTF-8</strong>。</p>
+<h2 id="特殊字符"><a href="#特殊字符" class="headerlink" title="特殊字符"></a>特殊字符</h2><h3 id="空白字符"><a href="#空白字符" class="headerlink" title="空白字符"></a>空白字符</h3><p>除了行结束符序列，ASCII水平空格字符(<code>0x20</code>，即空格)是源文件中唯一允许出现的空白字符，这意味着：</p>
+<ol>
+<li>所有其它字符串中的空白字符都要进行转义。</li>
+<li>制表符不用于缩进。</li>
+</ol>
+<h3 id="特殊转义序列"><a href="#特殊转义序列" class="headerlink" title="特殊转义序列"></a>特殊转义序列</h3><p>对于具有特殊转义序列的任何字符(<code>\b</code>,<code>\t</code>,<code>\n</code>, <code>\f</code>, <code>\r</code>,<code>&quot;</code>,<code>&#39;</code>及<code>\</code>)，我们使用它的转义序列，而不是相应的八进制(比如<code>\012</code>)或Unicode(比如<code>\u000a</code>)转义。</p>
+<h3 id="非ASCII字符"><a href="#非ASCII字符" class="headerlink" title="非ASCII字符"></a>非ASCII字符</h3><p>对于剩余的非ASCII字符，是使用实际的Unicode字符(比如<code>∞</code>)，还是使用等价的Unicode转义符(比如<code>\u221e</code>)，取决于哪个能让代码更易于阅读和理解。</p>
+<blockquote>
+<p>Tip: 在使用Unicode转义符或是一些实际的Unicode字符时，建议做些注释给出解释，这有助于别人阅读和理解。</p>
+</blockquote>
+<h1 id="源文件结构"><a href="#源文件结构" class="headerlink" title="源文件结构"></a>源文件结构</h1><p>一个源文件包含（按顺序地）：</p>
+<ol>
+<li>许可证版权信息（如果需要的情况下）；</li>
+<li>package语句；</li>
+<li>import语句；</li>
+<li>一个顶级类（只有一个）；</li>
+</ol>
+<p><em>以上每个部分用一个空行隔开。</em></p>
+<h2 id="许可证或版权信息"><a href="#许可证或版权信息" class="headerlink" title="许可证或版权信息"></a>许可证或版权信息</h2><p>如果一个文件包含许可证或版权信息，那么它应当被放在文件最前面。</p>
+<h2 id="package语句"><a href="#package语句" class="headerlink" title="package语句"></a>package语句</h2><p><strong>package语句不换行</strong>，列限制并不适用于package语句。(即package语句写在一行里)</p>
+<h2 id="import语句"><a href="#import语句" class="headerlink" title="import语句"></a>import语句</h2><ul>
+<li>import<strong>不要使用通配符</strong>，不要出现类似这样的import语句：<code>import java.util.*</code>；</li>
+<li>import语句<strong>不要换行</strong>，每个import语句独立成行；</li>
+<li>顺序与间距：import语句分为以下几组，按照这个顺序，每组由一个空行分隔。<ol>
+<li>所有的静态类导入独立成组；</li>
+<li><code>com.google</code> imports；</li>
+<li>第三的包。每个包为一组，字典序，如<code>andriod</code>，<code>com</code>，<code>junit</code>，<code>org</code>，<code>sun</code>.</li>
+<li><code>java</code> imports;</li>
+<li><code>javax</code> imports.</li>
+</ol>
+</li>
+</ul>
+<p>组内不空行，按字典序排序。</p>
+<h2 id="类声明"><a href="#类声明" class="headerlink" title="类声明"></a>类声明</h2><h3 id="只有一个顶级类声明"><a href="#只有一个顶级类声明" class="headerlink" title="只有一个顶级类声明"></a>只有一个顶级类声明</h3><p>每个顶级类都在一个与它同名的源文件中(当然，还包含<code>.java</code>后缀)。</p>
+<p>例如：<code>package-info.java</code>，该文件中可没有<code>package-info</code>类。</p>
+<h3 id="类成员顺序"><a href="#类成员顺序" class="headerlink" title="类成员顺序"></a>类成员顺序</h3><p>类的成员顺序对易学性有很大的影响，但这也不存在唯一的通用法则。不同的类对成员的排序可能是不同的。 最重要的一点，每个类应该以<strong>某种逻辑</strong>去排序它的成员，维护者应该要能解释这种排序逻辑。比如， 新的方法不能总是习惯性地添加到类的结尾，因为这样就是按时间顺序而非某种逻辑来排序的。</p>
+<h3 id="重载：永不分离"><a href="#重载：永不分离" class="headerlink" title="重载：永不分离"></a>重载：永不分离</h3><p>当一个类有多个构造函数，或是多个同名方法，这些函数/方法应该按顺序出现在一起，中间不要放进其它函数/方法。</p>
+<h1 id="格式"><a href="#格式" class="headerlink" title="格式"></a>格式</h1><h2 id="大括号"><a href="#大括号" class="headerlink" title="大括号"></a>大括号</h2><h3 id="使用大括号"><a href="#使用大括号" class="headerlink" title="使用大括号"></a>使用大括号</h3><p>当大括号与<code>if</code>, <code>else</code>, <code>for</code>, <code>do</code>, <code>while</code>语句一起使用，即使只有一条语句（或者是空），也应该把大括号写上。</p>
+<h3 id="非空块"><a href="#非空块" class="headerlink" title="非空块"></a>非空块</h3><p>对于非空块和块状结构，主要有以下几个原则：</p>
+<ul>
+<li>在左大括号前不换行；</li>
+<li>左大括号后换行；</li>
+<li>右大括号前换行；</li>
+<li>如果右大括号是一个语句、函数体或类的终止，则右大括号后换行; 否则不换行。例如，如果右大括号后面是else或逗号，则不换行。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//示例</span></span><br><span class="line"><span class="keyword">return</span> <span class="keyword">new</span> MyClass() &#123;</span><br><span class="line">    <span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">method</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (condition()) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                something();</span><br><span class="line">            &#125; <span class="keyword">catch</span> (ProblemException e) &#123;</span><br><span class="line">                recover();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="空块"><a href="#空块" class="headerlink" title="空块"></a>空块</h3><p>这里主要有两种情况：</p>
+<ul>
+<li>一个空的块状结构里什么也不包含，大括号可以简洁地写成<code>{}</code>，不需要换行；</li>
+</ul>
+<ul>
+<li>但是也有例外的情况：如果它是一个多块语句的一部分(<code>if/else</code>或 <code>try/catch/finally</code>) ，即使大括号内没内容，右大括号也要换行。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//不换行</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">doNothing</span><span class="params">()</span> </span>&#123;&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="块缩进：2个空格"><a href="#块缩进：2个空格" class="headerlink" title="块缩进：2个空格"></a>块缩进：2个空格</h2><p>每当开始一个新的块，缩进增加<strong>2个空格</strong>，当块结束时，缩进返回先前的缩进级别。缩进级别适用于代码和注释。（不过一般情况大家用的都是4个，这个的话看个人喜好，感觉只要统一就可以了）</p>
+<h2 id="一行一个语句"><a href="#一行一个语句" class="headerlink" title="一行一个语句"></a>一行一个语句</h2><p>每个语句后要换行。</p>
+<h2 id="列限制：80或100"><a href="#列限制：80或100" class="headerlink" title="列限制：80或100"></a>列限制：80或100</h2><p>一个项目可以选择一行80个字符或100个字符的列限制，除了下述例外，任何一行如果超过这个字符数限制，必须自动换行。</p>
+<p>例外：</p>
+<ul>
+<li>不可能满足列限制的行(例如，Javadoc中的一个长URL，或是一个长的JSNI方法参考);</li>
+<li><code>package</code>和<code>import</code>语句;</li>
+<li>注释中那些可能被剪切并粘贴到shell中的命令行.</li>
+</ul>
+<h2 id="自动换行"><a href="#自动换行" class="headerlink" title="自动换行"></a>自动换行</h2><p>术语说明：一般情况下，一行长代码为了避免超出列限制(<strong>80或100</strong>个字符)而被分为多行，我们称之为<strong>自动换行</strong>(line-wrapping)。</p>
+<p>我们并没有全面，确定性的准则来决定在每一种情况下如何自动换行。很多时候，对于同一段代码会有好几种有效的自动换行方式。</p>
+<blockquote>
+<p>Tip: 提取方法或局部变量可以在不换行的情况下解决代码过长的问题(是合理缩短命名长度吧)</p>
+</blockquote>
+<h3 id="从哪里断开"><a href="#从哪里断开" class="headerlink" title="从哪里断开"></a>从哪里断开</h3><p>自动换行的基本准则是：更倾向于在更高的语法级别处断开。</p>
+<ul>
+<li>如果在<code>非赋值运算符</code>处断开，那么在该符号前断开(比如+，它将位于下一行)。这条规则也适用于以下“类运算符”符号：点分隔符(.)，类型界限中的&amp;（<code>&lt;T extends Foo &amp; Bar&gt;</code>)，catch块中的管道符号(<code>catch (FooException | BarException e</code>)</li>
+<li>如果在赋值运算符处断开，通常的做法是在该符号后断开(比如=，它与前面的内容留在同一行)。这条规则也适用于<code>foreach</code>语句中的分号。</li>
+<li>方法名或构造函数名与左括号留在同一行。</li>
+<li>逗号(,)与其前面的内容留在同一行。</li>
+</ul>
+<h3 id="自动换行时缩进至少-4个空格"><a href="#自动换行时缩进至少-4个空格" class="headerlink" title="自动换行时缩进至少+4个空格"></a>自动换行时缩进至少+4个空格</h3><p>自动换行时，第一行后的每一行至少比第一行多缩进4个空格(注意：制表符不用于缩进。见2.3.1节)。</p>
+<p>当存在连续自动换行时，缩进可能会多缩进不只4个空格(语法元素存在多级时)。一般而言，两个连续行使用相同的缩进当且仅当它们开始于同级语法元素。</p>
+<h2 id="空白"><a href="#空白" class="headerlink" title="空白"></a>空白</h2><h3 id="垂直空白"><a href="#垂直空白" class="headerlink" title="垂直空白"></a>垂直空白</h3><p>以下情况需要使用<strong>一个空行</strong>：</p>
+<ol>
+<li>类内连续的成员之间：字段，构造函数，方法，嵌套类，静态初始化块，实例初始化块。<br>例外：两个连续字段之间的空行是可选的，用于字段的空行主要用来对字段进行逻辑分组。</li>
+<li>在函数体内，语句的逻辑分组间使用空行。</li>
+<li>类内的第一个成员前或最后一个成员后的空行是可选的(既不鼓励也不反对这样做，视个人喜好而定)。</li>
+<li>要满足本文档中其他节的空行要求(比如3.3节：import语句)</li>
+</ol>
+<p>多个连续的空行是允许的，但没有必要这样做(我们也不鼓励这样做)。</p>
+<h3 id="水平空白"><a href="#水平空白" class="headerlink" title="水平空白"></a>水平空白</h3><p>除了语言需求和其它规则，并且除了文字，注释和<code>Javadoc</code>用到单个空格，单个ASCII空格也出现在以下几个地方：</p>
+<ol>
+<li>分隔任何保留字与紧随其后的左括号(<code>(</code>)(如<code>if, for catch</code>等)。</li>
+<li>分隔任何保留字与其前面的右大括号(<code>}</code>)(如<code>else, catch</code>)。</li>
+<li>在任何左大括号前(<code>{</code>)，两个例外：<ul>
+<li><code>@SomeAnnotation({a, b})</code>(不使用空格)。</li>
+<li><code>String[][] x = foo;</code>(大括号间没有空格，见下面的Note)。</li>
+</ul>
+</li>
+<li>在任何二元或三元运算符的两侧。这也适用于以下“类运算符”符号：<ul>
+<li>类型界限中的&amp;(<code>&lt;T extends Foo &amp; Bar&gt;</code>)。</li>
+<li><code>catch</code>块中的管道符号(<code>catch (FooException | BarException e</code>)。</li>
+<li><code>foreach</code>语句中的分号。</li>
+</ul>
+</li>
+<li>在<code>, : ;</code>及右括号(<code>)</code>)后</li>
+<li>如果在一条语句后做注释，则<strong>双斜杠(//)两边都要空格</strong>。这里可以允许多个空格，但没有必要。</li>
+<li>类型和变量之间：List list。</li>
+<li><p>数组初始化中，大括号内的空格是可选的，即<code>new int[] {5, 6}</code>和<code>new int[] { 5, 6 }</code>都是可以的。</p>
+<blockquote>
+<p>Note：这个规则并不要求或禁止一行的开关或结尾需要额外的空格，只对内部空格做要求。</p>
+</blockquote>
+</li>
+</ol>
+<h3 id="水平对齐：不做要求"><a href="#水平对齐：不做要求" class="headerlink" title="水平对齐：不做要求"></a>水平对齐：不做要求</h3><p>术语说明：水平对齐指的是通过增加可变数量的空格来使某一行的字符与上一行的相应字符对齐。</p>
+<p>这是允许的(而且在不少地方可以看到这样的代码)，但Google编程风格对此不做要求。即使对于已经使用水平对齐的代码，我们也不需要去保持这种风格。</p>
+<p>以下示例先展示未对齐的代码，然后是对齐的代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 未对齐</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> x; <span class="comment">// this is fine</span></span><br><span class="line"><span class="keyword">private</span> Color color; <span class="comment">// this too</span></span><br><span class="line"><span class="comment">// 对齐</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> x; <span class="comment">// permitted, but future edits</span></span><br><span class="line"><span class="keyword">private</span> Color color; <span class="comment">// may leave it unaligned</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>Tip：对齐可增加代码可读性，但它为日后的维护带来问题。考虑未来某个时候，我们需要修改一堆对齐的代码中的一行。 这可能导致原本很漂亮的对齐代码变得错位。很可能它会提示你调整周围代码的空白来使这一堆代码重新水平对齐(比如程序员想保持这种水平对齐的风格)， 这就会让你做许多的无用功，增加了reviewer的工作并且可能导致更多的合并冲突。</p>
+</blockquote>
+<h2 id="用小括号来限定组：推荐"><a href="#用小括号来限定组：推荐" class="headerlink" title="用小括号来限定组：推荐"></a>用小括号来限定组：推荐</h2><p>除非作者和reviewer都认为去掉小括号也不会使代码被误解，或是去掉小括号能让代码更易于阅读，否则我们不应该去掉小括号。 我们没有理由假设读者能记住整个Java运算符优先级表。（把所有优先级表全部记下来是比较困难的）</p>
+<h2 id="具体结构"><a href="#具体结构" class="headerlink" title="具体结构"></a>具体结构</h2><h3 id="枚举类"><a href="#枚举类" class="headerlink" title="枚举类"></a>枚举类</h3><p>枚举常量间用逗号隔开，换行可选。</p>
+<p>没有方法和文档的枚举类可写成数组初始化的格式：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">enum</span> Suit &#123; CLUBS, HEARTS, SPADES, DIAMONDS &#125;</span><br></pre></td></tr></table></figure>
+<p>由于枚举类也是一个类，因此所有适用于其它类的格式规则也适用于枚举类。</p>
+<h3 id="变量声明"><a href="#变量声明" class="headerlink" title="变量声明"></a>变量声明</h3><h4 id="每次只声明一个变量"><a href="#每次只声明一个变量" class="headerlink" title="每次只声明一个变量"></a>每次只声明一个变量</h4><p><strong>不要使用组合声明</strong>，比如<code>int a, b</code>;。</p>
+<h4 id="局部变量需要时才声明，并尽快进行初始化"><a href="#局部变量需要时才声明，并尽快进行初始化" class="headerlink" title="局部变量需要时才声明，并尽快进行初始化"></a>局部变量需要时才声明，并尽快进行初始化</h4><p>不要在一个代码块的开头把局部变量一次性都声明了(这是c语言的做法)，而是在第一次需要使用它时才声明。 局部变量在声明时最好就进行初始化，或者声明后尽快进行初始化。</p>
+<h3 id="数组"><a href="#数组" class="headerlink" title="数组"></a>数组</h3><h4 id="数组初始化：可写成块状结构"><a href="#数组初始化：可写成块状结构" class="headerlink" title="数组初始化：可写成块状结构"></a>数组初始化：可写成块状结构</h4><p>数组初始化可以写成块状结构，比如，下面的写法都是OK的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">new</span> <span class="keyword">int</span>[] &#123;</span><br><span class="line">     <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span> </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">new</span> <span class="keyword">int</span>[] &#123;</span><br><span class="line">     <span class="number">0</span>,</span><br><span class="line">     <span class="number">1</span>,</span><br><span class="line">     <span class="number">2</span>,</span><br><span class="line">     <span class="number">3</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">new</span> <span class="keyword">int</span>[] &#123;</span><br><span class="line">     <span class="number">0</span>, <span class="number">1</span>,</span><br><span class="line">     <span class="number">2</span>, <span class="number">3</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">new</span> <span class="keyword">int</span>[]&#123;<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="数组声明"><a href="#数组声明" class="headerlink" title="数组声明"></a>数组声明</h4><p>中括号是类型的一部分：<code>String[] args</code>。</p>
+<h3 id="switch语句"><a href="#switch语句" class="headerlink" title="switch语句"></a>switch语句</h3><p>术语说明：switch块的大括号内是一个或多个语句组。每个语句组包含一个或多个<code>switch</code>标签(<code>case FOO:</code>或<code>default:</code>)，后面跟着一条或多条语句。</p>
+<h4 id="缩进"><a href="#缩进" class="headerlink" title="缩进"></a>缩进</h4><p>与其它块状结构一致，<code>switch</code>块中的内容缩进为2个空格。</p>
+<p>每个<code>switch</code>标签后新起一行，再缩进2个空格，写下一条或多条语句。</p>
+<h4 id="Fall-through：注释"><a href="#Fall-through：注释" class="headerlink" title="Fall-through：注释"></a>Fall-through：注释</h4><p>在一个<code>switch</code>块内，每个语句组要么通过<code>break, continue, return</code>或抛出异常来终止，要么通过一条注释来说明程序将继续执行到下一个语句组， 任何能表达这个意思的注释都是OK的(典型的是用// fall through)。这个特殊的注释并不需要在最后一个语句组(一般是<code>default</code>)中出现。示例：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">switch</span> (input) &#123;</span><br><span class="line">     <span class="keyword">case</span> <span class="number">1</span>:</span><br><span class="line">     <span class="keyword">case</span> <span class="number">2</span>:</span><br><span class="line">         prepareOneOrTwo();</span><br><span class="line">         <span class="comment">// fall through</span></span><br><span class="line">     <span class="keyword">case</span> <span class="number">3</span>:</span><br><span class="line">         handleOneTwoOrThree();</span><br><span class="line">         <span class="keyword">break</span>;</span><br><span class="line">     <span class="keyword">default</span>:</span><br><span class="line">         handleLargeNumber(input);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="default的情况要写出来"><a href="#default的情况要写出来" class="headerlink" title="default的情况要写出来"></a>default的情况要写出来</h4><p>每个switch语句都包含一个<code>default</code>语句组，即使它什么代码也不包含。</p>
+<h3 id="注解-Annotations"><a href="#注解-Annotations" class="headerlink" title="注解(Annotations)"></a>注解(<code>Annotations</code>)</h3><p>注解紧跟在文档块后面，应用于类、方法和构造函数，一个注解<strong>独占一行</strong>。这些换行不属于自动换行，因此缩进级别不变。例如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="meta">@Nullable</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> String <span class="title">getNameIfPresent</span><span class="params">()</span> </span>&#123; ... &#125;</span><br></pre></td></tr></table></figure>
+<p>例外：单个的注解可以和签名的第一行出现在同一行。例如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">hashCode</span><span class="params">()</span> </span>&#123; ... &#125;</span><br></pre></td></tr></table></figure>
+<p>应用于字段的注解紧随文档块出现，应用于字段的多个注解允许与字段出现在同一行。例如：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Partial</span> <span class="meta">@Mock</span> DataLoader loader;</span><br></pre></td></tr></table></figure>
+<p>参数和局部变量注解没有特定规则。</p>
+<h3 id="注释"><a href="#注释" class="headerlink" title="注释"></a>注释</h3><h4 id="块注释风格"><a href="#块注释风格" class="headerlink" title="块注释风格"></a>块注释风格</h4><p>块注释与其周围的代码在同一缩进级别。它们可以是/<em> … </em>/风格，也可以是// …风格。对于多行的/<em> … </em>/注释，后续行必须从<em>开始， 并且与前一行的</em>对齐。以下示例注释都是OK的。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span><br><span class="line">* This is // And so /* Or you can</span><br><span class="line">* okay. // is this. * even do this. */</span></span><br><span class="line">*/</span><br></pre></td></tr></table></figure>
+<p>注释不要封闭在由星号或其它字符绘制的框架里。</p>
+<p>Tip：在写多行注释时，如果你希望在必要时能重新换行(即注释像段落风格一样)，那么使用/<em> … </em>/。</p>
+<h3 id="Modifiers"><a href="#Modifiers" class="headerlink" title="Modifiers"></a>Modifiers</h3><p>类和成员的<code>modifiers</code>如果存在，则按Java语言规范中推荐的顺序出现。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">protected</span> <span class="keyword">private</span> <span class="keyword">abstract</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> <span class="keyword">synchronized</span> <span class="keyword">native</span> <span class="keyword">strictfp</span></span><br></pre></td></tr></table></figure>
+<h1 id="命名约定"><a href="#命名约定" class="headerlink" title="命名约定"></a>命名约定</h1><h2 id="对所有标识符都通用的规则"><a href="#对所有标识符都通用的规则" class="headerlink" title="对所有标识符都通用的规则"></a>对所有标识符都通用的规则</h2><p>标识符只能使用ASCII字母和数字，因此每个有效的标识符名称都能匹配正则表达式<code>\w+</code>。</p>
+<p>在Google其它编程语言风格中使用的特殊前缀或后缀，如<code>name_</code>,<code>mName</code>, <code>s_name</code>和<code>kName</code>，在Java编程风格中都不再使用。</p>
+<h2 id="标识符类型的规则"><a href="#标识符类型的规则" class="headerlink" title="标识符类型的规则"></a>标识符类型的规则</h2><h3 id="包名"><a href="#包名" class="headerlink" title="包名"></a>包名</h3><p>包名<strong>全部小写</strong>，连续的单词只是<strong>简单地连接</strong>起来，不使用下划线。</p>
+<h3 id="类名"><a href="#类名" class="headerlink" title="类名"></a>类名</h3><p>类名都以<code>UpperCamelCase</code>风格编写。</p>
+<p>类名通常是名词或名词短语，接口名称有时可能是形容词或形容词短语。现在还没有特定的规则或行之有效的约定来命名注解类型。</p>
+<p>测试类的命名以它要测试的类的名称开始，以Test结束。例如，<code>HashTest</code>或<code>HashIntegrationTest</code>。</p>
+<h3 id="方法名"><a href="#方法名" class="headerlink" title="方法名"></a>方法名</h3><p>方法名都以<code>lowerCamelCase</code>风格编写。</p>
+<p>方法名通常是动词或动词短语。</p>
+<p>下划线可能出现在JUnit测试方法名称中用以分隔名称的逻辑组件。一个典型的模式是：<code>test&lt;MethodUnderTest&gt;_&lt;state&gt;</code>，例如<code>testPop_emptyStack</code>。 并不存在唯一正确的方式来命名测试方法。</p>
+<h3 id="常量名"><a href="#常量名" class="headerlink" title="常量名"></a>常量名</h3><p>常量名命名模式为<code>CONSTANT_CASE</code>，<strong>全部字母大写，用下划线分隔单词</strong>。那，到底什么算是一个常量？</p>
+<p>每个常量都是一个静态<code>final</code>字段，但不是所有静态<code>final</code>字段都是常量。在决定一个字段是否是一个常量时， 考虑它是否真的感觉像是一个常量。例如，如果任何一个该实例的观测状态是可变的，则它几乎肯定不会是一个常量。 只是永远不打算改变对象一般是不够的，它要真的一直不变才能将它示为常量。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Constants</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> NUMBER = <span class="number">5</span>;</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> ImmutableList&lt;String&gt; NAMES = ImmutableList.of(<span class="string">"Ed"</span>, <span class="string">"Ann"</span>);</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> Joiner COMMA_JOINER = Joiner.on(<span class="string">','</span>); <span class="comment">// because Joiner is immutable</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> SomeMutableType[] EMPTY_ARRAY = &#123;&#125;;</span><br><span class="line"><span class="keyword">enum</span> SomeEnum &#123; ENUM_CONSTANT &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Not constants</span></span><br><span class="line"><span class="keyword">static</span> String nonFinal = <span class="string">"non-final"</span>;</span><br><span class="line"><span class="keyword">final</span> String nonStatic = <span class="string">"non-static"</span>;</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> Set&lt;String&gt; mutableCollection = <span class="keyword">new</span> HashSet&lt;String&gt;();</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> ImmutableSet&lt;SomeMutableType&gt; mutableElements = ImmutableSet.of(mutable);</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> Logger logger = Logger.getLogger(MyClass.getName());</span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> String[] nonEmptyArray = &#123;<span class="string">"these"</span>, <span class="string">"can"</span>, <span class="string">"change"</span>&#125;;</span><br></pre></td></tr></table></figure>
+<p>这些名字通常是名词或名词短语。</p>
+<h3 id="非常量字段名"><a href="#非常量字段名" class="headerlink" title="非常量字段名"></a>非常量字段名</h3><p>非常量字段名以<code>lowerCamelCase</code>风格编写。</p>
+<p>这些名字通常是名词或名词短语。</p>
+<h3 id="参数名"><a href="#参数名" class="headerlink" title="参数名"></a>参数名</h3><p>参数名以<code>lowerCamelCase</code>风格编写。</p>
+<p>参数应该避免用单个字符命名。</p>
+<h3 id="局部变量名"><a href="#局部变量名" class="headerlink" title="局部变量名"></a>局部变量名</h3><p>局部变量名以<code>lowerCamelCase</code>风格编写，比起其它类型的名称，局部变量名可以有更为宽松的缩写。</p>
+<p>虽然缩写更宽松，但还是要避免用单字符进行命名，除了临时变量和循环变量。</p>
+<p>即使局部变量是<code>final</code>和不可改变的，也不应该把它示为常量，自然也不能用常量的规则去命名它。</p>
+<h3 id="类型变量名"><a href="#类型变量名" class="headerlink" title="类型变量名"></a>类型变量名</h3><p>类型变量可用以下两种风格之一进行命名：</p>
+<ul>
+<li>单个的大写字母，后面可以跟一个数字(如：E, T, X, T2)。</li>
+<li>以类命名方式(5.2.2节)，后面加个大写的T(如：RequestT, FooBarT)。</li>
+</ul>
+<h2 id="驼峰式命名法-CamelCase"><a href="#驼峰式命名法-CamelCase" class="headerlink" title="驼峰式命名法(CamelCase)"></a>驼峰式命名法(<code>CamelCase</code>)</h2><p>驼峰式命名法：</p>
+<ol>
+<li>大驼峰式命名法(<code>UpperCamelCase</code>);</li>
+<li>小驼峰式命名法(<code>lowerCamelCase</code>)。</li>
+</ol>
+<p>有时，我们有不只一种合理的方式将一个英语词组转换成驼峰形式，如缩略语或不寻常的结构(例如”IPv6”或”iOS”)。Google指定了以下的转换方案。</p>
+<p>名字从散文形式(prose form)开始:</p>
+<ol>
+<li>把短语转换为纯ASCII码，并且移除任何单引号。例如：”Müller’s algorithm”将变成”Muellers algorithm”。</li>
+<li>把这个结果切分成单词，在空格或其它标点符号(通常是连字符)处分割开。<ul>
+<li>推荐：如果某个单词已经有了常用的驼峰表示形式，按它的组成将它分割开(如”AdWords”将分割成”ad words”)。 需要注意的是”iOS”并不是一个真正的驼峰表示形式，因此该推荐对它并不适用。</li>
+</ul>
+</li>
+<li>现在将所有字母都小写(包括缩写)，然后将单词的第一个字母大写：<ol>
+<li>每个单词的第一个字母都大写，来得到大驼峰式命名。</li>
+<li>除了第一个单词，每个单词的第一个字母都大写，来得到小驼峰式命名。</li>
+</ol>
+</li>
+<li>最后将所有的单词连接起来得到一个标识符。</li>
+</ol>
+<p>示例：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Prose form Correct Incorrect</span><br><span class="line">------------------------------------------------------------------</span><br><span class="line"><span class="string">"XML HTTP request"</span> XmlHttpRequest XMLHTTPRequest</span><br><span class="line"><span class="string">"new customer ID"</span> newCustomerId newCustomerID</span><br><span class="line"><span class="string">"inner stopwatch"</span> innerStopwatch innerStopWatch</span><br><span class="line"><span class="string">"supports IPv6 on iOS?"</span> supportsIpv6OnIos supportsIPv6OnIOS</span><br><span class="line"><span class="string">"YouTube importer"</span> YouTubeImporter</span><br><span class="line">YoutubeImporter*</span><br></pre></td></tr></table></figure>
+<p>加星号处表示可以，但不推荐。</p>
+<blockquote>
+<p>Note：在英语中，某些带有连字符的单词形式不唯一。例如：”nonempty”和”non-empty”都是正确的，因此方法名<code>checkNonempty</code>和<code>checkNonEmpty</code>也都是正确的。</p>
+</blockquote>
+<h1 id="编程实践"><a href="#编程实践" class="headerlink" title="编程实践"></a>编程实践</h1><h2 id="Override：能用则用"><a href="#Override：能用则用" class="headerlink" title="@Override：能用则用"></a><code>@Override</code>：能用则用</h2><p>只要是合法的，就把<code>@Override</code>注解给用上。</p>
+<h2 id="捕获的异常：不能忽视"><a href="#捕获的异常：不能忽视" class="headerlink" title="捕获的异常：不能忽视"></a>捕获的异常：不能忽视</h2><p>除了下面的例子，对捕获的异常不做响应是极少正确的。(典型的响应方式是打印日志，或者如果它被认为是不可能的，则把它当作一个<code>AssertionError</code>重新抛出。)</p>
+<p>如果它确实是不需要在<code>catch</code>块中做任何响应，需要做注释加以说明(如下面的例子)。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">     <span class="keyword">int</span> i = Integer.parseInt(response);</span><br><span class="line">     <span class="keyword">return</span> handleNumericResponse(i);</span><br><span class="line">&#125; <span class="keyword">catch</span> (NumberFormatException ok) &#123;</span><br><span class="line">     <span class="comment">// it's not numeric; that's fine, just continue</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> handleTextResponse(response);</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>例外：在测试中，如果一个捕获的异常被命名为<code>expected</code>，则它可以被不加注释地忽略。下面是一种非常常见的情形，用以确保所测试的方法会抛出一个期望中的异常， 因此在这里就没有必要加注释。</p>
+</blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">     emptyStack.pop();</span><br><span class="line">     fail();</span><br><span class="line">&#125; <span class="keyword">catch</span> (NoSuchElementException expected) &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="静态成员：使用类进行调用"><a href="#静态成员：使用类进行调用" class="headerlink" title="静态成员：使用类进行调用"></a>静态成员：使用类进行调用</h2><p>使用类名调用静态的类成员，而不是具体某个对象或表达式。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Foo aFoo = ...;</span><br><span class="line">Foo.aStaticMethod(); <span class="comment">// good</span></span><br><span class="line">aFoo.aStaticMethod(); <span class="comment">// bad</span></span><br><span class="line">somethingThatYieldsAFoo().aStaticMethod(); <span class="comment">// very bad</span></span><br></pre></td></tr></table></figure>
+<h2 id="Finalizers-禁用"><a href="#Finalizers-禁用" class="headerlink" title="Finalizers: 禁用"></a><code>Finalizers</code>: 禁用</h2><p>极少会去重写<code>Object.finalize</code>。</p>
+<blockquote>
+<p>Tip：不要使用finalize。如果你非要使用它，请先仔细阅读和理解Effective Java 第7条款：“Avoid Finalizers”，然后不要使用它。</p>
+</blockquote>
+<h1 id="Javadoc"><a href="#Javadoc" class="headerlink" title="Javadoc"></a>Javadoc</h1><h2 id="格式-1"><a href="#格式-1" class="headerlink" title="格式"></a>格式</h2><h3 id="一般形式"><a href="#一般形式" class="headerlink" title="一般形式"></a>一般形式</h3><p>Javadoc块的基本格式如下所示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span><br><span class="line">* Multiple lines of Javadoc text are written here,</span><br><span class="line">* wrapped normally...</span><br><span class="line">*/</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">method</span><span class="params">(String p1)</span> </span>&#123; ... &#125;</span><br></pre></td></tr></table></figure>
+<p>或者是以下单行形式：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** An especially short bit of Javadoc. */</span></span><br></pre></td></tr></table></figure>
+<p>基本格式总是OK的。当整个Javadoc块能容纳于一行时(且没有Javadoc标记@XXX)，可以使用单行形式。</p>
+<h3 id="段落"><a href="#段落" class="headerlink" title="段落"></a>段落</h3><p>空行(即，只包含最左侧星号的行)会出现在段落之间和Javadoc标记(@XXX)之前(如果有的话)。 除了第一个段落，每个段落第一个单词前都有标签</p><p>，并且它和第一个单词间没有空格。</p>
+<h3 id="Javadoc标记"><a href="#Javadoc标记" class="headerlink" title="Javadoc标记"></a>Javadoc标记</h3><p>标准的Javadoc标记按以下顺序出现：<code>@param</code>, <code>@return</code>, <code>@throws</code>, <code>@deprecated</code>, 前面这4种标记如果出现，描述都不能为空。 当描述无法在一行中容纳，连续行需要至少再缩进4个空格。</p>
+<h2 id="摘要片段"><a href="#摘要片段" class="headerlink" title="摘要片段"></a>摘要片段</h2><p>每个类或成员的Javadoc以一个简短的摘要片段开始。这个片段是非常重要的，在某些情况下，它是唯一出现的文本，比如在类和方法索引中。</p>
+<p>这只是一个小片段，可以是一个名词短语或动词短语，但不是一个完整的句子。它不会以<code>A {@code Foo} is a...</code>或<code>This method returns...</code>开头, 它也不会是一个完整的祈使句，如<code>Save the record...</code>。然而，由于开头大写及被加了标点，它看起来就像是个完整的句子。</p>
+<blockquote>
+<p>Tip：一个常见的错误是把简单的Javadoc写成<code>/** @return the customer ID */</code>，这是不正确的。它应该写成<code>/** Returns the customer ID. */</code>。</p>
+</blockquote>
+<h2 id="哪里需要使用Javadoc"><a href="#哪里需要使用Javadoc" class="headerlink" title="哪里需要使用Javadoc"></a>哪里需要使用Javadoc</h2><p>至少在每个public类及它的每个<code>public</code>和<code>protected</code>成员处使用Javadoc，以下是一些例外：</p>
+<h3 id="例外：不言自明的方法"><a href="#例外：不言自明的方法" class="headerlink" title="例外：不言自明的方法"></a>例外：不言自明的方法</h3><p>对于简单明显的方法如<code>getFoo</code>，Javadoc是可选的(即，是可以不写的)。这种情况下除了写“Returns the foo”，确实也没有什么值得写了。</p>
+<p>单元测试类中的测试方法可能是不言自明的最常见例子了，我们通常可以从这些方法的描述性命名中知道它是干什么的，因此不需要额外的文档说明。</p>
+<blockquote>
+<p>Tip：如果有一些相关信息是需要读者了解的，那么以上的例外不应作为忽视这些信息的理由。例如，对于方法名<code>getCanonicalName</code>， 就不应该忽视文档说明，因为读者很可能不知道词语<code>canonical name</code>指的是什么。</p>
+</blockquote>
+<h3 id="例外：重写"><a href="#例外：重写" class="headerlink" title="例外：重写"></a>例外：重写</h3><p>如果一个方法重写了超类中的方法，那么Javadoc并非必需的。</p>
+<h3 id="可选的Javadoc"><a href="#可选的Javadoc" class="headerlink" title="可选的Javadoc"></a>可选的Javadoc</h3><p>对于包外不可见的类和方法，如有需要，也是要使用Javadoc的。如果一个注释是用来定义一个类，方法，字段的整体目的或行为， 那么这个注释应该写成Javadoc，这样更统一更友好。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://google.github.io/styleguide/javaguide.html" target="_blank" rel="external">Google Java Style</a></li>
+<li><a href="http://www.hawstein.com/posts/google-java-style.html" target="_blank" rel="external">Google Style编程指南</a></li>
+</ul>
+
+      
+    </div>
+
+    <div>
+      
+        
+<div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center">
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
+  <button id="rewardButton", disable="enable", onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}", style="cursor: pointer; border: 0; outline: 0; border-radius: 100%; padding: 0; margin: 0; letter-spacing: normal; text-transform: none; text-indent: 0px; text-shadow: none">
+    <span onmouseover="this.style.color='rgb(236,96,0)';this.style.background='rgb(204,204,204)'" onMouseOut="this.style.color='#fff';this.style.background='rgb(236,96,0)'" style="display: inline-block; width: 70px; height: 70px; border-radius: 100%; line-height: 81px; color: #fff; font: 400 35px/75px 'microsofty'; background: rgb(236,96,0)">赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/pay/weixinpay.jpg" alt="Matt WeChat Pay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>微信打赏</p>
+      </div>
+    
+    
+      <div id="alipay" style="display: inline-block">
+        <img id="alipay_qr" src="/images/pay/alipay.jpg" alt="Matt Alipay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>支付宝打赏</p>
+      </div>
+    
+  </div>
+<div>
+
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/java/" rel="tag">#java</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2016/04/14/postgres-install/" rel="next" title="postgres安装">
+                <i class="fa fa-chevron-left"></i> postgres安装
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2016/04/22/google-java-style/"
+     data-title="Google Java Style"
+     data-content=""
+     data-url="http://wangzzu.github.io/2016/04/22/google-java-style/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2016/04/22/google-java-style/"
+           data-title="Google Java Style" data-url="http://wangzzu.github.io/2016/04/22/google-java-style/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">29</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">13</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">17</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#源文件基础"><span class="nav-number">1.</span> <span class="nav-text">源文件基础</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#源文件名"><span class="nav-number">1.1.</span> <span class="nav-text">源文件名</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#文件编码"><span class="nav-number">1.2.</span> <span class="nav-text">文件编码</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#特殊字符"><span class="nav-number">1.3.</span> <span class="nav-text">特殊字符</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#空白字符"><span class="nav-number">1.3.1.</span> <span class="nav-text">空白字符</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#特殊转义序列"><span class="nav-number">1.3.2.</span> <span class="nav-text">特殊转义序列</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#非ASCII字符"><span class="nav-number">1.3.3.</span> <span class="nav-text">非ASCII字符</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#源文件结构"><span class="nav-number">2.</span> <span class="nav-text">源文件结构</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#许可证或版权信息"><span class="nav-number">2.1.</span> <span class="nav-text">许可证或版权信息</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#package语句"><span class="nav-number">2.2.</span> <span class="nav-text">package语句</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#import语句"><span class="nav-number">2.3.</span> <span class="nav-text">import语句</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#类声明"><span class="nav-number">2.4.</span> <span class="nav-text">类声明</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#只有一个顶级类声明"><span class="nav-number">2.4.1.</span> <span class="nav-text">只有一个顶级类声明</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#类成员顺序"><span class="nav-number">2.4.2.</span> <span class="nav-text">类成员顺序</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#重载：永不分离"><span class="nav-number">2.4.3.</span> <span class="nav-text">重载：永不分离</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#格式"><span class="nav-number">3.</span> <span class="nav-text">格式</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#大括号"><span class="nav-number">3.1.</span> <span class="nav-text">大括号</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#使用大括号"><span class="nav-number">3.1.1.</span> <span class="nav-text">使用大括号</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#非空块"><span class="nav-number">3.1.2.</span> <span class="nav-text">非空块</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#空块"><span class="nav-number">3.1.3.</span> <span class="nav-text">空块</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#块缩进：2个空格"><span class="nav-number">3.2.</span> <span class="nav-text">块缩进：2个空格</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#一行一个语句"><span class="nav-number">3.3.</span> <span class="nav-text">一行一个语句</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#列限制：80或100"><span class="nav-number">3.4.</span> <span class="nav-text">列限制：80或100</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#自动换行"><span class="nav-number">3.5.</span> <span class="nav-text">自动换行</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#从哪里断开"><span class="nav-number">3.5.1.</span> <span class="nav-text">从哪里断开</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#自动换行时缩进至少-4个空格"><span class="nav-number">3.5.2.</span> <span class="nav-text">自动换行时缩进至少+4个空格</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#空白"><span class="nav-number">3.6.</span> <span class="nav-text">空白</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#垂直空白"><span class="nav-number">3.6.1.</span> <span class="nav-text">垂直空白</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#水平空白"><span class="nav-number">3.6.2.</span> <span class="nav-text">水平空白</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#水平对齐：不做要求"><span class="nav-number">3.6.3.</span> <span class="nav-text">水平对齐：不做要求</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#用小括号来限定组：推荐"><span class="nav-number">3.7.</span> <span class="nav-text">用小括号来限定组：推荐</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#具体结构"><span class="nav-number">3.8.</span> <span class="nav-text">具体结构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#枚举类"><span class="nav-number">3.8.1.</span> <span class="nav-text">枚举类</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#变量声明"><span class="nav-number">3.8.2.</span> <span class="nav-text">变量声明</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#每次只声明一个变量"><span class="nav-number">3.8.2.1.</span> <span class="nav-text">每次只声明一个变量</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#局部变量需要时才声明，并尽快进行初始化"><span class="nav-number">3.8.2.2.</span> <span class="nav-text">局部变量需要时才声明，并尽快进行初始化</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#数组"><span class="nav-number">3.8.3.</span> <span class="nav-text">数组</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#数组初始化：可写成块状结构"><span class="nav-number">3.8.3.1.</span> <span class="nav-text">数组初始化：可写成块状结构</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#数组声明"><span class="nav-number">3.8.3.2.</span> <span class="nav-text">数组声明</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#switch语句"><span class="nav-number">3.8.4.</span> <span class="nav-text">switch语句</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#缩进"><span class="nav-number">3.8.4.1.</span> <span class="nav-text">缩进</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Fall-through：注释"><span class="nav-number">3.8.4.2.</span> <span class="nav-text">Fall-through：注释</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#default的情况要写出来"><span class="nav-number">3.8.4.3.</span> <span class="nav-text">default的情况要写出来</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#注解-Annotations"><span class="nav-number">3.8.5.</span> <span class="nav-text">注解(Annotations)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#注释"><span class="nav-number">3.8.6.</span> <span class="nav-text">注释</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#块注释风格"><span class="nav-number">3.8.6.1.</span> <span class="nav-text">块注释风格</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Modifiers"><span class="nav-number">3.8.7.</span> <span class="nav-text">Modifiers</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#命名约定"><span class="nav-number">4.</span> <span class="nav-text">命名约定</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#对所有标识符都通用的规则"><span class="nav-number">4.1.</span> <span class="nav-text">对所有标识符都通用的规则</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#标识符类型的规则"><span class="nav-number">4.2.</span> <span class="nav-text">标识符类型的规则</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#包名"><span class="nav-number">4.2.1.</span> <span class="nav-text">包名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#类名"><span class="nav-number">4.2.2.</span> <span class="nav-text">类名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#方法名"><span class="nav-number">4.2.3.</span> <span class="nav-text">方法名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#常量名"><span class="nav-number">4.2.4.</span> <span class="nav-text">常量名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#非常量字段名"><span class="nav-number">4.2.5.</span> <span class="nav-text">非常量字段名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#参数名"><span class="nav-number">4.2.6.</span> <span class="nav-text">参数名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#局部变量名"><span class="nav-number">4.2.7.</span> <span class="nav-text">局部变量名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#类型变量名"><span class="nav-number">4.2.8.</span> <span class="nav-text">类型变量名</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#驼峰式命名法-CamelCase"><span class="nav-number">4.3.</span> <span class="nav-text">驼峰式命名法(CamelCase)</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#编程实践"><span class="nav-number">5.</span> <span class="nav-text">编程实践</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Override：能用则用"><span class="nav-number">5.1.</span> <span class="nav-text">@Override：能用则用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#捕获的异常：不能忽视"><span class="nav-number">5.2.</span> <span class="nav-text">捕获的异常：不能忽视</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#静态成员：使用类进行调用"><span class="nav-number">5.3.</span> <span class="nav-text">静态成员：使用类进行调用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Finalizers-禁用"><span class="nav-number">5.4.</span> <span class="nav-text">Finalizers: 禁用</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Javadoc"><span class="nav-number">6.</span> <span class="nav-text">Javadoc</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#格式-1"><span class="nav-number">6.1.</span> <span class="nav-text">格式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#一般形式"><span class="nav-number">6.1.1.</span> <span class="nav-text">一般形式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#段落"><span class="nav-number">6.1.2.</span> <span class="nav-text">段落</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Javadoc标记"><span class="nav-number">6.1.3.</span> <span class="nav-text">Javadoc标记</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#摘要片段"><span class="nav-number">6.2.</span> <span class="nav-text">摘要片段</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#哪里需要使用Javadoc"><span class="nav-number">6.3.</span> <span class="nav-text">哪里需要使用Javadoc</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#例外：不言自明的方法"><span class="nav-number">6.3.1.</span> <span class="nav-text">例外：不言自明的方法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#例外：重写"><span class="nav-number">6.3.2.</span> <span class="nav-text">例外：重写</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#可选的Javadoc"><span class="nav-number">6.3.3.</span> <span class="nav-text">可选的Javadoc</span></a></li></ol></li></ol></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+<script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+本站总访问量 <span id="busuanzi_value_site_pv"></span> &nbsp&nbsp&nbsp
+您是第<span id="busuanzi_value_site_uv"></span>个来到的小伙伴
+
+
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  1
+
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
+      var all = MathJax.Hub.getAllJax(), i;
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
+
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config("");
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="custom_mathjax_source">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
+
+
+  
+
+  
+
+</body>
+</html>
