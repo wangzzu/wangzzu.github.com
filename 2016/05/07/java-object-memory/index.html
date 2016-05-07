@@ -41,7 +41,7 @@
 <link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
 
 
-  <meta name="keywords" content="learn," />
+  <meta name="keywords" content="java," />
 
 
 
@@ -57,28 +57,29 @@
 
 
 
-<meta name="description" content="这篇主要是整理一下自己书签里收藏一些个人感觉不错的网站，它们大都是一些比较小众的网站，因为是技术出身，推荐的很大一部分网站可能都是偏技术类的，这点希望大家能够理解～。
-1.在线教育主要是推荐一些我自己用过的，感觉对自己比较有帮助的一些网站，当然免费是最好的了。
-
-实验楼，这个感觉非常不错，尤其是学习一些技术的基础课程很nice；
-MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习国外">
+<meta name="description" content="本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。
+本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
+对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内">
 <meta property="og:type" content="article">
-<meta property="og:title" content="收藏的一些不错的网站">
-<meta property="og:url" content="http://wangzzu.github.io/2015/11/12/WebsiteCollect/index.html">
+<meta property="og:title" content="Java中对象的内存使用学习">
+<meta property="og:url" content="http://wangzzu.github.io/2016/05/07/java-object-memory/index.html">
 <meta property="og:site_name" content="Matt's Blog">
-<meta property="og:description" content="这篇主要是整理一下自己书签里收藏一些个人感觉不错的网站，它们大都是一些比较小众的网站，因为是技术出身，推荐的很大一部分网站可能都是偏技术类的，这点希望大家能够理解～。
-1.在线教育主要是推荐一些我自己用过的，感觉对自己比较有帮助的一些网站，当然免费是最好的了。
-
-实验楼，这个感觉非常不错，尤其是学习一些技术的基础课程很nice；
-MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习国外">
-<meta property="og:updated_time" content="2016-05-05T06:27:04.793Z">
+<meta property="og:description" content="本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。
+本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
+对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/integer.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/date.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/counter.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/array.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/string.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/substring.png">
+<meta property="og:updated_time" content="2016-05-07T08:50:46.778Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="收藏的一些不错的网站">
-<meta name="twitter:description" content="这篇主要是整理一下自己书签里收藏一些个人感觉不错的网站，它们大都是一些比较小众的网站，因为是技术出身，推荐的很大一部分网站可能都是偏技术类的，这点希望大家能够理解～。
-1.在线教育主要是推荐一些我自己用过的，感觉对自己比较有帮助的一些网站，当然免费是最好的了。
-
-实验楼，这个感觉非常不错，尤其是学习一些技术的基础课程很nice；
-MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习国外">
+<meta name="twitter:title" content="Java中对象的内存使用学习">
+<meta name="twitter:description" content="本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。
+本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
+对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/integer.png">
 
 
 
@@ -96,7 +97,7 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
   };
 </script>
 
-  <title> 收藏的一些不错的网站 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+  <title> Java中对象的内存使用学习 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
 </head>
 
 <body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -291,7 +292,7 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
             
             
               
-                收藏的一些不错的网站
+                Java中对象的内存使用学习
               
             
           </h1>
@@ -303,8 +304,8 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
               <i class="fa fa-calendar-o"></i>
             </span>
             <span class="post-meta-item-text">发表于</span>
-            <time itemprop="dateCreated" datetime="2015-11-12T00:00:00+08:00" content="2015-11-12">
-              2015-11-12
+            <time itemprop="dateCreated" datetime="2016-05-07T16:33:22+08:00" content="2016-05-07">
+              2016-05-07
             </time>
           </span>
 
@@ -317,8 +318,8 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
               <span class="post-meta-item-text">分类于</span>
               
                 <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
-                  <a href="/categories/learn/" itemprop="url" rel="index">
-                    <span itemprop="name">learn</span>
+                  <a href="/categories/java/" itemprop="url" rel="index">
+                    <span itemprop="name">java</span>
                   </a>
                 </span>
 
@@ -333,8 +334,8 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
             
               <span class="post-comments-count">
                 &nbsp; | &nbsp;
-                <a href="/2015/11/12/WebsiteCollect/#comments" itemprop="discussionUrl">
-                  <span class="post-comments-count ds-thread-count" data-thread-key="2015/11/12/WebsiteCollect/" itemprop="commentsCount"></span>
+                <a href="/2016/05/07/java-object-memory/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/05/07/java-object-memory/" itemprop="commentsCount"></span>
                 </a>
               </span>
             
@@ -361,53 +362,53 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
       
 
       
-        <p>这篇主要是整理一下自己书签里收藏一些个人感觉不错的网站，它们大都是一些比较小众的网站，因为是技术出身，推荐的很大一部分网站可能都是偏技术类的，这点希望大家能够理解～。</p>
-<h3 id="1-在线教育"><a href="#1-在线教育" class="headerlink" title="1.在线教育"></a>1.在线教育</h3><p>主要是推荐一些我自己用过的，感觉对自己比较有帮助的一些网站，当然免费是最好的了。</p>
+        <p>本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。</p>
+<p>本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。</p>
+<h1 id="对象的内存"><a href="#对象的内存" class="headerlink" title="对象的内存"></a>对象的内存</h1><p>要想知道一个对象使用的内存量，需要将所有实例变量使用的内存与对象本身的开销（一般是16个字节）相加。这些开销包括一个指向对象的类的引用、垃圾收集信息以及同步信息。另外，一般内存的使用都会被填充为8个字节（64位计算机中的机器字）的倍数。如下图所示，对于一个<code>Integer</code>对象</p>
+<p><img src="/images/2016-05-07-java-object-mem/integer.png" alt="int"></p>
+<p>一个<code>Integer</code>对象会使用24字节（16个字节的对象开销，4个字节用于保存它的int值以及4个填充字节）。</p>
+<p>一个<code>Date</code>对象（如下图）需要使用32字节：16个字节的对象开销，3个int实例变量各需4个字节，以及4个填充字节。</p>
+<p><img src="/images/2016-05-07-java-object-mem/date.png" alt="date"></p>
+<p>对象的引用一般都是一个内存地址，因此会使用8个字节。</p>
+<p>例如对于一个<code>Counter</code>对象</p>
+<p><img src="/images/2016-05-07-java-object-mem/counter.png" alt="counter"></p>
+<p>它需要32字节：16个字节的对象开销，8个字节用于它的String型实例变量（<strong>一个引用</strong>），4字节用于int实例变量，以及4个填充字节。</p>
+<p>当我们说明一个引用所占的内存时，我们会单独说它所指向的对象所占用的内存，因此，这个内存使用总量并没有包含String值所使用的内存。</p>
+<h1 id="数组"><a href="#数组" class="headerlink" title="数组"></a>数组</h1><p>在java中，数组一般被实现为对象，它们一般都会因为记录长度而需要额外的内存。</p>
+<p>一个原始数据类型的数组一般需要24字节的头信息（如下）和保存值所需的引用。</p>
+<ol>
+<li>16个字节的对象开销；</li>
+<li>4个字节用于保存长度；</li>
+<li>4个填充字节。</li>
+</ol>
+<p>下面分别介绍一下<code>int[]</code>、<code>double[]</code>、对象数组和二位数组的内存占用情况。</p>
+<p><img src="/images/2016-05-07-java-object-mem/array.png" alt="array"></p>
+<h2 id="int值的数组"><a href="#int值的数组" class="headerlink" title="int值的数组"></a>int值的数组</h2><p>一个含有N个int值的数组需要使用$24+4N$字节（<em>notice：最后会被填充为8的倍数</em>）。</p>
+<h2 id="double值的数组"><a href="#double值的数组" class="headerlink" title="double值的数组"></a>double值的数组</h2><p>一个含有N个double值的数组需要使用$24+8N$字节（<em>notice：最后会被填充为8的倍数</em>）。</p>
+<h2 id="对象的数组"><a href="#对象的数组" class="headerlink" title="对象的数组"></a>对象的数组</h2><p>一个对象的数组就是一个对象的引用的数组，所以我们应该在对象所需的内存之外再加上引用所需的内存。例如，对于一个含有N个<code>Date</code>对象的数组需要使用24字节（头信息）加上$8N$字节（所有的引用）加上每个对象的32字节，总共$24+40N$。</p>
+<h2 id="二位数组"><a href="#二位数组" class="headerlink" title="二位数组"></a>二位数组</h2><p>对于二位数组而言，它就是一个数组的数组（每个数组都是一个对象）。例如：一个$M*N$的double类型的二维数组需要使用24字节（头信息）加上$8M$字节（所有元素数组的引用）加上$24M$字节（所有元素的开销）加上$8MN$字节（$M$个长度为$N$的double类型的数组），总和共$8MN+32M+24$字节。</p>
+<h1 id="String"><a href="#String" class="headerlink" title="String"></a>String</h1><p>一个String对象</p>
+<p><img src="/images/2016-05-07-java-object-mem/string.png" alt="string"></p>
+<p>String的标准实现含有4个<strong>实例变量</strong>：</p>
 <ul>
-<li><a href="https://www.shiyanlou.com/courses/" target="_blank" rel="external">实验楼</a>，这个感觉非常不错，尤其是学习一些技术的基础课程很nice；</li>
-<li><a href="http://mooc.guokr.com/" target="_blank" rel="external">MOOC学院</a>，果壳的MOOC学院，课程种类和数量很多，对于想学习国外课程的童鞋来说，简直是福利啊；</li>
-<li><a href="http://www.jikexueyuan.com/" target="_blank" rel="external">极客学院</a>，这种类型的网站就有很多了，比如：小象学院等，名气也比较大而且它们的模式基本上也一样，就不再推荐别的了；</li>
-<li><a href="http://www.julyedu.com/" target="_blank" rel="external">七月算法</a>，July的公司，不说其它的，他的博客对于找工作还是很有帮助的。</li>
+<li>一个指向字符数组的引用（8字节）；</li>
+<li>三个int值（4个字节）<ol>
+<li>第一个int值：字符数组中的偏移量；</li>
+<li>第二个int值：一个计数器，也就是字符串的长度，以上图为例，对象所表示的字符串由<code>value[offset]</code>到<code>value[offset+count-1]</code>中的字符组成；</li>
+<li>第三个int值：一个散列值（某些情况下可以忽略计算）。</li>
+</ol>
+</li>
 </ul>
-<h3 id="2-视频"><a href="#2-视频" class="headerlink" title="2.视频"></a>2.视频</h3><p>这些视频的内容比较广泛，应该会涉及到方方面面，都是些很不错的节目，看完也会给人很多的感触。</p>
+<p>因此，每个String对象都会使用40字节（16字节表示对象，三个int实例变量各需4个字节，加上数组引用的8个字节和4个填充字节）。这是除字符数组之外字符所需的内存空间，所有字符所需的内存需要另记，因为String的char数组常常是在多个字符串之间共享的。因为String对象是不可变的，这种设计使String的实现能够在多个对象都含有相同的<code>value[]</code>数组时节省内存。</p>
+<h1 id="字符串的值和子字符串"><a href="#字符串的值和子字符串" class="headerlink" title="字符串的值和子字符串"></a>字符串的值和子字符串</h1><p>字符串和子字符串的例子如下所示：</p>
+<p><img src="/images/2016-05-07-java-object-mem/substring.png" alt="substring"></p>
+<p>一个长度为N的String对象一般需要使用40字节（String对象本身）加上$24+2N$字节（字符数组），总共$64+2N$字节。但在处理字符串时经常会和子字符串打交道，所以Java对字符串的表示希望能够避免复制字符串中的字符。</p>
+<p>当调用<code>substring()</code>方法时，就创建了一个新的String对象（40字节），但它仍然重用了相同的<code>value[]</code>数组，因此该字符串的子字符串只会使用40字节的内存。含有原始字符串的字符数组的别名存在于子字符串中，字符串对象的偏移量和长度域标记了子字符串的位置。</p>
+<p>这些基础机制能够有效地帮助我们估计大量程序对内存的使用情况，但是很多复杂的因素仍然会使这个任务变得困难，这就得看一下JVM方面的书籍了。</p>
+<hr>
+<p>参考：</p>
 <ul>
-<li><a href="https://www.ted.com/" target="_blank" rel="external">TED</a>，这个大家应该都知道；</li>
-<li><a href="http://yixi.tv/" target="_blank" rel="external">一席</a>，这个就是中国版的TED，也是在我看到了方励那个讲座之后才听说的；</li>
-<li><a href="http://www.soku.com/search_video/q_%E6%99%93%E6%9D%BE%E5%A5%87%E8%B0%88?f=1&amp;kb=04126020kv41000__%E6%99%93%E6%9D%BE%E5%A5%87%E8%B0%AD&amp;_rp=1447420045800KOVWIn&amp;_rp=1447420045800KOVWIn" target="_blank" rel="external">晓松奇谈</a>，高晓松的一些节目（奇葩说）质量都挺不错，没事的时候可以看一下，也可以弄成音频跑步的时候听听；</li>
-<li><a href="http://v.youku.com/v_show/id_XMTM4NDM1ODM3Ng==.html" target="_blank" rel="external">罗辑思维</a>，当然也有很多人并不推荐这个节目，说有些地方根本没有任何逻辑性，可是我个人感觉这个节目还是不错的，可能因为我读书比较少的原因，这个节目确实也弥补了我很多知识的空白。</li>
-</ul>
-<h3 id="3-技术网站"><a href="#3-技术网站" class="headerlink" title="3.技术网站"></a>3.技术网站</h3><p>这类网站都是互联网技术类方面的，内容比较多而且大都是偏基础性的资料，很多都是一些基础知识文档，对于不熟悉某方面但又希望去了解的人还是很不错的选择。</p>
-<ul>
-<li><a href="http://www.w3school.com.cn/" target="_blank" rel="external">w3school</a>，这个大都是前端方面的，很多技术文档，偏基础；</li>
-<li><a href="http://www.runoob.com/" target="_blank" rel="external">菜鸟教程</a>，不仅仅涉及前端，大都也是些基础类的文档；</li>
-<li><a href="http://www.yiibai.com/" target="_blank" rel="external">易百教程</a>，大都也是些基础类的文档；</li>
-<li><a href="http://www.kancloud.cn/explore" target="_blank" rel="external">看云</a>，最近才发现网站，资料还挺多的，很多都是新型技术，这个网站相当于是把那些厚厚技术类书籍提炼一下，出了一本精简版的，对于我这种不喜欢看厚书的人来说简直是福利；</li>
-<li><a href="http://lxw1234.com/" target="_blank" rel="external">lxw的大数据田地</a>，这个专门针对于大数据技术学习的网站；</li>
-<li><a href="http://toutiao.io/" target="_blank" rel="external">开发者头条</a>，这里面的文章质量还是蛮高的；</li>
-<li><a href="http://ifeve.com/" target="_blank" rel="external">并发编程网</a>，很好的网站；</li>
-<li><a href="http://wiki.jikexueyuan.com/#all-project" target="_blank" rel="external">极客学院的WIKI</a>，有很多的技术学习文档；</li>
-</ul>
-<p>一些公司或个人的博客：</p>
-<ul>
-<li><a href="http://dongxicheng.org/" target="_blank" rel="external">董的博客</a>，偏大数据这一块，业内挺出名的；</li>
-<li><a href="http://www.ibm.com/developerworks/cn/topics/" target="_blank" rel="external">IBM博客</a>，IBM的官方博客，质量很高，推荐；</li>
-<li><a href="http://tech.meituan.com/" target="_blank" rel="external">美团技术团队博客</a>，涉及到了很多大数据方面的架构和设计。</li>
-</ul>
-<h3 id="4-旅行类"><a href="#4-旅行类" class="headerlink" title="4.旅行类"></a>4.旅行类</h3><ul>
-<li><a href="http://www.clctrip.com/" target="_blank" rel="external">草履虫旅行</a>，这个俱乐部，每周都会有一些短途的旅行，假期会有远途旅行，不过这个活动出发地仅仅局限在北京，其他城市还没有涉足，真心很赞的一个俱乐部；</li>
-<li><a href="http://www.yerenbang.org/forum.php" target="_blank" rel="external">野人帮</a>，这个主要是对准户外过夜那种，比较有挑战性；</li>
-<li><a href="http://www.iqingyi.com/" target="_blank" rel="external">青驿</a>，看别人推荐，还没有用过，感觉还不错。</li>
-</ul>
-<h3 id="5-媒体类"><a href="#5-媒体类" class="headerlink" title="5.媒体类"></a>5.媒体类</h3><ul>
-<li><a href="http://36kr.com/" target="_blank" rel="external">36氪</a>，第一个肯定要推荐36氪，毕竟创始人是我们校友，主要是一些关于互联网圈内发生的一些事情，也经常会介绍一些国内外新兴的互联网创业公司；</li>
-<li><a href="http://www.jianshu.com/" target="_blank" rel="external">简书</a>，可以使用Markdown写文章，大家通过文章来交流一些想法；</li>
-<li><a href="http://dataunion.org/" target="_blank" rel="external">数盟</a>，暂时把它归于媒体类吧，偏程序员的媒体网站。</li>
-</ul>
-<h3 id="其他的一些小网站："><a href="#其他的一些小网站：" class="headerlink" title="其他的一些小网站："></a>其他的一些小网站：</h3><ul>
-<li><a href="http://www.zimuku.net/" target="_blank" rel="external">字幕库</a>，美剧迷的福利；</li>
-<li><a href="http://www.haitou.cc/" target="_blank" rel="external">海投网</a>，可查看高校工作宣讲会；</li>
-<li><a href="https://www.zybuluo.com/" target="_blank" rel="external">作业部落</a>，Markdown的在线编辑器；</li>
-<li><a href="https://selfstore.io/" target="_blank" rel="external">selfstore</a>，专门由专业人士翻译国外技术书籍，然后买电子书的网站，当然，它们的翻译质量确实比某些出版社高太多了；</li>
+<li><a href="http://item.jd.com/11098789.html" target="_blank" rel="external">算法 第四版</a></li>
 </ul>
 
       
@@ -444,7 +445,7 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
       
         <div class="post-tags">
           
-            <a href="/tags/learn/" rel="tag">#learn</a>
+            <a href="/tags/java/" rel="tag">#java</a>
           
         </div>
       
@@ -453,17 +454,13 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2015/10/27/TheTransformOfJava/" rel="next" title="Java的几个基本类型之间的相互转换">
-                <i class="fa fa-chevron-left"></i> Java的几个基本类型之间的相互转换
+              <a href="/2016/04/22/google-java-style/" rel="next" title="Google Java Style">
+                <i class="fa fa-chevron-left"></i> Google Java Style
               </a>
             
           </div>
 
           <div class="post-nav-prev post-nav-item">
-            
-              <a href="/2015/11/13/kafka-install/" rel="prev" title="Kafka集群的安装与配置">
-                Kafka集群的安装与配置 <i class="fa fa-chevron-right"></i>
-              </a>
             
           </div>
         </div>
@@ -478,10 +475,10 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
 
     <div class="post-spread">
       
-        <div class="ds-share flat" data-thread-key="2015/11/12/WebsiteCollect/"
-     data-title="收藏的一些不错的网站"
+        <div class="ds-share flat" data-thread-key="2016/05/07/java-object-memory/"
+     data-title="Java中对象的内存使用学习"
      data-content=""
-     data-url="http://wangzzu.github.io/2015/11/12/WebsiteCollect/">
+     data-url="http://wangzzu.github.io/2016/05/07/java-object-memory/">
   <div class="ds-share-inline">
     <ul  class="ds-share-icons-16">
 
@@ -508,8 +505,8 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
           
   <div class="comments" id="comments">
     
-      <div class="ds-thread" data-thread-key="2015/11/12/WebsiteCollect/"
-           data-title="收藏的一些不错的网站" data-url="http://wangzzu.github.io/2015/11/12/WebsiteCollect/">
+      <div class="ds-thread" data-thread-key="2016/05/07/java-object-memory/"
+           data-title="Java中对象的内存使用学习" data-url="http://wangzzu.github.io/2016/05/07/java-object-memory/">
       </div>
     
   </div>
@@ -628,7 +625,7 @@ MOOC学院，果壳的MOOC学院，课程种类和数量很多，对于想学习
               
             
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-在线教育"><span class="nav-number">1.</span> <span class="nav-text">1.在线教育</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-视频"><span class="nav-number">2.</span> <span class="nav-text">2.视频</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-技术网站"><span class="nav-number">3.</span> <span class="nav-text">3.技术网站</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-旅行类"><span class="nav-number">4.</span> <span class="nav-text">4.旅行类</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-媒体类"><span class="nav-number">5.</span> <span class="nav-text">5.媒体类</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#其他的一些小网站："><span class="nav-number">6.</span> <span class="nav-text">其他的一些小网站：</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#对象的内存"><span class="nav-number">1.</span> <span class="nav-text">对象的内存</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#数组"><span class="nav-number">2.</span> <span class="nav-text">数组</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#int值的数组"><span class="nav-number">2.1.</span> <span class="nav-text">int值的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#double值的数组"><span class="nav-number">2.2.</span> <span class="nav-text">double值的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#对象的数组"><span class="nav-number">2.3.</span> <span class="nav-text">对象的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#二位数组"><span class="nav-number">2.4.</span> <span class="nav-text">二位数组</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#String"><span class="nav-number">3.</span> <span class="nav-text">String</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#字符串的值和子字符串"><span class="nav-number">4.</span> <span class="nav-text">字符串的值和子字符串</span></a></li></ol></div>
             
           </div>
         </section>
