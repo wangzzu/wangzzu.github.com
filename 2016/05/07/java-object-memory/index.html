@@ -57,28 +57,28 @@
 
 
 
-<meta name="description" content="本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。
-本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
-对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内">
+<meta name="description" content="本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。
+本文主要介绍在Java中，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
+对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内存与">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Java中对象的内存使用学习">
 <meta property="og:url" content="http://wangzzu.github.io/2016/05/07/java-object-memory/index.html">
 <meta property="og:site_name" content="Matt's Blog">
-<meta property="og:description" content="本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。
-本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
-对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内">
+<meta property="og:description" content="本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。
+本文主要介绍在Java中，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
+对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内存与">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/integer.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/date.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/counter.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/array.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/string.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/substring.png">
-<meta property="og:updated_time" content="2016-05-07T08:50:46.778Z">
+<meta property="og:updated_time" content="2016-05-07T09:17:29.597Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Java中对象的内存使用学习">
-<meta name="twitter:description" content="本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。
-本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
-对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内">
+<meta name="twitter:description" content="本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。
+本文主要介绍在Java中，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。
+对象的内存要想知道一个对象使用的内存量，需要将所有实例变量使用的内存与">
 <meta name="twitter:image" content="http://wangzzu.github.io/images/2016-05-07-java-object-mem/integer.png">
 
 
@@ -362,8 +362,8 @@
       
 
       
-        <p>本文的内容基本上都是来自《算法 第四版》，上次看这一章的时候应该一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就像再看一下，顺序写成博客，方便以后查看。</p>
-<p>本文主要介绍在Java，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。</p>
+        <p>本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。</p>
+<p>本文主要介绍在Java中，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。</p>
 <h1 id="对象的内存"><a href="#对象的内存" class="headerlink" title="对象的内存"></a>对象的内存</h1><p>要想知道一个对象使用的内存量，需要将所有实例变量使用的内存与对象本身的开销（一般是16个字节）相加。这些开销包括一个指向对象的类的引用、垃圾收集信息以及同步信息。另外，一般内存的使用都会被填充为8个字节（64位计算机中的机器字）的倍数。如下图所示，对于一个<code>Integer</code>对象</p>
 <p><img src="/images/2016-05-07-java-object-mem/integer.png" alt="int"></p>
 <p>一个<code>Integer</code>对象会使用24字节（16个字节的对象开销，4个字节用于保存它的int值以及4个填充字节）。</p>
@@ -373,7 +373,7 @@
 <p>例如对于一个<code>Counter</code>对象</p>
 <p><img src="/images/2016-05-07-java-object-mem/counter.png" alt="counter"></p>
 <p>它需要32字节：16个字节的对象开销，8个字节用于它的String型实例变量（<strong>一个引用</strong>），4字节用于int实例变量，以及4个填充字节。</p>
-<p>当我们说明一个引用所占的内存时，我们会单独说它所指向的对象所占用的内存，因此，这个内存使用总量并没有包含String值所使用的内存。</p>
+<p>当我们说明一个引用所占的内存时，我们会单独说它所指向的对象所占用的内存，因此，这个内存使用总量并没有包含String对象所使用的内存。</p>
 <h1 id="数组"><a href="#数组" class="headerlink" title="数组"></a>数组</h1><p>在java中，数组一般被实现为对象，它们一般都会因为记录长度而需要额外的内存。</p>
 <p>一个原始数据类型的数组一般需要24字节的头信息（如下）和保存值所需的引用。</p>
 <ol>
@@ -381,12 +381,12 @@
 <li>4个字节用于保存长度；</li>
 <li>4个填充字节。</li>
 </ol>
-<p>下面分别介绍一下<code>int[]</code>、<code>double[]</code>、对象数组和二位数组的内存占用情况。</p>
+<p>下面分别介绍一下<code>int[]</code>、<code>double[]</code>、对象数组和二维数组的内存占用情况。</p>
 <p><img src="/images/2016-05-07-java-object-mem/array.png" alt="array"></p>
 <h2 id="int值的数组"><a href="#int值的数组" class="headerlink" title="int值的数组"></a>int值的数组</h2><p>一个含有N个int值的数组需要使用$24+4N$字节（<em>notice：最后会被填充为8的倍数</em>）。</p>
 <h2 id="double值的数组"><a href="#double值的数组" class="headerlink" title="double值的数组"></a>double值的数组</h2><p>一个含有N个double值的数组需要使用$24+8N$字节（<em>notice：最后会被填充为8的倍数</em>）。</p>
 <h2 id="对象的数组"><a href="#对象的数组" class="headerlink" title="对象的数组"></a>对象的数组</h2><p>一个对象的数组就是一个对象的引用的数组，所以我们应该在对象所需的内存之外再加上引用所需的内存。例如，对于一个含有N个<code>Date</code>对象的数组需要使用24字节（头信息）加上$8N$字节（所有的引用）加上每个对象的32字节，总共$24+40N$。</p>
-<h2 id="二位数组"><a href="#二位数组" class="headerlink" title="二位数组"></a>二位数组</h2><p>对于二位数组而言，它就是一个数组的数组（每个数组都是一个对象）。例如：一个$M*N$的double类型的二维数组需要使用24字节（头信息）加上$8M$字节（所有元素数组的引用）加上$24M$字节（所有元素的开销）加上$8MN$字节（$M$个长度为$N$的double类型的数组），总和共$8MN+32M+24$字节。</p>
+<h2 id="二维数组"><a href="#二维数组" class="headerlink" title="二维数组"></a>二维数组</h2><p>对于二维数组而言，它就是一个数组的数组（每个数组都是一个对象）。例如：一个$M*N$的double类型的二维数组需要使用24字节（头信息）加上$8M$字节（所有元素数组的引用）加上$24M$字节（所有元素的开销）加上$8MN$字节（$M$个长度为$N$的double类型的数组），总和共$8MN+32M+24$字节。</p>
 <h1 id="String"><a href="#String" class="headerlink" title="String"></a>String</h1><p>一个String对象</p>
 <p><img src="/images/2016-05-07-java-object-mem/string.png" alt="string"></p>
 <p>String的标准实现含有4个<strong>实例变量</strong>：</p>
@@ -395,7 +395,7 @@
 <li>三个int值（4个字节）<ol>
 <li>第一个int值：字符数组中的偏移量；</li>
 <li>第二个int值：一个计数器，也就是字符串的长度，以上图为例，对象所表示的字符串由<code>value[offset]</code>到<code>value[offset+count-1]</code>中的字符组成；</li>
-<li>第三个int值：一个散列值（某些情况下可以忽略计算）。</li>
+<li>第三个int值：散列值。</li>
 </ol>
 </li>
 </ul>
@@ -625,7 +625,7 @@
               
             
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#对象的内存"><span class="nav-number">1.</span> <span class="nav-text">对象的内存</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#数组"><span class="nav-number">2.</span> <span class="nav-text">数组</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#int值的数组"><span class="nav-number">2.1.</span> <span class="nav-text">int值的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#double值的数组"><span class="nav-number">2.2.</span> <span class="nav-text">double值的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#对象的数组"><span class="nav-number">2.3.</span> <span class="nav-text">对象的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#二位数组"><span class="nav-number">2.4.</span> <span class="nav-text">二位数组</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#String"><span class="nav-number">3.</span> <span class="nav-text">String</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#字符串的值和子字符串"><span class="nav-number">4.</span> <span class="nav-text">字符串的值和子字符串</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#对象的内存"><span class="nav-number">1.</span> <span class="nav-text">对象的内存</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#数组"><span class="nav-number">2.</span> <span class="nav-text">数组</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#int值的数组"><span class="nav-number">2.1.</span> <span class="nav-text">int值的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#double值的数组"><span class="nav-number">2.2.</span> <span class="nav-text">double值的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#对象的数组"><span class="nav-number">2.3.</span> <span class="nav-text">对象的数组</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#二维数组"><span class="nav-number">2.4.</span> <span class="nav-text">二维数组</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#String"><span class="nav-number">3.</span> <span class="nav-text">String</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#字符串的值和子字符串"><span class="nav-number">4.</span> <span class="nav-text">字符串的值和子字符串</span></a></li></ol></div>
             
           </div>
         </section>
