@@ -69,21 +69,21 @@ Kafka is a distributed, partitioned, replicated commit log service. It provides 
 1.kafka介绍关于kafka入门的文章最好的就莫过于kafka的官方文档了，这上面对kafka的定义是：
 
 Kafka is a distributed, partitioned, replicated commit log service. It provides the functionality o">
-<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/kafka">
-<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/pull">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/kafka.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/pull.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/log.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/topic.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/consumerGroup.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/produce.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/consumer.png">
-<meta property="og:updated_time" content="2016-04-07T01:25:39.075Z">
+<meta property="og:updated_time" content="2016-05-23T08:15:49.397Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Kafka的简单介绍">
 <meta name="twitter:description" content="这篇文章主要是简单地把Kafka的背景，基础知识和应用场景介绍一下，算是一篇入门的文章。
 1.kafka介绍关于kafka入门的文章最好的就莫过于kafka的官方文档了，这上面对kafka的定义是：
 
 Kafka is a distributed, partitioned, replicated commit log service. It provides the functionality o">
-<meta name="twitter:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/kafka">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/2015-11-14-kafka-introduce/kafka.png">
 
 
 
@@ -374,9 +374,9 @@ Kafka is a distributed, partitioned, replicated commit log service. It provides 
 <p>kafka是一个分布式的，可分区的，可备份的日志提交服务，它使用独特的设计实现了一个消息系统的功能。</p>
 <p>到底kafka使用什么独特的设计可以让它在消息处理领域独占鳌头呢？这就涉及到kafka的内部机制，这些我会在后续的文章中向大家慢慢介绍，这里先介绍一下kafka集群的基本结构和kafka的一些专业术语。</p>
 <h3 id="1-1-kafka集群的基本架构"><a href="#1-1-kafka集群的基本架构" class="headerlink" title="1.1.kafka集群的基本架构"></a>1.1.kafka集群的基本架构</h3><p>一个典型的kafka集群架构如下图所示：</p>
-<p><img src="/images/2015-11-14-kafka-introduce/kafka" alt="kafka"></p>
+<p><img src="/images/2015-11-14-kafka-introduce/kafka.png" alt="kafka"></p>
 <p>kafka集群常用的场景就是，producer把日志信息推送（push）到broker节点上，然后consumer（可以是写入到hdfs或者其他的一些应用）再从broker拉取（pull）信息。kafka的push&amp;pull机制如下图所示，具体的这样设计的原因我会在后续的文章中进行介绍。</p>
-<p><img src="/images/2015-11-14-kafka-introduce/pull" alt="pull"></p>
+<p><img src="/images/2015-11-14-kafka-introduce/pull.png" alt="pull"></p>
 <p>作为一个message system，kafka遵循了传统的方式，选择由kafka的producer向broker push信息，而consumer从broker pull信息。kafka的consumer之所以没有采用push模式，主要是因为push模式很难适应速率不同的consumer，因为消息发送速率是由broker决定的。push模式的目标就是尽可能以最快速度传递消息，但是这样很容易造成consumer来不及处理消息，典型的表现就是拒绝服务以及网络拥塞，而pull模式则可以根据consumer的消费能力以适当的速率消费message。</p>
 <h3 id="1-2-专业术语"><a href="#1-2-专业术语" class="headerlink" title="1.2.专业术语"></a>1.2.专业术语</h3><p>kafka使用的一些主要的专业术语：</p>
 <ul>
