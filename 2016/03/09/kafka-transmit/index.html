@@ -76,7 +76,7 @@ Kafka是如何保证可靠性？
 
 0.写在前面昨天整理完Kafka之数据存储之后，今天决定再把笔记中kafka消息传输部分整理一下，逐步去完善kafka系列的博文。本文中讲述的kafka是0.8.1版">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-03-08-KafkaTransmit/broker.png">
-<meta property="og:updated_time" content="2016-04-07T01:25:39.126Z">
+<meta property="og:updated_time" content="2016-05-25T03:07:43.282Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Kafka之消息传输">
 <meta name="twitter:description" content="问题研究：
@@ -480,20 +480,20 @@ Kafka是如何保证可靠性？
 </ul>
 <p>consumer的<strong>reblance算法</strong>如下（去看源码分析）：</p>
 <ul>
-<li>Sort PT (all partitions in topic T)</li>
-<li>Sort CG(all consumers in consumer group G)</li>
-<li>Let i be the index position of Ci in CG and let N=size(PT)/size(CG)</li>
-<li>Remove current entries owned by Ci from the partition owner registry</li>
-<li>Assign partitions from iN to (i+1)N-1 to consumer Ci</li>
+<li>Sort $PT$ (all partitions in topic T)</li>
+<li>Sort $CG$(all consumers in consumer group G)</li>
+<li>Let i be the index position of $C_{i}$ in $CG$ and let $N=\lceil\frac{size(PT)}{size(CG)}\rceil$</li>
+<li>Remove current entries owned by $C_{i}$ from the partition owner registry</li>
+<li>Assign partitions from $iN$ to $(i+1)N-1$ to consumer $C_{i}$</li>
 <li>Add newly assigned partitions to the partition owner registry</li>
 </ul>
 <p>consumer的<strong>reblance算法</strong>如下：</p>
 <ol>
-<li>对topic下的所有partition进行排序，结果记为PT；</li>
-<li>对订阅这个topic的Group下的所有consumer进行排序，记为CG；</li>
-<li>记i为CG中的idex，第i个consumer记为Ci, N=size(PT)/size(CG)向上取整；</li>
-<li>解除原来Ci对分配的Partition的消费权；</li>
-<li>将第 iN 到 (i+1)N-1个partitions重新分配给Ci.</li>
+<li>对topic下的所有partition进行排序，结果记为$PT$；</li>
+<li>对订阅这个topic的Group下的所有consumer进行排序，记为$CG$；</li>
+<li>记i为CG中的idex，第i个consumer记为$C_{i}$,$N=\lceil\frac{size(PT)}{size(CG)}\rceil$；</li>
+<li>解除原来$C_{i}$对分配的Partition的消费权；</li>
+<li>将第 $iN$ 到 $(i+1)N-1$个partitions重新分配给$C_{i}$.</li>
 </ol>
 <p>目前consumer rebalance的控制策略是由每一个consumer通过Zookeeper完成的。具体的<strong>控制方式</strong>如下（去看源码分析）：</p>
 <ul>
