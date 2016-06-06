@@ -92,7 +92,7 @@ ZooKeepe">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-04-13-zookeeper-learn/watch.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-04-13-zookeeper-learn/service.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-04-13-zookeeper-learn/status.png">
-<meta property="og:updated_time" content="2016-04-16T08:34:06.018Z">
+<meta property="og:updated_time" content="2016-05-31T12:28:09.427Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="zookeeper之学习笔记">
 <meta name="twitter:description" content="Zookeeper的重要性及应用的广泛性，这里就不再叙述了，本文是学习Hadoop权威指南的基础上进行的总结，当然本文大部分内容来自此书，中间会穿插一些个人的理解。本文主要分以下几块进行详述。
@@ -405,7 +405,7 @@ ZooKeepe">
 <blockquote>
 <p>ZooKeeper is a centralized service for maintaining configuration information, naming, providing distributed synchronization, and providing group services. All of these kinds of services are used in some form or another by distributed applications. Each time they are implemented there is a lot of work that goes into fixing the bugs and race conditions that are inevitable. Because of the difficulty of implementing these kinds of services, applications initially usually skimp on them ,which make them brittle in the presence of change and difficult to manage. Even when done correctly, different implementations of these services lead to management complexity when the applications are deployed.</p>
 </blockquote>
-<p>总结一下就是，Zookeeper分布式服务框架是一个是用来解决分布式应用中经常遇到的一些数据管理问题，如：统一命名服务、状态同步服务、集群管理、分布式应用配置项的管理等的中央服务。</p>
+<p>总结一下就是，Zookeeper分布式服务框架是一个用来解决分布式应用中经常遇到的一些数据管理问题（如：统一命名服务、状态同步服务、集群管理、分布式应用配置项的管理等）的中央服务。</p>
 <p>对于一个分布式系统最困难的事情之一就是如何处理<strong>部分失败</strong>（partial failure）。当一条message在网络中的两个节点之间传送时，如果出现了网络错误，发送者无法知道接收者是否已经接收到了这条message。接收者有可能在发生错误之前收到这个message，也有可能没有收到，还有可能接收者已经挂掉。发送者获得真实情况的一般解决方案就是：重新连接接收者，然后发起询问。这就是部分失败：即我们甚至不知道一个操作是否已经完成。</p>
 <p>Zookeeper正是为了解决这个问题而应运而生的，当然Zookeeper并不能完全根除部分失败，当然它也不会隐藏这部分的失败。ZooKeeper具有以下几个特点：</p>
 <ul>
@@ -648,7 +648,7 @@ ZooKeepe">
 </li>
 </ol>
 <p>ZooKeeper要做的事情就是：确保对znode树的每一个修改都会被复制到集合体中超过半数的机器上。如果少于半数的机器出现故障，则最少有一台机器会保存最新的状态，其余的副本最终也会更新到这个状态。</p>
-<p>Zook使用了<strong>Zab协议</strong>，该协议包括两个可以无限重复的阶段：</p>
+<p>Zookeeper使用了<strong>Zab协议</strong>，该协议包括两个可以无限重复的阶段：</p>
 <ol>
 <li>阶段1：leader选举<ul>
 <li>集合体中的所有机器通过一个选择过程来选出一台被称为“领导者”（leader）的机器，其他的机器被称为”跟随者“（follower）。一旦半数以上（或指定数量）的follower已经将其状态与leader同步，则标明这个阶段已经完成。</li>
@@ -927,7 +927,7 @@ ZooKeepe">
         <nav class="site-state motion-element">
           <div class="site-state-item site-state-posts">
             <a href="/archives">
-              <span class="site-state-item-count">32</span>
+              <span class="site-state-item-count">33</span>
               <span class="site-state-item-name">日志</span>
             </a>
           </div>
@@ -935,7 +935,7 @@ ZooKeepe">
           
             <div class="site-state-item site-state-categories">
               <a href="/categories">
-                <span class="site-state-item-count">13</span>
+                <span class="site-state-item-count">14</span>
                 <span class="site-state-item-name">分类</span>
               </a>
             </div>
@@ -944,7 +944,7 @@ ZooKeepe">
           
             <div class="site-state-item site-state-tags">
               <a href="/tags">
-                <span class="site-state-item-count">18</span>
+                <span class="site-state-item-count">19</span>
                 <span class="site-state-item-name">标签</span>
               </a>
             </div>
