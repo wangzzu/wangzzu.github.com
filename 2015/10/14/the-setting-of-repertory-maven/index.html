@@ -72,7 +72,7 @@
 仓库：Maven在某个位置统一存储所有Maven项目共享的构件，这个统一的位置就是仓库。
 2.仓库的分类对于Maven来说，">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-10-14-theSettingOfRepertoryOfMaven/repertory.jpg">
-<meta property="og:updated_time" content="2016-04-07T01:25:39.045Z">
+<meta property="og:updated_time" content="2016-06-16T01:56:25.307Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Maven之仓库配置">
 <meta name="twitter:description" content="徐晓斌的《Maven实战》，实在是一本很不错的书，本文也是在我读过这本书的仓库一章后，根据自己的经验，做的一个总结。
@@ -465,6 +465,11 @@
 <p>Maven的快照版本机制就是为了解决上述问题。在该例中，小张只需要将模块A的版本设定为<code>2.1-SNAPSHOT</code>，然后发布到私服中，在发布的过程中，Maven会自动为构件打上时间戳。比如:<code>2.1-20091214.221414-13</code>就表示2009年12月14日 22点14分14秒的第13次快照。有了该时间戳，Maven就能随时找到仓库中该构件<code>2.1-SNAPSHOT</code>版本最新的文件。这时，季MM配置对于模块A的<code>2.1-SNAPSHOT</code>版本的依赖，当她构件模块B的时候，Maven会自动从仓库中检查模块A的<code>2.1-SNAPSHOT</code>的最新构件，当发现有更新时便进行下载。默认情况下，Maven每天检查一次更新(由仓库配置的<code>updatePolicy</code>控制)，用户也可以使用命令行-U参数强制让Maven检查更新，如：<code>mvn clean install-U</code>。</p>
 <p>基于快照版本机制，小张在构建成功之后才能将构件部署至仓库，而季MM可以完全不用考虑模块A的构建，并且她能确保随时得到模块A的最新可用的快照构件，而这一切都不需要额外的手工操作。</p>
 <p>最后要注意的是，快照版本一般只在组织内部的项目或模块间依赖使用，而且项目不应该依赖于组织外部的快照版本依赖（因为快照版本是不稳定的）。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://item.jd.com/10476794.html" target="_blank" rel="external">Maven实战</a></li>
+</ul>
 
       
     </div>
@@ -509,8 +514,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2015/10/11/the-dependency-of-maven/" rel="next" title="JMaven之依赖">
-                <i class="fa fa-chevron-left"></i> JMaven之依赖
+              <a href="/2015/10/11/the-dependency-of-maven/" rel="next" title="Maven之依赖">
+                <i class="fa fa-chevron-left"></i> Maven之依赖
               </a>
             
           </div>

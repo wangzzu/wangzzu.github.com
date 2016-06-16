@@ -57,25 +57,22 @@
 
 
 
-<meta name="description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。
-Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。
+<meta name="description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm常见的配置项参数。
 1.storm基本配置
-storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
+storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或者jars）的本地路径，需要每台storm node单独">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Storm之配置文件">
 <meta property="og:url" content="http://wangzzu.github.io/2015/07/27/storm-configuration/index.html">
 <meta property="og:site_name" content="Matt's Blog">
-<meta property="og:description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。
-Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。
+<meta property="og:description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm常见的配置项参数。
 1.storm基本配置
-storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
-<meta property="og:updated_time" content="2016-04-07T01:25:39.131Z">
+storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或者jars）的本地路径，需要每台storm node单独">
+<meta property="og:updated_time" content="2016-06-16T02:07:54.127Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Storm之配置文件">
-<meta name="twitter:description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。
-Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。
+<meta name="twitter:description" content="Storm的配置文件一般存放在$STORM_HOME/conf下，通常名为storm.yaml，它符合yaml格式要求。Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm常见的配置项参数。
 1.storm基本配置
-storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
+storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或者jars）的本地路径，需要每台storm node单独">
 
 
 
@@ -358,8 +355,7 @@ storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
       
 
       
-        <p>Storm的配置文件一般存放在<code>$STORM_HOME/conf</code>下，通常名为<code>storm.yaml</code>，它符合yaml格式要求。</p>
-<p>Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm的每个参数，顺便说解释一些storm的实现原理，以及生产环境中遇到的坑。</p>
+        <p>Storm的配置文件一般存放在<code>$STORM_HOME/conf</code>下，通常名为<code>storm.yaml</code>，它符合yaml格式要求。Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm常见的配置项参数。</p>
 <h3 id="1-storm基本配置"><a href="#1-storm基本配置" class="headerlink" title="1.storm基本配置"></a>1.storm基本配置</h3><ul>
 <li><strong>storm.local.dir</strong>: nimbus 和supervisor进程存储一些状态信息（conf或者jars）的本地路径，需要每台storm node单独创建该目录并保证该目录有正确的读写权限;</li>
 <li><strong>storm.log4j2.conf.dir</strong>： log4j的配置目录;</li>
@@ -425,7 +421,9 @@ storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
 <li><strong>storm.messaging.netty.min_wait_ms</strong>: 100</li>
 <li><strong>storm.messaging.netty.transfer.batch.size</strong>: 262144 如果netty 发送消息非常忙，client客户端可以batch发送消息，否则尽快的flush消息以减少延迟。</li>
 </ul>
+<blockquote>
 <p>注：我们的使用场景是storm kafka读取kafka里面的数据，发现运行一段时间以后，kafka消费的offset不再更新（2s更新一次消费的offset），spout 中的task不断重启导致offset一直不更新，查看log发现task失败的原因是gc设置不对以致netty连接超时，task会重新分配。在生产环境中应该调大该值，我们在线上设置该值为20s，并且调整worker的gc参数。</p>
+</blockquote>
 <h3 id="6-topology相关的设置，-针对特定拓扑的配置"><a href="#6-topology相关的设置，-针对特定拓扑的配置" class="headerlink" title="6.topology相关的设置， 针对特定拓扑的配置"></a>6.topology相关的设置， 针对特定拓扑的配置</h3><p>正如上一讲的，以下参数控制消息是否被完全处理：</p>
 <ul>
 <li><strong>topology.enable.message.timeouts</strong>: true 保证数据完全处理；</li>
@@ -466,6 +464,11 @@ storm.local.dir: nimbus 和supervisor进程存储一些状态信息（conf或">
 <li>jvm 参数设置和调整，这个对于java程序的稳定运行至关重要（尤其是在大数据平台下，因为目前开源的大数据工具大部分都是java写的，jvm调优是必不可少的;</li>
 <li>zookeeper的维护和管理，在hadoop生态系统以及分布式系统中中必不可少的工具</li>
 <li>storm worker间和worker内的消息传递，包含disruptor的使用，通过这一节的介绍就会知道buffer size 设置为啥都是2的幂次方，这里buffer size 的单位是字节还是其他等等一些疑惑</li>
+</ul>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://xstarcd.github.io/wiki/Cloud/storm_config_detail.html" target="_blank" rel="external">Storm配置项详解</a></li>
 </ul>
 
       

@@ -57,18 +57,18 @@
 
 
 
-<meta name="description" content="本文是参考网上的博客以及一些书籍根据自己一些逻辑整理得到的，主要是为了更好地理解storm的内部机制。
+<meta name="description" content="本文是参考网上的博客以及一些书籍根据自己的一些理解整理得到的，主要是为了更好地理解storm的内部机制（当时使用Storm的版本是0.9.3）。
 1.基础1.1.Storm的Topology模型一个storm Topology的一般模型为：
 
-1.1.1.tuplestorm中传输的数据类型是tuple，tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named of values where each">
+1.1.1.tuplestorm中传输的数据类型是tuple，tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named">
 <meta property="og:type" content="article">
-<meta property="og:title" content="The Base of Storm">
+<meta property="og:title" content="Storm简单介绍">
 <meta property="og:url" content="http://wangzzu.github.io/2015/05/26/the-basis-of-storm/index.html">
 <meta property="og:site_name" content="Matt's Blog">
-<meta property="og:description" content="本文是参考网上的博客以及一些书籍根据自己一些逻辑整理得到的，主要是为了更好地理解storm的内部机制。
+<meta property="og:description" content="本文是参考网上的博客以及一些书籍根据自己的一些理解整理得到的，主要是为了更好地理解storm的内部机制（当时使用Storm的版本是0.9.3）。
 1.基础1.1.Storm的Topology模型一个storm Topology的一般模型为：
 
-1.1.1.tuplestorm中传输的数据类型是tuple，tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named of values where each">
+1.1.1.tuplestorm中传输的数据类型是tuple，tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-05-26-theBasisOfStorm/2015-05-26-topology.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-05-26-theBasisOfStorm/2015-05-26-Node1.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-05-26-theBasisOfStorm/2015-05-26-Node2.png">
@@ -79,13 +79,13 @@
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-05-26-theBasisOfStorm/2015-05-26-ISpout.jpg">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-05-26-theBasisOfStorm/2015-05-26-bolt.jpg">
 <meta property="og:image" content="http://wangzzu.github.io/images/2015-05-26-theBasisOfStorm/2015-05-26-IBolt.jpg">
-<meta property="og:updated_time" content="2016-04-07T01:25:39.136Z">
+<meta property="og:updated_time" content="2016-06-16T01:58:43.852Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="The Base of Storm">
-<meta name="twitter:description" content="本文是参考网上的博客以及一些书籍根据自己一些逻辑整理得到的，主要是为了更好地理解storm的内部机制。
+<meta name="twitter:title" content="Storm简单介绍">
+<meta name="twitter:description" content="本文是参考网上的博客以及一些书籍根据自己的一些理解整理得到的，主要是为了更好地理解storm的内部机制（当时使用Storm的版本是0.9.3）。
 1.基础1.1.Storm的Topology模型一个storm Topology的一般模型为：
 
-1.1.1.tuplestorm中传输的数据类型是tuple，tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named of values where each">
+1.1.1.tuplestorm中传输的数据类型是tuple，tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named">
 <meta name="twitter:image" content="http://wangzzu.github.io/images/2015-05-26-theBasisOfStorm/2015-05-26-topology.png">
 
 
@@ -104,7 +104,7 @@
   };
 </script>
 
-  <title> The Base of Storm | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+  <title> Storm简单介绍 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
 </head>
 
 <body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -299,7 +299,7 @@
             
             
               
-                The Base of Storm
+                Storm简单介绍
               
             
           </h1>
@@ -369,7 +369,7 @@
       
 
       
-        <p>本文是参考网上的博客以及一些书籍根据自己一些逻辑整理得到的，主要是为了更好地理解storm的内部机制。</p>
+        <p>本文是参考网上的博客以及一些书籍根据自己的一些理解整理得到的，主要是为了更好地理解storm的内部机制（当时使用Storm的版本是<code>0.9.3</code>）。</p>
 <h3 id="1-基础"><a href="#1-基础" class="headerlink" title="1.基础"></a>1.基础</h3><h4 id="1-1-Storm的Topology模型"><a href="#1-1-Storm的Topology模型" class="headerlink" title="1.1.Storm的Topology模型"></a>1.1.Storm的Topology模型</h4><p>一个storm Topology的一般模型为：</p>
 <p><img src="/images/2015-05-26-theBasisOfStorm/2015-05-26-topology.png" alt="topology"></p>
 <h5 id="1-1-1-tuple"><a href="#1-1-1-tuple" class="headerlink" title="1.1.1.tuple"></a>1.1.1.tuple</h5><p>storm中传输的数据类型是tuple，tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named of values where each value can be any type.”  tuple是一个类似于列表的东西，存储的每个元素叫做field（字段）。我们用getString(i)可以获得tuple的第i个字段。而其中的每个字段都可以任意类型的，也可以一个很长的字符串。我们可以用：</p>
@@ -558,7 +558,7 @@
     <div class="post-spread">
       
         <div class="ds-share flat" data-thread-key="2015/05/26/the-basis-of-storm/"
-     data-title="The Base of Storm"
+     data-title="Storm简单介绍"
      data-content=""
      data-url="http://wangzzu.github.io/2015/05/26/the-basis-of-storm/">
   <div class="ds-share-inline">
@@ -588,7 +588,7 @@
   <div class="comments" id="comments">
     
       <div class="ds-thread" data-thread-key="2015/05/26/the-basis-of-storm/"
-           data-title="The Base of Storm" data-url="http://wangzzu.github.io/2015/05/26/the-basis-of-storm/">
+           data-title="Storm简单介绍" data-url="http://wangzzu.github.io/2015/05/26/the-basis-of-storm/">
       </div>
     
   </div>
