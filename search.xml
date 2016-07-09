@@ -4,6 +4,171 @@
   
     
     <entry>
+      <title><![CDATA[Mac常用软件配置]]></title>
+      <url>http://wangzzu.github.io/2016/07/09/mac-software/</url>
+      <content type="html"><![CDATA[<p>近段时间因为在公司实习，公司提供的电脑都是Mac，还给发了一台全新的Mac pro，刚开始用的时候有很多不习惯的地方，但是用了几天之后就感觉Mac真的爽到爆啊，本篇文章就记录一下自己感觉在Mac上用到的一些不错的软件，以及Mac下一些常用编程工具的配置安装方法，这样也方便自己以后查看，本篇文章会一直保持更新。</p>
+<h1 id="Mac基本配置"><a href="#Mac基本配置" class="headerlink" title="Mac基本配置"></a>Mac基本配置</h1><p>推荐一些Mac下常用的软件</p>
+<ul>
+<li>笔记：<a href="https://www.yinxiang.com/download/?offer=www_menu" target="_blank" rel="external">Evernote</a>；</li>
+<li>MarkDown：<a href="http://zh.mweb.im/" target="_blank" rel="external">MWeb</a>、Mou、Ulysses；</li>
+<li>编辑器：<a href="https://atom.io/" target="_blank" rel="external">Atom</a>；</li>
+<li>思维导图：<a href="http://www.xmindchina.net/" target="_blank" rel="external">XMid</a>；</li>
+<li>NTFS挂载：<a href="http://www.tuxera.com/products/tuxera-ntfs-for-mac/" target="_blank" rel="external">Tuxera NTFS</a>（<a href="http://www.orsoon.com/Mac/129966.html" target="_blank" rel="external">序列号</a>，建议买正版）；</li>
+</ul>
+<h1 id="Mac终端iTerm2配置"><a href="#Mac终端iTerm2配置" class="headerlink" title="Mac终端iTerm2配置"></a>Mac终端iTerm2配置</h1><h2 id="iTerm2下载安装"><a href="#iTerm2下载安装" class="headerlink" title="iTerm2下载安装"></a>iTerm2下载安装</h2><p><a href="http://www.iterm2.com/" target="_blank" rel="external">iTerm2下载</a></p>
+<p>下载完直接安装即可。</p>
+<h2 id="安装oh-my-zsh"><a href="#安装oh-my-zsh" class="headerlink" title="安装oh-my-zsh"></a>安装oh-my-zsh</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh</span><br></pre></td></tr></table></figure>
+<p>安装成功后的效果如下图所示</p>
+<p><img src="/images/mac/iterm-1" alt="zsh"></p>
+<h2 id="安装powerline"><a href="#安装powerline" class="headerlink" title="安装powerline"></a>安装powerline</h2><p>关于powerline的介绍可以参考<a href="http://cenalulu.github.io/linux/mac-powerline/" target="_blank" rel="external">为Bash和VIM配置一个美观奢华的状态提示栏</a>这篇文章，powerline就是一个全局的状态提示栏，安装方法如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 先安装pip指令</span></span><br><span class="line">sudo easy_install pip</span><br><span class="line"><span class="comment"># 安装管道</span></span><br><span class="line">pip install powerline-status</span><br></pre></td></tr></table></figure>
+<p>在第二步安装时，出现了这个错误，<code>error: [Errno 1] Operation not permitted: u&#39;/System/Library/Frameworks/Python.framework/Versions/2.7/bin/powerline&#39;</code>，如下图所示</p>
+<p><img src="/images/mac/iterm-2" alt="error"></p>
+<p>这个问题出现的原因，因为没有安装python，解决办法如下</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1.安装Homebrew</span></span><br><span class="line">/usr/bin/ruby <span class="_">-e</span> <span class="string">"<span class="variable">$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)</span>"</span></span><br><span class="line"><span class="comment"># 2.配置python</span></span><br><span class="line">brew install python</span><br><span class="line"><span class="comment"># 3.安装管道</span></span><br><span class="line">pip install --user powerline-status</span><br></pre></td></tr></table></figure>
+<p>powerline的安装可以参考：</p>
+<ol>
+<li>brew安装参考<a href="http://brew.sh/" target="_blank" rel="external">官网</a></li>
+<li>PowerLine安装参考<a href="http://powerline.readthedocs.io/en/latest/installation/osx.html" target="_blank" rel="external">官网</a></li>
+</ol>
+<h2 id="安装字体库"><a href="#安装字体库" class="headerlink" title="安装字体库"></a>安装字体库</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 下载字体库</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/powerline/fonts.git</span><br><span class="line"><span class="comment"># 安装所有字体</span></span><br><span class="line"><span class="built_in">cd</span> fonts</span><br><span class="line">./install.sh</span><br></pre></td></tr></table></figure>
+<p>安装成功后，如下图所示</p>
+<p><img src="/images/mac/iterm-3" alt="font"></p>
+<p>安装完成后会提示所有的字体均已下载到<code>/Users/superdanny/Library/Fonts</code>路径。</p>
+<h2 id="字体设置、配色方案设置及主题设置"><a href="#字体设置、配色方案设置及主题设置" class="headerlink" title="字体设置、配色方案设置及主题设置"></a>字体设置、配色方案设置及主题设置</h2><h3 id="字体配置"><a href="#字体配置" class="headerlink" title="字体配置"></a>字体配置</h3><p>安装完字体库之后，把iTerm 2的设置里的Profile中的Text 选项卡中里的<code>Regular Font</code>和<code>Non-ASCII Font</code>的字体都设置成powerline的字体，我这里设置的字体是<code>14pt Meslo LG S DZ Regular for Powerline</code>.</p>
+<p><img src="/images/mac/iterm-4" alt="font-setting"></p>
+<h3 id="配色方案"><a href="#配色方案" class="headerlink" title="配色方案"></a>配色方案</h3><h4 id="安装配色方案"><a href="#安装配色方案" class="headerlink" title="安装配色方案"></a>安装配色方案</h4><p>需要先在github下下载solarized工程，<a href="https://github.com/altercation/solarized" target="_blank" rel="external">solarized github地址</a></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git clone https://github.com/altercation/solarized</span><br></pre></td></tr></table></figure>
+<p>然后进入刚刚下载的工程的<code>solarized/iterm2-colors-solarized</code> 下双击 <code>Solarized Dark.itermcolors</code> 和 <code>Solarized Light.itermcolors</code> 两个文件就可以把配置文件导入到 iTerm2 里.</p>
+<h4 id="配置配色方案"><a href="#配置配色方案" class="headerlink" title="配置配色方案"></a>配置配色方案</h4><p>通过load presets选择刚刚安装的配色主题即可</p>
+<p><img src="/images/mac/iterm-5" alt="color"></p>
+<h3 id="主题设置"><a href="#主题设置" class="headerlink" title="主题设置"></a>主题设置</h3><p>这里使用的是agnoster主题，<a href="https://github.com/fcamblor/oh-my-zsh-agnoster-fcamblor" target="_blank" rel="external">oh-my-zsh-agnoster-fcamblor Github地址</a></p>
+<h4 id="下载安装"><a href="#下载安装" class="headerlink" title="下载安装"></a>下载安装</h4><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1.下载主题</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/fcamblor/oh-my-zsh-agnoster-fcamblor</span><br><span class="line"><span class="comment"># 2.安装主题</span></span><br><span class="line"><span class="built_in">cd</span> oh-my-zsh-agnoster-fcamblor</span><br><span class="line">./install</span><br></pre></td></tr></table></figure>
+<h4 id="设置该主题"><a href="#设置该主题" class="headerlink" title="设置该主题"></a>设置该主题</h4><p>编辑<code>~/.zshrc</code>文件，然后将<code>ZSH_THEME</code>后面的字段改为<code>agnoster</code>。<code>ZSH_THEME=&quot;agnoster&quot;</code>（agnoster即为要设置的主题）.</p>
+<h4 id="增加指令高亮效果"><a href="#增加指令高亮效果" class="headerlink" title="增加指令高亮效果"></a>增加指令高亮效果</h4><p>指令高亮效果作用是当用户输入正确命令时指令会绿色高亮，错误时命令红色高亮，这里需要先下载<code>zsh-syntax-highlighting</code></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1.下载工程项目</span></span><br><span class="line">git <span class="built_in">clone</span> git://github.com/zsh-users/zsh-syntax-highlighting.git</span><br><span class="line"><span class="comment"># 2.打开.zshrc文件，在最后添加下面内容</span></span><br><span class="line"><span class="built_in">source</span> /Users/matt/git//zsh-syntax-highlighting/zsh-syntax-highlighting.zsh</span><br><span class="line"><span class="comment"># 3.打开.zshrc文件，在最后面添加下面内容</span></span><br><span class="line">plugins=(zsh-syntax-highlighting)</span><br></pre></td></tr></table></figure>
+<h2 id="iTerm2快捷键"><a href="#iTerm2快捷键" class="headerlink" title="iTerm2快捷键"></a>iTerm2快捷键</h2><p>iTerm2快捷键的使用可以参考<a href="http://cnbin.github.io/blog/2015/06/20/iterm2-kuai-jie-jian-da-quan/" target="_blank" rel="external">Iterm2快捷键</a>这篇文章，这里给出一些常用的命令</p>
+<table>
+<thead>
+<tr>
+<th>说明</th>
+<th>快捷键</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>新建标签</td>
+<td>command + t</td>
+</tr>
+<tr>
+<td>关闭标签</td>
+<td>command + w</td>
+</tr>
+<tr>
+<td>切换标签</td>
+<td>command + 数字 command + 左右方向键</td>
+</tr>
+<tr>
+<td>切换全屏</td>
+<td>command + enter</td>
+</tr>
+<tr>
+<td>查找</td>
+<td>command +f</td>
+</tr>
+<tr>
+<td>垂直分屏</td>
+<td>command + d</td>
+</tr>
+<tr>
+<td>水平分屏</td>
+<td>command + shift + d</td>
+</tr>
+<tr>
+<td>切换屏幕</td>
+<td>command + option + 方向键 command + [ 或 command + ]</td>
+</tr>
+<tr>
+<td>查看历史命令</td>
+<td>command + ;</td>
+</tr>
+<tr>
+<td>查看剪贴板历史</td>
+<td>command + shift + h</td>
+</tr>
+<tr>
+<td>清除当前行</td>
+<td>ctrl + u</td>
+</tr>
+<tr>
+<td>到行首</td>
+<td>ctrl + a</td>
+</tr>
+<tr>
+<td>到行尾</td>
+<td>ctrl + e</td>
+</tr>
+<tr>
+<td>前进后退</td>
+<td>ctrl + f/b (相当于左右方向键)</td>
+</tr>
+<tr>
+<td>上一条命令</td>
+<td>ctrl + p</td>
+</tr>
+<tr>
+<td>搜索命令历史</td>
+<td>ctrl + r</td>
+</tr>
+<tr>
+<td>删除当前光标的字符</td>
+<td>ctrl + d</td>
+</tr>
+<tr>
+<td>删除光标之前的字符</td>
+<td>ctrl + h</td>
+</tr>
+<tr>
+<td>删除光标之前的单词</td>
+<td>ctrl + w</td>
+</tr>
+<tr>
+<td>删除到文本末尾</td>
+<td>ctrl + k</td>
+</tr>
+<tr>
+<td>交换光标处文本</td>
+<td>ctrl + t</td>
+</tr>
+<tr>
+<td>清屏1</td>
+<td>command + r</td>
+</tr>
+<tr>
+<td>清屏2</td>
+<td>ctrl + l</td>
+</tr>
+</tbody>
+</table>
+<h1 id="其他常用命令安装"><a href="#其他常用命令安装" class="headerlink" title="其他常用命令安装"></a>其他常用命令安装</h1><h2 id="tree命令安装"><a href="#tree命令安装" class="headerlink" title="tree命令安装"></a>tree命令安装</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 需要先安装HomeBrew</span></span><br><span class="line">brew install tree</span><br></pre></td></tr></table></figure>
+<h1 id="Mac下遇到的其他问题"><a href="#Mac下遇到的其他问题" class="headerlink" title="Mac下遇到的其他问题"></a>Mac下遇到的其他问题</h1><h2 id="bashrc每次打开iterm都要重新加载"><a href="#bashrc每次打开iterm都要重新加载" class="headerlink" title="~/.bashrc每次打开iterm都要重新加载"></a>~/.bashrc每次打开iterm都要重新加载</h2><p>参考<a href="http://www.zhihu.com/question/29653438" target="_blank" rel="external">文章</a></p>
+<p>原因：使用的zsh，而不是bash，所以zsh没有义务去加载<code>~/.bashrc</code>文件，zsh下别名一般放置到<code>~/.zshrc</code>文件中。</p>
+<p>解决办法：在<code>~/.zshrc</code>文件的最后添加<code>source ~/.bashrc</code>.</p>
+<h2 id="修改电脑名的方法"><a href="#修改电脑名的方法" class="headerlink" title="修改电脑名的方法"></a>修改电脑名的方法</h2><p>有人可能感觉跟我一样有强迫症，看到电脑名太长影响终端的显示，就想着怎么修改一下。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 执行下面命令“Tmp”是你想要改的电脑名称</span></span><br><span class="line">sudo scutil --set HostName Tmp</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>注：关闭终端之后，重新打开终端就会生效。</p>
+</blockquote>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://www.jianshu.com/p/7de00c73a2bb" target="_blank" rel="external">iTerm 2 &amp;&amp; Oh My Zsh</a></li>
+<li><a href="http://cnbin.github.io/blog/2015/06/20/iterm2-kuai-jie-jian-da-quan/" target="_blank" rel="external">Iterm2快捷键</a></li>
+</ul>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[Redis简单介绍]]></title>
       <url>http://wangzzu.github.io/2016/06/06/redis-introduce/</url>
       <content type="html"><![CDATA[<p>本文是根据我在<a href="https://www.shiyanlou.com/courses/106" target="_blank" rel="external">实验楼-Redis基础教程</a>中学习的总结，简单讲述了一下Redis的安装和使用。</p>
@@ -2344,7 +2509,7 @@
 <p><img src="/images/2016-03-08-KafkaTransmit/broker.png" alt="broker"></p>
 <h4 id="2-2-2-leader"><a href="#2-2-2-leader" class="headerlink" title="2.2.2.leader"></a>2.2.2.leader</h4><p>接着，我们再说一下kafka为何需要Leader Election。</p>
 <p>在引入Replication之后，同一个Partition可能会有多个Replica，而这时需要在这些Replication之间选出一个Leader，Producer和Consumer只与这个Leader交互，其它Replica作为Follower从Leader中复制数据。</p>
-<p>因为需要保证同一个Partition的多个Replica之间的数据一致性（其中一台宕机后其它Replica必须要能继续服务并且即不能造成数据重复也不能造成数据丢失）。如果没有一个Leader，所有Replica都可同时读/写数据，那就需要保证多个Replica之间互相（N×N条通路）同步数据，数据的一致性和有序性非常难保证，大大增加了Replication实现的复杂性，同时也增加了出现异常的几率。而引入Leader后，只有Leader负责数据读写，Follower只向Leader顺序Fetch数据（N条通路），系统更加简单且高效。</p>
+<p>因为需要保证同一个Partition的多个Replica之间的数据一致性（其中一台宕机后其它Replica必须要能继续服务并且即不能造成数据重复也不能造成数据丢失）。如果没有一个Leader，所有Replica都可同时读/写数据，那就需要保证多个Replica之间互相（$N×N$条通路）同步数据，数据的一致性和有序性非常难保证，大大增加了Replication实现的复杂性，同时也增加了出现异常的机率。而引入Leader后，只有Leader负责数据读写，Follower只向Leader顺序Fetch数据（N条通路），系统更加简单且高效。</p>
 <p>leader的性质有以下几条：</p>
 <ul>
 <li>每个partition都有一个leader，所有的读写操作都在leader上完成；</li>
@@ -2366,7 +2531,7 @@
 </ul>
 <figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">#If a replica falls more than this many messages behind the leader, the leader will remove the follower from ISR and treat it as dead</span><br><span class="line">replica.lag.max.messages=4000 </span><br><span class="line">#If a follower hasn't sent any fetch requests for this window of time, the leader will remove the follower from ISR (in-sync replicas) and treat it as dead</span><br><span class="line">replica.lag.time.max.ms=10000</span><br></pre></td></tr></table></figure>
 <p>而kafka的复制机制既不是完全的同步复制，也不是单纯的异步复制。kafka使用了<code>in sync list</code>的方式，很好的均衡了确保数据不丢失以及吞吐率，follower可以批量的从leader复制数据，这样极大的提高复制能力（批量写入磁盘），极大地减少了follower与leader的差距。</p>
-<p>这里介绍一下kafka的<strong>ISR(in-sync replicas)模式</strong>。kafka在zookeeper中动态地维护了一个ISR，这个ISR里的所有Replica都跟的上了leader，之有ISR成员才有被选为leader的可能。在这种模式下，对于f+1个Replica，一个Partition能在保证不丢失（已经commit）的前提下容忍f个Replica的失败。在大多数场景下，这种模式是非常有利的。</p>
+<p>这里介绍一下kafka的<strong>ISR(in-sync replicas)模式</strong>。kafka在zookeeper中动态地维护了一个ISR，这个ISR里的所有Replica都跟的上了leader，只有ISR成员才有被选为leader的可能。在这种模式下，对于f+1个Replica，一个Partition能在保证不丢失（已经commit）的前提下容忍f个Replica的失败。在大多数场景下，这种模式是非常有利的。</p>
 <p><strong>当leader宕机的情况，leader election算法</strong></p>
 <p>这种情况是很复杂的，当leader宕机时，我们需要在follower中选举出新的leader。因为follower可能落后于许多或者宕机了，所以必须保证“最新”的follower作为leader。一个基本的原则就是，如果leader不在了，新的leader必须拥有原来的leader commit的所有消息。这就需要做一个折衷，如果leader标明一条消息被commit前等待更多的follower确认，那它die之后就会有更多的leader可以作为新的leader，但这也会造成吞吐率的下降。</p>
 <p>常见的leader election算法有：</p>
@@ -2418,7 +2583,7 @@
 <ol>
 <li>对topic下的所有partition进行排序，结果记为$PT$；</li>
 <li>对订阅这个topic的Group下的所有consumer进行排序，记为$CG$；</li>
-<li>记i为CG中的idex，第i个consumer记为$C_{i}$,$N=\lceil\frac{size(PT)}{size(CG)}\rceil$；</li>
+<li>记i为CG中的idex，第i个consumer记为$C_{i}$，$N=\lceil\frac{size(PT)}{size(CG)}\rceil$；</li>
 <li>解除原来$C_{i}$对分配的Partition的消费权；</li>
 <li>将第 $iN$ 到 $(i+1)N-1$个partitions重新分配给$C_{i}$.</li>
 </ol>

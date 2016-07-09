@@ -76,7 +76,7 @@ Kafka是如何保证可靠性？
 
 0.写在前面昨天整理完Kafka之数据存储之后，今天决定再把笔记中kafka消息传输部分整理一下，逐步去完善kafka系列的博文。本文中讲述的kafka是0.8.1版">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-03-08-KafkaTransmit/broker.png">
-<meta property="og:updated_time" content="2016-05-25T03:07:43.282Z">
+<meta property="og:updated_time" content="2016-06-28T08:20:52.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Kafka之消息传输">
 <meta name="twitter:description" content="问题研究：
@@ -410,7 +410,7 @@ Kafka是如何保证可靠性？
 <p><img src="/images/2016-03-08-KafkaTransmit/broker.png" alt="broker"></p>
 <h4 id="2-2-2-leader"><a href="#2-2-2-leader" class="headerlink" title="2.2.2.leader"></a>2.2.2.leader</h4><p>接着，我们再说一下kafka为何需要Leader Election。</p>
 <p>在引入Replication之后，同一个Partition可能会有多个Replica，而这时需要在这些Replication之间选出一个Leader，Producer和Consumer只与这个Leader交互，其它Replica作为Follower从Leader中复制数据。</p>
-<p>因为需要保证同一个Partition的多个Replica之间的数据一致性（其中一台宕机后其它Replica必须要能继续服务并且即不能造成数据重复也不能造成数据丢失）。如果没有一个Leader，所有Replica都可同时读/写数据，那就需要保证多个Replica之间互相（N×N条通路）同步数据，数据的一致性和有序性非常难保证，大大增加了Replication实现的复杂性，同时也增加了出现异常的几率。而引入Leader后，只有Leader负责数据读写，Follower只向Leader顺序Fetch数据（N条通路），系统更加简单且高效。</p>
+<p>因为需要保证同一个Partition的多个Replica之间的数据一致性（其中一台宕机后其它Replica必须要能继续服务并且即不能造成数据重复也不能造成数据丢失）。如果没有一个Leader，所有Replica都可同时读/写数据，那就需要保证多个Replica之间互相（$N×N$条通路）同步数据，数据的一致性和有序性非常难保证，大大增加了Replication实现的复杂性，同时也增加了出现异常的机率。而引入Leader后，只有Leader负责数据读写，Follower只向Leader顺序Fetch数据（N条通路），系统更加简单且高效。</p>
 <p>leader的性质有以下几条：</p>
 <ul>
 <li>每个partition都有一个leader，所有的读写操作都在leader上完成；</li>
@@ -432,7 +432,7 @@ Kafka是如何保证可靠性？
 </ul>
 <figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">#If a replica falls more than this many messages behind the leader, the leader will remove the follower from ISR and treat it as dead</span><br><span class="line">replica.lag.max.messages=4000 </span><br><span class="line">#If a follower hasn't sent any fetch requests for this window of time, the leader will remove the follower from ISR (in-sync replicas) and treat it as dead</span><br><span class="line">replica.lag.time.max.ms=10000</span><br></pre></td></tr></table></figure>
 <p>而kafka的复制机制既不是完全的同步复制，也不是单纯的异步复制。kafka使用了<code>in sync list</code>的方式，很好的均衡了确保数据不丢失以及吞吐率，follower可以批量的从leader复制数据，这样极大的提高复制能力（批量写入磁盘），极大地减少了follower与leader的差距。</p>
-<p>这里介绍一下kafka的<strong>ISR(in-sync replicas)模式</strong>。kafka在zookeeper中动态地维护了一个ISR，这个ISR里的所有Replica都跟的上了leader，之有ISR成员才有被选为leader的可能。在这种模式下，对于f+1个Replica，一个Partition能在保证不丢失（已经commit）的前提下容忍f个Replica的失败。在大多数场景下，这种模式是非常有利的。</p>
+<p>这里介绍一下kafka的<strong>ISR(in-sync replicas)模式</strong>。kafka在zookeeper中动态地维护了一个ISR，这个ISR里的所有Replica都跟的上了leader，只有ISR成员才有被选为leader的可能。在这种模式下，对于f+1个Replica，一个Partition能在保证不丢失（已经commit）的前提下容忍f个Replica的失败。在大多数场景下，这种模式是非常有利的。</p>
 <p><strong>当leader宕机的情况，leader election算法</strong></p>
 <p>这种情况是很复杂的，当leader宕机时，我们需要在follower中选举出新的leader。因为follower可能落后于许多或者宕机了，所以必须保证“最新”的follower作为leader。一个基本的原则就是，如果leader不在了，新的leader必须拥有原来的leader commit的所有消息。这就需要做一个折衷，如果leader标明一条消息被commit前等待更多的follower确认，那它die之后就会有更多的leader可以作为新的leader，但这也会造成吞吐率的下降。</p>
 <p>常见的leader election算法有：</p>
@@ -484,7 +484,7 @@ Kafka是如何保证可靠性？
 <ol>
 <li>对topic下的所有partition进行排序，结果记为$PT$；</li>
 <li>对订阅这个topic的Group下的所有consumer进行排序，记为$CG$；</li>
-<li>记i为CG中的idex，第i个consumer记为$C_{i}$,$N=\lceil\frac{size(PT)}{size(CG)}\rceil$；</li>
+<li>记i为CG中的idex，第i个consumer记为$C_{i}$，$N=\lceil\frac{size(PT)}{size(CG)}\rceil$；</li>
 <li>解除原来$C_{i}$对分配的Partition的消费权；</li>
 <li>将第 $iN$ 到 $(i+1)N-1$个partitions重新分配给$C_{i}$.</li>
 </ol>
@@ -675,7 +675,7 @@ Kafka是如何保证可靠性？
         <nav class="site-state motion-element">
           <div class="site-state-item site-state-posts">
             <a href="/archives">
-              <span class="site-state-item-count">33</span>
+              <span class="site-state-item-count">34</span>
               <span class="site-state-item-name">日志</span>
             </a>
           </div>
@@ -683,7 +683,7 @@ Kafka是如何保证可靠性？
           
             <div class="site-state-item site-state-categories">
               <a href="/categories">
-                <span class="site-state-item-count">14</span>
+                <span class="site-state-item-count">15</span>
                 <span class="site-state-item-name">分类</span>
               </a>
             </div>
@@ -692,7 +692,7 @@ Kafka是如何保证可靠性？
           
             <div class="site-state-item site-state-tags">
               <a href="/tags">
-                <span class="site-state-item-count">19</span>
+                <span class="site-state-item-count">20</span>
                 <span class="site-state-item-name">标签</span>
               </a>
             </div>
