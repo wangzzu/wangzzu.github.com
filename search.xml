@@ -19,6 +19,40 @@
 <ul>
 <li><a href="http://www.jianshu.com/p/19e8ffd91576" target="_blank" rel="external">Mac下开发常用的必备软件</a>，这里有office、ps等工具的安装。</li>
 </ul>
+<h1 id="Mac下常用快捷键"><a href="#Mac下常用快捷键" class="headerlink" title="Mac下常用快捷键"></a>Mac下常用快捷键</h1><table>
+<thead>
+<tr>
+<th>说明</th>
+<th>快捷键</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>网页刷新</td>
+<td>command+r</td>
+</tr>
+<tr>
+<td>自定义截图</td>
+<td>command+shfit+4</td>
+</tr>
+<tr>
+<td>显示器</td>
+<td>control+shift+电源键</td>
+</tr>
+<tr>
+<td>将文本编辑器由带格式变为存文本</td>
+<td>command+shfit+t</td>
+</tr>
+</tbody>
+</table>
+<p>快捷键可以参考<a href="https://support.apple.com/zh-cn/HT201236" target="_blank" rel="external">Mac键盘快捷键</a>一文</p>
+<p>其他博文推荐：</p>
+<ol>
+<li><a href="http://wuchong.me/blog/2014/06/29/the-first-experience-of-mac/" target="_blank" rel="external">Mac上手体验</a></li>
+<li><a href="http://www.macx.cn/thread-2133104-1-1.html" target="_blank" rel="external">Mac快速锁屏</a></li>
+<li><a href="https://support.apple.com/kb/PH18669?locale=zh_CN&amp;viewlocale=zh_CN" target="_blank" rel="external">Mac锁屏后设置需要输密码</a></li>
+<li><a href="http://www.hangge.com/blog/cache/detail_540.html" target="_blank" rel="external">Mac下文本编辑器</a></li>
+</ol>
 <h1 id="Mac终端iTerm2配置"><a href="#Mac终端iTerm2配置" class="headerlink" title="Mac终端iTerm2配置"></a>Mac终端iTerm2配置</h1><h2 id="iTerm2下载安装"><a href="#iTerm2下载安装" class="headerlink" title="iTerm2下载安装"></a>iTerm2下载安装</h2><p><a href="http://www.iterm2.com/" target="_blank" rel="external">iTerm2下载</a></p>
 <p>下载完直接安装即可。</p>
 <h2 id="安装oh-my-zsh"><a href="#安装oh-my-zsh" class="headerlink" title="安装oh-my-zsh"></a>安装oh-my-zsh</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh</span><br></pre></td></tr></table></figure>
