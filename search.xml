@@ -43,6 +43,10 @@
 <td>将文本编辑器由带格式变为存文本</td>
 <td>command+shfit+t</td>
 </tr>
+<tr>
+<td>EverNote无格式粘贴</td>
+<td>command+shift+option+v</td>
+</tr>
 </tbody>
 </table>
 <p>快捷键可以参考<a href="https://support.apple.com/zh-cn/HT201236" target="_blank" rel="external">Mac键盘快捷键</a>一文</p>
