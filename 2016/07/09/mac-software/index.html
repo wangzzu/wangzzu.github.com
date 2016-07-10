@@ -71,12 +71,12 @@ Mac基本配置推荐一些Mac下常用的软件
 
 笔记：Evernote；
 MarkDown：">
-<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-1">
-<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-2">
-<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-3">
-<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-4">
-<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-5">
-<meta property="og:updated_time" content="2016-07-09T16:13:49.000Z">
+<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-1.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-2.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-3.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-4.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/mac/iterm-5.png">
+<meta property="og:updated_time" content="2016-07-10T00:28:03.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Mac常用软件配置">
 <meta name="twitter:description" content="近段时间因为在公司实习，公司提供的电脑都是Mac，还给发了一台全新的Mac pro，刚开始用的时候有很多不习惯的地方，但是用了几天之后就感觉Mac真的爽到爆啊，本篇文章就记录一下自己感觉在Mac上用到的一些不错的软件，以及Mac下一些常用编程工具的配置安装方法，这样也方便自己以后查看，本篇文章会一直保持更新。
@@ -84,7 +84,7 @@ Mac基本配置推荐一些Mac下常用的软件
 
 笔记：Evernote；
 MarkDown：">
-<meta name="twitter:image" content="http://wangzzu.github.io/images/mac/iterm-1">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/mac/iterm-1.png">
 
 
 
@@ -373,11 +373,11 @@ MarkDown：">
 <p>下载完直接安装即可。</p>
 <h2 id="安装oh-my-zsh"><a href="#安装oh-my-zsh" class="headerlink" title="安装oh-my-zsh"></a>安装oh-my-zsh</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh</span><br></pre></td></tr></table></figure>
 <p>安装成功后的效果如下图所示</p>
-<p><img src="/images/mac/iterm-1" alt="zsh"></p>
+<p><img src="/images/mac/iterm-1.png" alt="zsh"></p>
 <h2 id="安装powerline"><a href="#安装powerline" class="headerlink" title="安装powerline"></a>安装powerline</h2><p>关于powerline的介绍可以参考<a href="http://cenalulu.github.io/linux/mac-powerline/" target="_blank" rel="external">为Bash和VIM配置一个美观奢华的状态提示栏</a>这篇文章，powerline就是一个全局的状态提示栏，安装方法如下：</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 先安装pip指令</span></span><br><span class="line">sudo easy_install pip</span><br><span class="line"><span class="comment"># 安装管道</span></span><br><span class="line">pip install powerline-status</span><br></pre></td></tr></table></figure>
 <p>在第二步安装时，出现了这个错误，<code>error: [Errno 1] Operation not permitted: u&#39;/System/Library/Frameworks/Python.framework/Versions/2.7/bin/powerline&#39;</code>，如下图所示</p>
-<p><img src="/images/mac/iterm-2" alt="error"></p>
+<p><img src="/images/mac/iterm-2.png" alt="error"></p>
 <p>这个问题出现的原因，因为没有安装python，解决办法如下</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1.安装Homebrew</span></span><br><span class="line">/usr/bin/ruby <span class="_">-e</span> <span class="string">"<span class="variable">$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)</span>"</span></span><br><span class="line"><span class="comment"># 2.配置python</span></span><br><span class="line">brew install python</span><br><span class="line"><span class="comment"># 3.安装管道</span></span><br><span class="line">pip install --user powerline-status</span><br></pre></td></tr></table></figure>
 <p>powerline的安装可以参考：</p>
@@ -387,15 +387,15 @@ MarkDown：">
 </ol>
 <h2 id="安装字体库"><a href="#安装字体库" class="headerlink" title="安装字体库"></a>安装字体库</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 下载字体库</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/powerline/fonts.git</span><br><span class="line"><span class="comment"># 安装所有字体</span></span><br><span class="line"><span class="built_in">cd</span> fonts</span><br><span class="line">./install.sh</span><br></pre></td></tr></table></figure>
 <p>安装成功后，如下图所示</p>
-<p><img src="/images/mac/iterm-3" alt="font"></p>
+<p><img src="/images/mac/iterm-3.png" alt="font"></p>
 <p>安装完成后会提示所有的字体均已下载到<code>/Users/superdanny/Library/Fonts</code>路径。</p>
 <h2 id="字体设置、配色方案设置及主题设置"><a href="#字体设置、配色方案设置及主题设置" class="headerlink" title="字体设置、配色方案设置及主题设置"></a>字体设置、配色方案设置及主题设置</h2><h3 id="字体配置"><a href="#字体配置" class="headerlink" title="字体配置"></a>字体配置</h3><p>安装完字体库之后，把iTerm 2的设置里的Profile中的Text 选项卡中里的<code>Regular Font</code>和<code>Non-ASCII Font</code>的字体都设置成powerline的字体，我这里设置的字体是<code>14pt Meslo LG S DZ Regular for Powerline</code>.</p>
-<p><img src="/images/mac/iterm-4" alt="font-setting"></p>
+<p><img src="/images/mac/iterm-4.png" alt="font-setting"></p>
 <h3 id="配色方案"><a href="#配色方案" class="headerlink" title="配色方案"></a>配色方案</h3><h4 id="安装配色方案"><a href="#安装配色方案" class="headerlink" title="安装配色方案"></a>安装配色方案</h4><p>需要先在github下下载solarized工程，<a href="https://github.com/altercation/solarized" target="_blank" rel="external">solarized github地址</a></p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git clone https://github.com/altercation/solarized</span><br></pre></td></tr></table></figure>
 <p>然后进入刚刚下载的工程的<code>solarized/iterm2-colors-solarized</code> 下双击 <code>Solarized Dark.itermcolors</code> 和 <code>Solarized Light.itermcolors</code> 两个文件就可以把配置文件导入到 iTerm2 里.</p>
 <h4 id="配置配色方案"><a href="#配置配色方案" class="headerlink" title="配置配色方案"></a>配置配色方案</h4><p>通过load presets选择刚刚安装的配色主题即可</p>
-<p><img src="/images/mac/iterm-5" alt="color"></p>
+<p><img src="/images/mac/iterm-5.png" alt="color"></p>
 <h3 id="主题设置"><a href="#主题设置" class="headerlink" title="主题设置"></a>主题设置</h3><p>这里使用的是agnoster主题，<a href="https://github.com/fcamblor/oh-my-zsh-agnoster-fcamblor" target="_blank" rel="external">oh-my-zsh-agnoster-fcamblor Github地址</a></p>
 <h4 id="下载安装"><a href="#下载安装" class="headerlink" title="下载安装"></a>下载安装</h4><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1.下载主题</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/fcamblor/oh-my-zsh-agnoster-fcamblor</span><br><span class="line"><span class="comment"># 2.安装主题</span></span><br><span class="line"><span class="built_in">cd</span> oh-my-zsh-agnoster-fcamblor</span><br><span class="line">./install</span><br></pre></td></tr></table></figure>
 <h4 id="设置该主题"><a href="#设置该主题" class="headerlink" title="设置该主题"></a>设置该主题</h4><p>编辑<code>~/.zshrc</code>文件，然后将<code>ZSH_THEME</code>后面的字段改为<code>agnoster</code>。<code>ZSH_THEME=&quot;agnoster&quot;</code>（agnoster即为要设置的主题）.</p>
