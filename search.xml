@@ -57,7 +57,8 @@
 <li><a href="https://support.apple.com/kb/PH18669?locale=zh_CN&amp;viewlocale=zh_CN" target="_blank" rel="external">Mac锁屏后设置需要输密码</a></li>
 <li><a href="http://www.hangge.com/blog/cache/detail_540.html" target="_blank" rel="external">Mac下文本编辑器</a></li>
 </ol>
-<h1 id="Mac终端iTerm2配置"><a href="#Mac终端iTerm2配置" class="headerlink" title="Mac终端iTerm2配置"></a>Mac终端iTerm2配置</h1><h2 id="iTerm2下载安装"><a href="#iTerm2下载安装" class="headerlink" title="iTerm2下载安装"></a>iTerm2下载安装</h2><p><a href="http://www.iterm2.com/" target="_blank" rel="external">iTerm2下载</a></p>
+<h1 id="Mac终端iTerm2配置"><a href="#Mac终端iTerm2配置" class="headerlink" title="Mac终端iTerm2配置"></a>Mac终端iTerm2配置</h1><p>Mac下的iTerm2用着真的超爽</p>
+<h2 id="iTerm2下载安装"><a href="#iTerm2下载安装" class="headerlink" title="iTerm2下载安装"></a>iTerm2下载安装</h2><p><a href="http://www.iterm2.com/" target="_blank" rel="external">iTerm2下载</a></p>
 <p>下载完直接安装即可。</p>
 <h2 id="安装oh-my-zsh"><a href="#安装oh-my-zsh" class="headerlink" title="安装oh-my-zsh"></a>安装oh-my-zsh</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh</span><br></pre></td></tr></table></figure>
 <p>安装成功后的效果如下图所示</p>
