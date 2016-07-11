@@ -48,6 +48,10 @@
 <td>EverNote无格式粘贴</td>
 <td>command+shift+option+v</td>
 </tr>
+<tr>
+<td>文件/文件夹重命名</td>
+<td>选中该文件/文件夹，点击回车键</td>
+</tr>
 </tbody>
 </table>
 <p>快捷键可以参考<a href="https://support.apple.com/zh-cn/HT201236" target="_blank" rel="external">Mac键盘快捷键</a>一文</p>
