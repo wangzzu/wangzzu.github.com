@@ -10,7 +10,7 @@
 <h1 id="Mac基本配置"><a href="#Mac基本配置" class="headerlink" title="Mac基本配置"></a>Mac基本配置</h1><p>推荐一些Mac下常用的软件</p>
 <ul>
 <li>笔记：<a href="https://www.yinxiang.com/download/?offer=www_menu" target="_blank" rel="external">Evernote</a>；</li>
-<li>MarkDown：<a href="http://zh.mweb.im/" target="_blank" rel="external">MWeb</a>、Mou、Ulysses；</li>
+<li>MarkDown：<a href="http://zh.mweb.im/" target="_blank" rel="external">MWeb</a>、<a href="http://25.io/mou/" target="_blank" rel="external">Mou</a>、Ulysses、<a href="http://macdown.uranusjr.com/" target="_blank" rel="external">MacDown</a>；</li>
 <li>编辑器：<a href="https://atom.io/" target="_blank" rel="external">Atom</a>；</li>
 <li>思维导图：<a href="http://www.xmindchina.net/" target="_blank" rel="external">XMid</a>、SimpleMind；</li>
 <li>NTFS挂载：<a href="http://www.tuxera.com/products/tuxera-ntfs-for-mac/" target="_blank" rel="external">Tuxera NTFS</a>（<a href="http://www.orsoon.com/Mac/129966.html" target="_blank" rel="external">序列号</a>，建议买正版）；</li>
@@ -222,7 +222,32 @@
 <li>maven设置</li>
 <li>快捷键</li>
 </ol>
+<h3 id="快捷键"><a href="#快捷键" class="headerlink" title="快捷键"></a>快捷键</h3><p>常用的快捷键如下表所示</p>
+<table>
+<thead>
+<tr>
+<th>说明</th>
+<th>快捷键</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>查看所选代码的源码</td>
+<td>cmd + ↓</td>
+</tr>
+<tr>
+<td>查看maven依赖</td>
+<td>opt+shift+cmd+U</td>
+</tr>
+<tr>
+<td>只能补齐代码</td>
+</tr>
+</tbody>
+</table>
 <p>关于快捷键可以参考<a href="http://wiki.jikexueyuan.com/project/intellij-idea-tutorial/keymap-mac-introduce.html" target="_blank" rel="external">Mac下idea快捷键</a>一文。</p>
+<ul>
+<li><a href="http://baowp.iteye.com/blog/1989575" target="_blank" rel="external">Mac下Idea打开Maven的jar包依赖图</a></li>
+</ul>
 <h2 id="PyCharm"><a href="#PyCharm" class="headerlink" title="PyCharm"></a>PyCharm</h2><h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><p><a href="https://www.jetbrains.com/pycharm/download/" target="_blank" rel="external">PyCharm下载地址</a></p>
 <p>2016版的可以使用<a href="http://blog.csdn.net/jiang314/article/details/51680072" target="_blank" rel="external">注册码</a>进行破解，不过推荐购买正版。</p>
 <h1 id="其他常用命令安装"><a href="#其他常用命令安装" class="headerlink" title="其他常用命令安装"></a>其他常用命令安装</h1><h2 id="tree命令安装"><a href="#tree命令安装" class="headerlink" title="tree命令安装"></a>tree命令安装</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 需要先安装HomeBrew</span></span><br><span class="line">brew install tree</span><br></pre></td></tr></table></figure>
