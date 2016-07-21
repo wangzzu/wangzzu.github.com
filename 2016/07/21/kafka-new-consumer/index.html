@@ -1,0 +1,1012 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="kafka," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="近段时间在公司实习，有一项任务就是负责对Kafka新版本的一些feature做一下调研，主要是调研的内容是Kafka在0.9.0版本中提供的两个新特性：New Consumer API和安全认证机制，本文是在研究Kafka的新consumer API时看过的一篇文章，对于理解新API的设计理念以及应用，有很多的帮助，因此就打算翻译一下，帮助自己更好理解的同时也为开源做一些贡献。本文译自Introd">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Apache Kafka 0.9 Consumer Client 介绍【译】">
+<meta property="og:url" content="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="近段时间在公司实习，有一项任务就是负责对Kafka新版本的一些feature做一下调研，主要是调研的内容是Kafka在0.9.0版本中提供的两个新特性：New Consumer API和安全认证机制，本文是在研究Kafka的新consumer API时看过的一篇文章，对于理解新API的设计理念以及应用，有很多的帮助，因此就打算翻译一下，帮助自己更好理解的同时也为开源做一些贡献。本文译自Introd">
+<meta property="og:image" content="http://wangzzu.github.io/images/kafka/consumer-figure1.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/kafka/consumer-figure2.png">
+<meta property="og:image" content="http://wangzzu.github.io/images/kafka/consumer-figure3.png">
+<meta property="og:updated_time" content="2016-07-21T03:06:26.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Apache Kafka 0.9 Consumer Client 介绍【译】">
+<meta name="twitter:description" content="近段时间在公司实习，有一项任务就是负责对Kafka新版本的一些feature做一下调研，主要是调研的内容是Kafka在0.9.0版本中提供的两个新特性：New Consumer API和安全认证机制，本文是在研究Kafka的新consumer API时看过的一篇文章，对于理解新API的设计理念以及应用，有很多的帮助，因此就打算翻译一下，帮助自己更好理解的同时也为开源做一些贡献。本文译自Introd">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/kafka/consumer-figure1.png">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Apache Kafka 0.9 Consumer Client 介绍【译】 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-guestbook">
+          <a href="/guestbook" rel="section">
+            
+              <i class="menu-item-icon fa fa-book fa-fw"></i> <br />
+            
+            留言
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="#" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup">
+ <span class="search-icon fa fa-search"></span>
+ <input type="text" id="local-search-input">
+ <div id="local-search-result"></div>
+ <span class="popup-btn-close">close</span>
+</div>
+
+
+    </div>
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Apache Kafka 0.9 Consumer Client 介绍【译】
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-07-21T10:49:56+08:00" content="2016-07-21">
+              2016-07-21
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/kafka/" itemprop="url" rel="index">
+                    <span itemprop="name">kafka</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2016/07/21/kafka-new-consumer/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/07/21/kafka-new-consumer/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+	  
+              <span>&nbsp; | &nbsp;
+                   <span id="busuanzi_value_page_pv" ></span>次阅读
+              </span>    
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>近段时间在公司实习，有一项任务就是负责对Kafka新版本的一些feature做一下调研，主要是调研的内容是Kafka在0.9.0版本中提供的两个新特性：New Consumer API和安全认证机制，本文是在研究Kafka的新consumer API时看过的一篇文章，对于理解新API的设计理念以及应用，有很多的帮助，因此就打算翻译一下，帮助自己更好理解的同时也为开源做一些贡献。本文译自<a href="http://www.confluent.io/blog/tutorial-getting-started-with-the-new-apache-kafka-0.9-consumer-client" target="_blank" rel="external">Introducing the Kafka Consumer: Getting Started with the New Apache Kafka 0.9 Consumer Client</a>一文，是Confluent官方出的一篇关于Kafka新Consumer客户端介绍的文章。</p>
+<blockquote>
+<p>注：个人的英文及写作水平有限，虽然有些地方能够理解作者的意思，但是可能自己会表达不准确，读者遇到难以理解的地方，可以对照英文原文进行阅读。另外，有些在Kafka中经常出现专有英文名词，本文会尽量还用英文表示，本来直接看这些英文名词就非常简洁，翻译成中文反而难以理解。</p>
+</blockquote>
+<p>Kafka最初被设计时，它原生地提供了一个Scala版本的producer和Consumer客户端。但是随着Kafka的应用更加广泛，我们意识到这些API有很多的缺陷。比如，Kafka提供了一个<strong>high-level</strong>的Consumer API，它可以实现consumer group和自动容错，但是不能支持一些更复杂的使用场景，同时我们也提供了一套<strong>simple</strong>的Consumer API以提供更全面、更细粒度的控制，但是这种Consumer需要开发者自己设计容错机制。因此，我们重新设计和开发了客户端，以适应哪些旧的客户端很难或者无法适用的应用场景，并且建立了一套可以支持长久发展的API。</p>
+<p>开始的第一阶段，在0.8.1的版本中，我们重写设计了Producer的API。最近的0.9.0版本完成了第二阶段，引入了新的Consumer API。在Kafka本身提供的一套新的<strong>group coordination protocol</strong>的基础上，新的Consumer有以下这些优势：</p>
+<ul>
+<li>Clean Consolidated API：新的Consumer结合了旧的”simple”和”high-level”Consumer客户端，同时提供了group协调机制和更细粒度的消费机制；</li>
+<li>Reduced Dependencies：新的Consumer完全是用Java编写的，它在运行过程中没有依赖Scala或者Zookeeper，这使得我们的工程的依赖包更加轻量化；</li>
+<li>Better Security：Kafka 0.9.0提供的<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=51809888" target="_blank" rel="external">security extensions</a>只被新的Consumer所支持；</li>
+<li>新的Consumer同样也增加一系列用于管理消费过程中group容错的协议。之前这部分的设计是使用Java客户端实现的，它需要频繁地与Zookeeper进行交互，这个实现逻辑上的复杂性使得这些它很难推广到其他语言的客户端上。而随着新协议的提出，实现变得更加简单，实际上<a href="https://github.com/edenhill/librdkafka" target="_blank" rel="external">C Client</a>已经开始应用这个协议了。</li>
+</ul>
+<p>尽管新的Consumer使用了重新设计的API和一个新的coordination protocol，但是Kafka的那些基础的概念并没有任何变化。因此，对旧的Consumer非常熟悉的开发者在理解新Consumer客户端的设计时并不会遇到太大困难。然而，却有一些不易察觉细节需要额外的关注，特别是在理解<strong>group management</strong>和<strong>thread model</strong>上时。本文的目的就是讲述一下新Consumer的使用以及解释一下这些细节问题。</p>
+<blockquote>
+<p>有一点需要注意：在本文还在写的时候，新的Consumer在稳定性方面仍然被认为是”beta”。</p>
+</blockquote>
+<p>我们已经解决了几个在0.9.0版中遇到的重要bug，如果你在使用0.9.0版时遇到任何问题，我们建议你先对这个分支进行一下测试。如果依然遇到问题，可以通过<a href="https://kafka.apache.org/contact.html" target="_blank" rel="external">mail lists</a>或者<a href="https://issues.apache.org/jira/secure/Dashboard.jspa" target="_blank" rel="external">JIRA</a>提出。</p>
+<h1 id="Getting-Started：开始"><a href="#Getting-Started：开始" class="headerlink" title="Getting Started：开始"></a>Getting Started：开始</h1><p>开始讲述代码之前，我们先回顾一下Kafka的基本概念。在Kafka中，每一个topic都被分为一系列消息的集合，这些集合被称为partition，Producer会在这些消息集合的尾部追加数据，Consumer从给定的位置读取数据。Kafka通过consumer group实现规模化地消费topic数据，group是一系列Consumers共享一个共同的标识符。下图展示了一个有3个partition的topic被一个有2个成员的group消费的情况，topic的每个partition被安排到group中的一个cosumer上。</p>
+<p><img src="/images/kafka/consumer-figure1.png" alt="consumer group"></p>
+<p>旧的Consumer依赖ZK进行group管理，而新的Consumer则使用了一个Kafka自身提供的group coordination protocol实现。对于每一个group，都会从所有的broker中选取一个作为<strong>group coordinator</strong>，这个coordinator是负责维护和管理这个group的状态，它的主要工作是当一个consumer加入、一个consumer离开（挂掉或者手动停止等）或者topic的partition改变时重新进行partition分配，这个过程就是group的<strong>rebalance</strong>。</p>
+<blockquote>
+<p>这里有一个问题需要思考，每个topic的元数据信息（具体的指的是，这个topic有多少个partition，每个partition的leader在哪台broker上）是不是也有coordinator保存的？还是这些元数据信息直接保存在broker上？</p>
+</blockquote>
+<p>当一个group刚开始被初始化时，group中consumer可以选择从每个partition的最小或者最大的offset开始消费数据，然后每个partition中的message会按顺序依次进行消费。随着Consumer的处理，它会对已经成功处理的msg进行commit（提交的是msg的offset）。例如，如下图所示，Consumer当前消费的msg的offset（<code>Current Position</code>）是6，上一次已经提交的msg的offset（<code>Last Committed Offset</code>）是1.</p>
+<p><img src="/images/kafka/consumer-figure2.png" alt="consumer offset"></p>
+<p>当一个partition被分配到group中的另外一个consumer时，初始化的位置是<code>Last Committed Offset</code>。如果本例中的consumer突然挂掉，这个group中的consumer将不得不从1（<code>Last Committed Offset</code>）开始消费数据，在这种情况下，offset为1~6的message将被重新处理。</p>
+<p>图中也展示了在log中其他两个比较重要的位置信息，<code>Log End Offset</code>是写入log中的最新一条message的offset，而<code>High Watermark</code>是log中已经成功备份到其他replicas中的最新一条message的offset，也就是说<code>Log End Offset</code>与<code>High Watermark</code>之间的数据已经写入到log中，但是还未成功备份到其他的replicas中。从consuemr端来看，<code>High Watermark</code>是consumer可以消费的最后一条message的offset，这种机制会阻止Consumer读取那些未备份的message，因为这些message在后面可能会丢失。</p>
+<h1 id="Configuration-and-Initialization：配置与初始化"><a href="#Configuration-and-Initialization：配置与初始化" class="headerlink" title="Configuration and Initialization：配置与初始化"></a>Configuration and Initialization：配置与初始化</h1><p>使用新版的Consumer，需要先在工程中添加kafka-clients依赖，添加的配置信息如下：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.kafka<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>kafka-clients<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">version</span>&gt;</span>0.9.0.0-cp1<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>与其他的Kafka客户端一样，新版的Consumer也需要使用一个<code>Properties</code>文件来创建。下面例子中的配置，是对于一个Consumer group来说的几个必备的配置项</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Properties props = <span class="keyword">new</span> Properties();</span><br><span class="line">props.put(<span class="string">"bootstrap.servers"</span>, <span class="string">"localhost:9092"</span>);</span><br><span class="line">props.put(<span class="string">"group.id"</span>, <span class="string">"consumer-tutorial"</span>);</span><br><span class="line">props.put(<span class="string">"key.deserializer"</span>, StringDeserializer.class.getName());</span><br><span class="line">props.put(<span class="string">"value.deserializer"</span>, StringDeserializer.class.getName());</span><br><span class="line">KafkaConsumer&lt;String, String&gt; consumer = <span class="keyword">new</span> KafkaConsumer&lt;&gt;(props);</span><br></pre></td></tr></table></figure>
+<p>与旧的Consumer和Producer一样， 我们需要先配置一个brokers的初始列表，以便Consumer能够找到集群中其他的节点，这并不需要列出集群中的所有节点，客户端从列表中的broker中来找到全部的alive brokers，本例我们假设这台broker是运行在本地上的。Consumer也需要设置key和value反序列化的方式。最后，为了加入一个Consumer Group，也需要设置group id，它是group的一个标识符。在本文的下面，我们会介绍更多的配置选项。</p>
+<blockquote>
+<p>这里也有一个问题需要思考，Kafka是如何通过初始的broker列表来找到Kafka集群所有的节点信息？</p>
+</blockquote>
+<h1 id="Topic-Subscription：订阅Topic"><a href="#Topic-Subscription：订阅Topic" class="headerlink" title="Topic Subscription：订阅Topic"></a>Topic Subscription：订阅Topic</h1><p>开始消费前，必须首先配置出应用需要订阅的topic信息，下面的例子中，我们订阅了来自Topic为”foo”和”bar”的数据</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">consumer.subscribe(Arrays.asList(<span class="string">"foo"</span>, <span class="string">"bar"</span>));</span><br></pre></td></tr></table></figure>
+<p>开始订阅之后，Consumer可以与group的其他Consumer进行协调，来得到自己的partition分配，这个过程是在Consumer开始消费数据时自动进行的。下面，我们会展示如何使用<strong>assign</strong> API来手动进行partition分配，但是需要注意的是，Consumer中同时使用自动管理和手动管理是没有必要的。</p>
+<p><code>subscribe</code>方法是不能增加的：程序中必须包含想要消费的所有topic列表，你可以在任何时间改变你订阅的topic的集合，但是之前订阅的这些topic会被你使用<code>subscribe</code>方法调用的新的列表所取代。</p>
+<h1 id="Basic-Poll-Loop：基本的poll循环模型"><a href="#Basic-Poll-Loop：基本的poll循环模型" class="headerlink" title="Basic Poll Loop：基本的poll循环模型"></a>Basic Poll Loop：基本的poll循环模型</h1><p>Consumer需要支持并行地拉取数据，常见的情况就是从分布在不同broker上的多个topic的多个partition上拉取数据。为了实现这种情况，Kafka使用了一套类似于Unix中的<code>poll</code>或者<code>select</code>调用的API风格：一旦topic进行注册，未来所有的coordination、rebalance和数据拉取都是在一个event loop中通过一个单一的poll调用来触发的。这种实现方式是简单有效的，它可以处理来自单线程的所有IO。</p>
+<blockquote>
+<p>思考：Consumer在调用<code>poll</code>方法时处理逻辑是怎么样？</p>
+</blockquote>
+<p>在订阅了一个topic之后，你需要启动一个<code>event loop</code>来获得partition分配并开始开始拉取数据，这听起来很复杂，但是你需要做的就是在一个循环中调用<code>poll</code>方法，然后Consumer会自动处理其他的所有的事情。每一次对于<code>poll</code>方法的调用都会返回一个从其所分配的partition上拉取的message集合（集合可能会空）。下面的例子展示了在一个基本的poll循环模型中打印Consumer拉取的mmessage的offset和value。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (running) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">1000</span>);</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records)</span><br><span class="line">      System.out.println(record.offset() + <span class="string">": "</span> + record.value());</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">  consumer.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个<code>poll</code>API返回了根据<code>Current Position</code>拉取到的record。当group第一次创建时，这个位置是根据配置来进行设置的，可以被设置每个partition的最早或者最新的offset。但是一旦这个Consumer开始commit offset，之后的每次rebalance都会把position重置到<code>Last Committed Offset</code>位置。<code>poll</code>的这个参数是用来控制当Consumer在<code>Current Position</code>等待数据时block的最大时间，只要有任何record是可用的，Consumer就会立马返回，但是如果没有任何record是可用，Consumer将会等待一定的时长（被设置的时间）。</p>
+<blockquote>
+<p>思考：新API中的record与旧API中的message有什么区别与联系？</p>
+</blockquote>
+<p>Consumer最初被设计时就是运行在它自己的线程上，在多线程情况下使用时如果没有额外的同步机制它并不是线程安全的，而且也不推荐去尝试。在这个例子中，我们使用了一个flag（<code>runnning</code>），当应用关掉时它用于从poll循环中中断。当这个flag被其他线程（例如：关闭进程的线程）设置为false时，当poll返回时循环就会结束，而且无论是否返回record应用都会结束进程。</p>
+<p>当Consumer进程结束时，你应该显式地关闭Consumer进程，这样不仅可以清除使用的socket，而且可以确保Consumer会向Coordinator发送它离开group的信息。</p>
+<p>在上面的例子中，我们使用了较小的定时来确保在关闭Consumer时没有太多的延迟，或者，你也可以设置一个较长的定时，通过使用<code>weakup</code>API来从循环中中断。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Long.MAX_VALUE);</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records)</span><br><span class="line">      System.out.println(record.offset() + “: ” + record.value());</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">catch</span> (WakeupException e) &#123;</span><br><span class="line">  <span class="comment">// ignore for shutdown</span></span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">  consumer.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在这个例子中，我们将时长设置为了<code>Long.MAX_VALUE</code>，它意味着Consumer将会一直bolck直到下一批records返回。相比于前面例子中使用的flag，本例中线程通过调用<code>consumer.wakeup()</code>来中断poll循环，同时进程抛出一个<code>WakeupException</code>异常。这个API被其他线程调用是安全的，但值得注意的是：如果进程当前没有调用poll，这个异常会在下次调用时被抛出。在这个例子中，我们可以捕捉这个异常来阻止它继续传播。</p>
+<blockquote>
+<p>思考：1.只要有数据，poll就立马返回吗？还是poll会等待一段时间或者一定消息量后返回？2.poll中设置的time参数在什么情况下起作用？如果拉取的消息为空，而时间又超出的话会出现什么情况？</p>
+</blockquote>
+<h1 id="Putting-in-all-Together：一个完整的例子"><a href="#Putting-in-all-Together：一个完整的例子" class="headerlink" title="Putting in all Together：一个完整的例子"></a>Putting in all Together：一个完整的例子</h1><p>在下面的例子中，我们创建一个简单的<code>Runnable</code>任务，它初始化这个Consumer、订阅一个topic的列表，并且一直执行poll循环除非遇到外部触发结束进程。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ConsumerLoop</span> <span class="keyword">implements</span> <span class="title">Runnable</span> </span>&#123;</span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">final</span> KafkaConsumer&lt;String, String&gt; consumer;</span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">final</span> List&lt;String&gt; topics;</span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> id;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="title">ConsumerLoop</span><span class="params">(<span class="keyword">int</span> id,</span><br><span class="line">                      String groupId, </span><br><span class="line">                      List&lt;String&gt; topics)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">this</span>.id = id;</span><br><span class="line">    <span class="keyword">this</span>.topics = topics;</span><br><span class="line">    Properties props = <span class="keyword">new</span> Properties();</span><br><span class="line">    props.put(<span class="string">"bootstrap.servers"</span>, <span class="string">"localhost:9092"</span>);</span><br><span class="line">    props.put(“group.id”, groupId);</span><br><span class="line">    props.put(“key.deserializer”, StringDeserializer.class.getName());</span><br><span class="line">    props.put(“value.deserializer”, StringDeserializer.class.getName());</span><br><span class="line">    <span class="keyword">this</span>.consumer = <span class="keyword">new</span> KafkaConsumer&lt;&gt;(props);</span><br><span class="line">  &#125;</span><br><span class="line"> </span><br><span class="line">  <span class="meta">@Override</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      consumer.subscribe(topics);</span><br><span class="line"></span><br><span class="line">      <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">        ConsumerRecords&lt;String, String&gt; records = consumer.poll(Long.MAX_VALUE);</span><br><span class="line">        <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records) &#123;</span><br><span class="line">          Map&lt;String, Object&gt; data = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">          data.put(<span class="string">"partition"</span>, record.partition());</span><br><span class="line">          data.put(<span class="string">"offset"</span>, record.offset());</span><br><span class="line">          data.put(<span class="string">"value"</span>, record.value());</span><br><span class="line">          System.out.println(<span class="keyword">this</span>.id + <span class="string">": "</span> + data);</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (WakeupException e) &#123;</span><br><span class="line">      <span class="comment">// ignore for shutdown </span></span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">      consumer.close();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">shutdown</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    consumer.wakeup();</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>为了测试这个示例，需要有一个运行0.9.0版Kafka的broker，并且需要一个有一些待消费数据的topic，向一个topic写入数据的最简单的办法是使用<code>kafka-verifiable-producer.sh</code>脚本。为了确保实验更有趣，我们将topic设置为多个partition，这样的话就不用使一个parition去做所有的工作了。在本例中，Kafka的broker和Zookeeper都运行在本地，你可以在一个Kafka根目录下键入以下命令进行设置topic和partiion。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bin/kafka-topics.sh --create --topic consumer-tutorial --replication-factor 1 --partitions 3 --zookeeper localhost:2181</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># bin/kafka-verifiable-producer.sh --topic consumer-tutorial --max-messages 200000 --broker-list localhost:9092</span></span><br></pre></td></tr></table></figure>
+<p>然后我们创建了一个有三个成员的consumer group，这个group来订阅我们刚才创建的那个topic</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123; </span><br><span class="line">  <span class="keyword">int</span> numConsumers = <span class="number">3</span>;</span><br><span class="line">  String groupId = <span class="string">"consumer-tutorial-group"</span></span><br><span class="line">  List&lt;String&gt; topics = Arrays.asList(<span class="string">"consumer-tutorial"</span>);</span><br><span class="line">  ExecutorService executor = Executors.newFixedThreadPool(numConsumers);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">final</span> List&lt;ConsumerLoop&gt; consumers = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; numConsumers; i++) &#123;</span><br><span class="line">    ConsumerLoop consumer = <span class="keyword">new</span> ConsumerLoop(i, groupId, topics);</span><br><span class="line">    consumers.add(consumer);</span><br><span class="line">    executor.submit(consumer);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  Runtime.getRuntime().addShutdownHook(<span class="keyword">new</span> Thread() &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">      <span class="keyword">for</span> (ConsumerLoop consumer : consumers) &#123;</span><br><span class="line">        consumer.shutdown();</span><br><span class="line">      &#125; </span><br><span class="line">      executor.shutdown();</span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        executor.awaitTermination(<span class="number">5000</span>, TimeUnit.MILLISECONDS);</span><br><span class="line">      &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">        e.printStackTrace;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个例子向一个executor提交三个consumer，每一个线程都分配了一个唯一的id，便于我们清楚是哪个线程在接收数据。当进程停止时，shutdown的Hook将被触发，它将使用<code>weakup</code>中断这三个线程，并且等待它们关闭。如果你运行这个程序，你将会看到所有这些线程接收到数据，下面是运行之后的输出例子：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">2: &#123;partition=0, offset=928, value=2786&#125;</span><br><span class="line">2: &#123;partition=0, offset=929, value=2789&#125;</span><br><span class="line">1: &#123;partition=2, offset=297, value=891&#125;</span><br><span class="line">2: &#123;partition=0, offset=930, value=2792&#125;</span><br><span class="line">1: &#123;partition=2, offset=298, value=894&#125;</span><br><span class="line">2: &#123;partition=0, offset=931, value=2795&#125;</span><br><span class="line">0: &#123;partition=1, offset=278, value=835&#125;</span><br><span class="line">2: &#123;partition=0, offset=932, value=2798&#125;</span><br><span class="line">0: &#123;partition=1, offset=279, value=838&#125;</span><br><span class="line">1: &#123;partition=2, offset=299, value=897&#125;</span><br><span class="line">1: &#123;partition=2, offset=300, value=900&#125;</span><br><span class="line">1: &#123;partition=2, offset=301, value=903&#125;</span><br><span class="line">1: &#123;partition=2, offset=302, value=906&#125;</span><br><span class="line">1: &#123;partition=2, offset=303, value=909&#125;</span><br><span class="line">1: &#123;partition=2, offset=304, value=912&#125;</span><br><span class="line">0: &#123;partition=1, offset=280, value=841&#125;</span><br><span class="line">2: &#123;partition=0, offset=933, value=2801&#125;</span><br></pre></td></tr></table></figure>
+<p>这个输出展示三个partition的消费情况，每一个partition都被安排到其中的一个线程上。在每个partition中，你都会看到offset如期望中的一样在不断增加，你可以使用命令行或者IDE中的<code>Ctrl+C</code>关闭这个进程。</p>
+<h1 id="Consumer-Liveness：Consumer存活"><a href="#Consumer-Liveness：Consumer存活" class="headerlink" title="Consumer Liveness：Consumer存活"></a>Consumer Liveness：Consumer存活</h1><p>Group中每一个Consumer都被安排它订阅topic的partitions的一个子集，group会使用一个group锁在这些partition上。只要这些锁还被持有，其他的Consumer成员就不能从这些partition上读取数据。如果这些Consumer运行正常，这种情况就是我们想要的结果，这也是避免重复读消费数据的唯一办法。但是如果由于节点或者程序故障造成Consumer异常退出时，你需要能够释放这些锁，以便这些partition可以被安排到其他健康的Consumer上。</p>
+<p>Kafka的group coordination protocol通过心跳机制来解决这个问题（Consumer通过心跳机制来实现持有锁和释放锁），在每一次rebalance之后，当前group中的所有Consumer都会定期向group的coordinator发送心跳信息，如果可以收到这个Consumer的心跳信息，就证明这个Consumer是正常的。一旦收到心跳信息，这个coordinator会重新开始计时。如果定时到了而还没有收到心跳信息，coordinator将会把这个consumer标记为dead，并且会向group的其他成员发送信号，这样就会进行rebalance操作，从而重新对这些partition进行分配。定时的时长就是session 时长，它可以通过客户端的<code>session.timeout.ms</code>这个参数来设置</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">props.put(<span class="string">"session.timeout.ms"</span>, <span class="string">"60000"</span>);</span><br></pre></td></tr></table></figure>
+<p>session时长机制可以确保如果遇到节点或者应用崩亏、或者网络把consumer从group中隔离的情况，锁会被释放。但是，通常应用失败的情况处理起来有点麻烦，因为即使Consumer仍然向coordinator发送心跳信息也不能证明应用是正常运行的。</p>
+<p>Consumer的poll循环是被设置为解决这个问题，当你调用<code>poll</code>方法或者其他的阻塞的API时所有的网络IO就已经完成。而且Consumer并不会在后台调用任何其他线程，这就意味着心跳信息只是在调用<code>poll</code>方法时发送给coordinator的。如果因为处理代码的逻辑部分抛出异常或者下游系统崩溃而造成应用停止<code>poll</code>方法调用，那么也会造成没有任何心跳被发送，然后session定时就会超时，这个group就会进行rebalance操作。</p>
+<p>如果一个consumer在给定的时间内没有发送心跳信息，这种机制就会被触发一个虚假的rebalance操作。当然可以通过将定时设置足够大来避免这种情况的发生，它默认的时长是30s，但是它没有必要的将时长设置高达几分钟。设置为更长时长的一个问题就是它需要花费更多的时间来发现失败的Consumer。</p>
+<h1 id="Delivery-Semantics：可靠的消息传递"><a href="#Delivery-Semantics：可靠的消息传递" class="headerlink" title="Delivery Semantics：可靠的消息传递"></a>Delivery Semantics：可靠的消息传递</h1><p>当一个consumer group刚开始被创建的时候，最初的offset是通过<code>auto.offset.reset</code>配置项来进行设置的。一旦Consumer开始处理数据，它根据应用的需要来定期地对offset进行commit。在每一次的rebalance之后，group会将这个offset将被设置为<code>Last Committed Offset</code>。但如果consumer在对已经处理过的message进行commit之前挂掉了，另外一个Consumer最终会重复处理这些已经处理但未commit的数据。应用中对offset进行commit越频繁，在一次崩溃后你重复消费的数据就会越少。</p>
+<p>在前面的例子中，我们都已经设置了自动提交机制，当把<code>enable.auto.commit</code>设置为<code>true</code>（default）时，Consumer会周期性地自动触发的offset commit机制，这个时长可以通过<code>auto.commit.interval.ms</code>来进行配置。通过减少这个间隔，我们可以限制当崩溃发生时Consumer重新处理的数据量。</p>
+<p>如果要使用consumer的commit API，首先需要在配置文件中将<code>enable.auto.commit</code>设置为false，来禁止自动commit</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">props.put(<span class="string">"enable.auto.commit"</span>, <span class="string">"false"</span>);</span><br></pre></td></tr></table></figure>
+<p>这个commit API使用起来非常简单，难点在于如何与poll循环配合使用。下面的例子，主体中包含了commit细节实现的完整的poll循环。调用同步commit的API是处理手动提交的最简单的方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (running) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">1000</span>);</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records)</span><br><span class="line">      System.out.println(record.offset() + <span class="string">": "</span> + record.value());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      consumer.commitSync();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (CommitFailedException e) &#123;</span><br><span class="line">      <span class="comment">// application specific failure handling</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">  consumer.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>使用无参的<code>commitSync</code>API进行commit的offset是在调用<code>poll</code>后返回的，因为是同步commit，所以这个调用将会被一直block直到commit成功或者因为不可恢复的错误而失败。处理过程中，需要特别注意的是message处理的时间大于session时长的这种情况，如果这种情况发生，coordinator就会把这个consumer踢出这个group，它会导致抛出<code>CommitFailedException</code>异常。应用程序应该能够处理这种错误，并对由于消费自从上一次成功提交后的message造成的变化进行回滚操作。</p>
+<p>一般情况下，你应该确保message被成功处理后，这个offset被commit了。但是如果在commit被发送之前consumer挂掉了，然后这些messages就会被重复处理。如果这个commit机制保证<code>Last Committed Offset</code>不会超过<code>Current Position</code>（如图2所示，上图，非下图），然后系统就会保证<strong>at last once</strong>消息传递机制。</p>
+<p><img src="/images/kafka/consumer-figure3.png" alt="consumer commit offset"></p>
+<p>通过改变commit机制来保证<code>Current Position</code>不会超过<code>Last Committed Offset</code>，如上图所示，你将会得到<strong>at most once</strong>消息传递保证。如果在<code>Current Position</code>赶上<code>Last Committed Offset</code>之前consumer挂掉了，这段时间内的所有messages都会丢失，但是可以确定是没有消息会处理超过一次。为了实现这个机制，我们只需要改变commit和消息处理的顺序。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (running) &#123;</span><br><span class="line">  ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">1000</span>);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    consumer.commitSync();</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records)</span><br><span class="line">      System.out.println(record.offset() + <span class="string">": "</span> + record.value());</span><br><span class="line">    &#125; <span class="keyword">catch</span> (CommitFailedException e) &#123;</span><br><span class="line">      <span class="comment">// application specific failure handling</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">  consumer.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>要注意的是，如果使用<strong>默认的自动commit机制，系统是保证<code>at least once</code>消息处理</strong>，因为offset是在这些messages被应用处理后才进行commit的。在最糟糕的情况下，系统不得不重新处理的消息数量是由自动commit的间隔决定的（可以通过<code>auto.commit.interval.ms</code>设置）。</p>
+<blockquote>
+<p>思考：为什么kafka不能保证exactly once？</p>
+</blockquote>
+<p>通过应用commit API，你可以对重复处理的消息量进行更细的控制，在更极端的情况下，你甚至可以在每一条消息被处理后都进行commit，如下面的例子所示</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (running) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">1000</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records) &#123;</span><br><span class="line">        System.out.println(record.offset() + <span class="string">": "</span> + record.value());</span><br><span class="line">        consumer.commitSync(Collections.singletonMap(record.partition(), <span class="keyword">new</span> OffsetAndMetadata(record.offset() + <span class="number">1</span>)));</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (CommitFailedException e) &#123;</span><br><span class="line">      <span class="comment">// application specific failure handling</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">  consumer.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在这个例子中，我们调用<code>commitSync</code>方法通过对明确的offset进行commit，要注意的是，要进行commit的offset应该是应用将要读取的下一条消息的offset。当<code>commitSync</code>方法被无参调用时，这个consumer对应用返回的<code>Last Offset（+1）</code>进行commit，但是在这里并不能使用，因为我们不允许<code>The Committed Position</code>超过我们实际的处理位置（<code>Current Position</code>）。</p>
+<p>由于处理线程在每次进行commit请求并等待服务器返回这个过程中需要进行加锁，很明显对于大多数的应用场景，这种设计并不适用，这种设计会严重影响到consumer的吞吐量。更合理的设计是每接收N条消息后再进行commit，为了更高的吞吐量N的值可以进行调整。</p>
+<p>本例中<code>commitSync</code>方法的参数是一个map的数据结构，key为topic partition，value为<code>OffsetAndMetadata</code>的实例。Commit API允许在每次commit时包含一些额外的元数据信息，这些数据信息可以是record进行commit的时间、要发送的host、或者应用程序中需要的任何其他信息，在本例中，我们并没有添加这个额外信息。</p>
+<p>相比于对每接收一条message就进行commit，一个更加合理的机制是当你处理完每个partition的数据后进行commit offset。<code>ConsumerRecords</code>集合类提供了获取它内部每个partition集合以及每个partition内数据的方法。下面的例子详细描述这种机制：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (running) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Long.MAX_VALUE);</span><br><span class="line">    <span class="keyword">for</span> (TopicPartition partition : records.partitions()) &#123;</span><br><span class="line">      List&lt;ConsumerRecord&lt;String, String&gt;&gt; partitionRecords = records.records(partition);</span><br><span class="line">      <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : partitionRecords)</span><br><span class="line">        System.out.println(record.offset() + <span class="string">": "</span> + record.value());</span><br><span class="line"></span><br><span class="line">      <span class="keyword">long</span> lastoffset = partitionRecords.get(partitionRecords.size() - <span class="number">1</span>).offset();</span><br><span class="line">      consumer.commitSync(Collections.singletonMap(partition, <span class="keyword">new</span> OffsetAndMetadata(lastoffset + <span class="number">1</span>)));</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">  consumer.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>截止到目前为止，我们主要研究的是同步commit的API，但是consumer也提供了异步提交的API——<code>commitAsync</code>。使用异步commit一般情况下会提高系统的吞吐量，因为应用可以在commit结果还未返回时就能开始处理下一批的message。但是你可能在之后才会发现commit失败了，这是需要开发者进行权衡。下面的例子是异步commit的基本用法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (running) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">1000</span>);</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records)</span><br><span class="line">      System.out.println(record.offset() + <span class="string">": "</span> + record.value());</span><br><span class="line"></span><br><span class="line">    consumer.commitAsync(<span class="keyword">new</span> OffsetCommitCallback() &#123;</span><br><span class="line">      <span class="meta">@Override</span></span><br><span class="line">      <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onComplete</span><span class="params">(Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets, Exception exception)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (exception != <span class="keyword">null</span>) &#123;</span><br><span class="line">          <span class="comment">// application specific failure handling</span></span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">  consumer.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在本例中，在<code>commitAsync</code>中我们提供了回调方法，这个方法只会在commit完成后（不管成功还是失败）才会被consumer触发。如果你不需要这个设置，你也可以使用无参的<code>commitAsync</code>API。</p>
+<blockquote>
+<p>思考：在进行commit时，如果commit失败，consumer会怎么处理，同步与异步的处理过程是一样的吗？</p>
+</blockquote>
+<h1 id="Consumer-Group-Inspection：consumer-group查看"><a href="#Consumer-Group-Inspection：consumer-group查看" class="headerlink" title="Consumer Group Inspection：consumer group查看"></a>Consumer Group Inspection：consumer group查看</h1><p>当一个consuemr group是active，你可以通过在命令行运行<code>consumer-groups.sh</code>脚本来查看partition assignment和group消费情况，这个脚本存放在Kafka的<code>bin</code>目录下</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bin/kafka-consumer-groups.sh --new-consumer --describe --group consumer-tutorial-group --bootstrap-server localhost:9092</span></span><br></pre></td></tr></table></figure>
+<p>输出的结果如下所示</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">GROUP, TOPIC, PARTITION, CURRENT OFFSET, LOG END OFFSET, LAG, OWNER</span><br><span class="line">consumer-tutorial-group, consumer-tutorial, 0, 6667, 6667, 0, consumer-1_/127.0.0.1</span><br><span class="line">consumer-tutorial-group, consumer-tutorial, 1, 6667, 6667, 0, consumer-2_/127.0.0.1</span><br><span class="line">consumer-tutorial-group, consumer-tutorial, 2, 6666, 6666, 0, consumer-3_/127.0.0.1</span><br></pre></td></tr></table></figure>
+<p>上面的结果展示了这个consumer group的partition分配以及哪个consumer实例消费这个partition，还有<code>Last Committed Offset</code>（这里也可以认为是<code>Current Offset</code>）。每个partition的lag就是这个partition的最后offset与<code>Last Committed Offset</code>的差值。Administrators会一直进行监控以确保consuemr group能跟得上producers。</p>
+<h1 id="Using-Manual-Assignment：使用手动的assign"><a href="#Using-Manual-Assignment：使用手动的assign" class="headerlink" title="Using Manual Assignment：使用手动的assign"></a>Using Manual Assignment：使用手动的assign</h1><p>正如本文开始所述的一样，新的Consumer实现了对那些不需要group的场景进行更细粒度的控制，对这种场景的支持是建议使用新Consumer API的重要原因之一。旧的<code>simple consumer</code>虽然也提供这样的设计，但是却需要你自己做很多的容错处理。而新的Consumer API，你只需要提供了你需要读取的topic的partition，然后就可以开始读取数据，其他的东西Consumer会帮你处理。</p>
+<p>下面的例子展示了如何使用<code>partitionsFor</code> API来分配安排一个topic的所有partition</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">List&lt;TopicPartition&gt; partitions = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line"><span class="keyword">for</span> (PartitionInfo partition : consumer.partitionsFor(topic))</span><br><span class="line">  partitions.add(<span class="keyword">new</span> TopicPartition(topic, partition.partition()));</span><br><span class="line">consumer.assign(partitions);</span><br></pre></td></tr></table></figure>
+<p>和<code>subscribe</code>方法相似，调用<code>assign</code>方法时必须传入consuemr要读取的所有parition的集合，一旦partition被分配了，poll循环部分就与前面的过程基本一样。</p>
+<p>有一点需要的注意的是，不管是一个simple consumer还是一个consuemr group，所有offset的commit都必须经过<strong>group coordinator</strong>。因此，如果你需要进行commit，你必须设置一个合适的<code>group.id</code>，避免与其他的group产生冲突。如果一个simple consumer试图使用一个与一个active group相同的id进行commit offset，coordinator将会拒绝这个commit请求，会返回一个<code>CommitFailedException</code>异常。但是，如果一个simple comsumer与另一个simple consumer使用同一个id，系统就不会报任何错误。</p>
+<h1 id="Conclusion：结论"><a href="#Conclusion：结论" class="headerlink" title="Conclusion：结论"></a>Conclusion：结论</h1><p>新的Consumer给Kafka社区带了很多的好处，比如，简洁的API、更好的安全性和对ZK更少的依赖。本文介绍了new consumer的基本用法，并注重于poll循环模型以及使用commit API来控制传递机制。虽然还有很多需要讨论的地方，但是本文对于基本的使用是足够了。尽管新的comsumer还在开发中，但是我们仍然鼓励你去尝试使用。使用中如果遇到什么问题，欢迎通过邮件告诉我们.</p>
+<hr>
+<p>参考</p>
+<ul>
+<li><a href="http://www.confluent.io/blog/tutorial-getting-started-with-the-new-apache-kafka-0.9-consumer-client" target="_blank" rel="external">Introducing the Kafka Consumer: Getting Started with the New Apache Kafka 0.9 Consumer Client</a></li>
+</ul>
+
+      
+    </div>
+
+    <div>
+      
+        
+<div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center">
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
+  <button id="rewardButton", disable="enable", onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}", style="cursor: pointer; border: 0; outline: 0; border-radius: 100%; padding: 0; margin: 0; letter-spacing: normal; text-transform: none; text-indent: 0px; text-shadow: none">
+    <span onmouseover="this.style.color='rgb(236,96,0)';this.style.background='rgb(204,204,204)'" onMouseOut="this.style.color='#fff';this.style.background='rgb(236,96,0)'" style="display: inline-block; width: 70px; height: 70px; border-radius: 100%; line-height: 81px; color: #fff; font: 400 35px/75px 'microsofty'; background: rgb(236,96,0)">赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/pay/weixinpay.jpg" alt="Matt WeChat Pay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>微信打赏</p>
+      </div>
+    
+    
+      <div id="alipay" style="display: inline-block">
+        <img id="alipay_qr" src="/images/pay/alipay.jpg" alt="Matt Alipay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>支付宝打赏</p>
+      </div>
+    
+  </div>
+<div>
+
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/kafka/" rel="tag">#kafka</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2016/07/09/mac-software/" rel="next" title="Mac常用软件配置">
+                <i class="fa fa-chevron-left"></i> Mac常用软件配置
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2016/07/21/kafka-new-consumer/"
+     data-title="Apache Kafka 0.9 Consumer Client 介绍【译】"
+     data-content=""
+     data-url="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2016/07/21/kafka-new-consumer/"
+           data-title="Apache Kafka 0.9 Consumer Client 介绍【译】" data-url="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">35</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">15</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">20</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Getting-Started：开始"><span class="nav-number">1.</span> <span class="nav-text">Getting Started：开始</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Configuration-and-Initialization：配置与初始化"><span class="nav-number">2.</span> <span class="nav-text">Configuration and Initialization：配置与初始化</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Topic-Subscription：订阅Topic"><span class="nav-number">3.</span> <span class="nav-text">Topic Subscription：订阅Topic</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Basic-Poll-Loop：基本的poll循环模型"><span class="nav-number">4.</span> <span class="nav-text">Basic Poll Loop：基本的poll循环模型</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Putting-in-all-Together：一个完整的例子"><span class="nav-number">5.</span> <span class="nav-text">Putting in all Together：一个完整的例子</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Consumer-Liveness：Consumer存活"><span class="nav-number">6.</span> <span class="nav-text">Consumer Liveness：Consumer存活</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Delivery-Semantics：可靠的消息传递"><span class="nav-number">7.</span> <span class="nav-text">Delivery Semantics：可靠的消息传递</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Consumer-Group-Inspection：consumer-group查看"><span class="nav-number">8.</span> <span class="nav-text">Consumer Group Inspection：consumer group查看</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Using-Manual-Assignment：使用手动的assign"><span class="nav-number">9.</span> <span class="nav-text">Using Manual Assignment：使用手动的assign</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Conclusion：结论"><span class="nav-number">10.</span> <span class="nav-text">Conclusion：结论</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+<script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+本站总访问量 <span id="busuanzi_value_site_pv"></span> &nbsp&nbsp&nbsp
+您是第<span id="busuanzi_value_site_uv"></span>个来到的小伙伴
+
+
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length == 0) {
+       search_path = "search.xml";
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    function proceedsearch() {
+      $("body").append('<div class="popoverlay">').css('overflow', 'hidden');
+      $('.popup').toggle();
+
+    }
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+    'use strict';
+    $.ajax({
+        url: path,
+        dataType: "xml",
+        async: true,
+        success: function( xmlResponse ) {
+            // get the contents from search data
+            isfetched = true;
+            $('.popup').detach().appendTo('.header-inner');
+            var datas = $( "entry", xmlResponse ).map(function() {
+                return {
+                    title: $( "title", this ).text(),
+                    content: $("content",this).text(),
+                    url: $( "url" , this).text()
+                };
+            }).get();
+            var $input = document.getElementById(search_id);
+            var $resultContent = document.getElementById(content_id);
+            $input.addEventListener('input', function(){
+                var matchcounts = 0;
+                var str='<ul class=\"search-result-list\">';                
+                var keywords = this.value.trim().toLowerCase().split(/[\s\-]+/);
+                $resultContent.innerHTML = "";
+                if (this.value.trim().length > 1) {
+                // perform local searching
+                datas.forEach(function(data) {
+                    var isMatch = true;
+                    var content_index = [];
+                    var data_title = data.title.trim().toLowerCase();
+                    var data_content = data.content.trim().replace(/<[^>]+>/g,"").toLowerCase();
+                    var data_url = data.url;
+                    var index_title = -1;
+                    var index_content = -1;
+                    var first_occur = -1;
+                    // only match artiles with not empty titles and contents
+                    if(data_title != '' && data_content != '') {
+                        keywords.forEach(function(keyword, i) {
+                            index_title = data_title.indexOf(keyword);
+                            index_content = data_content.indexOf(keyword);
+                            if( index_title < 0 && index_content < 0 ){
+                                isMatch = false;
+                            } else {
+                                if (index_content < 0) {
+                                    index_content = 0;
+                                }
+                                if (i == 0) {
+                                    first_occur = index_content;
+                                }
+                            }
+                        });
+                    }
+                    // show search results
+                    if (isMatch) {
+                        matchcounts += 1;
+                        str += "<li><a href='"+ data_url +"' class='search-result-title'>"+ data_title +"</a>";
+                        var content = data.content.trim().replace(/<[^>]+>/g,"");
+                        if (first_occur >= 0) {
+                            // cut out 100 characters
+                            var start = first_occur - 20;
+                            var end = first_occur + 80;
+                            if(start < 0){
+                                start = 0;
+                            }
+                            if(start == 0){
+                                end = 50;
+                            }
+                            if(end > content.length){
+                                end = content.length;
+                            }
+                            var match_content = content.substring(start, end);
+                            // highlight all keywords
+                            keywords.forEach(function(keyword){
+                                var regS = new RegExp(keyword, "gi");
+                                match_content = match_content.replace(regS, "<b class=\"search-keyword\">"+keyword+"</b>");
+                            });
+                            
+                            str += "<p class=\"search-result\">" + match_content +"...</p>"
+                        }
+                        str += "</li>";
+                    }
+                })};
+                str += "</ul>";
+                if (matchcounts == 0) { str = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>' }
+                if (keywords == "") { str = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>' }
+                $resultContent.innerHTML = str;
+            });
+            proceedsearch();
+        }
+    });}
+
+    // handle and trigger popup window;
+    $('.popup-trigger').mousedown(function(e) {
+      e.stopPropagation();
+      if (isfetched == false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+
+    });
+
+    $('.popup-btn-close').click(function(e){
+      $('.popup').hide();
+      $(".popoverlay").remove();
+      $('body').css('overflow', '');
+    });
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+  </script>
+
+  1
+
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
+      var all = MathJax.Hub.getAllJax(), i;
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
+
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config("");
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="custom_mathjax_source">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
+
+
+  
+
+  
+
+</body>
+</html>
