@@ -1,0 +1,1099 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="kafka," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="本文主要介绍一下Kafka new Consumer的使用，关于new Consumer的基本概念可以参考上一篇博文Apache Kafka 0.9 Consumer Client 介绍【译】，这篇对于Kafka的new Consumer介绍得比较清楚。本文的一部分内容也来自上一篇文章。
+Consumer Client本节主要介绍Kafka从一些topic消费数据的示例。
+配置使用新版的Consu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Apache Kafka 0.10.0 new Consumer使用">
+<meta property="og:url" content="http://wangzzu.github.io/2016/07/22/kafak-new-consumer-use/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="本文主要介绍一下Kafka new Consumer的使用，关于new Consumer的基本概念可以参考上一篇博文Apache Kafka 0.9 Consumer Client 介绍【译】，这篇对于Kafka的new Consumer介绍得比较清楚。本文的一部分内容也来自上一篇文章。
+Consumer Client本节主要介绍Kafka从一些topic消费数据的示例。
+配置使用新版的Consu">
+<meta property="og:updated_time" content="2016-07-22T14:45:04.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Apache Kafka 0.10.0 new Consumer使用">
+<meta name="twitter:description" content="本文主要介绍一下Kafka new Consumer的使用，关于new Consumer的基本概念可以参考上一篇博文Apache Kafka 0.9 Consumer Client 介绍【译】，这篇对于Kafka的new Consumer介绍得比较清楚。本文的一部分内容也来自上一篇文章。
+Consumer Client本节主要介绍Kafka从一些topic消费数据的示例。
+配置使用新版的Consu">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> Apache Kafka 0.10.0 new Consumer使用 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-guestbook">
+          <a href="/guestbook" rel="section">
+            
+              <i class="menu-item-icon fa fa-book fa-fw"></i> <br />
+            
+            留言
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="#" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup">
+ <span class="search-icon fa fa-search"></span>
+ <input type="text" id="local-search-input">
+ <div id="local-search-result"></div>
+ <span class="popup-btn-close">close</span>
+</div>
+
+
+    </div>
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                Apache Kafka 0.10.0 new Consumer使用
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-07-22T20:49:56+08:00" content="2016-07-22">
+              2016-07-22
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/kafka/" itemprop="url" rel="index">
+                    <span itemprop="name">kafka</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2016/07/22/kafak-new-consumer-use/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/07/22/kafak-new-consumer-use/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+	  
+              <span>&nbsp; | &nbsp;
+                   <span id="busuanzi_value_page_pv" ></span>次阅读
+              </span>    
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>本文主要介绍一下Kafka new Consumer的使用，关于new Consumer的基本概念可以参考上一篇博文<a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍【译】</a>，这篇对于Kafka的new Consumer介绍得比较清楚。本文的一部分内容也来自上一篇文章。</p>
+<h1 id="Consumer-Client"><a href="#Consumer-Client" class="headerlink" title="Consumer Client"></a>Consumer Client</h1><p>本节主要介绍Kafka从一些topic消费数据的示例。</p>
+<h2 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h2><p>使用新版的Consumer，需要先在工程中添加kafka-clients依赖，添加的配置信息如下：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.kafka<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>kafka-clients<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>0.10.0.0<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<h2 id="初始化与配置"><a href="#初始化与配置" class="headerlink" title="初始化与配置"></a>初始化与配置</h2><p>Consumer的创建过程与之前旧的API创建方法一样，一个Consumer必备的最小配置项如下所示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Properties props = <span class="keyword">new</span> Properties();</span><br><span class="line">props.put(<span class="string">"bootstrap.servers"</span>, <span class="string">"localhost:9092"</span>); <span class="comment">// 通过其中的一台broker来找到group的coordinator，并不需要列出所有的broker</span></span><br><span class="line">props.put(<span class="string">"group.id"</span>, <span class="string">"consumer-tutorial"</span>);</span><br><span class="line">props.put(<span class="string">"key.deserializer"</span>, StringDeserializer.class.getName());</span><br><span class="line">props.put(<span class="string">"value.deserializer"</span>, StringDeserializer.class.getName());</span><br><span class="line">KafkaConsumer&lt;String, String&gt; consumer = <span class="keyword">new</span> KafkaConsumer&lt;&gt;(props); <span class="comment">// consumer实例</span></span><br></pre></td></tr></table></figure>
+<p>Consumer的其他配置项可以参考<a href="http://kafka.apache.org/documentation.html#newconsumerconfigs" target="_blank" rel="external">New Consumer Configs</a>，除了上面的这几个配置之外，其他的几个比较常用的配置信息如下表所示</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>默认值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>heartbeat.interval.ms</td>
+<td>3000</td>
+<td>当使用Kafka的group管理机制时，consumer向coordinator发送心跳的间隔，这个值要比session.timeout.ms小，最好不要超过session.timeout.ms的\frac{1}{3}</td>
+</tr>
+<tr>
+<td>session.timeout.ms</td>
+<td>30000</td>
+<td>当使用Kafka的group管理机制时用于检测到consumer失败的时长，如果在这个时间内没有收到consumer的心跳信息，就认为Consumer失败了</td>
+</tr>
+<tr>
+<td>auto.offset.reset</td>
+<td>latest</td>
+<td>group首次开始消费数据时的offset，有以下几个值可以选择：earliest、latest、none、anything else.</td>
+</tr>
+<tr>
+<td>enable.auto.commit</td>
+<td>true</td>
+<td>设置为true时，Consumer的offset将会被周期性地自动commit</td>
+</tr>
+<tr>
+<td>auto.commit.interval.ms</td>
+<td>5000</td>
+<td>Consumer的offset自动commit时的周期</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Consumer-Auto-Offset-Commit"><a href="#Consumer-Auto-Offset-Commit" class="headerlink" title="Consumer Auto Offset Commit"></a>Consumer Auto Offset Commit</h2><p>本例使用Kafka的自动commit机制，每隔一段时间（可通过<code>auto.commit.interval.ms</code>来设置）就会自动进行commit offset。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">Properties props = <span class="keyword">new</span> Properties();</span><br><span class="line">props.put(<span class="string">"bootstrap.servers"</span>, <span class="string">"localhost:9092"</span>);</span><br><span class="line">props.put(<span class="string">"group.id"</span>, <span class="string">"group"</span>);</span><br><span class="line">props.put(<span class="string">"auto.offset.reset"</span>, <span class="string">"earliest"</span>);</span><br><span class="line">props.put(<span class="string">"enable.auto.commit"</span>, <span class="string">"true"</span>); <span class="comment">// 自动commit</span></span><br><span class="line">props.put(<span class="string">"auto.commit.interval.ms"</span>, <span class="string">"1000"</span>); <span class="comment">// 自动commit的间隔</span></span><br><span class="line">props.put(<span class="string">"session.timeout.ms"</span>, <span class="string">"30000"</span>);</span><br><span class="line">props.put(<span class="string">"key.deserializer"</span>, <span class="string">"org.apache.kafka.common.serialization.StringDeserializer"</span>);</span><br><span class="line">props.put(<span class="string">"value.deserializer"</span>, <span class="string">"org.apache.kafka.common.serialization.StringDeserializer"</span>);</span><br><span class="line">KafkaConsumer&lt;String, String&gt; consumer = <span class="keyword">new</span> KafkaConsumer&lt;&gt;(props);</span><br><span class="line">consumer.subscribe(Arrays.asList(<span class="string">"test1"</span>, <span class="string">"test2"</span>)); <span class="comment">// 可消费多个topic,组成一个list</span></span><br><span class="line"><span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">100</span>);</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records) &#123;</span><br><span class="line">        System.out.printf(<span class="string">"offset = %d, key = %s, value = %s \n"</span>, record.offset(), record.key(), record.value());</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里有几点需要注意：</p>
+<ol>
+<li>在使用自动commit时，系统是保证at least once，因为offset是在这些messages被应用处理成功后才进行commit的；</li>
+<li>subscribe方法需要传入所有topic的列表，一个group所消费的topic是不能动态增加的，但是可以在任何时间改变这个列表，它会把前面的设置覆盖掉；</li>
+<li>poll中的参数就是设置一个时长，Consumer在进行拉取数据进行block的最大时间限制；</li>
+</ol>
+<h2 id="Consumer-Manual-Offset-Control"><a href="#Consumer-Manual-Offset-Control" class="headerlink" title="Consumer Manual Offset Control"></a>Consumer Manual Offset Control</h2><p>要进行手动commit，需要在配置文件中将enable.auto.commit设置为false，来禁止自动commit，本例以手动同步commit为例</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">Properties props = <span class="keyword">new</span> Properties();</span><br><span class="line">props.put(<span class="string">"bootstrap.servers"</span>, <span class="string">"localhost:9092"</span>);</span><br><span class="line">props.put(<span class="string">"group.id"</span>, <span class="string">"group"</span>);</span><br><span class="line">props.put(<span class="string">"enable.auto.commit"</span>, <span class="string">"false"</span>); <span class="comment">//关闭自动commit</span></span><br><span class="line">props.put(<span class="string">"session.timeout.ms"</span>, <span class="string">"30000"</span>);</span><br><span class="line">props.put(<span class="string">"auto.offset.reset"</span>, <span class="string">"earliest"</span>);</span><br><span class="line">props.put(<span class="string">"key.deserializer"</span>, <span class="string">"org.apache.kafka.common.serialization.StringDeserializer"</span>);</span><br><span class="line">props.put(<span class="string">"value.deserializer"</span>, <span class="string">"org.apache.kafka.common.serialization.StringDeserializer"</span>);</span><br><span class="line">KafkaConsumer&lt;String, String&gt; consumer = <span class="keyword">new</span> KafkaConsumer&lt;&gt;(props);</span><br><span class="line">consumer.subscribe(Arrays.asList(<span class="string">"test1"</span>, <span class="string">"test2"</span>));</span><br><span class="line"><span class="keyword">final</span> <span class="keyword">int</span> minBatchSize = <span class="number">10</span>;</span><br><span class="line"><span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">100</span>);</span><br><span class="line">    <span class="keyword">int</span> i = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records) &#123;</span><br><span class="line">        System.out.printf(<span class="string">"offset = %d, key = %s, value = %s \n"</span>, record.offset(), record.key(), record.value());</span><br><span class="line">        i++;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (i &gt;= minBatchSize) &#123;</span><br><span class="line">        consumer.commitSync(); <span class="comment">//批量完成写入后，手工同步commit offset</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>在本例中，我们调用了commitSync方法，这是同步commit的方式，同时Kafka还提供了commitAsync方法，它们的区别是：使用同步提交时，consumer会进行block知道commit的结果返回，这样的话如果commit失败就可以今早地发现错误，而当使用异步commit时，commit的结果还未返回，Consumer就会开始拉取下一批的数据，但是使用异步commit可以系统的吞吐量，具体使用哪种方式需要开发者自己权衡；</li>
+<li>本例中的实现依然是保证at least once，但是如果每次拉取到数据之后，就进行commit，最后再处理数据，就可以保证at last once。</li>
+</ol>
+<h2 id="Consumer-Manual-Partition-Assign"><a href="#Consumer-Manual-Partition-Assign" class="headerlink" title="Consumer Manual Partition Assign"></a>Consumer Manual Partition Assign</h2><p>Kafka在进行消费数据时，可以指定消费某个topic的某个partition，这种使用情况比较特殊，并不需要coordinator进行rebalance，也就意味着这种模式虽然需要设置group id，但是它跟前面的group的机制并不一样，它与旧的Consumer中的Simple Consumer相似，这是Kafka在新的Consumer API中对这种情况的支持。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">Properties props = <span class="keyword">new</span> Properties();</span><br><span class="line">props.put(<span class="string">"bootstrap.servers"</span>, <span class="string">"localhost:9092"</span>);</span><br><span class="line">props.put(<span class="string">"group.id"</span>, <span class="string">"group"</span>);</span><br><span class="line">props.put(<span class="string">"enable.auto.commit"</span>, <span class="string">"false"</span>); <span class="comment">//关闭自动commit</span></span><br><span class="line">props.put(<span class="string">"session.timeout.ms"</span>, <span class="string">"30000"</span>);</span><br><span class="line">props.put(<span class="string">"auto.offset.reset"</span>, <span class="string">"earliest"</span>);</span><br><span class="line">props.put(<span class="string">"key.deserializer"</span>, <span class="string">"org.apache.kafka.common.serialization.StringDeserializer"</span>);</span><br><span class="line">props.put(<span class="string">"value.deserializer"</span>, <span class="string">"org.apache.kafka.common.serialization.StringDeserializer"</span>);</span><br><span class="line">KafkaConsumer consumer = <span class="keyword">new</span> KafkaConsumer(props);</span><br><span class="line">TopicPartition partition0 = <span class="keyword">new</span> TopicPartition(<span class="string">"test"</span>, <span class="number">0</span>);</span><br><span class="line">TopicPartition partition1 = <span class="keyword">new</span> TopicPartition(<span class="string">"test"</span>, <span class="number">2</span>);</span><br><span class="line">consumer.assign(Arrays.asList(partition0, partition1));</span><br><span class="line"> </span><br><span class="line"><span class="keyword">final</span> <span class="keyword">int</span> minBatchSize = <span class="number">10</span>;</span><br><span class="line"><span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">    ConsumerRecords&lt;String, String&gt; records = consumer.poll(<span class="number">100</span>);</span><br><span class="line">    <span class="keyword">int</span> i = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (ConsumerRecord&lt;String, String&gt; record : records) &#123;</span><br><span class="line">        System.out.printf(<span class="string">"offset = %d, key = %s, value = %s \n"</span>, record.offset(), record.key(), record.value());</span><br><span class="line">        i++;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (i &gt;= minBatchSize) &#123;</span><br><span class="line">        consumer.commitSync(); <span class="comment">//批量完成写入后，手工sync offset</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意：</p>
+<ol>
+<li>与前面的subscribe方法一样，在调用assign方法时，需要传入这个Consumer要消费的所有TopicPartition的列表；</li>
+<li>不管对于simple consumer还是consumer group，所有offset的commit都必须经过group coordinator；</li>
+<li>在进行commit时，必须设置一个合适的group.id，避免与其他的group产生冲突。如果一个simple consumer试图使用一个与一个active group相同的id进行commit offset，coordinator将会拒绝这个commit请求，会返回一个CommitFailedException异常，但是，如果一个simple consumer与另一个simple consumer使用同一个id，系统就不会报任何错误。</li>
+</ol>
+<h1 id="KafkaStream使用"><a href="#KafkaStream使用" class="headerlink" title="KafkaStream使用"></a>KafkaStream使用</h1><p>KafkaStream是在Kafka 0.10.0版中新提出的内容，Kafka官方也说了设计这个feature的原因——为了简单，之前在流处理方面，一般情况下都会使用Kafka作为消息队列，然后再搭建一个流处理环境做流处理，而现在我们可以直接在Kafka中进行流处理，不需要再搭建另外一个环境（加了这个feature之后会使得Kafka变得更加复杂，不过官网说，在使用时我们只需要在工程中添加一个外部依赖包即可使用这个功能）。</p>
+<h2 id="配置-1"><a href="#配置-1" class="headerlink" title="配置"></a>配置</h2><p>需要在pom文件中添加如下依赖，KafkaStream在实际运行时也是依赖这个外部的jar包运行。</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.kafka<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>kafka-streams<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>0.10.0.0<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<h2 id="初始化与配置-1"><a href="#初始化与配置-1" class="headerlink" title="初始化与配置"></a>初始化与配置</h2><p>KafkaStream使用的一个基本初始化部分如下所示（代码来自<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html" target="_blank" rel="external">Javadoc</a>）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;String, Object&gt; props = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">props.put(StreamsConfig.APPLICATION_ID_CONFIG, <span class="string">"my-stream-processing-application"</span>);</span><br><span class="line">props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, <span class="string">"localhost:9092"</span>);</span><br><span class="line">props.put(StreamsConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);</span><br><span class="line">props.put(StreamsConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);</span><br><span class="line">props.put(StreamsConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);</span><br><span class="line">props.put(StreamsConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);</span><br><span class="line">StreamsConfig config = <span class="keyword">new</span> StreamsConfig(props);</span><br><span class="line"></span><br><span class="line">KStreamBuilder builder = <span class="keyword">new</span> KStreamBuilder();</span><br><span class="line">builder.from(<span class="string">"my-input-topic"</span>).mapValue(value -&gt; value.length().toString()).to(<span class="string">"my-output-topic"</span>);</span><br><span class="line"></span><br><span class="line">KafkaStreams streams = <span class="keyword">new</span> KafkaStreams(builder, config);</span><br><span class="line">streams.start();</span><br></pre></td></tr></table></figure>
+<p>完整的配置选项如下表所示，也可以参考<a href="http://kafka.apache.org/documentation.html#streamsconfigs" target="_blank" rel="external">Streams Configs</a></p>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>描述</th>
+<th>类型</th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>application.id</td>
+<td>流处理应用的标识，对同一个应用需要一致，因为它是作为消费的group_id的</td>
+<td>string</td>
+<td></td>
+</tr>
+<tr>
+<td>bootstrap.servers</td>
+<td>host1:port1,host2:port2 这样的列表，是用来发现所有Kafka节点的种子，因此不需要配上所有的Kafka节点</td>
+<td>list</td>
+<td></td>
+</tr>
+<tr>
+<td>client.id</td>
+<td>应用的一个客户端的逻辑名称，设定后可以区分是哪个客户端在请求</td>
+<td>string</td>
+<td>“”</td>
+</tr>
+<tr>
+<td>zookeeper.connect</td>
+<td>zookeeper</td>
+<td>string</td>
+<td>“”</td>
+</tr>
+<tr>
+<td>key.serde</td>
+<td>键的序列化/反序列化类</td>
+<td>class</td>
+<td>org.apache.kafka.common.serialization.Serdes$ByteArraySerde</td>
+</tr>
+<tr>
+<td>partition.grouper</td>
+<td>用于分区组织的类，需要实现PartitionGrouper接口</td>
+<td>class</td>
+<td>org.apache.kafka.streams.processor.DefaultPartitionGrouper</td>
+</tr>
+<tr>
+<td>replication.factor</td>
+<td>流处理应用会创建change log topic和repartition topic用于管理内部状态，这个参数设定这些topic的副本数</td>
+<td>int</td>
+<td>1</td>
+</tr>
+<tr>
+<td>state.dir</td>
+<td>状态仓库的存储路径</td>
+<td>string</td>
+<td>/tmp/kafka-streams</td>
+</tr>
+<tr>
+<td>timestamp.extractor</td>
+<td>时间戳抽取类，需要实现TimestampExtractor接口</td>
+<td>class</td>
+<td>org.apache.kafka.streams.processor.ConsumerRecordTimestampExtractor</td>
+</tr>
+<tr>
+<td>value.serde</td>
+<td>值的序列化/反序列化类</td>
+<td>class</td>
+<td>org.apache.kafka.common.serialization.Serdes$ByteArraySerde</td>
+</tr>
+<tr>
+<td>buffered.records.per.partition</td>
+<td>每个分区缓存的最大记录数</td>
+<td>int</td>
+<td>1000</td>
+</tr>
+<tr>
+<td>commit.interval.ms</td>
+<td>存储处理器当前位置的间隔毫秒数</td>
+<td>long</td>
+<td>30000</td>
+</tr>
+<tr>
+<td>metric.reporters</td>
+<td>用于性能报告的类列表。需要实现MetricReporter接口。JmxReporter会永远开启不需要指定</td>
+<td>list</td>
+<td>[]</td>
+</tr>
+<tr>
+<td>metric.num.samples</td>
+<td>计算性能需要的采样数</td>
+<td>int</td>
+<td>2</td>
+</tr>
+<tr>
+<td>metric.sample.window.ms</td>
+<td>性能采样的时间间隔</td>
+<td>long</td>
+<td>30000</td>
+</tr>
+<tr>
+<td>num.standby.replicas</td>
+<td>每个任务的后备副本数</td>
+<td>int</td>
+<td>0</td>
+</tr>
+<tr>
+<td>num.stream.threads</td>
+<td>执行流处理的线程数</td>
+<td>int</td>
+<td>1</td>
+</tr>
+<tr>
+<td>poll.ms</td>
+<td>等待输入的毫秒数</td>
+<td>long</td>
+<td>100</td>
+</tr>
+<tr>
+<td>state.cleanup.delay.ms</td>
+<td>一个分区迁移后，在删除状态前等待的毫秒数</td>
+<td>long</td>
+<td>60000</td>
+</tr>
+</tbody>
+</table>
+<h2 id="小示例"><a href="#小示例" class="headerlink" title="小示例"></a>小示例</h2><p>这是个将一个topic的事件进行过滤的示例，处理很简单，下面给出了这个例子的完整代码。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> org.apache.kafka.clients.consumer.ConsumerConfig;</span><br><span class="line"><span class="keyword">import</span> org.apache.kafka.common.serialization.Serdes;</span><br><span class="line"><span class="keyword">import</span> org.apache.kafka.streams.kstream.KStream;</span><br><span class="line"><span class="keyword">import</span> org.apache.kafka.streams.kstream.KStreamBuilder;</span><br><span class="line"><span class="keyword">import</span> org.apache.kafka.streams.KafkaStreams;</span><br><span class="line"><span class="keyword">import</span> org.apache.kafka.streams.StreamsConfig;</span><br><span class="line"><span class="keyword">import</span> org.apache.kafka.streams.kstream.Predicate;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.Properties;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span><br><span class="line"> * Created by matt on 16/7/22.</span><br><span class="line"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">EventFilter</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        Properties props = <span class="keyword">new</span> Properties();</span><br><span class="line">        props.put(StreamsConfig.APPLICATION_ID_CONFIG, <span class="string">"test-filter"</span>);</span><br><span class="line">        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, <span class="string">"10.4.232.70:9091,10.4.232.77:2181"</span>);</span><br><span class="line">        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());</span><br><span class="line">        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());</span><br><span class="line"></span><br><span class="line">        <span class="comment">// setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data</span></span><br><span class="line">        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, <span class="string">"earliest"</span>);</span><br><span class="line"></span><br><span class="line">        KStreamBuilder builder = <span class="keyword">new</span> KStreamBuilder();</span><br><span class="line"></span><br><span class="line">        KStream&lt;String, String&gt; source = builder.stream(<span class="string">"test"</span>);</span><br><span class="line"></span><br><span class="line">        source.filter(<span class="keyword">new</span> Predicate&lt;String, String&gt;() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">test</span><span class="params">(String key, String value)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">return</span> (value.split(<span class="string">","</span>)[<span class="number">3</span>]).equals(<span class="string">"food"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;).to(<span class="string">"food"</span>);</span><br><span class="line"></span><br><span class="line">        KafkaStreams streams = <span class="keyword">new</span> KafkaStreams(builder, props);</span><br><span class="line">        streams.start();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// usually the stream application would be running forever,</span></span><br><span class="line">        <span class="comment">// in this example we just let it run for some time and stop since the input data is finite.</span></span><br><span class="line">        Thread.sleep(<span class="number">5000L</span>);</span><br><span class="line"></span><br><span class="line">        streams.close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<hr>
+<p>本文只是介绍这两个重要feature的使用方法，而KafkaStream并没有深入去讨论，后面会对本文再进行更新，并且还会增加Producer和Consumer使用安全机制的方法。</p>
+
+      
+    </div>
+
+    <div>
+      
+        
+<div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center">
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
+  <button id="rewardButton", disable="enable", onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}", style="cursor: pointer; border: 0; outline: 0; border-radius: 100%; padding: 0; margin: 0; letter-spacing: normal; text-transform: none; text-indent: 0px; text-shadow: none">
+    <span onmouseover="this.style.color='rgb(236,96,0)';this.style.background='rgb(204,204,204)'" onMouseOut="this.style.color='#fff';this.style.background='rgb(236,96,0)'" style="display: inline-block; width: 70px; height: 70px; border-radius: 100%; line-height: 81px; color: #fff; font: 400 35px/75px 'microsofty'; background: rgb(236,96,0)">赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/pay/weixinpay.jpg" alt="Matt WeChat Pay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>微信打赏</p>
+      </div>
+    
+    
+      <div id="alipay" style="display: inline-block">
+        <img id="alipay_qr" src="/images/pay/alipay.jpg" alt="Matt Alipay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>支付宝打赏</p>
+      </div>
+    
+  </div>
+<div>
+
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/kafka/" rel="tag">#kafka</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2016/07/21/kafka-new-consumer/" rel="next" title="Apache Kafka 0.9 Consumer Client 介绍【译】">
+                <i class="fa fa-chevron-left"></i> Apache Kafka 0.9 Consumer Client 介绍【译】
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2016/07/22/kafak-new-consumer-use/"
+     data-title="Apache Kafka 0.10.0 new Consumer使用"
+     data-content=""
+     data-url="http://wangzzu.github.io/2016/07/22/kafak-new-consumer-use/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2016/07/22/kafak-new-consumer-use/"
+           data-title="Apache Kafka 0.10.0 new Consumer使用" data-url="http://wangzzu.github.io/2016/07/22/kafak-new-consumer-use/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">36</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">15</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">20</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Consumer-Client"><span class="nav-number">1.</span> <span class="nav-text">Consumer Client</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#配置"><span class="nav-number">1.1.</span> <span class="nav-text">配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#初始化与配置"><span class="nav-number">1.2.</span> <span class="nav-text">初始化与配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Consumer-Auto-Offset-Commit"><span class="nav-number">1.3.</span> <span class="nav-text">Consumer Auto Offset Commit</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Consumer-Manual-Offset-Control"><span class="nav-number">1.4.</span> <span class="nav-text">Consumer Manual Offset Control</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Consumer-Manual-Partition-Assign"><span class="nav-number">1.5.</span> <span class="nav-text">Consumer Manual Partition Assign</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#KafkaStream使用"><span class="nav-number">2.</span> <span class="nav-text">KafkaStream使用</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#配置-1"><span class="nav-number">2.1.</span> <span class="nav-text">配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#初始化与配置-1"><span class="nav-number">2.2.</span> <span class="nav-text">初始化与配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#小示例"><span class="nav-number">2.3.</span> <span class="nav-text">小示例</span></a></li></ol></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+<script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+本站总访问量 <span id="busuanzi_value_site_pv"></span> &nbsp&nbsp&nbsp
+您是第<span id="busuanzi_value_site_uv"></span>个来到的小伙伴
+
+
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length == 0) {
+       search_path = "search.xml";
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    function proceedsearch() {
+      $("body").append('<div class="popoverlay">').css('overflow', 'hidden');
+      $('.popup').toggle();
+
+    }
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+    'use strict';
+    $.ajax({
+        url: path,
+        dataType: "xml",
+        async: true,
+        success: function( xmlResponse ) {
+            // get the contents from search data
+            isfetched = true;
+            $('.popup').detach().appendTo('.header-inner');
+            var datas = $( "entry", xmlResponse ).map(function() {
+                return {
+                    title: $( "title", this ).text(),
+                    content: $("content",this).text(),
+                    url: $( "url" , this).text()
+                };
+            }).get();
+            var $input = document.getElementById(search_id);
+            var $resultContent = document.getElementById(content_id);
+            $input.addEventListener('input', function(){
+                var matchcounts = 0;
+                var str='<ul class=\"search-result-list\">';                
+                var keywords = this.value.trim().toLowerCase().split(/[\s\-]+/);
+                $resultContent.innerHTML = "";
+                if (this.value.trim().length > 1) {
+                // perform local searching
+                datas.forEach(function(data) {
+                    var isMatch = true;
+                    var content_index = [];
+                    var data_title = data.title.trim().toLowerCase();
+                    var data_content = data.content.trim().replace(/<[^>]+>/g,"").toLowerCase();
+                    var data_url = data.url;
+                    var index_title = -1;
+                    var index_content = -1;
+                    var first_occur = -1;
+                    // only match artiles with not empty titles and contents
+                    if(data_title != '' && data_content != '') {
+                        keywords.forEach(function(keyword, i) {
+                            index_title = data_title.indexOf(keyword);
+                            index_content = data_content.indexOf(keyword);
+                            if( index_title < 0 && index_content < 0 ){
+                                isMatch = false;
+                            } else {
+                                if (index_content < 0) {
+                                    index_content = 0;
+                                }
+                                if (i == 0) {
+                                    first_occur = index_content;
+                                }
+                            }
+                        });
+                    }
+                    // show search results
+                    if (isMatch) {
+                        matchcounts += 1;
+                        str += "<li><a href='"+ data_url +"' class='search-result-title'>"+ data_title +"</a>";
+                        var content = data.content.trim().replace(/<[^>]+>/g,"");
+                        if (first_occur >= 0) {
+                            // cut out 100 characters
+                            var start = first_occur - 20;
+                            var end = first_occur + 80;
+                            if(start < 0){
+                                start = 0;
+                            }
+                            if(start == 0){
+                                end = 50;
+                            }
+                            if(end > content.length){
+                                end = content.length;
+                            }
+                            var match_content = content.substring(start, end);
+                            // highlight all keywords
+                            keywords.forEach(function(keyword){
+                                var regS = new RegExp(keyword, "gi");
+                                match_content = match_content.replace(regS, "<b class=\"search-keyword\">"+keyword+"</b>");
+                            });
+                            
+                            str += "<p class=\"search-result\">" + match_content +"...</p>"
+                        }
+                        str += "</li>";
+                    }
+                })};
+                str += "</ul>";
+                if (matchcounts == 0) { str = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>' }
+                if (keywords == "") { str = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>' }
+                $resultContent.innerHTML = str;
+            });
+            proceedsearch();
+        }
+    });}
+
+    // handle and trigger popup window;
+    $('.popup-trigger').mousedown(function(e) {
+      e.stopPropagation();
+      if (isfetched == false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+
+    });
+
+    $('.popup-btn-close').click(function(e){
+      $('.popup').hide();
+      $(".popoverlay").remove();
+      $('body').css('overflow', '');
+    });
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+  </script>
+
+  1
+
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
+      var all = MathJax.Hub.getAllJax(), i;
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
+
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config("");
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="custom_mathjax_source">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
+
+
+  
+
+  
+
+</body>
+</html>

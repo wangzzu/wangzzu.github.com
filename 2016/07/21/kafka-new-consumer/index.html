@@ -66,7 +66,7 @@
 <meta property="og:image" content="http://wangzzu.github.io/images/kafka/consumer-figure1.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/kafka/consumer-figure2.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/kafka/consumer-figure3.png">
-<meta property="og:updated_time" content="2016-07-21T03:06:26.000Z">
+<meta property="og:updated_time" content="2016-07-22T09:00:41.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Apache Kafka 0.9 Consumer Client 介绍【译】">
 <meta name="twitter:description" content="近段时间在公司实习，有一项任务就是负责对Kafka新版本的一些feature做一下调研，主要是调研的内容是Kafka在0.9.0版本中提供的两个新特性：New Consumer API和安全认证机制，本文是在研究Kafka的新consumer API时看过的一篇文章，对于理解新API的设计理念以及应用，有很多的帮助，因此就打算翻译一下，帮助自己更好理解的同时也为开源做一些贡献。本文译自Introd">
@@ -455,7 +455,7 @@
 <p>下面的例子展示了如何使用<code>partitionsFor</code> API来分配安排一个topic的所有partition</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">List&lt;TopicPartition&gt; partitions = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line"><span class="keyword">for</span> (PartitionInfo partition : consumer.partitionsFor(topic))</span><br><span class="line">  partitions.add(<span class="keyword">new</span> TopicPartition(topic, partition.partition()));</span><br><span class="line">consumer.assign(partitions);</span><br></pre></td></tr></table></figure>
 <p>和<code>subscribe</code>方法相似，调用<code>assign</code>方法时必须传入consuemr要读取的所有parition的集合，一旦partition被分配了，poll循环部分就与前面的过程基本一样。</p>
-<p>有一点需要的注意的是，不管是一个simple consumer还是一个consuemr group，所有offset的commit都必须经过<strong>group coordinator</strong>。因此，如果你需要进行commit，你必须设置一个合适的<code>group.id</code>，避免与其他的group产生冲突。如果一个simple consumer试图使用一个与一个active group相同的id进行commit offset，coordinator将会拒绝这个commit请求，会返回一个<code>CommitFailedException</code>异常。但是，如果一个simple comsumer与另一个simple consumer使用同一个id，系统就不会报任何错误。</p>
+<p>有一点需要的注意的是，不管是一个simple consumer还是一个consumer group，所有offset的commit都必须经过<strong>group coordinator</strong>。因此，如果你需要进行commit，你必须设置一个合适的<code>group.id</code>，避免与其他的group产生冲突。如果一个simple consumer试图使用一个与一个active group相同的id进行commit offset，coordinator将会拒绝这个commit请求，会返回一个<code>CommitFailedException</code>异常。但是，如果一个simple consumer与另一个simple consumer使用同一个id，系统就不会报任何错误。</p>
 <h1 id="Conclusion：结论"><a href="#Conclusion：结论" class="headerlink" title="Conclusion：结论"></a>Conclusion：结论</h1><p>新的Consumer给Kafka社区带了很多的好处，比如，简洁的API、更好的安全性和对ZK更少的依赖。本文介绍了new consumer的基本用法，并注重于poll循环模型以及使用commit API来控制传递机制。虽然还有很多需要讨论的地方，但是本文对于基本的使用是足够了。尽管新的comsumer还在开发中，但是我们仍然鼓励你去尝试使用。使用中如果遇到什么问题，欢迎通过邮件告诉我们.</p>
 <hr>
 <p>参考</p>
@@ -513,6 +513,10 @@
           </div>
 
           <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2016/07/22/kafak-new-consumer-use/" rel="prev" title="Apache Kafka 0.10.0 new Consumer使用">
+                Apache Kafka 0.10.0 new Consumer使用 <i class="fa fa-chevron-right"></i>
+              </a>
             
           </div>
         </div>
@@ -603,7 +607,7 @@
         <nav class="site-state motion-element">
           <div class="site-state-item site-state-posts">
             <a href="/archives">
-              <span class="site-state-item-count">35</span>
+              <span class="site-state-item-count">36</span>
               <span class="site-state-item-name">日志</span>
             </a>
           </div>
