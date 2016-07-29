@@ -4,6 +4,229 @@
   
     
     <entry>
+      <title><![CDATA[Kafka 0.10.0 SASL/PLAIN身份认证及权限实现]]></title>
+      <url>http://wangzzu.github.io/2016/07/29/sasl-plain-kafka/</url>
+      <content type="html"><![CDATA[<p>本文主要介绍一下使用官方发布的 Kafka 0.10.0 版如何实现 SASL/PLAIN 认证机制以及权限控制。</p>
+<h1 id="Kafka-安全机制"><a href="#Kafka-安全机制" class="headerlink" title="Kafka 安全机制"></a>Kafka 安全机制</h1><p> Kafka 的安全机制主要分为两部分：</p>
+<ul>
+<li>身份认证（Authentication）：对client 与服务器的连接进行身份认证。</li>
+<li>权限控制（Authorization）：实现对于消息级别的权限控制</li>
+</ul>
+<blockquote>
+<p>In release 0.9.0.0, the Kafka community added a number of features that, used either separately or together, increases security in a Kafka cluster.<br>These features are considered to be of beta quality. The following security measures are currently supported:</p>
+<ol>
+<li>Authentication of connections to brokers from clients (producers and consumers), other brokers and tools, using either SSL or SASL (Kerberos). SASL/PLAIN can also be used from release 0.10.0.0 onwards.</li>
+<li>Authentication of connections from brokers to ZooKeeper</li>
+<li>Encryption of data transferred between brokers and clients, between brokers, or between brokers and tools using SSL (Note that there is a performance degradation when SSL is enabled, the magnitude of which depends on the CPU type and the JVM implementation.)</li>
+<li>Authorization of read / write operations by clients</li>
+<li>Authorization is pluggable and integration with external authorization services is supported</li>
+</ol>
+</blockquote>
+<p>这段话的中文意思也就是说</p>
+<ol>
+<li>可以使用 SSL 或者 SASL 进行客户端（producer 和 consumer）、其他 brokers、tools与 brokers 之间连接的认证，SASL/PLAIN将在0.10.0中得到支持；</li>
+<li>对brokers和zookeeper之间的连接进行Authentication；</li>
+<li>数据传输用SSL加密，性能会下降；</li>
+<li>对clients的读写操作进行Authorization；</li>
+<li>Authorization 是pluggable，与外部的authorization services结合进行支持。</li>
+</ol>
+<h1 id="Kafka身份认证"><a href="#Kafka身份认证" class="headerlink" title="Kafka身份认证"></a>Kafka身份认证</h1><p>Kafka 目前支持SSL、SASL/Kerberos、SASL/PLAIN三种认证机制，关于这些认证机制的介绍可以参考一下三篇文章。</p>
+<ul>
+<li><a href="http://www.cnblogs.com/JeffreySun/archive/2010/06/24/1627247.html" target="_blank" rel="external">数字证书原理</a>;</li>
+<li><a href="http://www.cnblogs.com/mailingfeng/archive/2012/07/18/2597392.html" target="_blank" rel="external">数字证书, 数字签名, SSL(TLS) , SASL</a>;</li>
+<li><a href="http://www.ruanyifeng.com/blog/2014/09/ssl-latency.html" target="_blank" rel="external">SSL的延迟</a></li>
+</ul>
+<h2 id="SASL-PLAIN-认证"><a href="#SASL-PLAIN-认证" class="headerlink" title="SASL/PLAIN 认证"></a>SASL/PLAIN 认证</h2><p>可以参考<a href="http://orchome.com/270" target="_blank" rel="external">kafka使用SASL验证</a>，这个官方文档的中文版。</p>
+<h3 id="Kafka-Server-端配置"><a href="#Kafka-Server-端配置" class="headerlink" title="Kafka Server 端配置"></a>Kafka Server 端配置</h3><p>需要在 Kafka 安装目录下的config/server.properties文件中配置以下信息</p>
+<h2 id="Kafka-Server-端配置-1"><a href="#Kafka-Server-端配置-1" class="headerlink" title="Kafka Server 端配置"></a>Kafka Server 端配置</h2><p>在 kafka 安装目录下的<code>config/server.properties</code>配置一下信息</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">listeners=SASL_PLAINTEXT://ip:pot</span><br><span class="line">security.inter.broker.protocol=SASL_PLAINTEXT</span><br><span class="line">sasl.mechanism.inter.broker.protocol=PLAIN</span><br><span class="line">sasl.enabled.mechanisms=PLAIN</span><br><span class="line">authorizer.class.name = kafka.security.auth.SimpleAclAuthorizer</span><br><span class="line">super.users=User:admin</span><br></pre></td></tr></table></figure>
+<p>还需要配置一个名 <code>kafka_server_jaas.conf</code> 的配置文件，将配置文件放置在<code>conf</code>目录下。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">KafkaServer &#123;</span><br><span class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</span><br><span class="line">    username=&quot;admin&quot;</span><br><span class="line">    password=&quot;admin&quot;</span><br><span class="line">    user_admin=&quot;adminpw&quot;</span><br><span class="line">    user_alice=&quot;alicepw&quot;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里，我们配置了两个用户：admin 和 alice，密码分别为 adminpw 和 alicepw。<br>最后需要为 Kafka 添加 <code>java.security.auth.login.config</code> 环境变量。在 <code>bin/kafka-run-class.sh</code> 中添加以下内容</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">KAFKA_SASL_OPTS=<span class="string">'-Djava.security.auth.login.config=/opt/meituan/kafka_2.10-0.10.0.0/config/kafka_server_jaas.conf'</span></span><br><span class="line"><span class="comment"># Launch mode</span></span><br><span class="line"><span class="keyword">if</span> [ <span class="string">"x<span class="variable">$DAEMON_MODE</span>"</span> = <span class="string">"xtrue"</span> ]; <span class="keyword">then</span></span><br><span class="line">  nohup <span class="variable">$JAVA</span> <span class="variable">$KAFKA_HEAP_OPTS</span> <span class="variable">$KAFKA_JVM_PERFORMANCE_OPTS</span> <span class="variable">$KAFKA_GC_LOG_OPTS</span> <span class="variable">$KAFKA_SASL_OPTS</span> <span class="variable">$KAFKA_JMX_OPTS</span> <span class="variable">$KAFKA_LOG4J_OPTS</span> -cp <span class="variable">$CLASSPATH</span> <span class="variable">$KAFKA_OPTS</span> <span class="string">"<span class="variable">$@</span>"</span> &gt; <span class="string">"<span class="variable">$CONSOLE_OUTPUT_FILE</span>"</span> 2&gt;&amp;1 &lt; /dev/null &amp;</span><br><span class="line"><span class="keyword">else</span></span><br><span class="line">  <span class="built_in">exec</span> <span class="variable">$JAVA</span> <span class="variable">$KAFKA_HEAP_OPTS</span> <span class="variable">$KAFKA_JVM_PERFORMANCE_OPTS</span> <span class="variable">$KAFKA_GC_LOG_OPTS</span> <span class="variable">$KAFKA_SASL_OPTS</span> <span class="variable">$KAFKA_JMX_OPTS</span> <span class="variable">$KAFKA_LOG4J_OPTS</span> -cp <span class="variable">$CLASSPATH</span> <span class="variable">$KAFKA_OPTS</span> <span class="string">"<span class="variable">$@</span>"</span></span><br><span class="line"><span class="keyword">fi</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>注：实际上，我们只是添加了第一行，并在第4和第6行中添加了 $KAFKA_SASL_OPTS 这个环境变量。</p>
+</blockquote>
+<h3 id="KafkaClient-配置"><a href="#KafkaClient-配置" class="headerlink" title="KafkaClient 配置"></a>KafkaClient 配置</h3><p>首先需要在客户端配置 <code>kafka_client_jaas.conf</code> 文件</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">KafkaClient &#123;</span><br><span class="line">  org.apache.kafka.common.security.plain.PlainLoginModule required</span><br><span class="line">  username=&quot;alice&quot;</span><br><span class="line">  password=&quot;alice&quot;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>然后在（producer 和 consumer）程序中添加环境变量和配置，如下所示</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">System.setProperty(<span class="string">"java.security.auth.login.config"</span>, <span class="string">".../kafka_client_jaas.conf"</span>); <span class="comment">// 环境变量添加，需要输入配置文件的路径</span></span><br><span class="line">props.put(<span class="string">"security.protocol"</span>, <span class="string">"SASL_PLAINTEXT"</span>);</span><br><span class="line">props.put(<span class="string">"sasl.mechanism"</span>, <span class="string">"PLAIN"</span>);</span><br></pre></td></tr></table></figure>
+<p>配置完以上内容后，就可以正常运行 producer 和 consumer 程序，如果账户密码错误的话，程序就不能正常进行，但是不会有任何提示，这方面后面会进行一些改进。</p>
+<h1 id="Kafka权限控制"><a href="#Kafka权限控制" class="headerlink" title="Kafka权限控制"></a>Kafka权限控制</h1><p>这个小节介绍一下 Kafka 的 ACL 。</p>
+<h2 id="权限的内容"><a href="#权限的内容" class="headerlink" title="权限的内容"></a>权限的内容</h2><table>
+<thead>
+<tr>
+<th>权限</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>READ</td>
+<td>读取topic</td>
+</tr>
+<tr>
+<td>WRITE</td>
+<td>写入topic</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>删除topic</td>
+</tr>
+<tr>
+<td>CREATE</td>
+<td>创建topic</td>
+</tr>
+<tr>
+<td>ALTER</td>
+<td>修改topic</td>
+</tr>
+<tr>
+<td>DESCRIBE</td>
+<td>获取topic的信息</td>
+</tr>
+<tr>
+<td>ClusterAction</td>
+<td></td>
+</tr>
+<tr>
+<td>ALL</td>
+<td>所有权限</td>
+</tr>
+</tbody>
+</table>
+<p>访问控制列表ACL存储在zk上，路径为<code>/kafka-acl</code>。</p>
+<h2 id="权限配置"><a href="#权限配置" class="headerlink" title="权限配置"></a>权限配置</h2><p>Kafka 提供的命令如下表所示</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Description</th>
+<th>Default</th>
+<th>Option type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>–add</td>
+<td>Indicates to the script that user is trying to add an acl.</td>
+<td></td>
+<td>Action</td>
+</tr>
+<tr>
+<td>–remove</td>
+<td>Indicates to the script that user is trying to remove an acl.</td>
+<td></td>
+<td>Action</td>
+</tr>
+<tr>
+<td>–list</td>
+<td>Indicates to the script that user is trying to list acts.</td>
+<td></td>
+<td>Action</td>
+</tr>
+<tr>
+<td>–authorizer</td>
+<td>Fully qualified class name of the authorizer.</td>
+<td>kafka.security.auth.SimpleAclAuthorizer</td>
+<td>Configuration</td>
+</tr>
+<tr>
+<td>–authorizer-properties</td>
+<td>key=val pairs that will be passed to authorizer for initialization. For the default authorizer the example values are: zookeeper.connect=localhost:2181</td>
+<td></td>
+<td>Configuration</td>
+</tr>
+<tr>
+<td>–cluster</td>
+<td>Specifies cluster as resource.</td>
+<td></td>
+<td>Resource</td>
+</tr>
+<tr>
+<td>–topic [topic-name]</td>
+<td>Specifies the topic as resource.</td>
+<td></td>
+<td>Resource</td>
+</tr>
+<tr>
+<td>–group [group-name]</td>
+<td>Specifies the consumer-group as resource.</td>
+<td></td>
+<td>Resource</td>
+</tr>
+<tr>
+<td>–allow-principal</td>
+<td>Principal is in PrincipalType:name format that will be added to ACL with <strong>Allow</strong> permission. You can specify multiple –allow-principal in a single command.</td>
+<td></td>
+<td>Principal</td>
+</tr>
+<tr>
+<td>–deny-principal</td>
+<td>Principal is in PrincipalType:name format that will be added to ACL with <strong>Deny</strong> permission. You can specify multiple –deny-principal in a single command.</td>
+<td></td>
+<td>Principal</td>
+</tr>
+<tr>
+<td>–allow-host</td>
+<td>IP address from which principals listed in –allow-principal will have access.</td>
+<td>if –allow-principal is specified defaults to * which translates to “all hosts”</td>
+<td>Host</td>
+</tr>
+<tr>
+<td>–deny-host</td>
+<td>IP address from which principals listed in –deny-principal will be denied access.</td>
+<td>if –deny-principal is specified defaults to * which translates to “all hosts”</td>
+<td>Host</td>
+</tr>
+<tr>
+<td>–operation</td>
+<td>Operation that will be allowed or denied. Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
+<td>All</td>
+<td>Operation</td>
+</tr>
+<tr>
+<td>–producer</td>
+<td>Convenience option to add/remove acls for producer role. This will generate acls that allows WRITE, DESCRIBE on topic and CREATE on cluster.</td>
+<td></td>
+<td>Convenience</td>
+</tr>
+<tr>
+<td>–consumer</td>
+<td>Convenience option to add/remove acls for consumer role. This will generate acls that allows READ, DESCRIBE on topic and READ on consumer-group.</td>
+<td></td>
+<td>Convenience</td>
+</tr>
+</tbody>
+</table>
+<h2 id="权限设置"><a href="#权限设置" class="headerlink" title="权限设置"></a>权限设置</h2><p>通过几个例子介绍一下如何进行权限设置。</p>
+<h3 id="add-操作"><a href="#add-操作" class="headerlink" title="add 操作"></a>add 操作</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 为用户 alice 在 test（topic）上添加读写的权限</span></span><br><span class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_<span class="built_in">test</span>10 --add --allow-principal User:alice --operation Read --operation Write --topic <span class="built_in">test</span></span><br><span class="line"><span class="comment"># 对于 topic 为 test 的消息队列，拒绝来自 ip 为198.51.100.3账户为 BadBob  进行 read 操作，其他用户都允许</span></span><br><span class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_<span class="built_in">test</span>10 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic <span class="built_in">test</span></span><br><span class="line"><span class="comment"># 为bob 和 alice 添加all，以允许来自 ip 为198.51.100.0或者198.51.100.1的读写请求</span></span><br><span class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_<span class="built_in">test</span>10 --add --allow-principal User:bob --allow-principal User:alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic <span class="built_in">test</span></span><br></pre></td></tr></table></figure>
+<h3 id="list-操作"><a href="#list-操作" class="headerlink" title="list 操作"></a>list 操作</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 列出 topic 为 test 的所有权限账户</span></span><br><span class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_<span class="built_in">test</span>10 --list --topic <span class="built_in">test</span></span><br></pre></td></tr></table></figure>
+<p>输出信息为：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Current ACLs <span class="keyword">for</span> resource `Topic:<span class="built_in">test</span>`:</span><br><span class="line">     User:alice has Allow permission <span class="keyword">for</span> operations: Describe from hosts: *</span><br><span class="line">    User:alice has Allow permission <span class="keyword">for</span> operations: Read from hosts: *</span><br><span class="line">    User:alice has Allow permission <span class="keyword">for</span> operations: Write from hosts: *</span><br></pre></td></tr></table></figure>
+<h3 id="remove-操作"><a href="#remove-操作" class="headerlink" title="remove 操作"></a>remove 操作</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># 移除 acl</span><br><span class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic test</span><br></pre></td></tr></table></figure>
+<h3 id="producer-和-consumer-的操作"><a href="#producer-和-consumer-的操作" class="headerlink" title="producer 和 consumer 的操作"></a>producer 和 consumer 的操作</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># producer</span></span><br><span class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_<span class="built_in">test</span>10 --add --allow-principal User:alice --producer --topic <span class="built_in">test</span></span><br><span class="line"></span><br><span class="line"><span class="comment">#consumer</span></span><br><span class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_<span class="built_in">test</span>10 --add --allow-principal User:alice --consumer --topic <span class="built_in">test</span> —group <span class="built_in">test</span>-group</span><br></pre></td></tr></table></figure>
+<h1 id="填坑"><a href="#填坑" class="headerlink" title="填坑"></a>填坑</h1><p>本小节记录了在使用 SASL/PLAIN 时遇到的一些坑。</p>
+<h2 id="Controller连接broker失败"><a href="#Controller连接broker失败" class="headerlink" title="Controller连接broker失败"></a>Controller连接broker失败</h2><p>错误信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">[2016-07-27 17:45:46,047] WARN [Controller-1-to-broker-1-send-thread], Controller 1<span class="string">'s connection to broker XXXX:9092 (id: 1 rack: null) was unsuccessful (kafka.controller.RequestSendThread)</span><br><span class="line">java.io.IOException: Connection to XXXX:9092 (id: 1 rack: null) failed</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$$anonfun$blockingReady$extension$2.apply(NetworkClientBlockingOps.scala:63)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$$anonfun$blockingReady$extension$2.apply(NetworkClientBlockingOps.scala:59)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$.recursivePoll$1(NetworkClientBlockingOps.scala:112)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$.kafka$utils$NetworkClientBlockingOps$$pollUntil$extension(NetworkClientBlockingOps.scala:120)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$.blockingReady$extension(NetworkClientBlockingOps.scala:59)</span><br><span class="line">    at kafka.controller.RequestSendThread.brokerReady(ControllerChannelManager.scala:232)</span><br><span class="line">    at kafka.controller.RequestSendThread.liftedTree1$1(ControllerChannelManager.scala:181)</span><br><span class="line">    at kafka.controller.RequestSendThread.doWork(ControllerChannelManager.scala:180)</span><br><span class="line">    at kafka.utils.ShutdownableThread.run(ShutdownableThread.scala:63)</span><br><span class="line">[2016-07-27 17:45:46,056] INFO [delete-topics-thread-1], Starting  (kafka.controller.TopicDeletionManager$DeleteTopicsThread)</span><br><span class="line">[2016-07-27 17:45:46,057] DEBUG [Topic Deletion Manager 1], Waiting for signal to start or continue topic deletion (kafka.controller.TopicDeletionManager)</span><br><span class="line">[2016-07-27 17:45:46,351] WARN [Controller-1-to-broker-1-send-thread], Controller 1'</span>s connection to broker XXXX:9092 (id: 1 rack: null) was unsuccessful (kafka.controller.RequestSendThread)</span><br><span class="line">java.io.IOException: Connection to XXXX:9092 (id: 1 rack: null) failed</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$<span class="variable">$anonfun</span><span class="variable">$blockingReady</span><span class="variable">$extension</span><span class="variable">$2</span>.apply(NetworkClientBlockingOps.scala:63)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$<span class="variable">$anonfun</span><span class="variable">$blockingReady</span><span class="variable">$extension</span><span class="variable">$2</span>.apply(NetworkClientBlockingOps.scala:59)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$.recursivePoll<span class="variable">$1</span>(NetworkClientBlockingOps.scala:112)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$.kafka<span class="variable">$utils</span><span class="variable">$NetworkClientBlockingOps</span>$<span class="variable">$pollUntil</span><span class="variable">$extension</span>(NetworkClientBlockingOps.scala:120)</span><br><span class="line">    at kafka.utils.NetworkClientBlockingOps$.blockingReady<span class="variable">$extension</span>(NetworkClientBlockingOps.scala:59)</span><br><span class="line">    at kafka.controller.RequestSendThread.brokerReady(ControllerChannelManager.scala:232)</span><br><span class="line">    at kafka.controller.RequestSendThread.liftedTree1<span class="variable">$1</span>(ControllerChannelManager.scala:181)</span><br><span class="line">    at kafka.controller.RequestSendThread.doWork(ControllerChannelManager.scala:180)</span><br><span class="line">    at kafka.utils.ShutdownableThread.run(ShutdownableThread.scala:63)</span><br></pre></td></tr></table></figure>
+<p>查找原因查找了半天，之前以为是<code>kafka_server_jaas.conf</code>文件的格式有问题，改了之后发现 Kafka 有时启动正常，有时不能正常启动，修改之前 conf 文件为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">KafkaServer &#123;</span><br><span class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</span><br><span class="line">    username=&quot;admin&quot;</span><br><span class="line">    password=&quot;admin&quot;</span><br><span class="line">    user_matt=“33&quot;</span><br><span class="line">    user_alice=&quot;alice&quot;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>最后分析可能是因为没有在 user 中配置 admin 账户，因为 broker 之间也开启了身份认证，修改之后的配置文件如下。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">KafkaServer &#123;</span><br><span class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</span><br><span class="line">    username=&quot;admin&quot;</span><br><span class="line">    password=&quot;admin&quot;</span><br><span class="line">    user_admin=&quot;admin&quot;</span><br><span class="line">    user_alice=&quot;alice&quot;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>修改完之后，Kafka 就可以正常运行了。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li>confluent的官网博客：<a href="http://www.confluent.io/blog/apache-kafka-security-authorization-authentication-encryption" target="_blank" rel="external">Apache Kafka Security 101</a></li>
+<li>Kafka 官网：<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=51809888" target="_blank" rel="external">KIP-12 - Kafka Sasl/Kerberos and SSL implementation</a></li>
+<li><a href="https://cwiki.apache.org/confluence/display/KAFKA/Security" target="_blank" rel="external">Kafka Security</a></li>
+<li>Kafka 官网：<a href="http://kafka.apache.org/documentation.html#security" target="_blank" rel="external">Kafka security</a></li>
+<li>Kafka 官网中文翻译<a href="http://orchome.com/270" target="_blank" rel="external">kafka使用SASL验证</a></li>
+</ul>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[Apache Kafka 0.10.0 new Consumer使用]]></title>
       <url>http://wangzzu.github.io/2016/07/22/kafak-new-consumer-use/</url>
       <content type="html"><![CDATA[<p>本文主要介绍一下Kafka new Consumer的使用，关于new Consumer的基本概念可以参考上一篇博文<a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍【译】</a>，这篇对于Kafka的new Consumer介绍得比较清楚。本文的一部分内容也来自上一篇文章。</p>
@@ -580,7 +803,12 @@
 <td>opt+shift+cmd+U</td>
 </tr>
 <tr>
-<td>只能补齐代码</td>
+<td>智能补齐代码</td>
+<td>opt + enter</td>
+</tr>
+<tr>
+<td>生成一些常用方法，如：toString、get 等</td>
+<td>control + enter</td>
 </tr>
 </tbody>
 </table>
