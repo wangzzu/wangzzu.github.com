@@ -189,7 +189,7 @@
 </tr>
 </tbody>
 </table>
-<h1 id="数据库的索引结构；"><a href="#数据库的索引结构；" class="headerlink" title="数据库的索引结构；"></a>数据库的索引结构；</h1><p>在 MySQL 官方定义中，索引（ Index ）是帮助 MySQL 高效获取数据的数据结构。提取句子主干，就可以得到索引的本质：索引是数据结构。</p>
+<h1 id="数据库的索引结构"><a href="#数据库的索引结构" class="headerlink" title="数据库的索引结构"></a>数据库的索引结构</h1><p>在 MySQL 官方定义中，索引（ Index ）是帮助 MySQL 高效获取数据的数据结构。提取句子主干，就可以得到索引的本质：索引是数据结构。</p>
 <p>在 MySQL 中，主要有四种类型的索引，分别为： B-Tree 索引， Hash 索引， Fulltext （全文）索引和 R-Tree 索引。</p>
 <p>具体可以参考<a href="http://blog.codinglabs.org/articles/theory-of-mysql-index.html" target="_blank" rel="external">MySQL索引背后的数据结构及算法原理-张洋</a>一文，本文以后会把这部分给补充上。</p>
 <p>关于数据库的索引结构还有一下几篇文章推荐：</p>
@@ -4529,6 +4529,7 @@
 <li><a href="http://www.ibm.com/developerworks/cn/topics/" target="_blank" rel="external">IBM博客</a>，IBM的官方博客，质量很高，推荐；</li>
 <li><a href="http://tech.meituan.com/" target="_blank" rel="external">美团技术团队博客</a>，涉及到了很多大数据方面的架构和设计;</li>
 <li><a href="http://jm.taobao.org/" target="_blank" rel="external">阿里巴巴中间件博客</a>，有很多关于阿里消息中间件RocketMQ的一些内容，以及其它的一些分布式技术；</li>
+<li><a href="https://code.facebook.com/" target="_blank" rel="external">Code Facebook</a>，里面有很多前沿的内容，不过需要 fq；</li>
 </ul>
 <h1 id="旅行"><a href="#旅行" class="headerlink" title="旅行"></a>旅行</h1><ul>
 <li><a href="http://www.clctrip.com/" target="_blank" rel="external">草履虫旅行</a>，这个俱乐部，每周都会有一些短途的旅行，假期会有远途旅行，不过这个活动出发地仅仅局限在北京，其他城市还没有涉足，真心很赞的一个俱乐部；</li>
@@ -5541,6 +5542,90 @@
 <p>[3] 《影响力2》这个名字起得很聪明，其实它并不是《影响力》的作者写的。</p>
 <p>[4] 我忘了这则实验的出处了，但实验的精神是记忆犹新的，哪位同学记得原始出处的麻烦提醒我一下。</p>
 <p>[5] 对于阿基米德这个故事的真实性是有争议的，毕竟几千年久远的事情谁弄得清呢。但是故事的道理是很本质的，我们平时也经常有类似的体验，加上阿基米德的“尤里卡”实在太出名了，所以我相信用用无妨。</p>
+]]></content>
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Matt 的中文简历]]></title>
+      <url>http://wangzzu.github.io/2014/09/01/resume/</url>
+      <content type="html"><![CDATA[<hr>
+<h1 id="个人信息"><a href="#个人信息" class="headerlink" title="个人信息"></a>个人信息</h1><ul>
+<li>王蒙/男/1992</li>
+<li>硕士/北京邮电大学信息与通信工程（2014-2017） 本科/郑州大学电子信息工程专业（2010-2014）</li>
+<li>技术博客：<a href="http://wangzzu.github.io">Matt’s Blog</a></li>
+<li><p>Github：<a href="http://github.com/wangzzu" target="_blank" rel="external">wangzzu</a></p>
+<hr>
+</li>
+</ul>
+<h1 id="联系方式"><a href="#联系方式" class="headerlink" title="联系方式"></a>联系方式</h1><ul>
+<li>Email：wangm92 # 163.com or mattbupt # gmail.com</li>
+<li><p>微博：<a href="http://weibo.com/wangzzu" target="_blank" rel="external">柳年思水</a></p>
+<hr>
+</li>
+</ul>
+<h1 id="工作实习经历"><a href="#工作实习经历" class="headerlink" title="工作实习经历"></a>工作实习经历</h1><h2 id="美团网-（-2016年7月-至今-）"><a href="#美团网-（-2016年7月-至今-）" class="headerlink" title="美团网 （ 2016年7月 ~ 至今 ）"></a>美团网 （ 2016年7月 ~ 至今 ）</h2><p>技术工程部-数据平台组  系统开发实习生</p>
+<h3 id="Kafka-身份认证与权限管理平台"><a href="#Kafka-身份认证与权限管理平台" class="headerlink" title="Kafka 身份认证与权限管理平台"></a>Kafka 身份认证与权限管理平台</h3><ul>
+<li>项目简介：建立一个统一 Kafka 数据账户管理平台，并对账户设置相应的权限，加强数据的安全性。</li>
+<li>工作内容<ol>
+<li>阅读并修改 Kafka new Consumer 和 Security 部分的<strong>源码</strong>，熟悉 new Consumer 部分的设计思想;</li>
+<li>设计和开发 Kafka 身份认证和权限管理平台。</li>
+</ol>
+</li>
+</ul>
+<h2 id="北邮网络体系构建与融合实验室-（2014年9月-2016年6月）"><a href="#北邮网络体系构建与融合实验室-（2014年9月-2016年6月）" class="headerlink" title="北邮网络体系构建与融合实验室 （2014年9月 ~ 2016年6月）"></a>北邮网络体系构建与融合实验室 （2014年9月 ~ 2016年6月）</h2><p>研究生期间主要在做实验室的项目。</p>
+<h3 id="日志快速查询系统"><a href="#日志快速查询系统" class="headerlink" title="日志快速查询系统"></a>日志快速查询系统</h3><p>2015.08 - 2016.01</p>
+<ul>
+<li>项目描述：基于 HBase 开发常用字段的快速查询系统</li>
+<li>工作内容<ol>
+<li>改写 InputFormat，改进后 MR 作业读取 csv 文件的平均 Map 时间节省了<strong>60.6%</strong>，读取 lzo 压缩 文件的平均 Map 时间节省了<strong>69.1%</strong>；</li>
+<li>开发 Kafka 客户端，代替运营商省网项目中 importer，将数据传入到 hdfs 和 HBase，该运营商每天的数据量大约是1.2TB；</li>
+<li>利用 HBase 基于 RowKey 的快速查询为 hdfs 上的文件话单建立常用字段索引表。</li>
+</ol>
+</li>
+</ul>
+<h3 id="网络流量流向分析系统"><a href="#网络流量流向分析系统" class="headerlink" title="网络流量流向分析系统"></a>网络流量流向分析系统</h3><p>2015.02 - 2015.07</p>
+<ul>
+<li>项目描述：将实验室的实时网络访问信息以地图的形式进行展示。</li>
+<li>工作内容<ol>
+<li>设计和搭建实验室数据实时处理平台，使用 Flume 和 Kafka 实时监控实验室话单；</li>
+<li>完成基于 Storm 的<strong>流处理模块开发</strong>；</li>
+<li>在流处理模块中设计了数据聚合算法。</li>
+</ol>
+</li>
+</ul>
+<h3 id="Kafka-性能测试与优化"><a href="#Kafka-性能测试与优化" class="headerlink" title="Kafka 性能测试与优化"></a>Kafka 性能测试与优化</h3><p>2014.09 - 2015.05</p>
+<ul>
+<li>项目描述：测试和优化 Kafka 性能，设计并实现流处理系统。</li>
+<li>工作内容<ol>
+<li>测试和优化 producer、consumer 性能，优化后 producer 速度提高<strong>14%</strong>，consumer 速度提高<strong>21%</strong>；</li>
+<li>研究 Kafka 与 Storm、Spark Streaming 的集成，分别实现一个流量实时统计系统;</li>
+<li>在 <strong>IHMSC2016</strong> 会议上以第一作者的身份发表一篇关于 Kafka 性能优化的<strong>论文</strong>。</li>
+</ol>
+</li>
+</ul>
+<hr>
+<h1 id="开源项目和作品"><a href="#开源项目和作品" class="headerlink" title="开源项目和作品"></a>开源项目和作品</h1><h2 id="开源项目"><a href="#开源项目" class="headerlink" title="开源项目"></a>开源项目</h2><ul>
+<li><a href="https://github.com/apache/kafka" target="_blank" rel="external">Kafka</a>：在看 Kafka 的阅读的过程中，为源码添加了一些注释。</li>
+</ul>
+<h2 id="技术文章"><a href="#技术文章" class="headerlink" title="技术文章"></a>技术文章</h2><ul>
+<li><a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍【译】</a>：翻译自 Confluent 官网博客；</li>
+<li><a href="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/">Kafka的简单介绍</a>：Kafka 基本入门文章；</li>
+<li><a href="http://wangzzu.github.io/2016/03/02/hadoop-shuffle/">MapReduce之Shuffle过程详述</a>：介绍 MapReduce 中最核心部分—— Shuffle 的一篇文章。</li>
+</ul>
+<h2 id="游记"><a href="#游记" class="headerlink" title="游记"></a>游记</h2><p>个人非常喜欢户外跟旅行，经常会在<a href="http://www.jianshu.com/users/e50b355579a9/latest_articles" target="_blank" rel="external">简书</a>上分享一些个人的旅行攻略。</p>
+<ul>
+<li><a href="http://www.jianshu.com/p/778513f9ce4c" target="_blank" rel="external">Travel to Haituo | 2016河北海坨山露营</a>：第一次去海坨，人生第一次重装爬山露营；</li>
+<li><a href="http://www.jianshu.com/p/afffa111edd0" target="_blank" rel="external">Travel to Kubuqi | 2016端午库布其穿越</a>：这一次穿越遇到了很多臭味相投的朋友；</li>
+<li><a href="http://www.jianshu.com/p/183cb4b10ed5" target="_blank" rel="external">Travel to Qinghai Lake | 2015暑假环骑青海湖</a>：从最开始的在学校论坛上发帖征集队友，到最后带领着七人的校友小分队完成环骑旅行；</li>
+</ul>
+<h1 id="技能清单"><a href="#技能清单" class="headerlink" title="技能清单"></a>技能清单</h1><ul>
+<li>熟悉 <strong>Kafka</strong>，了解 Flume，对 Kafka 框架有较深入理解；</li>
+<li>熟悉 <strong>MapReduce</strong> 框架，熟悉 <strong>Storm</strong>，了解 Spark 和 Flink；</li>
+<li>熟悉 <strong>Java</strong> 和 <strong>Linux</strong>，了解 SQL、Shell、Scala 和 Python，有两年 Java 开发经验;</li>
+<li>CET-6，良好的英语文档的阅读能力和写作能力。</li>
+</ul>
+<hr>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p>简历模板参考<a href="https://github.com/geekcompany/ResumeSample/blob/master/java.md" target="_blank" rel="external">jobdeer java</a></p>
 ]]></content>
     </entry>
     
