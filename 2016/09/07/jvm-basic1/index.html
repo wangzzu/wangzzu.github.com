@@ -60,7 +60,7 @@
 <meta name="description" content="本文主要是对《深入理解java虚拟机 第二版》第二章部分做的总结，文章中大部分内容都来自这章内容，之所以记录到博客，是想通过这个过程加深自己的理解，并且方便以后遇到相关问题之后进行查阅。
 JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Java 语言编译程序只需生成在 Java 虚拟机上运行的目标代码(字节码)，就可以在多种平台上不加修改地运行。Java 虚拟机在执行字节码时，实际">
 <meta property="og:type" content="article">
-<meta property="og:title" content="JVM学习（一）">
+<meta property="og:title" content="JVM学习——java 内存区域与内存溢出分析">
 <meta property="og:url" content="http://wangzzu.github.io/2016/09/07/jvm-basic1/index.html">
 <meta property="og:site_name" content="Matt's Blog">
 <meta property="og:description" content="本文主要是对《深入理解java虚拟机 第二版》第二章部分做的总结，文章中大部分内容都来自这章内容，之所以记录到博客，是想通过这个过程加深自己的理解，并且方便以后遇到相关问题之后进行查阅。
@@ -68,9 +68,9 @@ JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Ja
 <meta property="og:image" content="http://wangzzu.github.io/images/java/jvm/jvm.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/java/jvm/getobject1.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/java/jvm/getobject2.png">
-<meta property="og:updated_time" content="2016-09-07T13:32:22.000Z">
+<meta property="og:updated_time" content="2016-09-18T06:45:23.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="JVM学习（一）">
+<meta name="twitter:title" content="JVM学习——java 内存区域与内存溢出分析">
 <meta name="twitter:description" content="本文主要是对《深入理解java虚拟机 第二版》第二章部分做的总结，文章中大部分内容都来自这章内容，之所以记录到博客，是想通过这个过程加深自己的理解，并且方便以后遇到相关问题之后进行查阅。
 JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Java 语言编译程序只需生成在 Java 虚拟机上运行的目标代码(字节码)，就可以在多种平台上不加修改地运行。Java 虚拟机在执行字节码时，实际">
 <meta name="twitter:image" content="http://wangzzu.github.io/images/java/jvm/jvm.png">
@@ -91,7 +91,7 @@ JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Ja
   };
 </script>
 
-  <title> JVM学习（一） | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+  <title> JVM学习——java 内存区域与内存溢出分析 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
 </head>
 
 <body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -279,7 +279,7 @@ JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Ja
             
             
               
-                JVM学习（一）
+                JVM学习——java 内存区域与内存溢出分析
               
             
           </h1>
@@ -536,6 +536,10 @@ JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Ja
 
           <div class="post-nav-prev post-nav-item">
             
+              <a href="/2016/09/18/jvm-basic2/" rel="prev" title="JVM 学习——垃圾收集器与内存分配策略">
+                JVM 学习——垃圾收集器与内存分配策略 <i class="fa fa-chevron-right"></i>
+              </a>
+            
           </div>
         </div>
       
@@ -550,7 +554,7 @@ JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Ja
     <div class="post-spread">
       
         <div class="ds-share flat" data-thread-key="2016/09/07/jvm-basic1/"
-     data-title="JVM学习（一）"
+     data-title="JVM学习——java 内存区域与内存溢出分析"
      data-content=""
      data-url="http://wangzzu.github.io/2016/09/07/jvm-basic1/">
   <div class="ds-share-inline">
@@ -580,7 +584,7 @@ JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Ja
   <div class="comments" id="comments">
     
       <div class="ds-thread" data-thread-key="2016/09/07/jvm-basic1/"
-           data-title="JVM学习（一）" data-url="http://wangzzu.github.io/2016/09/07/jvm-basic1/">
+           data-title="JVM学习——java 内存区域与内存溢出分析" data-url="http://wangzzu.github.io/2016/09/07/jvm-basic1/">
       </div>
     
   </div>
@@ -625,7 +629,7 @@ JVMJava 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Ja
         <nav class="site-state motion-element">
           <div class="site-state-item site-state-posts">
             <a href="/archives">
-              <span class="site-state-item-count">42</span>
+              <span class="site-state-item-count">43</span>
               <span class="site-state-item-name">日志</span>
             </a>
           </div>
