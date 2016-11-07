@@ -4942,11 +4942,11 @@
     <entry>
       <title><![CDATA[Kafka监控软件介绍]]></title>
       <url>http://wangzzu.github.io/2015/12/08/2015-12-8-kafka-monitor/</url>
-      <content type="html"><![CDATA[<h2 id="1-KafkaOffsetMonitor"><a href="#1-KafkaOffsetMonitor" class="headerlink" title="1.KafkaOffsetMonitor"></a>1.KafkaOffsetMonitor</h2><h3 id="1-1-下载安装"><a href="#1-1-下载安装" class="headerlink" title="1.1.下载安装"></a>1.1.下载安装</h3><ul>
+      <content type="html"><![CDATA[<h1 id="KafkaOffsetMonitor"><a href="#KafkaOffsetMonitor" class="headerlink" title="KafkaOffsetMonitor"></a>KafkaOffsetMonitor</h1><h2 id="下载安装"><a href="#下载安装" class="headerlink" title="下载安装"></a>下载安装</h2><ul>
 <li><a href="https://github.com/quantifind/KafkaOffsetMonitor" target="_blank" rel="external">源码下载地址</a></li>
 <li><a href="https://github.com/quantifind/KafkaOffsetMonitor/releases/download/v0.2.1/KafkaOffsetMonitor-assembly-0.2.1.jar" target="_blank" rel="external">jar下载地址</a></li>
 </ul>
-<h3 id="1-2-使用方法"><a href="#1-2-使用方法" class="headerlink" title="1.2.使用方法"></a>1.2.使用方法</h3><p>This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.</p>
+<h2 id="使用方法"><a href="#使用方法" class="headerlink" title="使用方法"></a>使用方法</h2><p>This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">java -cp KafkaOffsetMonitor-assembly-0.2.1.jar com.quantifind.kafka.offsetapp.OffsetGetterWeb --zk serveIp1,serveIp2,serveIp3 --port 8080 --refresh 10.seconds --retain 2.days</span><br></pre></td></tr></table></figure>
 <p>The arguments are:</p>
 <ul>
@@ -4956,26 +4956,26 @@
 <li><strong>retain</strong>: how long should points be kept in the DB;</li>
 <li><strong>dbName</strong>: where to store the history (default ‘offsetapp’);</li>
 </ul>
-<h2 id="2-Kafka-Manager"><a href="#2-Kafka-Manager" class="headerlink" title="2.Kafka Manager"></a>2.Kafka Manager</h2><p><a href="https://github.com/yahoo/kafka-manager" target="_blank" rel="external">源码地址</a></p>
-<h3 id="2-1-安装"><a href="#2-1-安装" class="headerlink" title="2.1.安装"></a>2.1.安装</h3><p><a href="http://hengyunabc.github.io/kafka-manager-install/" target="_blank" rel="external">Kafka Manager安装</a></p>
-<h4 id="2-1-1-sbt安装"><a href="#2-1-1-sbt安装" class="headerlink" title="2.1.1.sbt安装"></a>2.1.1.sbt安装</h4><p><a href="http://www.scala-sbt.org/download.html" target="_blank" rel="external">sbt安装</a></p>
+<h1 id="Kafka-Manager"><a href="#Kafka-Manager" class="headerlink" title="Kafka Manager"></a>Kafka Manager</h1><p><a href="https://github.com/yahoo/kafka-manager" target="_blank" rel="external">源码地址</a></p>
+<h2 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h2><p><a href="http://hengyunabc.github.io/kafka-manager-install/" target="_blank" rel="external">Kafka Manager安装</a></p>
+<h3 id="sbt安装"><a href="#sbt安装" class="headerlink" title="sbt安装"></a>sbt安装</h3><p><a href="http://www.scala-sbt.org/download.html" target="_blank" rel="external">sbt安装</a></p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">curl https://bintray.com/sbt/rpm/rpm &gt; bintray-sbt-rpm.repo</span><br><span class="line">sudo mv bintray-sbt-rpm.repo /etc/yum.repos.d/</span><br><span class="line">sudo yum install sbt</span><br></pre></td></tr></table></figure>
-<h4 id="2-1-2-下载，编译"><a href="#2-1-2-下载，编译" class="headerlink" title="2.1.2.下载，编译"></a>2.1.2.下载，编译</h4><p>下载，并编译源码：</p>
+<h3 id="下载，编译"><a href="#下载，编译" class="headerlink" title="下载，编译"></a>下载，编译</h3><p>下载，并编译源码：</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">git <span class="built_in">clone</span> https://github.com/yahoo/kafka-manager</span><br><span class="line"><span class="built_in">cd</span> kafka-manager</span><br><span class="line">sbt clean dist</span><br></pre></td></tr></table></figure>
 <p>生成的包会在<code>kafka-manager/target/universal</code> 下面。生成的包只需要java环境就可以运行了，在部署的机器上不需要安装sbt.</p>
-<h4 id="2-1-3-打包部署"><a href="#2-1-3-打包部署" class="headerlink" title="2.1.3.打包部署"></a>2.1.3.打包部署</h4><p>打好包好，在部署机器上解压，修改好配置文件，就可以运行了。</p>
+<h3 id="打包部署"><a href="#打包部署" class="headerlink" title="打包部署"></a>打包部署</h3><p>打好包好，在部署机器上解压，修改好配置文件，就可以运行了。</p>
 <p>解压：<br><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">unzip kafka-manager-1.0-SNAPSHOT.zip</span><br></pre></td></tr></table></figure></p>
-<h3 id="2-2-配置运行"><a href="#2-2-配置运行" class="headerlink" title="2.2.配置运行"></a>2.2.配置运行</h3><h4 id="2-2-1-配置"><a href="#2-2-1-配置" class="headerlink" title="2.2.1.配置"></a>2.2.1.配置</h4><p>修改<code>conf/application.conf</code>，把<code>kafka-manager.zkhosts</code>改为自己的zookeeper服务器地址</p>
+<h2 id="配置运行"><a href="#配置运行" class="headerlink" title="配置运行"></a>配置运行</h2><h3 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h3><p>修改<code>conf/application.conf</code>，把<code>kafka-manager.zkhosts</code>改为自己的zookeeper服务器地址</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kafka-manager.zkhosts=<span class="string">"localhost:2181"</span></span><br></pre></td></tr></table></figure>
-<h4 id="2-2-2-启动"><a href="#2-2-2-启动" class="headerlink" title="2.2.2.启动"></a>2.2.2.启动</h4><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./bin/kafka-manager -Dconfig.file=./conf/application.conf -Dhttp.port=8080</span><br></pre></td></tr></table></figure>
-<h4 id="2-2-3-kafka-manager其他方面"><a href="#2-2-3-kafka-manager其他方面" class="headerlink" title="2.2.3.kafka-manager其他方面"></a>2.2.3.kafka-manager其他方面</h4><p>查看帮助</p>
+<h3 id="启动"><a href="#启动" class="headerlink" title="启动"></a>启动</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./bin/kafka-manager -Dconfig.file=./conf/application.conf -Dhttp.port=8080</span><br></pre></td></tr></table></figure>
+<h3 id="kafka-manager其他方面"><a href="#kafka-manager其他方面" class="headerlink" title="kafka-manager其他方面"></a>kafka-manager其他方面</h3><p>查看帮助</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./bin/kafka-manager -h</span><br></pre></td></tr></table></figure>
 <p>后台运行</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nohup ./kafka-manager -Dconfig.file=../conf/application.conf &gt;/dev/null 2&gt;&amp;1 &amp;</span><br></pre></td></tr></table></figure>
 <p>默认http端口是9000，可以修改配置文件里的http.port的值，或者通过命令行参数传递：</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./kafka-manager -Dhttp.port=9001</span><br></pre></td></tr></table></figure>
 <p>如果不想自己编译源文件，也可以通过下面的地址直接下载，<a href="http://pan.baidu.com/s/1kTtFpGV" target="_blank" rel="external">kafka-manager-1.0-SNAPSHOT.zip下载地址</a></p>
-<h3 id="3-Kafka-web-console"><a href="#3-Kafka-web-console" class="headerlink" title="3.Kafka-web-console"></a>3.Kafka-web-console</h3><p><a href="https://github.com/claudemamo/kafka-web-console" target="_blank" rel="external">源码地址</a></p>
+<h1 id="Kafka-web-console"><a href="#Kafka-web-console" class="headerlink" title="Kafka-web-console"></a>Kafka-web-console</h1><p><a href="https://github.com/claudemamo/kafka-web-console" target="_blank" rel="external">源码地址</a></p>
 <p>不过这个项目好像不再进行更新了，想了解这个项目的话可以进入github主页去研究研究。</p>
 ]]></content>
     </entry>
