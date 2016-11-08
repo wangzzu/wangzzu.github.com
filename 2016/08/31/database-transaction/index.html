@@ -1,0 +1,1108 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="sql,mysql," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="数据库事务性并非任意的对数据库的操作序列都是数据库事务。事务应该具有4个属性：原子性、一致性、隔离性、持久性。这四个属性通常称为ACID特性。
+
+原子性（Atomicity）：事务作为一个整体被执行，包含在其中的对数据库的操作要么全部被执行，要么都不执行。
+一致性（Consistency）：事务应确保数据库的状态从一个一致状态转变为另一个一致状态。一致状态的含义是数据库中的数据应满足完整性约束。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="数据库事务性（MySQL 存储引擎及索引结构）">
+<meta property="og:url" content="http://wangzzu.github.io/2016/08/31/database-transaction/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="数据库事务性并非任意的对数据库的操作序列都是数据库事务。事务应该具有4个属性：原子性、一致性、隔离性、持久性。这四个属性通常称为ACID特性。
+
+原子性（Atomicity）：事务作为一个整体被执行，包含在其中的对数据库的操作要么全部被执行，要么都不执行。
+一致性（Consistency）：事务应确保数据库的状态从一个一致状态转变为另一个一致状态。一致状态的含义是数据库中的数据应满足完整性约束。">
+<meta property="og:updated_time" content="2016-09-01T06:21:14.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="数据库事务性（MySQL 存储引擎及索引结构）">
+<meta name="twitter:description" content="数据库事务性并非任意的对数据库的操作序列都是数据库事务。事务应该具有4个属性：原子性、一致性、隔离性、持久性。这四个属性通常称为ACID特性。
+
+原子性（Atomicity）：事务作为一个整体被执行，包含在其中的对数据库的操作要么全部被执行，要么都不执行。
+一致性（Consistency）：事务应确保数据库的状态从一个一致状态转变为另一个一致状态。一致状态的含义是数据库中的数据应满足完整性约束。">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> 数据库事务性（MySQL 存储引擎及索引结构） | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-guestbook">
+          <a href="/guestbook" rel="section">
+            
+              <i class="menu-item-icon fa fa-book fa-fw"></i> <br />
+            
+            留言
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="#" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup">
+ <span class="search-icon fa fa-search"></span>
+ <input type="text" id="local-search-input">
+ <div id="local-search-result"></div>
+ <span class="popup-btn-close">close</span>
+</div>
+
+
+    </div>
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                数据库事务性（MySQL 存储引擎及索引结构）
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-08-31T23:33:22+08:00" content="2016-08-31">
+              2016-08-31
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/db/" itemprop="url" rel="index">
+                    <span itemprop="name">db</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2016/08/31/database-transaction/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/08/31/database-transaction/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          <span>&nbsp; | &nbsp;
+          <span id="busuanzi_value_page_pv" ></span>次阅读
+          </span>
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="数据库事务性"><a href="#数据库事务性" class="headerlink" title="数据库事务性"></a>数据库事务性</h1><p>并非任意的对数据库的操作序列都是数据库事务。事务应该具有4个属性：原子性、一致性、隔离性、持久性。这四个属性通常称为ACID特性。</p>
+<ol>
+<li>原子性（Atomicity）：事务作为一个整体被执行，包含在其中的对数据库的操作要么全部被执行，要么都不执行。</li>
+<li>一致性（Consistency）：事务应确保数据库的状态从一个一致状态转变为另一个一致状态。一致状态的含义是数据库中的数据应满足完整性约束。</li>
+<li>隔离性（Isolation）：多个事务并发执行时，一个事务的执行不应影响其他事务的执行。事务查看数据时数据所处的状态，要么是另一并发事务修改它之前的状态，要么是另一事务修改它之后的状态，事务不会查看中间状态的数据。换句话说，一个事务的影响在该事务提交前对其他事务都不可见。</li>
+<li>持久性（Durability）：一个事务一旦提交，他对数据库的修改应该永久保存在数据库中。</li>
+</ol>
+<h2 id="数据库的并发控制"><a href="#数据库的并发控制" class="headerlink" title="数据库的并发控制"></a>数据库的并发控制</h2><p>数据库管理系统（DBMS）中的并发控制的任务是确保在多个事务同时存取数据库中同一数据时不破坏事务的隔离性和统一性以及数据库的统一性。</p>
+<p>封锁、时间戳、乐观并发控制(乐观锁)和悲观并发控制（悲观锁）是并发控制主要采用的技术手段。</p>
+<h3 id="锁的分类-oracle"><a href="#锁的分类-oracle" class="headerlink" title="锁的分类(oracle)"></a>锁的分类(oracle)</h3><ol>
+<li>按操作划分，可分为DML锁、DDL锁</li>
+<li>按锁的粒度划分，可分为表级锁、行级锁、页级锁（mysql）</li>
+<li>按锁级别划分，可分为共享锁、排他锁</li>
+<li>按加锁方式划分，可分为自动锁、显示锁</li>
+<li>按使用方式划分，可分为乐观锁、悲观锁</li>
+</ol>
+<ul>
+<li>DML锁（data locks，数据锁），用于保护数据的完整性，其中包括行级锁(Row Locks (TX锁))、表级锁(table lock(TM锁));</li>
+<li>DDL锁（dictionary locks，数据字典锁），用于保护数据库对象的结构，如表、索引等的结构定义.</li>
+<li>其中包排他DDL锁（Exclusive DDL lock）、共享DDL锁（Share DDL lock）、可中断解析锁（Breakable parse locks）</li>
+</ul>
+<h1 id="数据隔离级别"><a href="#数据隔离级别" class="headerlink" title="数据隔离级别"></a>数据隔离级别</h1><p>如果不对数据库进行并发控制，可能会产生异常情况：</p>
+<ol>
+<li>脏读(Dirty Read)<ul>
+<li>当一个事务读取另一个事务尚未提交的修改时，产生脏读。</li>
+<li>同一事务内不是脏读。 一个事务开始读取了某行数据，但是另外一个事务已经更新了此数据但没有能够及时提交。这是相当危险的，因为很可能所有的操作都被回滚，也就是说读取出的数据其实是错误的。</li>
+</ul>
+</li>
+<li>非重复读(Nonrepeatable Read)：一个事务对同一行数据重复读取两次，但是却得到了不同的结果。同一查询在同一事务中多次进行，由于其他提交事务所做的修改或删除，每次返回不同的结果集，此时发生非重复读。</li>
+<li>幻像读(Phantom Reads)：事务在操作过程中进行两次查询，第二次查询的结果包含了第一次查询中未出现的数据（这里并不要求两次查询的SQL语句相同）。这是因为在两次查询过程中有另外一个事务插入数据造成的。<ul>
+<li>当对某行执行插入或删除操作，而该行属于某个事务正在读取的行的范围时，会发生幻像读问题。</li>
+</ul>
+</li>
+<li>丢失修改(Lost Update)<ul>
+<li>第一类：当两个事务更新相同的数据源，如果第一个事务被提交，第二个却被撤销，那么连同第一个事务做的更新也被撤销。</li>
+<li>第二类：有两个并发事务同时读取同一行数据，然后其中一个对它进行修改提交，而另一个也进行了修改提交。这就会造成第一次写操作失效。</li>
+</ul>
+</li>
+</ol>
+<p>为了兼顾并发效率和异常控制，在标准SQL规范中，定义了4个事务隔离级别，（ Oracle 和 SQL Server 对标准隔离级别有不同的实现 ）</p>
+<ol>
+<li>未提交读(Read Uncommitted)<ul>
+<li>直译就是”读未提交”，意思就是即使一个更新语句没有提交，但是别的事务可以读到这个改变。</li>
+<li>Read Uncommitted允许脏读。</li>
+</ul>
+</li>
+<li>已提交读(Read Committed)<ul>
+<li>直译就是”读提交”，意思就是语句提交以后，即执行了 Commit 以后别的事务就能读到这个改变，只能读取到已经提交的数据。Oracle等多数数据库默认都是该级别。</li>
+<li>Read Commited 不允许脏读，但会出现非重复读。</li>
+</ul>
+</li>
+<li>可重复读(Repeatable Read)<ul>
+<li>直译就是”可以重复读”，这是说在同一个事务里面先后执行同一个查询语句的时候，得到的结果是一样的。</li>
+<li>Repeatable Read 不允许脏读，不允许非重复读，但是会出现幻象读。</li>
+</ul>
+</li>
+<li>串行读(Serializable)<ul>
+<li>直译就是”序列化”，意思是说这个事务执行的时候不允许别的事务并发执行。完全串行化的读，每次读都需要获得表级共享锁，读写相互都会阻塞。</li>
+<li>Serializable 不允许不一致现象的出现。</li>
+</ul>
+</li>
+</ol>
+<h2 id="事务隔离的实现——锁"><a href="#事务隔离的实现——锁" class="headerlink" title="事务隔离的实现——锁"></a>事务隔离的实现——锁</h2><ol>
+<li>共享锁(S锁)<ul>
+<li>用于只读操作(<code>SELECT</code>)，锁定共享的资源。共享锁不会阻止其他用户读，但是阻止其他的用户写和修改。</li>
+</ul>
+</li>
+<li>更新锁(U锁)<ul>
+<li>用于可更新的资源中。防止当多个会话在读取、锁定以及随后可能进行的资源更新时发生常见形式的死锁。</li>
+</ul>
+</li>
+<li>独占锁(X锁，也叫排他锁)<ul>
+<li>一次只能有一个独占锁用在一个资源上，并且阻止其他所有的锁包括共享缩。写是独占锁，可以有效的防止“脏读”。</li>
+</ul>
+</li>
+</ol>
+<p>隔离级别如何实现，这部分的详细内容可以参考<a href="http://www.hollischuang.com/archives/943" target="_blank" rel="external">深入分析事务的隔离级别</a>一文，下表是进行的总结。</p>
+<table>
+<thead>
+<tr>
+<th>隔离级别</th>
+<th>实现原理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>未提交读(Read uncommitted)</td>
+<td>事务在读数据的时候并未对数据加锁；事务在修改数据的时候只对数据增加行级共享锁。</td>
+</tr>
+<tr>
+<td>提交读(Read committed)</td>
+<td>事务对当前被读取的数据加 行级共享锁（当读到时才加锁），一旦读完该行，立即释放该行级共享锁；事务在更新某数据的瞬间（就是发生更新的瞬间），必须先对其加行级排他锁，直到事务结束才释放。</td>
+</tr>
+<tr>
+<td>可重复读(Repeatable reads)</td>
+<td>事务在读取某数据的瞬间（就是开始读取的瞬间），必须先对其加 行级共享锁，直到事务结束才释放；事务在更新某数据的瞬间（就是发生更新的瞬间），必须先对其加 行级排他锁，直到事务结束才释放。</td>
+</tr>
+<tr>
+<td>可序列化(Serializable)</td>
+<td>事务在读取数据时，必须先对其加 表级共享锁 ，直到事务结束才释放；事务在更新数据时，必须先对其加 表级排他锁 ，直到事务结束才释放。</td>
+</tr>
+</tbody>
+</table>
+<h1 id="MySQL-的存储引擎"><a href="#MySQL-的存储引擎" class="headerlink" title="MySQL 的存储引擎"></a>MySQL 的存储引擎</h1><p>关系数据库表是用于存储和组织信息的数据结构，可以将表理解为由行和列组成的表格，类似于Excel的电子表格的形式。有的表简单，有的表复杂，有的表根本不用来存储任何长期的数据，有的表读取时非常快，但是插入数据时去很差；而我们在实际开发过程中，就可能需要各种各样的表，不同的表，就意味着存储不同类型的数据，数据的处理上也会存在着差异。</p>
+<p>对于MySQL来说，它提供了很多种类型的存储引擎，我们可以根据对数据处理的需求，选择不同的存储引擎，从而最大限度的利用MySQL强大的功能。本节将总结和分析各个引擎的特点，以及适用场合，这里先不会纠结于更深层次的东西，下面就对MySQL支持的存储引擎进行简单的介绍。（本节主要参考<a href="http://www.jellythink.com/archives/640" target="_blank" rel="external">MySQL存储引擎介绍</a>一文）</p>
+<p>在mysql客户端中，使用以下命令可以查看MySQL支持的引擎。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">engines</span>;</span><br></pre></td></tr></table></figure>
+<h2 id="MyISAM"><a href="#MyISAM" class="headerlink" title="MyISAM"></a>MyISAM</h2><p><code>MyISAM</code> 表是独立于操作系统的，这说明可以轻松地将其从 Windows 服务器移植到 Linux 服务器；每当我们建立一个 <code>MyISAM</code> 引擎的表时，就会在本地磁盘上建立三个文件，文件名就是表名。例如，我建立了一个 <code>MyISAM</code> 引擎的 <code>tb_Demo</code> 表，那么就会生成以下三个文件：</p>
+<ul>
+<li><code>tb_demo.frm</code>：存储表定义；</li>
+<li><code>tb_demo.MYD</code>：存储数据；</li>
+<li><code>tb_demo.MYI</code>：存储索引。</li>
+</ul>
+<p>有以下特点：</p>
+<ul>
+<li>不支持事务：MyISAM存储引擎不支持事务，所以对事务有要求的业务场景不能使用</li>
+<li>表级锁定：其锁定机制是表级锁定，这虽然可以让锁定的实现成本很小但是也同时大大降低了其并发性能</li>
+<li>读写互相阻塞：不仅会在写入的时候阻塞读取，MyISAM还会在读取的时候阻塞写入，但读本身并不会阻塞另外的读</li>
+<li>只会缓存索引：MyISAM可以通过key_buffer缓存以大大提高访问性能减少磁盘IO，但是这个缓存区只会缓存索引，而不会缓存数据</li>
+</ul>
+<p><code>MyISAM</code> 表无法处理事务，这就意味着有事务处理需求的表，不能使用 <code>MyISAM</code> 存储引擎。<code>MyISAM</code> 存储引擎特别适合在以下几种情况下使用：</p>
+<ul>
+<li>选择密集型的表。MyISAM存储引擎在筛选大量数据时非常迅速，这是它最突出的优点。</li>
+<li>插入密集型的表。MyISAM的并发插入特性允许同时选择和插入数据。例如：MyISAM存储引擎很适合管理邮件或Web服务器日志数据。</li>
+</ul>
+<h2 id="InnoDB"><a href="#InnoDB" class="headerlink" title="InnoDB"></a>InnoDB</h2><p><code>InnoDB</code> 是一个健壮的事务型存储引擎，这种存储引擎已经被很多互联网公司使用，为用户操作非常大的数据存储提供了一个强大的解决方案。<code>InnoDB</code> 是默认的存储引擎，<code>InnoDB</code> 还引入了行级锁定和外键约束。</p>
+<p>有以下几点特点：</p>
+<ol>
+<li>具有较好的事务支持：支持4个事务隔离级别，支持多版本读</li>
+<li>行级锁定：通过索引实现，全表扫描仍然会是表锁，注意间隙锁的影响</li>
+<li>读写阻塞与事务隔离级别相关</li>
+<li>具有非常高效的缓存特性：能缓存索引，也能缓存数据</li>
+<li>整个表和主键以Cluster方式存储，组成一颗平衡树</li>
+<li>所有Secondary Index都会保存主键信息</li>
+</ol>
+<p>在以下场合下，使用 <code>InnoDB</code> 是最理想的选择：</p>
+<ol>
+<li>更新密集的表。<code>InnoDB</code> 存储引擎特别适合处理多重并发的更新请求。</li>
+<li>事务。<code>InnoDB</code> 存储引擎是支持事务的标准 MySQL 存储引擎。</li>
+<li>自动灾难恢复。与其它存储引擎不同，<code>InnoDB</code> 表能够自动从灾难中恢复。</li>
+<li>外键约束。MySQL支持外键的存储引擎只有 <code>InnoDB</code>。</li>
+<li>支持自动增加列<code>AUTO_INCREMENT</code>属性。</li>
+</ol>
+<p>一般来说，如果需要事务支持，并且有较高的并发读取频率，<code>InnoDB</code> 是不错的选择。</p>
+<h2 id="MEMORY"><a href="#MEMORY" class="headerlink" title="MEMORY"></a>MEMORY</h2><p>使用 MySQL <code>Memory</code> 存储引擎的出发点是速度。为得到最快的响应时间，采用的逻辑存储介质是系统<strong>内存</strong>。虽然在内存中存储表数据确实会提供很高的性能，但当 mysqid 守护进程崩溃时，所有的 <code>Memory</code> 数据都会丢失。获得速度的同时也带来了一些缺陷。它要求存储在 <code>Memory</code> 数据表里的数据使用的是长度不变的格式，这意味着不能使用 <code>BLOB</code> 和 <code>TEXT</code> 这样的长度可变的数据类型，<code>VARCHAR</code> 是一种长度可变的类型，但因为它在 MySQL 内部当做长度固定不变的 <code>CHAR</code> 类型，所以可以使用。</p>
+<p>一般在以下几种情况下适用 <code>Memory</code> 存储引擎：</p>
+<ol>
+<li>目标数据较小，而且被非常频繁地访问。在内存中存放数据，所以会造成内存的使用，可以通过参数 <code>max_heap_table_size</code> 控制 <code>Memory</code> 表的大小，设置此参数，就可以限制 <code>Memory</code> 表的最大大小；</li>
+<li>如果数据是临时的，而且要求必须立即可用，那么就可以存放在内存表中。</li>
+<li>存储在 <code>Memory</code> 表中的数据如果突然丢失，不会对应用服务产生实质的负面影响。</li>
+</ol>
+<p><code>Memory</code> 同时支持散列索引和B树索引。B树索引的优于散列索引的是，可以使用部分查询和通配查询，也可以使用<code>&lt;</code>、<code>&gt;</code>和<code>&gt;=</code>等操作符方便数据挖掘。散列索引进行“相等比较”非常快，但是对“范围比较”的速度就慢多了，因此散列索引值适合使用在<code>=</code>和<code>&lt;&gt;</code>的操作符中，不适合在<code>&lt;</code>或<code>&gt;</code>操作符中，也同样不适合用在 <code>order by</code> 子句中。</p>
+<p>可以在表创建时利用 <code>USING</code> 子句指定要使用的版本。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> <span class="keyword">users</span></span><br><span class="line">(</span><br><span class="line">    <span class="keyword">id</span> <span class="built_in">smallint</span> <span class="keyword">unsigned</span> <span class="keyword">not</span> <span class="literal">null</span> auto_increment,</span><br><span class="line">    username <span class="built_in">varchar</span>(<span class="number">15</span>) <span class="keyword">not</span> <span class="literal">null</span>,</span><br><span class="line">    pwd <span class="built_in">varchar</span>(<span class="number">15</span>) <span class="keyword">not</span> <span class="literal">null</span>,</span><br><span class="line">    <span class="keyword">index</span> <span class="keyword">using</span> <span class="keyword">hash</span> (username),</span><br><span class="line">    primary <span class="keyword">key</span> (<span class="keyword">id</span>)</span><br><span class="line">)<span class="keyword">engine</span>=<span class="keyword">memory</span>;</span><br></pre></td></tr></table></figure>
+<p>上述代码创建了一个表，在 <code>username</code> 字段上使用了 <code>HASH</code> 散列索引。下面的代码就创建一个表，使用 <code>BTREE</code> 索引。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> <span class="keyword">users</span></span><br><span class="line">(</span><br><span class="line">    <span class="keyword">id</span> <span class="built_in">smallint</span> <span class="keyword">unsigned</span> <span class="keyword">not</span> <span class="literal">null</span> auto_increment,</span><br><span class="line">    username <span class="built_in">varchar</span>(<span class="number">15</span>) <span class="keyword">not</span> <span class="literal">null</span>,</span><br><span class="line">    pwd <span class="built_in">varchar</span>(<span class="number">15</span>) <span class="keyword">not</span> <span class="literal">null</span>,</span><br><span class="line">    <span class="keyword">index</span> <span class="keyword">using</span> btree (username),</span><br><span class="line">    primary <span class="keyword">key</span> (<span class="keyword">id</span>)</span><br><span class="line">)<span class="keyword">engine</span>=<span class="keyword">memory</span>;</span><br></pre></td></tr></table></figure>
+<h2 id="MERGE"><a href="#MERGE" class="headerlink" title="MERGE"></a>MERGE</h2><p><code>MERGE</code> 存储引擎是一组 <code>MyISAM</code> 表的组合，这些 <code>MyISAM</code> 表结构必须完全相同，尽管其使用不如其它引擎突出，但是在某些情况下非常有用。说白了，<code>Merge</code> 表就是几个相同 <code>MyISAM</code> 表的聚合器；<code>Merge</code> 表中并没有数据，对 <code>Merge</code> 类型的表可以进行查询、更新、删除操作，这些操作实际上是对内部的 <code>MyISAM</code> 表进行操作。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><table>
+<thead>
+<tr>
+<th></th>
+<th>特点</th>
+<th>适用情况</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MyISAM</td>
+<td>独立于操作系统的；不支持事务；表级锁定；</td>
+<td>不需要事务支持；并发相对较低；  数据修改相对较少，以读为主；数据一致性要求不是非常高</td>
+</tr>
+<tr>
+<td>InnoDB</td>
+<td>事务性；行级锁定；外键约束；</td>
+<td>需要事务支持；数据更新较为频繁；   数据一致性要求较高；行级锁定对高并发有很好的适应能力</td>
+</tr>
+<tr>
+<td>MEMORY</td>
+<td>存储内存里，数据容易丢失；性能高；存储的数据表要求数据类型长度不可变</td>
+<td>数据小，但是可能会被频繁访问；数据是临时，并且立即可用；  可靠性不高的数据</td>
+</tr>
+</tbody>
+</table>
+<h1 id="数据库的索引结构"><a href="#数据库的索引结构" class="headerlink" title="数据库的索引结构"></a>数据库的索引结构</h1><p>在 MySQL 官方定义中，索引（ Index ）是帮助 MySQL 高效获取数据的数据结构。提取句子主干，就可以得到索引的本质：索引是数据结构。</p>
+<p>在 MySQL 中，主要有四种类型的索引，分别为： B-Tree 索引， Hash 索引， Fulltext （全文）索引和 R-Tree 索引。</p>
+<p>具体可以参考<a href="http://blog.codinglabs.org/articles/theory-of-mysql-index.html" target="_blank" rel="external">MySQL索引背后的数据结构及算法原理-张洋</a>一文，本文以后会把这部分给补充上。</p>
+<p>关于数据库的索引结构还有一下几篇文章推荐：</p>
+<ul>
+<li><a href="http://database.51cto.com/art/201504/473322_all.htm" target="_blank" rel="external">为什么要用B+树结构——MySQL索引结构的实现</a></li>
+<li><a href="http://ju.outofmemory.cn/entry/29124" target="_blank" rel="external">mysql索引原理之B+/-Tree</a></li>
+<li><a href="http://blog.csdn.net/hguisu/article/details/7786014" target="_blank" rel="external">B-树和B+树的应用：数据搜索和数据库索引</a></li>
+<li><a href="http://www.2cto.com/database/201404/295109.html" target="_blank" rel="external">2014阿里实习生面试题——mysql如何实现索引的</a></li>
+</ul>
+<hr>
+<p>参考</p>
+<ul>
+<li><a href="http://2627lounuo.blog.51cto.com/10696599/1787812" target="_blank" rel="external">数据库之——索引、触发器、事务（存储引擎）</a></li>
+<li><a href="http://www.jellythink.com/archives/640" target="_blank" rel="external">MySQL存储引擎介绍</a></li>
+<li><a href="http://blog.codinglabs.org/articles/theory-of-mysql-index.html" target="_blank" rel="external">MySQL索引背后的数据结构及算法原理-张洋</a></li>
+<li><a href="http://www.hollischuang.com/archives/943" target="_blank" rel="external">深入分析事务的隔离级别</a></li>
+</ul>
+
+      
+    </div>
+
+    <div>
+      
+        
+<div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center">
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
+  <button id="rewardButton", disable="enable", onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}", style="cursor: pointer; border: 0; outline: 0; border-radius: 100%; padding: 0; margin: 0; letter-spacing: normal; text-transform: none; text-indent: 0px; text-shadow: none">
+    <span onmouseover="this.style.color='rgb(236,96,0)';this.style.background='rgb(204,204,204)'" onMouseOut="this.style.color='#fff';this.style.background='rgb(236,96,0)'" style="display: inline-block; width: 70px; height: 70px; border-radius: 100%; line-height: 81px; color: #fff; font: 400 35px/75px 'microsofty'; background: rgb(236,96,0)">赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/pay/weixinpay.jpg" alt="Matt WeChat Pay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>微信打赏</p>
+      </div>
+    
+    
+      <div id="alipay" style="display: inline-block">
+        <img id="alipay_qr" src="/images/pay/alipay.jpg" alt="Matt Alipay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>支付宝打赏</p>
+      </div>
+    
+  </div>
+<div>
+
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/sql/" rel="tag">#sql</a>
+          
+            <a href="/tags/mysql/" rel="tag">#mysql</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2016/08/30/http-protocol/" rel="next" title="TCP/IP 协议">
+                <i class="fa fa-chevron-left"></i> TCP/IP 协议
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2016/09/07/jvm-basic1/" rel="prev" title="JVM学习——java 内存区域与内存溢出分析">
+                JVM学习——java 内存区域与内存溢出分析 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2016/08/31/database-transaction/"
+     data-title="数据库事务性（MySQL 存储引擎及索引结构）"
+     data-content=""
+     data-url="http://wangzzu.github.io/2016/08/31/database-transaction/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2016/08/31/database-transaction/"
+           data-title="数据库事务性（MySQL 存储引擎及索引结构）" data-url="http://wangzzu.github.io/2016/08/31/database-transaction/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">44</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">17</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">25</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#数据库事务性"><span class="nav-number">1.</span> <span class="nav-text">数据库事务性</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#数据库的并发控制"><span class="nav-number">1.1.</span> <span class="nav-text">数据库的并发控制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#锁的分类-oracle"><span class="nav-number">1.1.1.</span> <span class="nav-text">锁的分类(oracle)</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#数据隔离级别"><span class="nav-number">2.</span> <span class="nav-text">数据隔离级别</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#事务隔离的实现——锁"><span class="nav-number">2.1.</span> <span class="nav-text">事务隔离的实现——锁</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#MySQL-的存储引擎"><span class="nav-number">3.</span> <span class="nav-text">MySQL 的存储引擎</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#MyISAM"><span class="nav-number">3.1.</span> <span class="nav-text">MyISAM</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#InnoDB"><span class="nav-number">3.2.</span> <span class="nav-text">InnoDB</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#MEMORY"><span class="nav-number">3.3.</span> <span class="nav-text">MEMORY</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#MERGE"><span class="nav-number">3.4.</span> <span class="nav-text">MERGE</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#总结"><span class="nav-number">3.5.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#数据库的索引结构"><span class="nav-number">4.</span> <span class="nav-text">数据库的索引结构</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+<script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+本站总访问量 <span id="busuanzi_value_site_pv"></span> &nbsp&nbsp&nbsp
+您是第<span id="busuanzi_value_site_uv"></span>个来到的小伙伴
+
+
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length == 0) {
+       search_path = "search.xml";
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    function proceedsearch() {
+      $("body").append('<div class="popoverlay">').css('overflow', 'hidden');
+      $('.popup').toggle();
+
+    }
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+    'use strict';
+    $.ajax({
+        url: path,
+        dataType: "xml",
+        async: true,
+        success: function( xmlResponse ) {
+            // get the contents from search data
+            isfetched = true;
+            $('.popup').detach().appendTo('.header-inner');
+            var datas = $( "entry", xmlResponse ).map(function() {
+                return {
+                    title: $( "title", this ).text(),
+                    content: $("content",this).text(),
+                    url: $( "url" , this).text()
+                };
+            }).get();
+            var $input = document.getElementById(search_id);
+            var $resultContent = document.getElementById(content_id);
+            $input.addEventListener('input', function(){
+                var matchcounts = 0;
+                var str='<ul class=\"search-result-list\">';                
+                var keywords = this.value.trim().toLowerCase().split(/[\s\-]+/);
+                $resultContent.innerHTML = "";
+                if (this.value.trim().length > 1) {
+                // perform local searching
+                datas.forEach(function(data) {
+                    var isMatch = true;
+                    var content_index = [];
+                    var data_title = data.title.trim().toLowerCase();
+                    var data_content = data.content.trim().replace(/<[^>]+>/g,"").toLowerCase();
+                    var data_url = data.url;
+                    var index_title = -1;
+                    var index_content = -1;
+                    var first_occur = -1;
+                    // only match artiles with not empty titles and contents
+                    if(data_title != '' && data_content != '') {
+                        keywords.forEach(function(keyword, i) {
+                            index_title = data_title.indexOf(keyword);
+                            index_content = data_content.indexOf(keyword);
+                            if( index_title < 0 && index_content < 0 ){
+                                isMatch = false;
+                            } else {
+                                if (index_content < 0) {
+                                    index_content = 0;
+                                }
+                                if (i == 0) {
+                                    first_occur = index_content;
+                                }
+                            }
+                        });
+                    }
+                    // show search results
+                    if (isMatch) {
+                        matchcounts += 1;
+                        str += "<li><a href='"+ data_url +"' class='search-result-title'>"+ data_title +"</a>";
+                        var content = data.content.trim().replace(/<[^>]+>/g,"");
+                        if (first_occur >= 0) {
+                            // cut out 100 characters
+                            var start = first_occur - 20;
+                            var end = first_occur + 80;
+                            if(start < 0){
+                                start = 0;
+                            }
+                            if(start == 0){
+                                end = 50;
+                            }
+                            if(end > content.length){
+                                end = content.length;
+                            }
+                            var match_content = content.substring(start, end);
+                            // highlight all keywords
+                            keywords.forEach(function(keyword){
+                                var regS = new RegExp(keyword, "gi");
+                                match_content = match_content.replace(regS, "<b class=\"search-keyword\">"+keyword+"</b>");
+                            });
+                            
+                            str += "<p class=\"search-result\">" + match_content +"...</p>"
+                        }
+                        str += "</li>";
+                    }
+                })};
+                str += "</ul>";
+                if (matchcounts == 0) { str = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>' }
+                if (keywords == "") { str = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>' }
+                $resultContent.innerHTML = str;
+            });
+            proceedsearch();
+        }
+    });}
+
+    // handle and trigger popup window;
+    $('.popup-trigger').mousedown(function(e) {
+      e.stopPropagation();
+      if (isfetched == false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+
+    });
+
+    $('.popup-btn-close').click(function(e){
+      $('.popup').hide();
+      $(".popoverlay").remove();
+      $('body').css('overflow', '');
+    });
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+  </script>
+
+  1
+
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
+      var all = MathJax.Hub.getAllJax(), i;
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
+
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config("");
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="custom_mathjax_source">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
+
+
+  
+
+  
+
+</body>
+</html>

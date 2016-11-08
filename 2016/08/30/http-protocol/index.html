@@ -1,0 +1,1040 @@
+<!doctype html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion">
+<head>
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+  <link href="/vendors/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css"/>
+
+
+
+
+  <link href="//fonts.googleapis.com/css?family=Lato:300,400,700,400italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+
+
+
+<link href="/vendors/font-awesome/css/font-awesome.min.css?v=4.4.0" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="tcp," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=0.5.0" />
+
+
+
+
+
+
+<meta name="description" content="TCP/IP 协议在计算机网络中是非常重要的部分，本文主要是简单介绍其中的 TCP 协议和 IP 协议，也会涉及一些在面试中经常遇到的问题。
+TCP/IP 协议在最项目开发中，经常会遇到各种协议，互联网基础通信框架就是 TCP/IP。TCP/IP 是个协议族，可分为四个层次：网络接口层（连接层）、网络层、传输层和应用层。
+可以这样理解它们的作用：
+
+连接层负责建立电路连接，是整个网络的物理基础，典">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TCP/IP 协议">
+<meta property="og:url" content="http://wangzzu.github.io/2016/08/30/http-protocol/index.html">
+<meta property="og:site_name" content="Matt's Blog">
+<meta property="og:description" content="TCP/IP 协议在计算机网络中是非常重要的部分，本文主要是简单介绍其中的 TCP 协议和 IP 协议，也会涉及一些在面试中经常遇到的问题。
+TCP/IP 协议在最项目开发中，经常会遇到各种协议，互联网基础通信框架就是 TCP/IP。TCP/IP 是个协议族，可分为四个层次：网络接口层（连接层）、网络层、传输层和应用层。
+可以这样理解它们的作用：
+
+连接层负责建立电路连接，是整个网络的物理基础，典">
+<meta property="og:image" content="http://wangzzu.github.io/images/computebase/tcp.jpg">
+<meta property="og:updated_time" content="2016-08-31T15:29:32.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="TCP/IP 协议">
+<meta name="twitter:description" content="TCP/IP 协议在计算机网络中是非常重要的部分，本文主要是简单介绍其中的 TCP 协议和 IP 协议，也会涉及一些在面试中经常遇到的问题。
+TCP/IP 协议在最项目开发中，经常会遇到各种协议，互联网基础通信框架就是 TCP/IP。TCP/IP 是个协议族，可分为四个层次：网络接口层（连接层）、网络层、传输层和应用层。
+可以这样理解它们的作用：
+
+连接层负责建立电路连接，是整个网络的物理基础，典">
+<meta name="twitter:image" content="http://wangzzu.github.io/images/computebase/tcp.jpg">
+
+
+
+<script type="text/javascript" id="hexo.configuration">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    scheme: 'Mist',
+    sidebar: {"position":"left","display":"hide"},
+    fancybox: true,
+    motion: true,
+    duoshuo: {
+      userId: 0,
+      author: '博主'
+    }
+  };
+</script>
+
+  <title> TCP/IP 协议 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+
+
+
+
+
+  <!-- hexo-inject:begin --><!-- hexo-inject:end --><script type="text/javascript">
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//tajs.qq.com/stats?sId=55364149";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <div style="display: none;">
+    <script src="http://s6.cnzz.com/stat.php?id=1256517224&web_id=1256517224" type="text/javascript"></script>
+  </div>
+
+
+
+
+
+  
+  
+    
+  
+
+  <div class="container one-collumn sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-meta ">
+  
+
+  <div class="custom-logo-site-title">
+    <a href="/"  class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <span class="site-title">Matt's Blog</span>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+  <p class="site-subtitle">wangzzu</p>
+</div>
+
+<div class="site-nav-toggle">
+  <button>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+    <span class="btn-bar"></span>
+  </button>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-home fa-fw"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives" rel="section">
+            
+              <i class="menu-item-icon fa fa-archive fa-fw"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories" rel="section">
+            
+              <i class="menu-item-icon fa fa-th fa-fw"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags" rel="section">
+            
+              <i class="menu-item-icon fa fa-tags fa-fw"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-guestbook">
+          <a href="/guestbook" rel="section">
+            
+              <i class="menu-item-icon fa fa-book fa-fw"></i> <br />
+            
+            留言
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about" rel="section">
+            
+              <i class="menu-item-icon fa fa-user fa-fw"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="#" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />
+            
+            搜索
+          </a>
+        </li>
+      
+    </ul>
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup">
+ <span class="search-icon fa fa-search"></span>
+ <input type="text" id="local-search-input">
+ <div id="local-search-result"></div>
+ <span class="popup-btn-close">close</span>
+</div>
+
+
+    </div>
+  
+</nav>
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+            
+            
+              
+                TCP/IP 协议
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            <span class="post-meta-item-icon">
+              <i class="fa fa-calendar-o"></i>
+            </span>
+            <span class="post-meta-item-text">发表于</span>
+            <time itemprop="dateCreated" datetime="2016-08-30T10:33:22+08:00" content="2016-08-30">
+              2016-08-30
+            </time>
+          </span>
+
+          
+            <span class="post-category" >
+              &nbsp; | &nbsp;
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+              
+                <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
+                  <a href="/categories/network/" itemprop="url" rel="index">
+                    <span itemprop="name">network</span>
+                  </a>
+                </span>
+
+                
+                
+
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                &nbsp; | &nbsp;
+                <a href="/2016/08/30/http-protocol/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count ds-thread-count" data-thread-key="2016/08/30/http-protocol/" itemprop="commentsCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          <span>&nbsp; | &nbsp;
+          <span id="busuanzi_value_page_pv" ></span>次阅读
+          </span>
+          
+
+          
+
+          
+          
+
+        </div>
+      </header>
+    
+
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>TCP/IP 协议在计算机网络中是非常重要的部分，本文主要是简单介绍其中的 TCP 协议和 IP 协议，也会涉及一些在面试中经常遇到的问题。</p>
+<h1 id="TCP-IP-协议"><a href="#TCP-IP-协议" class="headerlink" title="TCP/IP 协议"></a>TCP/IP 协议</h1><p>在最项目开发中，经常会遇到各种协议，互联网基础通信框架就是 TCP/IP。TCP/IP 是个协议族，可分为四个层次：网络接口层（连接层）、网络层、传输层和应用层。</p>
+<p>可以这样理解它们的作用：</p>
+<ol>
+<li>连接层负责建立电路连接，是整个网络的物理基础，典型的协议包括以太网、Wi-Fi、MPLS 等；</li>
+<li>网络层负责分配地址和传送二进制数据，主要协议是IP协议，也有 ICMP 协议、ARP 协议、RARP 协议和 BOOTP 协议；</li>
+<li>传输层负责传送文本数据，主要协议是 TCP 协议与 UDP 协议；</li>
+<li>应用层负责传送各种最终形态的数据，是直接与用户打交道的层，典型协议是 FTP、HTTP、TELNET、SMTP、DNS 等。</li>
+</ol>
+<h1 id="TCP协议"><a href="#TCP协议" class="headerlink" title="TCP协议"></a>TCP协议</h1><h2 id="特点"><a href="#特点" class="headerlink" title="特点"></a>特点</h2><ul>
+<li>TCP提供一种面向连接的、可靠的字节流服务</li>
+<li>在一个TCP连接中，仅有两方进行彼此通信。广播和多播不能用于TCP</li>
+<li>TCP使用校验和，确认和重传机制来保证可靠传输</li>
+<li>TCP使用累积确认</li>
+<li>TCP使用滑动窗口机制来实现流量控制，通过动态改变窗口的大小进行拥塞控制</li>
+</ul>
+<h2 id="三次握手"><a href="#三次握手" class="headerlink" title="三次握手"></a>三次握手</h2><p>所谓三次握手(Three-way Handshake)，是指建立一个 TCP 连接时，需要客户端和服务器总共发送3个包。三次握手的目的是连接服务器指定端口，建立 TCP 连接，并同步连接双方的序列号和确认号，交换 TCP 窗口大小信息。</p>
+<p>TCP 连接三次握手四次挥手（下小节介绍）如下图所示（图片来自<a href="http://www.jellythink.com/archives/705" target="_blank" rel="external">简析TCP的三次握手与四次分手</a>）</p>
+<p><img src="/images/computebase/tcp.jpg" alt="tcp"></p>
+<ol>
+<li>第一次握手：建立连接<ul>
+<li>客户端发送连接请求报文段，将 <code>SYN</code> 位置为1，<code>Sequence Number</code> 为 <code>x</code>；</li>
+<li>然后，客户端进入 <code>SYN_SEND</code>状态，等待服务器的确认；</li>
+</ul>
+</li>
+<li>第二次握手：服务器收到 <code>SYN</code> 报文段<ul>
+<li>服务器收到客户端的 <code>SYN</code> 报文段，需要对这个 <code>SYN</code> 报文段进行确认，设置 <code>Acknowledgment Number</code> 为 <code>x+1</code> (<code>Sequence Number+1</code>)；</li>
+<li>同时，自己自己还要发送 <code>SYN</code> 请求信息，将 <code>SYN</code> 位置为1，<code>Sequence Number</code> 为<code>y</code>；服务器端将上述所有信息放到一个报文段（即 <code>SYN+ACK</code> 报文段）中，一并发送给客户端，此时服务器进入 <code>SYN_RECV</code> 状态；</li>
+</ul>
+</li>
+<li>第三次握手：客户端收到服务器的 <code>SYN+ACK</code> 报文段<ul>
+<li>将 <code>Acknowledgment Number</code> 设置为<code>y+1</code>，向服务器发送 <code>ACK</code> 报文段，这个报文段发送完毕以后，客户端和服务器端都进入 <code>ESTABLISHED</code> 状态，完成 TCP 三次握手。</li>
+</ul>
+</li>
+</ol>
+<p>完成了三次握手，客户端和服务器端就可以开始传送数据。</p>
+<h3 id="为什么需要三次握手"><a href="#为什么需要三次握手" class="headerlink" title="为什么需要三次握手"></a>为什么需要三次握手</h3><p>既然总结了TCP的三次握手，那为什么非要三次呢？怎么觉得两次就可以完成了。那TCP为什么非要进行三次连接呢？在谢希仁的《计算机网络》中是这样说的：</p>
+<blockquote>
+<p>为了防止已失效的连接请求报文段突然又传送到了服务端，因而产生错误。</p>
+</blockquote>
+<p>在书中同时举了一个例子，如下：</p>
+<blockquote>
+<p>“已失效的连接请求报文段”的产生在这样一种情况下：client发出的第一个连接请求报文段并没有丢失，而是在某个网络结点长时间的滞留了，以致延误到连接释放以后的某个时间才到达server。本来这是一个早已失效的报文段。但server收到此失效的连接请求报文段后，就误认为是client再次发出的一个新的连接请求。于是就向client发出确认报文段，同意建立连接。假设不采用“三次握手”，那么只要server发出确认，新的连接就建立了。由于现在client并没有发出建立连接的请求，因此不会理睬server的确认，也不会向server发送数据。但server却以为新的运输连接已经建立，并一直等待client发来数据。这样，server的很多资源就白白浪费掉了。采用“三次握手”的办法可以防止上述现象发生。例如刚才那种情况，client不会向server的确认发出确认。server由于收不到确认，就知道client并没有要求建立连接。”</p>
+</blockquote>
+<p>这就很明白了，防止了服务器端的一直等待而浪费资源。</p>
+<h2 id="四次挥手"><a href="#四次挥手" class="headerlink" title="四次挥手"></a>四次挥手</h2><p>示意图如上图所示。</p>
+<p>当客户端和服务器通过三次握手建立了 TCP 连接以后，当数据传送完毕，肯定是要断开 TCP 连接的，这时候 TCP 采用的是四次挥手。</p>
+<ol>
+<li>第一次挥手<ul>
+<li>主机1（可以使客户端，也可以是服务器端），设置 <code>Sequence Number</code> 和 <code>Acknowledgment Number</code>，向主机2发送一个 <code>FIN</code> 报文段；</li>
+<li>此时，主机1进入 <code>FIN_WAIT_1</code> 状态；这表示主机1没有数据要发送给主机2了；</li>
+</ul>
+</li>
+<li>第二次挥手<ul>
+<li>主机2收到了主机1发送的 <code>FIN</code> 报文段，向主机1回一个 <code>ACK</code> 报文段，<code>Acknowledgment Number</code> 为 <code>Sequence Number</code> 加1；</li>
+<li>主机1进入 <code>FIN_WAIT_2</code> 状态；</li>
+<li>主机2告诉主机1，我“同意”你的关闭请求；</li>
+</ul>
+</li>
+<li>第三次挥手<ul>
+<li>主机2向主机1发送 <code>FIN</code> 报文段，请求关闭连接;</li>
+<li>同时主机2进入 <code>LAST_ACK</code> 状态；</li>
+</ul>
+</li>
+<li>第四次挥手<ul>
+<li>主机1收到主机2发送的 <code>FIN</code> 报文段，向主机2发送 <code>ACK</code> 报文段，然后主机1进入 <code>TIME_WAIT</code> 状态；</li>
+<li>主机2收到主机1的 <code>ACK</code> 报文段以后，就关闭连接；</li>
+<li>此时，主机1等待 2MSL 后依然没有收到回复，则证明 Server 端已正常关闭，那好，主机1也可以关闭连接了。</li>
+</ul>
+</li>
+</ol>
+<h3 id="为什么需要四次挥手"><a href="#为什么需要四次挥手" class="headerlink" title="为什么需要四次挥手"></a>为什么需要四次挥手</h3><p>那四次分手又是为何呢？TCP 协议是一种面向连接的、可靠的、基于字节流的运输层通信协议。TCP 是全双工模式，这就意味着，当主机1发出 <code>FIN</code> 报文段时，只是表示主机1已经没有数据要发送了，主机1告诉主机2，它的数据已经全部发送完毕了；但是，这个时候主机1还是可以接受来自主机2的数据；当主机2返回 <code>ACK</code> 报文段时，表示它已经知道主机1没有数据发送了，但是主机2还是可以发送数据到主机1的；当主机2也发送了 <code>FIN</code> 报文段时，这个时候就表示主机2也没有数据要发送了，就会告诉主机1，我也没有数据要发送了，之后彼此就会愉快的中断这次 TCP 连接。如果要正确的理解四次分手的原理，就需要了解四次分手过程中的状态变化。</p>
+<ol>
+<li><code>FIN_WAIT_1</code>: 这个状态要好好解释一下，其实 <code>FIN_WAIT_1</code> 和 <code>FIN_WAIT_2</code> 状态的真正含义都是表示等待对方的 <code>FIN</code> 报文。而这两种状态的区别是：<code>FIN_WAIT_1</code> 状态实际上是当 SOCKET 在 <code>ESTABLISHED</code> 状态时，它想主动关闭连接，向对方发送了 <code>FIN</code> 报文，此时该 SOCKET 即进入到 <code>FIN_WAIT_1</code> 状态。而当对方回应 <code>ACK</code> 报文后，则进入到 <code>FIN_WAIT_2</code> 状态，当然在实际的正常情况下，无论对方何种情况下，都应该马上回应 <code>ACK</code> 报文，所以 <code>FIN_WAIT_1</code> 状态一般是比较难见到的，而 <code>FIN_WAIT_2</code> 状态还有时常常可以用 <code>netstat</code>看到。（主动方）</li>
+<li><code>FIN_WAIT_2</code>：上面已经详细解释了这种状态，实际上 <code>FIN_WAIT_2</code> 状态下的 SOCKET，表示<strong>半连接</strong>，也即有一方要求 close 连接，但另外还告诉对方，我暂时还有点数据需要传送给你( <code>ACK</code> 信息)，稍后再关闭连接。（主动方）</li>
+<li><code>CLOSE_WAIT</code>：这种状态的含义其实是表示在等待关闭。怎么理解呢？当对方 close 一个 SOCKET 后发送 <code>FIN</code> 报文给自己，你系统毫无疑问地会回应一个 <code>ACK</code> 报文给对方，此时则进入到 <code>CLOSE_WAIT</code> 状态。接下来呢，实际上你真正需要考虑的事情是察看你是否还有数据发送给对方，如果没有的话，那么你也就可以 close 这个 SOCKET，发送 <code>FIN</code> 报文给对方，也即关闭连接。所以你在 <code>CLOSE_WAIT</code> 状态下，需要完成的事情是等待你去关闭连接。（被动方）</li>
+<li><code>LAST_ACK</code>: 这个状态还是比较容易好理解的，它是被动关闭一方在发送 <code>FIN</code> 报文后，最后等待对方的 ACK 报文。当收到 ACK 报文后，也即可以进入到 <code>CLOSED</code> 可用状态了。（被动方）</li>
+<li><code>TIME_WAIT</code>: 表示收到了对方的 <code>FIN</code> 报文，并发送出了 ACK 报文，就等 2MSL 后即可回到 <code>CLOSED</code> 可用状态了。如果 <code>FINWAIT1</code> 状态下，收到了对方同时带 <code>FIN</code> 标志和 ACK 标志的报文时，可以直接进入到 <code>TIME_WAIT</code> 状态，而无须经过 <code>FIN_WAIT_2</code> 状态。（主动方）</li>
+<li><code>CLOSED</code>: 表示连接中断。</li>
+</ol>
+<h2 id="TCP-重传机制"><a href="#TCP-重传机制" class="headerlink" title="TCP 重传机制"></a>TCP 重传机制</h2><p>这部分可以参考<a href="http://coolshell.cn/articles/11609.html" target="_blank" rel="external">TCP 的那些事儿（下）</a>一文。</p>
+<h2 id="SYN攻击"><a href="#SYN攻击" class="headerlink" title="SYN攻击"></a>SYN攻击</h2><h3 id="什么是-SYN-攻击（SYN-Flood）？"><a href="#什么是-SYN-攻击（SYN-Flood）？" class="headerlink" title="什么是 SYN 攻击（SYN Flood）？"></a>什么是 SYN 攻击（SYN Flood）？</h3><p>在三次握手过程中，服务器发送 <code>SYN-ACK</code> 之后，收到客户端的 <code>ACK</code> 之前的 TCP 连接称为半连接(half-open connect)。此时服务器处于 <code>SYN_RCVD</code> 状态。当收到 ACK 后，服务器才能转入 <code>ESTABLISHED</code> 状态.</p>
+<p>SYN 攻击指的是，攻击客户端在短时间内伪造大量不存在的IP地址，向服务器不断地发送 <code>SYN</code> 包，服务器回复确认包，并等待客户的确认。由于源地址是不存在的，服务器需要不断的重发直至超时，这些伪造的 <code>SYN</code> 包将长时间占用未连接队列，正常的 <code>SYN</code> 请求被丢弃，导致目标系统运行缓慢，严重者会引起网络堵塞甚至系统瘫痪。</p>
+<p><code>SYN</code> 攻击是一种典型的 <code>DoS/DDoS</code> 攻击。</p>
+<h3 id="如何检测-SYN-攻击？"><a href="#如何检测-SYN-攻击？" class="headerlink" title="如何检测 SYN 攻击？"></a>如何检测 SYN 攻击？</h3><p>检测 <code>SYN</code> 攻击非常的方便，当你在服务器上看到大量的半连接状态时，特别是源IP地址是随机的，基本上可以断定这是一次 <code>SYN</code> 攻击。在 Linux/Unix 上可以使用系统自带的 <code>netstats</code> 命令来检测 <code>SYN</code> 攻击。</p>
+<h3 id="如何防御-SYN-攻击？"><a href="#如何防御-SYN-攻击？" class="headerlink" title="如何防御 SYN 攻击？"></a>如何防御 SYN 攻击？</h3><p><code>SYN</code> 攻击不能完全被阻止，除非将 TCP 协议重新设计。我们所做的是尽可能的减轻 <code>SYN</code> 攻击的危害，常见的防御 <code>SYN</code> 攻击的方法有如下几种：</p>
+<ul>
+<li>缩短超时（SYN Timeout）时间</li>
+<li>增加最大半连接数</li>
+<li>过滤网关防护</li>
+<li>SYN cookies技术</li>
+</ul>
+<h2 id="常见面试题"><a href="#常见面试题" class="headerlink" title="常见面试题"></a>常见面试题</h2><h3 id="TCP-与-UDP-的区别？"><a href="#TCP-与-UDP-的区别？" class="headerlink" title="TCP 与 UDP 的区别？"></a>TCP 与 UDP 的区别？</h3><ol>
+<li>TCP是面向连接的、可靠的、有序的、速度慢的协议；UDP是无连接的、不可靠的、无序的、速度快的协议。</li>
+<li>TCP开销比UDP大，TCP头部需要20字节，UDP头部只要8个字节。</li>
+<li>TCP无界有拥塞控制，TCP有界无拥塞控制。</li>
+</ol>
+<p>补充：</p>
+<ul>
+<li>基于TCP的协议有：HTTP/HTTPS，Telnet，FTP，SMTP。</li>
+<li>基于UDP的协议有：DHCP，DNS，SNMP，TFTP，BOOTP。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>TCP</th>
+<th>UDP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>特点</td>
+<td>面向连接；可靠；开销大</td>
+<td>无连接；不可靠；效率高；可靠性由应用层负责</td>
+</tr>
+</tbody>
+</table>
+<h3 id="三次握手过程及其原因"><a href="#三次握手过程及其原因" class="headerlink" title="三次握手过程及其原因"></a>三次握手过程及其原因</h3><p>如上面所述</p>
+<h3 id="四次挥手及其原因"><a href="#四次挥手及其原因" class="headerlink" title="四次挥手及其原因"></a>四次挥手及其原因</h3><p>如上面所述</p>
+<h1 id="TCP-拥塞控制"><a href="#TCP-拥塞控制" class="headerlink" title="TCP 拥塞控制"></a>TCP 拥塞控制</h1><p>这部分可以参考<a href="http://coolshell.cn/articles/11609.html" target="_blank" rel="external">TCP 的那些事儿（下）</a>一文。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://www.ruanyifeng.com/blog/2009/03/tcp-ip_model.html" target="_blank" rel="external">TCP/IP模型的一个简单解释</a></li>
+<li><a href="http://www.jellythink.com/archives/705" target="_blank" rel="external">简析TCP的三次握手与四次分手</a></li>
+<li><a href="https://hit-alibaba.github.io/interview/basic/network/TCP.html" target="_blank" rel="external">TCP 协议</a></li>
+<li><a href="http://coolshell.cn/articles/11564.html" target="_blank" rel="external">TCP 的那些事儿（上）</a></li>
+<li><a href="http://coolshell.cn/articles/11609.html" target="_blank" rel="external">TCP 的那些事儿（下）</a></li>
+</ul>
+
+      
+    </div>
+
+    <div>
+      
+        
+<div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center">
+  <div>坚持原创技术分享，您的支持将鼓励我继续创作！</div>
+  <button id="rewardButton", disable="enable", onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}", style="cursor: pointer; border: 0; outline: 0; border-radius: 100%; padding: 0; margin: 0; letter-spacing: normal; text-transform: none; text-indent: 0px; text-shadow: none">
+    <span onmouseover="this.style.color='rgb(236,96,0)';this.style.background='rgb(204,204,204)'" onMouseOut="this.style.color='#fff';this.style.background='rgb(236,96,0)'" style="display: inline-block; width: 70px; height: 70px; border-radius: 100%; line-height: 81px; color: #fff; font: 400 35px/75px 'microsofty'; background: rgb(236,96,0)">赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/pay/weixinpay.jpg" alt="Matt WeChat Pay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>微信打赏</p>
+      </div>
+    
+    
+      <div id="alipay" style="display: inline-block">
+        <img id="alipay_qr" src="/images/pay/alipay.jpg" alt="Matt Alipay" style="width: 200px; max-width: 100%; display: inline-block"/>
+        <p>支付宝打赏</p>
+      </div>
+    
+  </div>
+<div>
+
+      
+    </div>
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/tcp/" rel="tag">#tcp</a>
+          
+        </div>
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2016/08/21/java-concurrency/" rel="next" title="Java 并发学习（一）">
+                <i class="fa fa-chevron-left"></i> Java 并发学习（一）
+              </a>
+            
+          </div>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2016/08/31/database-transaction/" rel="prev" title="数据库事务性（MySQL 存储引擎及索引结构）">
+                数据库事务性（MySQL 存储引擎及索引结构） <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </article>
+
+
+
+    <div class="post-spread">
+      
+        <div class="ds-share flat" data-thread-key="2016/08/30/http-protocol/"
+     data-title="TCP/IP 协议"
+     data-content=""
+     data-url="http://wangzzu.github.io/2016/08/30/http-protocol/">
+  <div class="ds-share-inline">
+    <ul  class="ds-share-icons-16">
+
+      <li data-toggle="ds-share-icons-more"><a class="ds-more" href="javascript:void(0);">分享到：</a></li>
+      <li><a class="ds-weibo" href="javascript:void(0);" data-service="weibo">微博</a></li>
+      <li><a class="ds-qzone" href="javascript:void(0);" data-service="qzone">QQ空间</a></li>
+      <li><a class="ds-qqt" href="javascript:void(0);" data-service="qqt">腾讯微博</a></li>
+      <li><a class="ds-wechat" href="javascript:void(0);" data-service="wechat">微信</a></li>
+
+    </ul>
+    <div class="ds-share-icons-more">
+    </div>
+  </div>
+</div>
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+      <div class="ds-thread" data-thread-key="2016/08/30/http-protocol/"
+           data-title="TCP/IP 协议" data-url="http://wangzzu.github.io/2016/08/30/http-protocol/">
+      </div>
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel ">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/face.png"
+               alt="Matt" />
+          <p class="site-author-name" itemprop="name">Matt</p>
+          <p class="site-description motion-element" itemprop="description">与一群有趣的人，做一些有趣的事.</p>
+        </div>
+        <nav class="site-state motion-element">
+          <div class="site-state-item site-state-posts">
+            <a href="/archives">
+              <span class="site-state-item-count">44</span>
+              <span class="site-state-item-name">日志</span>
+            </a>
+          </div>
+
+          
+            <div class="site-state-item site-state-categories">
+              <a href="/categories">
+                <span class="site-state-item-count">17</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            <div class="site-state-item site-state-tags">
+              <a href="/tags">
+                <span class="site-state-item-count">25</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-github"></i> GitHub
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="http://weibo.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-weibo"></i> Weibo
+                  
+                </a>
+              </span>
+            
+              <span class="links-of-author-item">
+                <a href="https://twitter.com/wangzzu" target="_blank">
+                  
+                    <i class="fa fa-twitter"></i> Twitter
+                  
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+
+        
+        <div class="links-of-blogroll motion-element">
+          
+        </div>
+
+      </section>
+
+      
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+            
+              
+            
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#TCP-IP-协议"><span class="nav-number">1.</span> <span class="nav-text">TCP/IP 协议</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#TCP协议"><span class="nav-number">2.</span> <span class="nav-text">TCP协议</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#特点"><span class="nav-number">2.1.</span> <span class="nav-text">特点</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#三次握手"><span class="nav-number">2.2.</span> <span class="nav-text">三次握手</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#为什么需要三次握手"><span class="nav-number">2.2.1.</span> <span class="nav-text">为什么需要三次握手</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#四次挥手"><span class="nav-number">2.3.</span> <span class="nav-text">四次挥手</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#为什么需要四次挥手"><span class="nav-number">2.3.1.</span> <span class="nav-text">为什么需要四次挥手</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#TCP-重传机制"><span class="nav-number">2.4.</span> <span class="nav-text">TCP 重传机制</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#SYN攻击"><span class="nav-number">2.5.</span> <span class="nav-text">SYN攻击</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#什么是-SYN-攻击（SYN-Flood）？"><span class="nav-number">2.5.1.</span> <span class="nav-text">什么是 SYN 攻击（SYN Flood）？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#如何检测-SYN-攻击？"><span class="nav-number">2.5.2.</span> <span class="nav-text">如何检测 SYN 攻击？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#如何防御-SYN-攻击？"><span class="nav-number">2.5.3.</span> <span class="nav-text">如何防御 SYN 攻击？</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#常见面试题"><span class="nav-number">2.6.</span> <span class="nav-text">常见面试题</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#TCP-与-UDP-的区别？"><span class="nav-number">2.6.1.</span> <span class="nav-text">TCP 与 UDP 的区别？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#三次握手过程及其原因"><span class="nav-number">2.6.2.</span> <span class="nav-text">三次握手过程及其原因</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#四次挥手及其原因"><span class="nav-number">2.6.3.</span> <span class="nav-text">四次挥手及其原因</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#TCP-拥塞控制"><span class="nav-number">3.</span> <span class="nav-text">TCP 拥塞控制</span></a></li></ol></div>
+            
+          </div>
+        </section>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy;  2014 - 
+  <span itemprop="copyrightYear">2016</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Matt</span>
+</div>
+
+<div class="powered-by">
+  由 <a class="theme-link" href="http://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Mist
+  </a>
+</div>
+
+<script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+本站总访问量 <span id="busuanzi_value_site_pv"></span> &nbsp&nbsp&nbsp
+您是第<span id="busuanzi_value_site_uv"></span>个来到的小伙伴
+
+
+
+
+
+      </div>
+    </footer>
+
+    <div class="back-to-top">
+      <i class="fa fa-arrow-up"></i>
+    </div>
+  </div>
+
+  
+
+
+  
+
+
+
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+  <script type="text/javascript" src="/vendors/jquery/index.js?v=2.1.3"></script>
+
+  <script type="text/javascript" src="/vendors/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  <script type="text/javascript" src="/vendors/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/velocity/velocity.ui.min.js"></script>
+
+  <script type="text/javascript" src="/vendors/fancybox/source/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=0.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=0.5.0"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=0.5.0"></script>
+<script type="text/javascript" src="/vendors/jquery-scrollintoview/jquery.scrollintoview.min.js?v=0.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=0.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=0.5.0"></script>
+
+
+
+  
+
+  
+    
+  
+
+  <script type="text/javascript">
+    var duoshuoQuery = {short_name:"wangzzu"};
+    (function() {
+      var ds = document.createElement('script');
+      ds.type = 'text/javascript';ds.async = true;
+      ds.id = 'duoshuo-script';
+      ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+      ds.charset = 'UTF-8';
+      (document.getElementsByTagName('head')[0]
+      || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+  </script>
+
+  
+    
+  
+
+
+
+
+
+  
+  
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length == 0) {
+       search_path = "search.xml";
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    function proceedsearch() {
+      $("body").append('<div class="popoverlay">').css('overflow', 'hidden');
+      $('.popup').toggle();
+
+    }
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+    'use strict';
+    $.ajax({
+        url: path,
+        dataType: "xml",
+        async: true,
+        success: function( xmlResponse ) {
+            // get the contents from search data
+            isfetched = true;
+            $('.popup').detach().appendTo('.header-inner');
+            var datas = $( "entry", xmlResponse ).map(function() {
+                return {
+                    title: $( "title", this ).text(),
+                    content: $("content",this).text(),
+                    url: $( "url" , this).text()
+                };
+            }).get();
+            var $input = document.getElementById(search_id);
+            var $resultContent = document.getElementById(content_id);
+            $input.addEventListener('input', function(){
+                var matchcounts = 0;
+                var str='<ul class=\"search-result-list\">';                
+                var keywords = this.value.trim().toLowerCase().split(/[\s\-]+/);
+                $resultContent.innerHTML = "";
+                if (this.value.trim().length > 1) {
+                // perform local searching
+                datas.forEach(function(data) {
+                    var isMatch = true;
+                    var content_index = [];
+                    var data_title = data.title.trim().toLowerCase();
+                    var data_content = data.content.trim().replace(/<[^>]+>/g,"").toLowerCase();
+                    var data_url = data.url;
+                    var index_title = -1;
+                    var index_content = -1;
+                    var first_occur = -1;
+                    // only match artiles with not empty titles and contents
+                    if(data_title != '' && data_content != '') {
+                        keywords.forEach(function(keyword, i) {
+                            index_title = data_title.indexOf(keyword);
+                            index_content = data_content.indexOf(keyword);
+                            if( index_title < 0 && index_content < 0 ){
+                                isMatch = false;
+                            } else {
+                                if (index_content < 0) {
+                                    index_content = 0;
+                                }
+                                if (i == 0) {
+                                    first_occur = index_content;
+                                }
+                            }
+                        });
+                    }
+                    // show search results
+                    if (isMatch) {
+                        matchcounts += 1;
+                        str += "<li><a href='"+ data_url +"' class='search-result-title'>"+ data_title +"</a>";
+                        var content = data.content.trim().replace(/<[^>]+>/g,"");
+                        if (first_occur >= 0) {
+                            // cut out 100 characters
+                            var start = first_occur - 20;
+                            var end = first_occur + 80;
+                            if(start < 0){
+                                start = 0;
+                            }
+                            if(start == 0){
+                                end = 50;
+                            }
+                            if(end > content.length){
+                                end = content.length;
+                            }
+                            var match_content = content.substring(start, end);
+                            // highlight all keywords
+                            keywords.forEach(function(keyword){
+                                var regS = new RegExp(keyword, "gi");
+                                match_content = match_content.replace(regS, "<b class=\"search-keyword\">"+keyword+"</b>");
+                            });
+                            
+                            str += "<p class=\"search-result\">" + match_content +"...</p>"
+                        }
+                        str += "</li>";
+                    }
+                })};
+                str += "</ul>";
+                if (matchcounts == 0) { str = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>' }
+                if (keywords == "") { str = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>' }
+                $resultContent.innerHTML = str;
+            });
+            proceedsearch();
+        }
+    });}
+
+    // handle and trigger popup window;
+    $('.popup-trigger').mousedown(function(e) {
+      e.stopPropagation();
+      if (isfetched == false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+
+    });
+
+    $('.popup-btn-close').click(function(e){
+      $('.popup').hide();
+      $(".popoverlay").remove();
+      $('body').css('overflow', '');
+    });
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+  </script>
+
+  1
+
+<!-- MathJax Start -->
+<!-- MathJax documentation: http://docs.mathjax.org/en/latest/index.html -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {  // tex2jax preprocessor
+      inlineMath: [ ['$','$'] ],  // delimiters for in-line math
+      displayMath: [ ['$$','$$'] ],  // delimiters for displayed equations
+      processEscapes: true,  // enable \$ to represent a single dollar sign
+      skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']  // MathJax will not process contents inside these tags 
+    },
+    TeX: {  // TeX/LaTeX input processor
+      equationNumbers: { autoNumber: "AMS" },  // only number those equations in specific AMSmath environments
+      extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]  // introduce AMS extensions and suppress generating error messages 
+    },
+    "HTML-CSS": {  // HTML-CSS output processor (this is the default output of MathJax)
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    SVG: {  // SVG output processor
+      scale: 110,  // The scaling factor of math with respect to the surrounding text
+      linebreaks: { automatic: true } // automatically breaks the line if necessary
+    },
+    menuSettings: {  // settings for the mathematics contextual menu
+      zoom: "Hover"  // set equation zooming to be triggered by a single mouse click
+    }
+  });
+ 
+  MathJax.Hub.Queue(function() { // Fix <code> tags after MathJax finishes running, this is a hack to overcome a shortcoming of Markdown
+      var all = MathJax.Hub.getAllJax(), i;
+      for(i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+  });
+</script>
+<script type="text/javascript"
+   src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">  // link to the MathJax CDN
+</script>
+<!-- MathJax End -->
+
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script><!-- hexo-inject:begin --><!-- Begin: Injected MathJax -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config("");
+</script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i=0; i < all.length; i += 1) {
+      all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+  });
+</script>
+
+<script type="text/javascript" src="custom_mathjax_source">
+</script>
+<!-- End: Injected MathJax -->
+<!-- hexo-inject:end -->
+
+
+  
+
+  
+
+</body>
+</html>

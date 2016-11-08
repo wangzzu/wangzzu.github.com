@@ -60,12 +60,12 @@
 <meta name="description" content="本文主要介绍一下在linux（CentOS7.1）下postgres的安装，后续的一篇博文会着重的介绍一下SQL操作。
 注：
 
-#：超级用户提示符 
+#：超级用户提示符
 $：普通用户提示符
 
 安装12345$ sudo yum install postgresql$ sudo yum install pgadmin3$ su postgres #切换psql用户下exit #退出
 修改用户postgres密码
-1$">
+1$ s">
 <meta property="og:type" content="article">
 <meta property="og:title" content="postgres安装">
 <meta property="og:url" content="http://wangzzu.github.io/2016/04/14/postgres-install/index.html">
@@ -73,28 +73,28 @@ $：普通用户提示符
 <meta property="og:description" content="本文主要介绍一下在linux（CentOS7.1）下postgres的安装，后续的一篇博文会着重的介绍一下SQL操作。
 注：
 
-#：超级用户提示符 
+#：超级用户提示符
 $：普通用户提示符
 
 安装12345$ sudo yum install postgresql$ sudo yum install pgadmin3$ su postgres #切换psql用户下exit #退出
 修改用户postgres密码
-1$">
+1$ s">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-04-14-postgresql/1.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-04-14-postgresql/fail.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-04-14-postgresql/status.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/2016-04-14-postgresql/port.png">
-<meta property="og:updated_time" content="2016-04-22T01:24:37.000Z">
+<meta property="og:updated_time" content="2016-08-30T02:59:48.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="postgres安装">
 <meta name="twitter:description" content="本文主要介绍一下在linux（CentOS7.1）下postgres的安装，后续的一篇博文会着重的介绍一下SQL操作。
 注：
 
-#：超级用户提示符 
+#：超级用户提示符
 $：普通用户提示符
 
 安装12345$ sudo yum install postgresql$ sudo yum install pgadmin3$ su postgres #切换psql用户下exit #退出
 修改用户postgres密码
-1$">
+1$ s">
 <meta name="twitter:image" content="http://wangzzu.github.io/images/2016-04-14-postgresql/1.png">
 
 
@@ -327,8 +327,8 @@ $：普通用户提示符
               <span class="post-meta-item-text">分类于</span>
               
                 <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
-                  <a href="/categories/sql/" itemprop="url" rel="index">
-                    <span itemprop="name">sql</span>
+                  <a href="/categories/db/" itemprop="url" rel="index">
+                    <span itemprop="name">db</span>
                   </a>
                 </span>
 
@@ -349,10 +349,11 @@ $：普通用户提示符
               </span>
             
           
-	  
-              <span>&nbsp; | &nbsp;
-                   <span id="busuanzi_value_page_pv" ></span>次阅读
-              </span>    
+
+          
+          <span>&nbsp; | &nbsp;
+          <span id="busuanzi_value_page_pv" ></span>次阅读
+          </span>
           
 
           
@@ -364,7 +365,6 @@ $：普通用户提示符
       </header>
     
 
-
     <div class="post-body" itemprop="articleBody">
 
       
@@ -374,19 +374,19 @@ $：普通用户提示符
         <p>本文主要介绍一下在linux（CentOS7.1）下postgres的安装，后续的一篇博文会着重的介绍一下SQL操作。</p>
 <p>注：</p>
 <ul>
-<li>#：超级用户提示符 </li>
+<li>#：超级用户提示符</li>
 <li>$：普通用户提示符</li>
 </ul>
 <h1 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h1><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ sudo yum install postgresql</span><br><span class="line">$ sudo yum install pgadmin3</span><br><span class="line"></span><br><span class="line">$ su postgres <span class="comment">#切换psql用户下</span></span><br><span class="line"><span class="built_in">exit</span> <span class="comment">#退出</span></span><br></pre></td></tr></table></figure>
 <p>修改用户postgres密码</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ sudo passwd postgres <span class="comment">#重置新密码</span></span><br></pre></td></tr></table></figure>
-<h1 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h1><h2 id="初始化数据库"><a href="#初始化数据库" class="headerlink" title="初始化数据库"></a>初始化数据库</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ sudo mkdir -p /var/lib/pgsql/data      #创建pgsql的数据库目录 </span><br><span class="line"># cd /var/lib/pgsql  </span><br><span class="line"># chown postgres.postgres data     #改变目录的所属用户用组 </span><br><span class="line"># su postgres                     #切换到postgres，不然初始化不了</span><br><span class="line"></span><br><span class="line">initdb -E UTF-8 -D /var/lib/pgsql/data --locale=en_US.UTF-8 -U postgres -W  #在postgres下，初始化数据库(初始化过程中，需要输入root密码)</span><br></pre></td></tr></table></figure>
+<h1 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h1><h2 id="初始化数据库"><a href="#初始化数据库" class="headerlink" title="初始化数据库"></a>初始化数据库</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ sudo mkdir -p /var/lib/pgsql/data      #创建pgsql的数据库目录</span><br><span class="line"># cd /var/lib/pgsql</span><br><span class="line"># chown postgres.postgres data     #改变目录的所属用户用组</span><br><span class="line"># su postgres                     #切换到postgres，不然初始化不了</span><br><span class="line"></span><br><span class="line">initdb -E UTF-8 -D /var/lib/pgsql/data --locale=en_US.UTF-8 -U postgres -W  #在postgres下，初始化数据库(初始化过程中，需要输入root密码)</span><br></pre></td></tr></table></figure>
 <h2 id="修改配置文件"><a href="#修改配置文件" class="headerlink" title="修改配置文件"></a>修改配置文件</h2><p>修改<code>/var/lib/pgsql/data/postgresql.conf</code>文件，修改postgresql.conf的目的是修改连接权限；</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># vim /var/lib/pgsql/data/postgresql.conf</span></span><br></pre></td></tr></table></figure>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">listen_addresses = <span class="string">'*'</span>     <span class="comment">#监听所有ip的连接，默认是本机 ip，当然也可以设置局域网ip</span></span><br><span class="line">port = 5432             <span class="comment">#这个不开也行，默认就是5432端口</span></span><br></pre></td></tr></table></figure>
 <p>修改<code>/var/lib/pgsql/data/pg_hba.conf</code>文件，修改pg_hba.conf的目的是设置谁才可以操作数据服务器</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"># vim /var/lib/pgsql/data/pg_hba.conf</span><br></pre></td></tr></table></figure>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># TYPE  DATABASE    USER        CIDR-ADDRESS          METHOD</span></span><br><span class="line"><span class="comment"># "local" is for Unix domain socket connections only</span></span><br><span class="line"><span class="built_in">local</span>   all         all                               trust </span><br><span class="line"><span class="comment"># IPv4 local connections:  </span></span><br><span class="line">host    all         all         127.0.0.1/32          <span class="literal">true</span></span><br><span class="line">host    all         all         0.0.0.0/0             <span class="literal">true</span>   <span class="comment">#这一行我加的，所有IP和用户，密码对都可以连接 </span></span><br><span class="line"><span class="comment"># IPv6 local connections:  </span></span><br><span class="line">host    all         all         ::1/128               <span class="literal">true</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># TYPE  DATABASE    USER        CIDR-ADDRESS          METHOD</span></span><br><span class="line"><span class="comment"># "local" is for Unix domain socket connections only</span></span><br><span class="line"><span class="built_in">local</span>   all         all                               trust</span><br><span class="line"><span class="comment"># IPv4 local connections:</span></span><br><span class="line">host    all         all         127.0.0.1/32          <span class="literal">true</span></span><br><span class="line">host    all         all         0.0.0.0/0             <span class="literal">true</span>   <span class="comment">#这一行我加的，所有IP和用户，密码对都可以连接</span></span><br><span class="line"><span class="comment"># IPv6 local connections:</span></span><br><span class="line">host    all         all         ::1/128               <span class="literal">true</span></span><br></pre></td></tr></table></figure>
 <h1 id="psql使用"><a href="#psql使用" class="headerlink" title="psql使用"></a>psql使用</h1><h2 id="启动"><a href="#启动" class="headerlink" title="启动"></a>启动</h2><p>命令：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"># systemctl start postgresql.service</span><br><span class="line"># or</span><br><span class="line"># service postgresql start</span><br></pre></td></tr></table></figure>
 <p>但是出现了一个问题：</p>
@@ -590,7 +590,7 @@ $：普通用户提示符
         <nav class="site-state motion-element">
           <div class="site-state-item site-state-posts">
             <a href="/archives">
-              <span class="site-state-item-count">38</span>
+              <span class="site-state-item-count">44</span>
               <span class="site-state-item-name">日志</span>
             </a>
           </div>
@@ -598,7 +598,7 @@ $：普通用户提示符
           
             <div class="site-state-item site-state-categories">
               <a href="/categories">
-                <span class="site-state-item-count">15</span>
+                <span class="site-state-item-count">17</span>
                 <span class="site-state-item-name">分类</span>
               </a>
             </div>
@@ -607,7 +607,7 @@ $：普通用户提示符
           
             <div class="site-state-item site-state-tags">
               <a href="/tags">
-                <span class="site-state-item-count">20</span>
+                <span class="site-state-item-count">25</span>
                 <span class="site-state-item-name">标签</span>
               </a>
             </div>

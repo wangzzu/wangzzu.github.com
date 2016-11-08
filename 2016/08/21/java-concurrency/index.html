@@ -61,15 +61,15 @@
 多线程编程对于多线程编程，线程安全是我们首先要考虑的问题，关于线程安全有三个核心概念：原子性、可见性和顺序性，这三个概念需要先理解清楚。
 三个核心概念原子性与数据库中事务的原子性概念相似，即对于一个操作（有可能包含有多个子操作）">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Java 并发学习">
+<meta property="og:title" content="Java 并发学习（一）">
 <meta property="og:url" content="http://wangzzu.github.io/2016/08/21/java-concurrency/index.html">
 <meta property="og:site_name" content="Matt's Blog">
 <meta property="og:description" content="本文主要是根据华黎的《大型网站系统与Java中间件实践》和 Jason 的几篇博客，对 Java 并发方面的内容做的一些总结，会着重讲述并发方面一些常见的类、接口和方法。
 多线程编程对于多线程编程，线程安全是我们首先要考虑的问题，关于线程安全有三个核心概念：原子性、可见性和顺序性，这三个概念需要先理解清楚。
 三个核心概念原子性与数据库中事务的原子性概念相似，即对于一个操作（有可能包含有多个子操作）">
-<meta property="og:updated_time" content="2016-08-21T09:19:50.000Z">
+<meta property="og:updated_time" content="2016-08-29T08:16:01.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Java 并发学习">
+<meta name="twitter:title" content="Java 并发学习（一）">
 <meta name="twitter:description" content="本文主要是根据华黎的《大型网站系统与Java中间件实践》和 Jason 的几篇博客，对 Java 并发方面的内容做的一些总结，会着重讲述并发方面一些常见的类、接口和方法。
 多线程编程对于多线程编程，线程安全是我们首先要考虑的问题，关于线程安全有三个核心概念：原子性、可见性和顺序性，这三个概念需要先理解清楚。
 三个核心概念原子性与数据库中事务的原子性概念相似，即对于一个操作（有可能包含有多个子操作）">
@@ -90,7 +90,7 @@
   };
 </script>
 
-  <title> Java 并发学习 | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
+  <title> Java 并发学习（一） | Matt's Blog </title><!-- hexo-inject:begin --><!-- hexo-inject:end -->
 </head>
 
 <body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
@@ -278,7 +278,7 @@
             
             
               
-                Java 并发学习
+                Java 并发学习（一）
               
             
           </h1>
@@ -326,10 +326,11 @@
               </span>
             
           
-	  
-              <span>&nbsp; | &nbsp;
-                   <span id="busuanzi_value_page_pv" ></span>次阅读
-              </span>    
+
+          
+          <span>&nbsp; | &nbsp;
+          <span id="busuanzi_value_page_pv" ></span>次阅读
+          </span>
           
 
           
@@ -340,7 +341,6 @@
         </div>
       </header>
     
-
 
     <div class="post-body" itemprop="articleBody">
 
@@ -638,6 +638,10 @@
 
           <div class="post-nav-prev post-nav-item">
             
+              <a href="/2016/08/30/http-protocol/" rel="prev" title="TCP/IP 协议">
+                TCP/IP 协议 <i class="fa fa-chevron-right"></i>
+              </a>
+            
           </div>
         </div>
       
@@ -652,7 +656,7 @@
     <div class="post-spread">
       
         <div class="ds-share flat" data-thread-key="2016/08/21/java-concurrency/"
-     data-title="Java 并发学习"
+     data-title="Java 并发学习（一）"
      data-content=""
      data-url="http://wangzzu.github.io/2016/08/21/java-concurrency/">
   <div class="ds-share-inline">
@@ -682,7 +686,7 @@
   <div class="comments" id="comments">
     
       <div class="ds-thread" data-thread-key="2016/08/21/java-concurrency/"
-           data-title="Java 并发学习" data-url="http://wangzzu.github.io/2016/08/21/java-concurrency/">
+           data-title="Java 并发学习（一）" data-url="http://wangzzu.github.io/2016/08/21/java-concurrency/">
       </div>
     
   </div>
@@ -727,7 +731,7 @@
         <nav class="site-state motion-element">
           <div class="site-state-item site-state-posts">
             <a href="/archives">
-              <span class="site-state-item-count">38</span>
+              <span class="site-state-item-count">44</span>
               <span class="site-state-item-name">日志</span>
             </a>
           </div>
@@ -735,7 +739,7 @@
           
             <div class="site-state-item site-state-categories">
               <a href="/categories">
-                <span class="site-state-item-count">15</span>
+                <span class="site-state-item-count">17</span>
                 <span class="site-state-item-name">分类</span>
               </a>
             </div>
@@ -744,7 +748,7 @@
           
             <div class="site-state-item site-state-tags">
               <a href="/tags">
-                <span class="site-state-item-count">20</span>
+                <span class="site-state-item-count">25</span>
                 <span class="site-state-item-name">标签</span>
               </a>
             </div>

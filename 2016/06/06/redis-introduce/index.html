@@ -41,7 +41,7 @@
 <link href="/css/main.css?v=0.5.0" rel="stylesheet" type="text/css" />
 
 
-  <meta name="keywords" content="database,redis," />
+  <meta name="keywords" content="sql,redis," />
 
 
 
@@ -79,7 +79,7 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
 <meta property="og:image" content="http://wangzzu.github.io/images/redis/ttl.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/redis/pass.png">
 <meta property="og:image" content="http://wangzzu.github.io/images/redis/multi.png">
-<meta property="og:updated_time" content="2016-06-07T03:37:45.000Z">
+<meta property="og:updated_time" content="2016-08-30T03:00:03.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Redis简单介绍">
 <meta name="twitter:description" content="本文是根据我在实验楼-Redis基础教程中学习的总结，简单讲述了一下Redis的安装和使用。
@@ -316,8 +316,8 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
               <span class="post-meta-item-text">分类于</span>
               
                 <span itemprop="about" itemscope itemtype="https://schema.org/Thing">
-                  <a href="/categories/database/" itemprop="url" rel="index">
-                    <span itemprop="name">database</span>
+                  <a href="/categories/db/" itemprop="url" rel="index">
+                    <span itemprop="name">db</span>
                   </a>
                 </span>
 
@@ -338,10 +338,11 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
               </span>
             
           
-	  
-              <span>&nbsp; | &nbsp;
-                   <span id="busuanzi_value_page_pv" ></span>次阅读
-              </span>    
+
+          
+          <span>&nbsp; | &nbsp;
+          <span id="busuanzi_value_page_pv" ></span>次阅读
+          </span>
           
 
           
@@ -352,7 +353,6 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
         </div>
       </header>
     
-
 
     <div class="post-body" itemprop="articleBody">
 
@@ -370,7 +370,7 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
 <li>丰富的特性：Redis还支持 <code>publish/subscribe</code>, 通知, key 过期等等特性。</li>
 </ul>
 <h1 id="Redis安装"><a href="#Redis安装" class="headerlink" title="Redis安装"></a>Redis安装</h1><p>在<a href="http://redis.io/" target="_blank" rel="external">Redis官网</a>中下载最新的稳定版，这里我选用的是<code>3.2.0</code>稳定版。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"># 解压按照包</span><br><span class="line">$ tar xvfz redis-3.2.0.tar.gz</span><br><span class="line"></span><br><span class="line"># 编译</span><br><span class="line">$ cd redis-3.2.0</span><br><span class="line">$ sudo make </span><br><span class="line">$ sudo make install</span><br><span class="line"></span><br><span class="line"># 测试</span><br><span class="line">$ make test</span><br></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"># 解压按照包</span><br><span class="line">$ tar xvfz redis-3.2.0.tar.gz</span><br><span class="line"></span><br><span class="line"># 编译</span><br><span class="line">$ cd redis-3.2.0</span><br><span class="line">$ sudo make</span><br><span class="line">$ sudo make install</span><br><span class="line"></span><br><span class="line"># 测试</span><br><span class="line">$ make test</span><br></pre></td></tr></table></figure>
 <p>测试成功的结果如下图所示：</p>
 <p><img src="/images/redis/test.png" alt="test"></p>
 <h1 id="Redis启动"><a href="#Redis启动" class="headerlink" title="Redis启动"></a>Redis启动</h1><h2 id="启动与配置"><a href="#启动与配置" class="headerlink" title="启动与配置"></a>启动与配置</h2><p>在 Redis 安装完成后，注意一些重要的文件，可用 ls 命令查看。</p>
@@ -462,13 +462,13 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
 <h1 id="Redis系统管理"><a href="#Redis系统管理" class="headerlink" title="Redis系统管理"></a>Redis系统管理</h1><p>在Redis中，命令大小写不敏感。</p>
 <h2 id="适合全体类型的常用命令"><a href="#适合全体类型的常用命令" class="headerlink" title="适合全体类型的常用命令"></a>适合全体类型的常用命令</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 启动服务器与客户端</span></span><br><span class="line">$ redis-server</span><br><span class="line">$ redis-cli</span><br></pre></td></tr></table></figure>
 <h3 id="EXISTS-and-DEL"><a href="#EXISTS-and-DEL" class="headerlink" title="EXISTS and DEL"></a>EXISTS and DEL</h3><ul>
-<li><code>EXISTS key</code> 判断一个key是否存在，存在返回 1;否则返回0; </li>
+<li><code>EXISTS key</code> 判断一个key是否存在，存在返回 1;否则返回0;</li>
 <li><code>DEL key</code> 删除某个key，或是一系列key，<code>DEL key1 key2 key3 key4</code>。成功返回1，失败返回0（key值不存在）。</li>
 </ul>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&gt; <span class="built_in">set</span> mykey hello</span><br><span class="line">&gt; exists mykey</span><br><span class="line"></span><br><span class="line">&gt; del mykey</span><br><span class="line">&gt; exists mykey</span><br></pre></td></tr></table></figure>
 <p><img src="/images/redis/exist.png" alt="exist"></p>
 <h3 id="TYPE-and-KEYS"><a href="#TYPE-and-KEYS" class="headerlink" title="TYPE and KEYS"></a>TYPE and KEYS</h3><ul>
-<li><code>TYPE key</code>：返回某个key元素的数据类型 ( none:不存在,string:字符,list,set,zset,hash)，key不存在返回空。 </li>
+<li><code>TYPE key</code>：返回某个key元素的数据类型 ( none:不存在,string:字符,list,set,zset,hash)，key不存在返回空。</li>
 <li><code>KEYS key—pattern</code> ：返回匹配的key列表 (<code>KEYS foo*</code>:查找foo开头的keys)</li>
 </ul>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&gt; <span class="built_in">set</span> mykey x</span><br><span class="line">&gt; <span class="built_in">type</span> mykey</span><br><span class="line">&gt; keys my*</span><br><span class="line">&gt; del mykey</span><br><span class="line">&gt; keys my*</span><br><span class="line">&gt; <span class="built_in">type</span> mykey</span><br></pre></td></tr></table></figure>
@@ -494,10 +494,10 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
 <blockquote>
 <p>注意：如果在还没有过期的时候，对值进行了改变，那么那个值会被清除。</p>
 </blockquote>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&gt; <span class="built_in">set</span> key some-value</span><br><span class="line">&gt; expire key 10</span><br><span class="line"><span class="comment"># 马上执行此命令</span></span><br><span class="line">&gt; get key     </span><br><span class="line"><span class="comment"># 10s后执行此命令</span></span><br><span class="line">&gt; get key</span><br></pre></td></tr></table></figure>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&gt; <span class="built_in">set</span> key some-value</span><br><span class="line">&gt; expire key 10</span><br><span class="line"><span class="comment"># 马上执行此命令</span></span><br><span class="line">&gt; get key</span><br><span class="line"><span class="comment"># 10s后执行此命令</span></span><br><span class="line">&gt; get key</span><br></pre></td></tr></table></figure>
 <p>结果显示，执行EXPIRE命令后，马上GET，显示key存在。10秒后再GET时，key 已经被自动删除。</p>
 <p><img src="/images/redis/ttl.png" alt="ttl"></p>
-<h3 id="查询key剩余生存时间"><a href="#查询key剩余生存时间" class="headerlink" title="查询key剩余生存时间"></a>查询key剩余生存时间</h3><p>限时操作可以再<code>SET</code>命令中实现，并且可用<code>TTL</code>命令查询key剩余生存时间。 </p>
+<h3 id="查询key剩余生存时间"><a href="#查询key剩余生存时间" class="headerlink" title="查询key剩余生存时间"></a>查询key剩余生存时间</h3><p>限时操作可以再<code>SET</code>命令中实现，并且可用<code>TTL</code>命令查询key剩余生存时间。</p>
 <p><code>TTL</code>：查找某个key还有多长时间过期,返回时间秒</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&gt; <span class="built_in">set</span> key 100 ex 30</span><br><span class="line">&gt; ttl key</span><br><span class="line">&gt; ttl key</span><br></pre></td></tr></table></figure>
 <h3 id="清除key"><a href="#清除key" class="headerlink" title="清除key"></a>清除key</h3><ul>
@@ -507,8 +507,8 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&gt; flushdb</span><br><span class="line">&gt; flushall</span><br></pre></td></tr></table></figure>
 <h2 id="Redis设置相关命令"><a href="#Redis设置相关命令" class="headerlink" title="Redis设置相关命令"></a>Redis设置相关命令</h2><p>Redis有其配置文件，可以通过client-command窗口查看或者更改相关配置。相关命令介绍如下：</p>
 <h3 id="CONFIG-GET-and-CONFIG-SET"><a href="#CONFIG-GET-and-CONFIG-SET" class="headerlink" title="CONFIG GET and CONFIG SET"></a>CONFIG GET and CONFIG SET</h3><ul>
-<li><code>CONFIG GET</code>：用来读取运行Redis服务器的配置参数。 </li>
-<li><code>CONFIG SET</code>：用于更改运行Redis服务器的配置参数。 </li>
+<li><code>CONFIG GET</code>：用来读取运行Redis服务器的配置参数。</li>
+<li><code>CONFIG SET</code>：用于更改运行Redis服务器的配置参数。</li>
 <li><code>AUTH</code> : 认证密码，下面针对Redis密码的示例：</li>
 </ul>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&gt; config get requirepass （查看密码）</span><br><span class="line">&gt; config <span class="built_in">set</span> requirepass <span class="built_in">test</span>123 （设置密码为<span class="built_in">test</span>123 ）</span><br><span class="line">&gt; config get requirepass  （报错，没有认证）</span><br><span class="line">&gt; auth <span class="built_in">test</span>123</span><br><span class="line">&gt; config get requirepass</span><br></pre></td></tr></table></figure>
@@ -640,7 +640,7 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
       
         <div class="post-tags">
           
-            <a href="/tags/database/" rel="tag">#database</a>
+            <a href="/tags/sql/" rel="tag">#sql</a>
           
             <a href="/tags/redis/" rel="tag">#redis</a>
           
@@ -659,8 +659,8 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2016/07/09/mac-software/" rel="prev" title="Mac常用软件配置">
-                Mac常用软件配置 <i class="fa fa-chevron-right"></i>
+              <a href="/2016/07/09/mac-software/" rel="prev" title="Mac常用软件及环境配置">
+                Mac常用软件及环境配置 <i class="fa fa-chevron-right"></i>
               </a>
             
           </div>
@@ -752,7 +752,7 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
         <nav class="site-state motion-element">
           <div class="site-state-item site-state-posts">
             <a href="/archives">
-              <span class="site-state-item-count">38</span>
+              <span class="site-state-item-count">44</span>
               <span class="site-state-item-name">日志</span>
             </a>
           </div>
@@ -760,7 +760,7 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
           
             <div class="site-state-item site-state-categories">
               <a href="/categories">
-                <span class="site-state-item-count">15</span>
+                <span class="site-state-item-count">17</span>
                 <span class="site-state-item-name">分类</span>
               </a>
             </div>
@@ -769,7 +769,7 @@ Redis简介什么是RedisREmote DIctionary Server(Redis) 是一个由Salvatore S
           
             <div class="site-state-item site-state-tags">
               <a href="/tags">
-                <span class="site-state-item-count">20</span>
+                <span class="site-state-item-count">25</span>
                 <span class="site-state-item-name">标签</span>
               </a>
             </div>
