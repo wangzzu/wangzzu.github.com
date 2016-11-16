@@ -1,5 +1,5 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>Storm之配置文件 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">Storm之配置文件</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">wangzzu</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/guestbook/"><i class="fa fa-book"> 留言</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">Storm之配置文件</h1><div class="post-meta">Jul 27, 2015<span> | </span><span class="category"><a href="/categories/storm/">storm</a></span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Hits</span></span></div><a data-thread-key="2015/07/27/storm-configuration/" href="/2015/07/27/storm-configuration/#comments" class="ds-thread-count"></a><div class="post-content"><p>Storm的配置文件一般存放在<code>$STORM_HOME/conf</code>下，通常名为<code>storm.yaml</code>，它符合yaml格式要求。Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm常见的配置项参数。</p>
-<h3 id="1-storm基本配置"><a href="#1-storm基本配置" class="headerlink" title="1.storm基本配置"></a>1.storm基本配置</h3><ul>
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>Storm之配置文件 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">Storm之配置文件</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">wangzzu</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/guestbook/"><i class="fa fa-book"> 留言</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">Storm之配置文件</h1><div class="post-meta">Jul 27, 2015<span> | </span><span class="category"><a href="/categories/storm/">storm</a></span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Hits</span></span></div><a data-thread-key="2015/07/27/storm-configuration/" href="/2015/07/27/storm-configuration/#comments" class="ds-thread-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#storm基本配置"><span class="toc-number">1.</span> <span class="toc-text">storm基本配置</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#nimbus相关设置"><span class="toc-number">2.</span> <span class="toc-text">nimbus相关设置</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#supervisor相关配置"><span class="toc-number">3.</span> <span class="toc-text">supervisor相关配置</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#worker-配置"><span class="toc-number">4.</span> <span class="toc-text">worker 配置</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#message传递相关参数"><span class="toc-number">5.</span> <span class="toc-text">message传递相关参数</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#topology相关的设置，-针对特定拓扑的配置"><span class="toc-number">6.</span> <span class="toc-text">topology相关的设置， 针对特定拓扑的配置</span></a></li></ol></div></div><div class="post-content"><p>Storm的配置文件一般存放在<code>$STORM_HOME/conf</code>下，通常名为<code>storm.yaml</code>，它符合yaml格式要求。Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm常见的配置项参数。</p>
+<h1 id="storm基本配置"><a href="#storm基本配置" class="headerlink" title="storm基本配置"></a>storm基本配置</h1><ul>
 <li><strong>storm.local.dir</strong>: nimbus 和supervisor进程存储一些状态信息（conf或者jars）的本地路径，需要每台storm node单独创建该目录并保证该目录有正确的读写权限;</li>
 <li><strong>storm.log4j2.conf.dir</strong>： log4j的配置目录;</li>
 <li><strong>storm.zookeeper.servers</strong>: storm严重依赖zookeeper存储状态信息，要保证zookeeper的高可用，最好设置多个zk地址;</li>
@@ -15,7 +15,7 @@
 <li><strong>storm.id</strong>：运行中拓扑的id,由storm name和一个唯一随机数组成；</li>
 <li><strong>storm.local.mode.zmq</strong>：Local模式下是否使用ZeroMQ作消息系统，如果设置为false则使用java消息系统。默认为false；<br>注：Storm严重依赖zookeeper，而且zk在分布式使用中扮演了非常重要的角色。</li>
 </ul>
-<h3 id="2-nimbus相关设置"><a href="#2-nimbus相关设置" class="headerlink" title="2.nimbus相关设置"></a>2.nimbus相关设置</h3><ul>
+<h1 id="nimbus相关设置"><a href="#nimbus相关设置" class="headerlink" title="nimbus相关设置"></a>nimbus相关设置</h1><ul>
 <li><strong>storm.nimbus.retry.times</strong>： 5 nimbus操作的重试次数</li>
 <li><strong>storm.nimbus.retry.interval.millis</strong>： 2s 重试间隔</li>
 <li><strong>storm.nimbus.retry.intervalceiling.millis</strong>: 60000 最大重试时间 10分钟</li>
@@ -37,7 +37,7 @@
 <li><strong>topology.min.replication.count</strong>: 1 当nimbus seeds中该拓扑代码的备份达到最小数目时leader nimbus才可以执行拓扑动作。</li>
 <li><strong>topology.max.replication.wait.time.sec</strong>: 60 当代码备份在nimbus list中达到topology.min.replication.count设置的最大等待时间，如果超时，不管有没有最小备份个数，都要执行该拓扑</li>
 </ul>
-<h3 id="3-supervisor相关配置"><a href="#3-supervisor相关配置" class="headerlink" title="3.supervisor相关配置"></a>3.supervisor相关配置</h3><ul>
+<h1 id="supervisor相关配置"><a href="#supervisor相关配置" class="headerlink" title="supervisor相关配置"></a>supervisor相关配置</h1><ul>
 <li><strong>supervisor.slots.ports</strong>: 设置当台机子上可跑的worker数目，每个worker对应一个port，通常情况下多少个cpu core就设置多少个worker，类似与hadoop中nodemanager中slot的设置</li>
 <li><strong>supervisor.childopts</strong>: “-Xmx256m” supervisor jvm参数设置</li>
 <li><strong>supervisor.worker.start.timeout.secs</strong>: 120 supervisor等待worker启动的最长时间</li>
@@ -47,7 +47,7 @@
 <li><strong>supervisor.heartbeat.frequency.secs</strong>: 5s supervisor和nimbus心跳的频率</li>
 <li><strong>supervisor.enable</strong>: true supervisor是否要启动分配它的worker</li>
 </ul>
-<h3 id="4-worker-配置"><a href="#4-worker-配置" class="headerlink" title="4.worker 配置"></a>4.worker 配置</h3><ul>
+<h1 id="worker-配置"><a href="#worker-配置" class="headerlink" title="worker 配置"></a>worker 配置</h1><ul>
 <li><strong>worker.childopts</strong>: “-Xmx768m”</li>
 <li><strong>worker.gc.childopts</strong>: “” worker gc set 可以被topology.worker.gc.childopts.覆盖</li>
 <li><strong>worker.heartbeat.frequency.secs</strong>: 1 worker 和supervisor的heartbeat时间</li>
@@ -55,7 +55,7 @@
 <li><strong>task.heartbeat.frequency.secs</strong>: 3s task向nimbus发送心跳的频率</li>
 <li><strong>task.refresh.poll.secs</strong>: 10 多久和其他task同步连接（如果task重新分配，发往该task信息的那些task需要重练他们之间的连接）</li>
 </ul>
-<h3 id="5-message传递相关参数"><a href="#5-message传递相关参数" class="headerlink" title="5.message传递相关参数"></a>5.message传递相关参数</h3><ul>
+<h1 id="message传递相关参数"><a href="#message传递相关参数" class="headerlink" title="message传递相关参数"></a>message传递相关参数</h1><ul>
 <li><strong>storm.messaging.netty.server_worker_threads</strong>：1， server端接收信息的线程个数</li>
 <li><strong>storm.messaging.netty.client_worker_threads</strong>: 1， client端发送信息的线程个数</li>
 <li><strong>storm.messaging.netty.buffer_size</strong>: 5M，netty buffer大小</li>
@@ -67,7 +67,7 @@
 <blockquote>
 <p>注：我们的使用场景是storm kafka读取kafka里面的数据，发现运行一段时间以后，kafka消费的offset不再更新（2s更新一次消费的offset），spout 中的task不断重启导致offset一直不更新，查看log发现task失败的原因是gc设置不对以致netty连接超时，task会重新分配。在生产环境中应该调大该值，我们在线上设置该值为20s，并且调整worker的gc参数。</p>
 </blockquote>
-<h3 id="6-topology相关的设置，-针对特定拓扑的配置"><a href="#6-topology相关的设置，-针对特定拓扑的配置" class="headerlink" title="6.topology相关的设置， 针对特定拓扑的配置"></a>6.topology相关的设置， 针对特定拓扑的配置</h3><p>正如上一讲的，以下参数控制消息是否被完全处理：</p>
+<h1 id="topology相关的设置，-针对特定拓扑的配置"><a href="#topology相关的设置，-针对特定拓扑的配置" class="headerlink" title="topology相关的设置， 针对特定拓扑的配置"></a>topology相关的设置， 针对特定拓扑的配置</h1><p>正如上一讲的，以下参数控制消息是否被完全处理：</p>
 <ul>
 <li><strong>topology.enable.message.timeouts</strong>: true 保证数据完全处理；</li>
 <li><strong>topology.acker.executors</strong>: null 设置acker线程个数；</li>
