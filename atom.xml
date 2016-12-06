@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://wangzzu.github.io/"/>
-  <updated>2016-11-29T15:51:01.000Z</updated>
+  <updated>2016-12-06T14:02:51.000Z</updated>
   <id>http://wangzzu.github.io/</id>
   
   <author>
@@ -14,6 +14,336 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Vim 快捷键总结</title>
+    <link href="http://wangzzu.github.io/2016/12/06/vim-basic/"/>
+    <id>http://wangzzu.github.io/2016/12/06/vim-basic/</id>
+    <published>2016-12-06T14:02:51.000Z</published>
+    <updated>2016-12-06T14:02:51.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>Vim 到目前位置也用了将近两年，但是很多的快捷键每次要用到的时候还是会 Google 一下，只能记住很少的命令，查的过程其实还是会浪费很多时间，这里总结一下一些常用的 Vim 命令，以便以后查看。</p>
+<h1 id="光标移动"><a href="#光标移动" class="headerlink" title="光标移动"></a>光标移动</h1><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用（解释）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>h,j,k,l</td>
+<td>h表示往左，j表示往下，k表示往右，l表示往上</td>
+</tr>
+<tr>
+<td>Ctrl+f</td>
+<td>上一页</td>
+</tr>
+<tr>
+<td>Ctrl+b</td>
+<td>下一页</td>
+</tr>
+<tr>
+<td>w, e, W, E</td>
+<td>跳到单词的后面，小写包括标点</td>
+</tr>
+<tr>
+<td>b, B</td>
+<td>以单词为单位往前跳动光标，小写包含标点</td>
+</tr>
+<tr>
+<td>0</td>
+<td>跳到本行的头部</td>
+</tr>
+<tr>
+<td>O</td>
+<td>开启新的一行</td>
+</tr>
+<tr>
+<td>^</td>
+<td>一行的开始</td>
+</tr>
+<tr>
+<td>$</td>
+<td>一行的结尾</td>
+</tr>
+<tr>
+<td>gg</td>
+<td>文档的第一行</td>
+</tr>
+<tr>
+<td>[N]G</td>
+<td>文档的第N行（G 是最后一行），如：27+shift+g</td>
+</tr>
+</tbody>
+</table>
+<h1 id="插入"><a href="#插入" class="headerlink" title="插入"></a>插入</h1><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用（解释）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>i</td>
+<td>插入到光标前面</td>
+</tr>
+<tr>
+<td>I</td>
+<td>插入到行的开始位置</td>
+</tr>
+<tr>
+<td>a</td>
+<td>插入到光标的后面</td>
+</tr>
+<tr>
+<td>A</td>
+<td>插入到行的最后位置</td>
+</tr>
+<tr>
+<td>o</td>
+<td>在当前光标的下方插入新一行</td>
+</tr>
+<tr>
+<td>O(Shift+o)</td>
+<td>在当前光标的上方插入新一行</td>
+</tr>
+<tr>
+<td>Esc</td>
+<td>关闭插入模式</td>
+</tr>
+</tbody>
+</table>
+<h1 id="编辑"><a href="#编辑" class="headerlink" title="编辑"></a>编辑</h1><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用（解释）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>r</td>
+<td>在插入模式替换光标所在的一个字符</td>
+</tr>
+<tr>
+<td>J</td>
+<td>合并下一行到上一行</td>
+</tr>
+<tr>
+<td>s</td>
+<td>删除光标所在的一个字符, 光标还在当行</td>
+</tr>
+<tr>
+<td>S</td>
+<td>删除光标所在的一行，光标还在当行，不同于dd</td>
+</tr>
+<tr>
+<td>u</td>
+<td>撤销上一步操作</td>
+</tr>
+<tr>
+<td>ctrl+r</td>
+<td>恢复上一步操作</td>
+</tr>
+<tr>
+<td>.</td>
+<td>重复最后一个命令</td>
+</tr>
+<tr>
+<td>~</td>
+<td>变换为大写</td>
+</tr>
+<tr>
+<td>[N]&gt;&gt;</td>
+<td>一行或N行往右移动一个tab</td>
+</tr>
+<tr>
+<td>[N]&lt;&lt;</td>
+<td>一行或N行往左移动一个tab</td>
+</tr>
+</tbody>
+</table>
+<h1 id="退出"><a href="#退出" class="headerlink" title="退出"></a>退出</h1><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用（解释）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>:w</td>
+<td>保存</td>
+</tr>
+<tr>
+<td>:wq,:x</td>
+<td>保存并关闭</td>
+</tr>
+<tr>
+<td>:q</td>
+<td>关闭（已保存）</td>
+</tr>
+<tr>
+<td>:q!</td>
+<td>强制关，不保存</td>
+</tr>
+</tbody>
+</table>
+<h1 id="查找和搜索"><a href="#查找和搜索" class="headerlink" title="查找和搜索"></a>查找和搜索</h1><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用（解释）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>/pattern</td>
+<td>搜索（非插入模式) ，支持正则</td>
+</tr>
+<tr>
+<td>?pattern</td>
+<td>往后搜索</td>
+</tr>
+<tr>
+<td>n</td>
+<td>光标到达搜索结果的前一个目标</td>
+</tr>
+<tr>
+<td>N</td>
+<td>光标到达搜索结果的后一个目标</td>
+</tr>
+<tr>
+<td>r+p</td>
+<td>将光标之后的字符替换为字母p</td>
+</tr>
+<tr>
+<td>:s/word/replace</td>
+<td>光标所在行的第一个 word 替换为replace。</td>
+</tr>
+<tr>
+<td>:%s/word/replace/</td>
+<td>全文查找 word 并替换为 replace</td>
+</tr>
+<tr>
+<td>:1,50s/word/replace/</td>
+<td>在第1行和第50行之间（含）进行搜索和替换</td>
+</tr>
+<tr>
+<td>:45s/word/replace/</td>
+<td>表示仅仅在第45行进行搜索和替换。而 1,$ 行号范围和 % 是等价的</td>
+</tr>
+</tbody>
+</table>
+<h1 id="剪切、复制与粘贴"><a href="#剪切、复制与粘贴" class="headerlink" title="剪切、复制与粘贴"></a>剪切、复制与粘贴</h1><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用（解释）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dd</td>
+<td>删除一行，同时被删除内容存于剪贴板上</td>
+</tr>
+<tr>
+<td>de</td>
+<td>删除光标后的单词内容，同时被删除内容存于剪贴板上</td>
+</tr>
+<tr>
+<td>dw</td>
+<td>删除光标后的单词内容以及之后的空格，同时被删除内容存于剪贴板上</td>
+</tr>
+<tr>
+<td>dw</td>
+<td>删除一个单词</td>
+</tr>
+<tr>
+<td>[N]dd</td>
+<td>删除以当前行开始的n行</td>
+</tr>
+<tr>
+<td>x</td>
+<td>删除后一个字符</td>
+</tr>
+<tr>
+<td>X</td>
+<td>删除前一个字符</td>
+</tr>
+<tr>
+<td>D</td>
+<td>删除一行最后一个字符</td>
+</tr>
+<tr>
+<td>[N]yy</td>
+<td>复制一行或者N行</td>
+</tr>
+<tr>
+<td>yw</td>
+<td>复制一个单词</td>
+</tr>
+<tr>
+<td>p</td>
+<td>粘贴</td>
+</tr>
+</tbody>
+</table>
+<h1 id="窗口操作"><a href="#窗口操作" class="headerlink" title="窗口操作"></a>窗口操作</h1><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用（解释）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>:split</td>
+<td>水平方向分割出一个窗口</td>
+</tr>
+<tr>
+<td>:vsplit</td>
+<td>垂直方向分割出一个窗口</td>
+</tr>
+<tr>
+<td>:close</td>
+<td>关闭窗口</td>
+</tr>
+<tr>
+<td>Ctrl+W</td>
+<td>切换窗口, h到左边窗口，j到下方窗口，k到上方窗口，l到右边窗口</td>
+</tr>
+</tbody>
+</table>
+<h1 id="文字版"><a href="#文字版" class="headerlink" title="文字版"></a>文字版</h1><p>这里有一个别人总结的文字版<a href="http://tnerual.eriogerg.free.fr/vimqrc.pdf" target="_blank" rel="external">图片链接</a>。</p>
+<p><img src="/images/linux/vim-text.png" alt="vim-text"></p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://www.cnblogs.com/jiqingwu/archive/2012/06/14/vim_notes.html" target="_blank" rel="external">Vim 使用笔记</a></li>
+<li><a href="http://cenalulu.github.io/linux/all-vim-cheatsheat/" target="_blank" rel="external">史上最全Vim快捷键键位图 – 入门到进阶</a></li>
+<li><a href="http://coolshell.cn/articles/5426.html" target="_blank" rel="external">简明 Vim 练级攻略</a></li>
+<li><a href="http://www.jianshu.com/p/c23136f68d2f" target="_blank" rel="external">Vim快捷键整理</a></li>
+<li><a href="http://lxs647.iteye.com/blog/1245948" target="_blank" rel="external">vi/vim 删除以及其它命令</a></li>
+<li><a href="http://pizn.github.io/2012/03/03/vim-commonly-used-command.html" target="_blank" rel="external">Vim 命令总结</a></li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;Vim 到目前位置也用了将近两年，但是很多的快捷键每次要用到的时候还是会 Google 一下，只能记住很少的命令，查的过程其实还是会浪费很多时间，这里总结一下一些常用的 Vim 命令，以便以后查看。&lt;/p&gt;
+&lt;h1 id=&quot;光标移动&quot;&gt;&lt;a href=&quot;#光标移动&quot; cla
+    
+    </summary>
+    
+      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="linux" scheme="http://wangzzu.github.io/tags/linux/"/>
+    
+  </entry>
   
   <entry>
     <title>技巧，其实并没有什么技巧，只不过多了些毅力罢了</title>
@@ -3698,268 +4028,6 @@
     
       &lt;p&gt;本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。&lt;/p&gt;
 &lt;p&gt;本文主要介绍在Ja
-    
-    </summary>
-    
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="java" scheme="http://wangzzu.github.io/tags/java/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Google Java Style</title>
-    <link href="http://wangzzu.github.io/2016/04/22/google-java-style/"/>
-    <id>http://wangzzu.github.io/2016/04/22/google-java-style/</id>
-    <published>2016-04-22T01:31:43.000Z</published>
-    <updated>2016-11-19T09:02:27.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>这份文档是Google Java编程风格规范的定义。在平时编写代码时应该养成一个良好的习惯，按照这个标准去编写容易维护的代码。当且仅当一个Java源文件符合此文档中的规则，我们才认为它符合Google的Java编程风格。</p>
-<h1 id="源文件基础"><a href="#源文件基础" class="headerlink" title="源文件基础"></a>源文件基础</h1><h2 id="源文件名"><a href="#源文件名" class="headerlink" title="源文件名"></a>源文件名</h2><p>源文件以其最顶层的类名来命名，大小写敏感，文件扩展名为<code>.java</code>。</p>
-<h2 id="文件编码"><a href="#文件编码" class="headerlink" title="文件编码"></a>文件编码</h2><p>源文件编码格式为：<strong>UTF-8</strong>。</p>
-<h2 id="特殊字符"><a href="#特殊字符" class="headerlink" title="特殊字符"></a>特殊字符</h2><h3 id="空白字符"><a href="#空白字符" class="headerlink" title="空白字符"></a>空白字符</h3><p>除了行结束符序列，ASCII水平空格字符(<code>0x20</code>，即空格)是源文件中唯一允许出现的空白字符，这意味着：</p>
-<ol>
-<li>所有其它字符串中的空白字符都要进行转义。</li>
-<li>制表符不用于缩进。</li>
-</ol>
-<h3 id="特殊转义序列"><a href="#特殊转义序列" class="headerlink" title="特殊转义序列"></a>特殊转义序列</h3><p>对于具有特殊转义序列的任何字符(<code>\b</code>,<code>\t</code>,<code>\n</code>, <code>\f</code>, <code>\r</code>,<code>&quot;</code>,<code>&#39;</code>及<code>\</code>)，我们使用它的转义序列，而不是相应的八进制(比如<code>\012</code>)或Unicode(比如<code>\u000a</code>)转义。</p>
-<h3 id="非ASCII字符"><a href="#非ASCII字符" class="headerlink" title="非ASCII字符"></a>非ASCII字符</h3><p>对于剩余的非ASCII字符，是使用实际的Unicode字符(比如<code>∞</code>)，还是使用等价的Unicode转义符(比如<code>\u221e</code>)，取决于哪个能让代码更易于阅读和理解。</p>
-<blockquote>
-<p>Tip: 在使用Unicode转义符或是一些实际的Unicode字符时，建议做些注释给出解释，这有助于别人阅读和理解。</p>
-</blockquote>
-<h1 id="源文件结构"><a href="#源文件结构" class="headerlink" title="源文件结构"></a>源文件结构</h1><p>一个源文件包含（按顺序地）：</p>
-<ol>
-<li>许可证版权信息（如果需要的情况下）；</li>
-<li>package语句；</li>
-<li>import语句；</li>
-<li>一个顶级类（只有一个）；</li>
-</ol>
-<p><em>以上每个部分用一个空行隔开。</em></p>
-<h2 id="许可证或版权信息"><a href="#许可证或版权信息" class="headerlink" title="许可证或版权信息"></a>许可证或版权信息</h2><p>如果一个文件包含许可证或版权信息，那么它应当被放在文件最前面。</p>
-<h2 id="package语句"><a href="#package语句" class="headerlink" title="package语句"></a>package语句</h2><p><strong>package语句不换行</strong>，列限制并不适用于package语句。(即package语句写在一行里)</p>
-<h2 id="import语句"><a href="#import语句" class="headerlink" title="import语句"></a>import语句</h2><ul>
-<li>import<strong>不要使用通配符</strong>，不要出现类似这样的import语句：<code>import java.util.*</code>；</li>
-<li>import语句<strong>不要换行</strong>，每个import语句独立成行；</li>
-<li>顺序与间距：import语句分为以下几组，按照这个顺序，每组由一个空行分隔。<ol>
-<li>所有的静态类导入独立成组；</li>
-<li><code>com.google</code> imports；</li>
-<li>第三的包。每个包为一组，字典序，如<code>andriod</code>，<code>com</code>，<code>junit</code>，<code>org</code>，<code>sun</code>.</li>
-<li><code>java</code> imports;</li>
-<li><code>javax</code> imports.</li>
-</ol>
-</li>
-</ul>
-<p>组内不空行，按字典序排序。</p>
-<h2 id="类声明"><a href="#类声明" class="headerlink" title="类声明"></a>类声明</h2><h3 id="只有一个顶级类声明"><a href="#只有一个顶级类声明" class="headerlink" title="只有一个顶级类声明"></a>只有一个顶级类声明</h3><p>每个顶级类都在一个与它同名的源文件中(当然，还包含<code>.java</code>后缀)。</p>
-<p>例如：<code>package-info.java</code>，该文件中可没有<code>package-info</code>类。</p>
-<h3 id="类成员顺序"><a href="#类成员顺序" class="headerlink" title="类成员顺序"></a>类成员顺序</h3><p>类的成员顺序对易学性有很大的影响，但这也不存在唯一的通用法则。不同的类对成员的排序可能是不同的。 最重要的一点，每个类应该以<strong>某种逻辑</strong>去排序它的成员，维护者应该要能解释这种排序逻辑。比如， 新的方法不能总是习惯性地添加到类的结尾，因为这样就是按时间顺序而非某种逻辑来排序的。</p>
-<h3 id="重载：永不分离"><a href="#重载：永不分离" class="headerlink" title="重载：永不分离"></a>重载：永不分离</h3><p>当一个类有多个构造函数，或是多个同名方法，这些函数/方法应该按顺序出现在一起，中间不要放进其它函数/方法。</p>
-<h1 id="格式"><a href="#格式" class="headerlink" title="格式"></a>格式</h1><h2 id="大括号"><a href="#大括号" class="headerlink" title="大括号"></a>大括号</h2><h3 id="使用大括号"><a href="#使用大括号" class="headerlink" title="使用大括号"></a>使用大括号</h3><p>当大括号与<code>if</code>, <code>else</code>, <code>for</code>, <code>do</code>, <code>while</code>语句一起使用，即使只有一条语句（或者是空），也应该把大括号写上。</p>
-<h3 id="非空块"><a href="#非空块" class="headerlink" title="非空块"></a>非空块</h3><p>对于非空块和块状结构，主要有以下几个原则：</p>
-<ul>
-<li>在左大括号前不换行；</li>
-<li>左大括号后换行；</li>
-<li>右大括号前换行；</li>
-<li>如果右大括号是一个语句、函数体或类的终止，则右大括号后换行; 否则不换行。例如，如果右大括号后面是else或逗号，则不换行。</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//示例</span></div><div class="line"><span class="keyword">return</span> <span class="keyword">new</span> MyClass() &#123;</div><div class="line">    <span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">method</span><span class="params">()</span> </span>&#123;</div><div class="line">        <span class="keyword">if</span> (condition()) &#123;</div><div class="line">            <span class="keyword">try</span> &#123;</div><div class="line">                something();</div><div class="line">            &#125; <span class="keyword">catch</span> (ProblemException e) &#123;</div><div class="line">                recover();</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
-<h3 id="空块"><a href="#空块" class="headerlink" title="空块"></a>空块</h3><p>这里主要有两种情况：</p>
-<ul>
-<li>一个空的块状结构里什么也不包含，大括号可以简洁地写成<code>{}</code>，不需要换行；</li>
-</ul>
-<ul>
-<li>但是也有例外的情况：如果它是一个多块语句的一部分(<code>if/else</code>或 <code>try/catch/finally</code>) ，即使大括号内没内容，右大括号也要换行。</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//不换行</span></div><div class="line"><span class="function"><span class="keyword">void</span> <span class="title">doNothing</span><span class="params">()</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
-<h2 id="块缩进：2个空格"><a href="#块缩进：2个空格" class="headerlink" title="块缩进：2个空格"></a>块缩进：2个空格</h2><p>每当开始一个新的块，缩进增加<strong>2个空格</strong>，当块结束时，缩进返回先前的缩进级别。缩进级别适用于代码和注释。（不过一般情况大家用的都是4个，这个的话看个人喜好，感觉只要统一就可以了）</p>
-<h2 id="一行一个语句"><a href="#一行一个语句" class="headerlink" title="一行一个语句"></a>一行一个语句</h2><p>每个语句后要换行。</p>
-<h2 id="列限制：80或100"><a href="#列限制：80或100" class="headerlink" title="列限制：80或100"></a>列限制：80或100</h2><p>一个项目可以选择一行80个字符或100个字符的列限制，除了下述例外，任何一行如果超过这个字符数限制，必须自动换行。</p>
-<p>例外：</p>
-<ul>
-<li>不可能满足列限制的行(例如，Javadoc中的一个长URL，或是一个长的JSNI方法参考);</li>
-<li><code>package</code>和<code>import</code>语句;</li>
-<li>注释中那些可能被剪切并粘贴到shell中的命令行.</li>
-</ul>
-<h2 id="自动换行"><a href="#自动换行" class="headerlink" title="自动换行"></a>自动换行</h2><p>术语说明：一般情况下，一行长代码为了避免超出列限制(<strong>80或100</strong>个字符)而被分为多行，我们称之为<strong>自动换行</strong>(line-wrapping)。</p>
-<p>我们并没有全面，确定性的准则来决定在每一种情况下如何自动换行。很多时候，对于同一段代码会有好几种有效的自动换行方式。</p>
-<blockquote>
-<p>Tip: 提取方法或局部变量可以在不换行的情况下解决代码过长的问题(是合理缩短命名长度吧)</p>
-</blockquote>
-<h3 id="从哪里断开"><a href="#从哪里断开" class="headerlink" title="从哪里断开"></a>从哪里断开</h3><p>自动换行的基本准则是：更倾向于在更高的语法级别处断开。</p>
-<ul>
-<li>如果在<code>非赋值运算符</code>处断开，那么在该符号前断开(比如+，它将位于下一行)。这条规则也适用于以下“类运算符”符号：点分隔符(.)，类型界限中的&amp;（<code>&lt;T extends Foo &amp; Bar&gt;</code>)，catch块中的管道符号(<code>catch (FooException | BarException e</code>)</li>
-<li>如果在赋值运算符处断开，通常的做法是在该符号后断开(比如=，它与前面的内容留在同一行)。这条规则也适用于<code>foreach</code>语句中的分号。</li>
-<li>方法名或构造函数名与左括号留在同一行。</li>
-<li>逗号(,)与其前面的内容留在同一行。</li>
-</ul>
-<h3 id="自动换行时缩进至少-4个空格"><a href="#自动换行时缩进至少-4个空格" class="headerlink" title="自动换行时缩进至少+4个空格"></a>自动换行时缩进至少+4个空格</h3><p>自动换行时，第一行后的每一行至少比第一行多缩进4个空格(注意：制表符不用于缩进。见2.3.1节)。</p>
-<p>当存在连续自动换行时，缩进可能会多缩进不只4个空格(语法元素存在多级时)。一般而言，两个连续行使用相同的缩进当且仅当它们开始于同级语法元素。</p>
-<h2 id="空白"><a href="#空白" class="headerlink" title="空白"></a>空白</h2><h3 id="垂直空白"><a href="#垂直空白" class="headerlink" title="垂直空白"></a>垂直空白</h3><p>以下情况需要使用<strong>一个空行</strong>：</p>
-<ol>
-<li>类内连续的成员之间：字段，构造函数，方法，嵌套类，静态初始化块，实例初始化块。<br>例外：两个连续字段之间的空行是可选的，用于字段的空行主要用来对字段进行逻辑分组。</li>
-<li>在函数体内，语句的逻辑分组间使用空行。</li>
-<li>类内的第一个成员前或最后一个成员后的空行是可选的(既不鼓励也不反对这样做，视个人喜好而定)。</li>
-<li>要满足本文档中其他节的空行要求(比如3.3节：import语句)</li>
-</ol>
-<p>多个连续的空行是允许的，但没有必要这样做(我们也不鼓励这样做)。</p>
-<h3 id="水平空白"><a href="#水平空白" class="headerlink" title="水平空白"></a>水平空白</h3><p>除了语言需求和其它规则，并且除了文字，注释和<code>Javadoc</code>用到单个空格，单个ASCII空格也出现在以下几个地方：</p>
-<ol>
-<li>分隔任何保留字与紧随其后的左括号(<code>(</code>)(如<code>if, for catch</code>等)。</li>
-<li>分隔任何保留字与其前面的右大括号(<code>}</code>)(如<code>else, catch</code>)。</li>
-<li>在任何左大括号前(<code>{</code>)，两个例外：<ul>
-<li><code>@SomeAnnotation({a, b})</code>(不使用空格)。</li>
-<li><code>String[][] x = foo;</code>(大括号间没有空格，见下面的Note)。</li>
-</ul>
-</li>
-<li>在任何二元或三元运算符的两侧。这也适用于以下“类运算符”符号：<ul>
-<li>类型界限中的&amp;(<code>&lt;T extends Foo &amp; Bar&gt;</code>)。</li>
-<li><code>catch</code>块中的管道符号(<code>catch (FooException | BarException e</code>)。</li>
-<li><code>foreach</code>语句中的分号。</li>
-</ul>
-</li>
-<li>在<code>, : ;</code>及右括号(<code>)</code>)后</li>
-<li>如果在一条语句后做注释，则<strong>双斜杠(//)两边都要空格</strong>。这里可以允许多个空格，但没有必要。</li>
-<li>类型和变量之间：List list。</li>
-<li><p>数组初始化中，大括号内的空格是可选的，即<code>new int[] {5, 6}</code>和<code>new int[] { 5, 6 }</code>都是可以的。</p>
-<blockquote>
-<p>Note：这个规则并不要求或禁止一行的开关或结尾需要额外的空格，只对内部空格做要求。</p>
-</blockquote>
-</li>
-</ol>
-<h3 id="水平对齐：不做要求"><a href="#水平对齐：不做要求" class="headerlink" title="水平对齐：不做要求"></a>水平对齐：不做要求</h3><p>术语说明：水平对齐指的是通过增加可变数量的空格来使某一行的字符与上一行的相应字符对齐。</p>
-<p>这是允许的(而且在不少地方可以看到这样的代码)，但Google编程风格对此不做要求。即使对于已经使用水平对齐的代码，我们也不需要去保持这种风格。</p>
-<p>以下示例先展示未对齐的代码，然后是对齐的代码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 未对齐</span></div><div class="line"><span class="keyword">private</span> <span class="keyword">int</span> x; <span class="comment">// this is fine</span></div><div class="line"><span class="keyword">private</span> Color color; <span class="comment">// this too</span></div><div class="line"><span class="comment">// 对齐</span></div><div class="line"><span class="keyword">private</span> <span class="keyword">int</span> x; <span class="comment">// permitted, but future edits</span></div><div class="line"><span class="keyword">private</span> Color color; <span class="comment">// may leave it unaligned</span></div></pre></td></tr></table></figure>
-<blockquote>
-<p>Tip：对齐可增加代码可读性，但它为日后的维护带来问题。考虑未来某个时候，我们需要修改一堆对齐的代码中的一行。 这可能导致原本很漂亮的对齐代码变得错位。很可能它会提示你调整周围代码的空白来使这一堆代码重新水平对齐(比如程序员想保持这种水平对齐的风格)， 这就会让你做许多的无用功，增加了reviewer的工作并且可能导致更多的合并冲突。</p>
-</blockquote>
-<h2 id="用小括号来限定组：推荐"><a href="#用小括号来限定组：推荐" class="headerlink" title="用小括号来限定组：推荐"></a>用小括号来限定组：推荐</h2><p>除非作者和reviewer都认为去掉小括号也不会使代码被误解，或是去掉小括号能让代码更易于阅读，否则我们不应该去掉小括号。 我们没有理由假设读者能记住整个Java运算符优先级表。（把所有优先级表全部记下来是比较困难的）</p>
-<h2 id="具体结构"><a href="#具体结构" class="headerlink" title="具体结构"></a>具体结构</h2><h3 id="枚举类"><a href="#枚举类" class="headerlink" title="枚举类"></a>枚举类</h3><p>枚举常量间用逗号隔开，换行可选。</p>
-<p>没有方法和文档的枚举类可写成数组初始化的格式：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">private</span> <span class="keyword">enum</span> Suit &#123; CLUBS, HEARTS, SPADES, DIAMONDS &#125;</div></pre></td></tr></table></figure>
-<p>由于枚举类也是一个类，因此所有适用于其它类的格式规则也适用于枚举类。</p>
-<h3 id="变量声明"><a href="#变量声明" class="headerlink" title="变量声明"></a>变量声明</h3><h4 id="每次只声明一个变量"><a href="#每次只声明一个变量" class="headerlink" title="每次只声明一个变量"></a>每次只声明一个变量</h4><p><strong>不要使用组合声明</strong>，比如<code>int a, b</code>;。</p>
-<h4 id="局部变量需要时才声明，并尽快进行初始化"><a href="#局部变量需要时才声明，并尽快进行初始化" class="headerlink" title="局部变量需要时才声明，并尽快进行初始化"></a>局部变量需要时才声明，并尽快进行初始化</h4><p>不要在一个代码块的开头把局部变量一次性都声明了(这是c语言的做法)，而是在第一次需要使用它时才声明。 局部变量在声明时最好就进行初始化，或者声明后尽快进行初始化。</p>
-<h3 id="数组"><a href="#数组" class="headerlink" title="数组"></a>数组</h3><h4 id="数组初始化：可写成块状结构"><a href="#数组初始化：可写成块状结构" class="headerlink" title="数组初始化：可写成块状结构"></a>数组初始化：可写成块状结构</h4><p>数组初始化可以写成块状结构，比如，下面的写法都是OK的：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">new</span> <span class="keyword">int</span>[] &#123;</div><div class="line">     <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span></div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="keyword">new</span> <span class="keyword">int</span>[] &#123;</div><div class="line">     <span class="number">0</span>,</div><div class="line">     <span class="number">1</span>,</div><div class="line">     <span class="number">2</span>,</div><div class="line">     <span class="number">3</span></div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="keyword">new</span> <span class="keyword">int</span>[] &#123;</div><div class="line">     <span class="number">0</span>, <span class="number">1</span>,</div><div class="line">     <span class="number">2</span>, <span class="number">3</span></div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="keyword">new</span> <span class="keyword">int</span>[]&#123;<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>&#125;</div></pre></td></tr></table></figure>
-<h4 id="数组声明"><a href="#数组声明" class="headerlink" title="数组声明"></a>数组声明</h4><p>中括号是类型的一部分：<code>String[] args</code>。</p>
-<h3 id="switch语句"><a href="#switch语句" class="headerlink" title="switch语句"></a>switch语句</h3><p>术语说明：switch块的大括号内是一个或多个语句组。每个语句组包含一个或多个<code>switch</code>标签(<code>case FOO:</code>或<code>default:</code>)，后面跟着一条或多条语句。</p>
-<h4 id="缩进"><a href="#缩进" class="headerlink" title="缩进"></a>缩进</h4><p>与其它块状结构一致，<code>switch</code>块中的内容缩进为2个空格。</p>
-<p>每个<code>switch</code>标签后新起一行，再缩进2个空格，写下一条或多条语句。</p>
-<h4 id="Fall-through：注释"><a href="#Fall-through：注释" class="headerlink" title="Fall-through：注释"></a>Fall-through：注释</h4><p>在一个<code>switch</code>块内，每个语句组要么通过<code>break, continue, return</code>或抛出异常来终止，要么通过一条注释来说明程序将继续执行到下一个语句组， 任何能表达这个意思的注释都是OK的(典型的是用// fall through)。这个特殊的注释并不需要在最后一个语句组(一般是<code>default</code>)中出现。示例：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">switch</span> (input) &#123;</div><div class="line">     <span class="keyword">case</span> <span class="number">1</span>:</div><div class="line">     <span class="keyword">case</span> <span class="number">2</span>:</div><div class="line">         prepareOneOrTwo();</div><div class="line">         <span class="comment">// fall through</span></div><div class="line">     <span class="keyword">case</span> <span class="number">3</span>:</div><div class="line">         handleOneTwoOrThree();</div><div class="line">         <span class="keyword">break</span>;</div><div class="line">     <span class="keyword">default</span>:</div><div class="line">         handleLargeNumber(input);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<h4 id="default的情况要写出来"><a href="#default的情况要写出来" class="headerlink" title="default的情况要写出来"></a>default的情况要写出来</h4><p>每个switch语句都包含一个<code>default</code>语句组，即使它什么代码也不包含。</p>
-<h3 id="注解-Annotations"><a href="#注解-Annotations" class="headerlink" title="注解(Annotations)"></a>注解(<code>Annotations</code>)</h3><p>注解紧跟在文档块后面，应用于类、方法和构造函数，一个注解<strong>独占一行</strong>。这些换行不属于自动换行，因此缩进级别不变。例如：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="meta">@Override</span></div><div class="line"><span class="meta">@Nullable</span></div><div class="line"><span class="function"><span class="keyword">public</span> String <span class="title">getNameIfPresent</span><span class="params">()</span> </span>&#123; ... &#125;</div></pre></td></tr></table></figure>
-<p>例外：单个的注解可以和签名的第一行出现在同一行。例如：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">hashCode</span><span class="params">()</span> </span>&#123; ... &#125;</div></pre></td></tr></table></figure>
-<p>应用于字段的注解紧随文档块出现，应用于字段的多个注解允许与字段出现在同一行。例如：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="meta">@Partial</span> <span class="meta">@Mock</span> DataLoader loader;</div></pre></td></tr></table></figure>
-<p>参数和局部变量注解没有特定规则。</p>
-<h3 id="注释"><a href="#注释" class="headerlink" title="注释"></a>注释</h3><h4 id="块注释风格"><a href="#块注释风格" class="headerlink" title="块注释风格"></a>块注释风格</h4><p>块注释与其周围的代码在同一缩进级别。它们可以是/<em> … </em>/风格，也可以是// …风格。对于多行的/<em> … </em>/注释，后续行必须从<em>开始， 并且与前一行的</em>对齐。以下示例注释都是OK的。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/*</span></div><div class="line">* This is // And so /* Or you can</div><div class="line">* okay. // is this. * even do this. */</div><div class="line">*/</div></pre></td></tr></table></figure>
-<p>注释不要封闭在由星号或其它字符绘制的框架里。</p>
-<p>Tip：在写多行注释时，如果你希望在必要时能重新换行(即注释像段落风格一样)，那么使用/<em> … </em>/。</p>
-<h3 id="Modifiers"><a href="#Modifiers" class="headerlink" title="Modifiers"></a>Modifiers</h3><p>类和成员的<code>modifiers</code>如果存在，则按Java语言规范中推荐的顺序出现。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">public</span> <span class="keyword">protected</span> <span class="keyword">private</span> <span class="keyword">abstract</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> <span class="keyword">synchronized</span> <span class="keyword">native</span> <span class="keyword">strictfp</span></div></pre></td></tr></table></figure>
-<h1 id="命名约定"><a href="#命名约定" class="headerlink" title="命名约定"></a>命名约定</h1><h2 id="对所有标识符都通用的规则"><a href="#对所有标识符都通用的规则" class="headerlink" title="对所有标识符都通用的规则"></a>对所有标识符都通用的规则</h2><p>标识符只能使用ASCII字母和数字，因此每个有效的标识符名称都能匹配正则表达式<code>\w+</code>。</p>
-<p>在Google其它编程语言风格中使用的特殊前缀或后缀，如<code>name_</code>,<code>mName</code>, <code>s_name</code>和<code>kName</code>，在Java编程风格中都不再使用。</p>
-<h2 id="标识符类型的规则"><a href="#标识符类型的规则" class="headerlink" title="标识符类型的规则"></a>标识符类型的规则</h2><h3 id="包名"><a href="#包名" class="headerlink" title="包名"></a>包名</h3><p>包名<strong>全部小写</strong>，连续的单词只是<strong>简单地连接</strong>起来，不使用下划线。</p>
-<h3 id="类名"><a href="#类名" class="headerlink" title="类名"></a>类名</h3><p>类名都以<code>UpperCamelCase</code>风格编写。</p>
-<p>类名通常是名词或名词短语，接口名称有时可能是形容词或形容词短语。现在还没有特定的规则或行之有效的约定来命名注解类型。</p>
-<p>测试类的命名以它要测试的类的名称开始，以Test结束。例如，<code>HashTest</code>或<code>HashIntegrationTest</code>。</p>
-<h3 id="方法名"><a href="#方法名" class="headerlink" title="方法名"></a>方法名</h3><p>方法名都以<code>lowerCamelCase</code>风格编写。</p>
-<p>方法名通常是动词或动词短语。</p>
-<p>下划线可能出现在JUnit测试方法名称中用以分隔名称的逻辑组件。一个典型的模式是：<code>test&lt;MethodUnderTest&gt;_&lt;state&gt;</code>，例如<code>testPop_emptyStack</code>。 并不存在唯一正确的方式来命名测试方法。</p>
-<h3 id="常量名"><a href="#常量名" class="headerlink" title="常量名"></a>常量名</h3><p>常量名命名模式为<code>CONSTANT_CASE</code>，<strong>全部字母大写，用下划线分隔单词</strong>。那，到底什么算是一个常量？</p>
-<p>每个常量都是一个静态<code>final</code>字段，但不是所有静态<code>final</code>字段都是常量。在决定一个字段是否是一个常量时， 考虑它是否真的感觉像是一个常量。例如，如果任何一个该实例的观测状态是可变的，则它几乎肯定不会是一个常量。 只是永远不打算改变对象一般是不够的，它要真的一直不变才能将它示为常量。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// Constants</span></div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> NUMBER = <span class="number">5</span>;</div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> ImmutableList&lt;String&gt; NAMES = ImmutableList.of(<span class="string">"Ed"</span>, <span class="string">"Ann"</span>);</div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> Joiner COMMA_JOINER = Joiner.on(<span class="string">','</span>); <span class="comment">// because Joiner is immutable</span></div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> SomeMutableType[] EMPTY_ARRAY = &#123;&#125;;</div><div class="line"><span class="keyword">enum</span> SomeEnum &#123; ENUM_CONSTANT &#125;</div><div class="line"></div><div class="line"><span class="comment">// Not constants</span></div><div class="line"><span class="keyword">static</span> String nonFinal = <span class="string">"non-final"</span>;</div><div class="line"><span class="keyword">final</span> String nonStatic = <span class="string">"non-static"</span>;</div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> Set&lt;String&gt; mutableCollection = <span class="keyword">new</span> HashSet&lt;String&gt;();</div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> ImmutableSet&lt;SomeMutableType&gt; mutableElements = ImmutableSet.of(mutable);</div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> Logger logger = Logger.getLogger(MyClass.getName());</div><div class="line"><span class="keyword">static</span> <span class="keyword">final</span> String[] nonEmptyArray = &#123;<span class="string">"these"</span>, <span class="string">"can"</span>, <span class="string">"change"</span>&#125;;</div></pre></td></tr></table></figure>
-<p>这些名字通常是名词或名词短语。</p>
-<h3 id="非常量字段名"><a href="#非常量字段名" class="headerlink" title="非常量字段名"></a>非常量字段名</h3><p>非常量字段名以<code>lowerCamelCase</code>风格编写。</p>
-<p>这些名字通常是名词或名词短语。</p>
-<h3 id="参数名"><a href="#参数名" class="headerlink" title="参数名"></a>参数名</h3><p>参数名以<code>lowerCamelCase</code>风格编写。</p>
-<p>参数应该避免用单个字符命名。</p>
-<h3 id="局部变量名"><a href="#局部变量名" class="headerlink" title="局部变量名"></a>局部变量名</h3><p>局部变量名以<code>lowerCamelCase</code>风格编写，比起其它类型的名称，局部变量名可以有更为宽松的缩写。</p>
-<p>虽然缩写更宽松，但还是要避免用单字符进行命名，除了临时变量和循环变量。</p>
-<p>即使局部变量是<code>final</code>和不可改变的，也不应该把它示为常量，自然也不能用常量的规则去命名它。</p>
-<h3 id="类型变量名"><a href="#类型变量名" class="headerlink" title="类型变量名"></a>类型变量名</h3><p>类型变量可用以下两种风格之一进行命名：</p>
-<ul>
-<li>单个的大写字母，后面可以跟一个数字(如：E, T, X, T2)。</li>
-<li>以类命名方式(5.2.2节)，后面加个大写的T(如：RequestT, FooBarT)。</li>
-</ul>
-<h2 id="驼峰式命名法-CamelCase"><a href="#驼峰式命名法-CamelCase" class="headerlink" title="驼峰式命名法(CamelCase)"></a>驼峰式命名法(<code>CamelCase</code>)</h2><p>驼峰式命名法：</p>
-<ol>
-<li>大驼峰式命名法(<code>UpperCamelCase</code>);</li>
-<li>小驼峰式命名法(<code>lowerCamelCase</code>)。</li>
-</ol>
-<p>有时，我们有不只一种合理的方式将一个英语词组转换成驼峰形式，如缩略语或不寻常的结构(例如”IPv6”或”iOS”)。Google指定了以下的转换方案。</p>
-<p>名字从散文形式(prose form)开始:</p>
-<ol>
-<li>把短语转换为纯ASCII码，并且移除任何单引号。例如：”Müller’s algorithm”将变成”Muellers algorithm”。</li>
-<li>把这个结果切分成单词，在空格或其它标点符号(通常是连字符)处分割开。<ul>
-<li>推荐：如果某个单词已经有了常用的驼峰表示形式，按它的组成将它分割开(如”AdWords”将分割成”ad words”)。 需要注意的是”iOS”并不是一个真正的驼峰表示形式，因此该推荐对它并不适用。</li>
-</ul>
-</li>
-<li>现在将所有字母都小写(包括缩写)，然后将单词的第一个字母大写：<ol>
-<li>每个单词的第一个字母都大写，来得到大驼峰式命名。</li>
-<li>除了第一个单词，每个单词的第一个字母都大写，来得到小驼峰式命名。</li>
-</ol>
-</li>
-<li>最后将所有的单词连接起来得到一个标识符。</li>
-</ol>
-<p>示例：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">Prose form Correct Incorrect</div><div class="line">------------------------------------------------------------------</div><div class="line"><span class="string">"XML HTTP request"</span> XmlHttpRequest XMLHTTPRequest</div><div class="line"><span class="string">"new customer ID"</span> newCustomerId newCustomerID</div><div class="line"><span class="string">"inner stopwatch"</span> innerStopwatch innerStopWatch</div><div class="line"><span class="string">"supports IPv6 on iOS?"</span> supportsIpv6OnIos supportsIPv6OnIOS</div><div class="line"><span class="string">"YouTube importer"</span> YouTubeImporter</div><div class="line">YoutubeImporter*</div></pre></td></tr></table></figure>
-<p>加星号处表示可以，但不推荐。</p>
-<blockquote>
-<p>Note：在英语中，某些带有连字符的单词形式不唯一。例如：”nonempty”和”non-empty”都是正确的，因此方法名<code>checkNonempty</code>和<code>checkNonEmpty</code>也都是正确的。</p>
-</blockquote>
-<h1 id="编程实践"><a href="#编程实践" class="headerlink" title="编程实践"></a>编程实践</h1><h2 id="Override：能用则用"><a href="#Override：能用则用" class="headerlink" title="@Override：能用则用"></a><code>@Override</code>：能用则用</h2><p>只要是合法的，就把<code>@Override</code>注解给用上。</p>
-<h2 id="捕获的异常：不能忽视"><a href="#捕获的异常：不能忽视" class="headerlink" title="捕获的异常：不能忽视"></a>捕获的异常：不能忽视</h2><p>除了下面的例子，对捕获的异常不做响应是极少正确的。(典型的响应方式是打印日志，或者如果它被认为是不可能的，则把它当作一个<code>AssertionError</code>重新抛出。)</p>
-<p>如果它确实是不需要在<code>catch</code>块中做任何响应，需要做注释加以说明(如下面的例子)。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">try</span> &#123;</div><div class="line">     <span class="keyword">int</span> i = Integer.parseInt(response);</div><div class="line">     <span class="keyword">return</span> handleNumericResponse(i);</div><div class="line">&#125; <span class="keyword">catch</span> (NumberFormatException ok) &#123;</div><div class="line">     <span class="comment">// it's not numeric; that's fine, just continue</span></div><div class="line">&#125;</div><div class="line"><span class="keyword">return</span> handleTextResponse(response);</div></pre></td></tr></table></figure>
-<blockquote>
-<p>例外：在测试中，如果一个捕获的异常被命名为<code>expected</code>，则它可以被不加注释地忽略。下面是一种非常常见的情形，用以确保所测试的方法会抛出一个期望中的异常， 因此在这里就没有必要加注释。</p>
-</blockquote>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">try</span> &#123;</div><div class="line">     emptyStack.pop();</div><div class="line">     fail();</div><div class="line">&#125; <span class="keyword">catch</span> (NoSuchElementException expected) &#123;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<h2 id="静态成员：使用类进行调用"><a href="#静态成员：使用类进行调用" class="headerlink" title="静态成员：使用类进行调用"></a>静态成员：使用类进行调用</h2><p>使用类名调用静态的类成员，而不是具体某个对象或表达式。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">Foo aFoo = ...;</div><div class="line">Foo.aStaticMethod(); <span class="comment">// good</span></div><div class="line">aFoo.aStaticMethod(); <span class="comment">// bad</span></div><div class="line">somethingThatYieldsAFoo().aStaticMethod(); <span class="comment">// very bad</span></div></pre></td></tr></table></figure>
-<h2 id="Finalizers-禁用"><a href="#Finalizers-禁用" class="headerlink" title="Finalizers: 禁用"></a><code>Finalizers</code>: 禁用</h2><p>极少会去重写<code>Object.finalize</code>。</p>
-<blockquote>
-<p>Tip：不要使用finalize。如果你非要使用它，请先仔细阅读和理解Effective Java 第7条款：“Avoid Finalizers”，然后不要使用它。</p>
-</blockquote>
-<h1 id="Javadoc"><a href="#Javadoc" class="headerlink" title="Javadoc"></a>Javadoc</h1><h2 id="格式-1"><a href="#格式-1" class="headerlink" title="格式"></a>格式</h2><h3 id="一般形式"><a href="#一般形式" class="headerlink" title="一般形式"></a>一般形式</h3><p>Javadoc块的基本格式如下所示：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/**</span></div><div class="line">* Multiple lines of Javadoc text are written here,</div><div class="line">* wrapped normally...</div><div class="line">*/</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">method</span><span class="params">(String p1)</span> </span>&#123; ... &#125;</div></pre></td></tr></table></figure>
-<p>或者是以下单行形式：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/** An especially short bit of Javadoc. */</span></div></pre></td></tr></table></figure>
-<p>基本格式总是OK的。当整个Javadoc块能容纳于一行时(且没有Javadoc标记@XXX)，可以使用单行形式。</p>
-<h3 id="段落"><a href="#段落" class="headerlink" title="段落"></a>段落</h3><p>空行(即，只包含最左侧星号的行)会出现在段落之间和Javadoc标记(@XXX)之前(如果有的话)。 除了第一个段落，每个段落第一个单词前都有标签</p><p>，并且它和第一个单词间没有空格。</p>
-<h3 id="Javadoc标记"><a href="#Javadoc标记" class="headerlink" title="Javadoc标记"></a>Javadoc标记</h3><p>标准的Javadoc标记按以下顺序出现：<code>@param</code>, <code>@return</code>, <code>@throws</code>, <code>@deprecated</code>, 前面这4种标记如果出现，描述都不能为空。 当描述无法在一行中容纳，连续行需要至少再缩进4个空格。</p>
-<h2 id="摘要片段"><a href="#摘要片段" class="headerlink" title="摘要片段"></a>摘要片段</h2><p>每个类或成员的Javadoc以一个简短的摘要片段开始。这个片段是非常重要的，在某些情况下，它是唯一出现的文本，比如在类和方法索引中。</p>
-<p>这只是一个小片段，可以是一个名词短语或动词短语，但不是一个完整的句子。它不会以<code>A {@code Foo} is a...</code>或<code>This method returns...</code>开头, 它也不会是一个完整的祈使句，如<code>Save the record...</code>。然而，由于开头大写及被加了标点，它看起来就像是个完整的句子。</p>
-<blockquote>
-<p>Tip：一个常见的错误是把简单的Javadoc写成<code>/** @return the customer ID */</code>，这是不正确的。它应该写成<code>/** Returns the customer ID. */</code>。</p>
-</blockquote>
-<h2 id="哪里需要使用Javadoc"><a href="#哪里需要使用Javadoc" class="headerlink" title="哪里需要使用Javadoc"></a>哪里需要使用Javadoc</h2><p>至少在每个public类及它的每个<code>public</code>和<code>protected</code>成员处使用Javadoc，以下是一些例外：</p>
-<h3 id="例外：不言自明的方法"><a href="#例外：不言自明的方法" class="headerlink" title="例外：不言自明的方法"></a>例外：不言自明的方法</h3><p>对于简单明显的方法如<code>getFoo</code>，Javadoc是可选的(即，是可以不写的)。这种情况下除了写“Returns the foo”，确实也没有什么值得写了。</p>
-<p>单元测试类中的测试方法可能是不言自明的最常见例子了，我们通常可以从这些方法的描述性命名中知道它是干什么的，因此不需要额外的文档说明。</p>
-<blockquote>
-<p>Tip：如果有一些相关信息是需要读者了解的，那么以上的例外不应作为忽视这些信息的理由。例如，对于方法名<code>getCanonicalName</code>， 就不应该忽视文档说明，因为读者很可能不知道词语<code>canonical name</code>指的是什么。</p>
-</blockquote>
-<h3 id="例外：重写"><a href="#例外：重写" class="headerlink" title="例外：重写"></a>例外：重写</h3><p>如果一个方法重写了超类中的方法，那么Javadoc并非必需的。</p>
-<h3 id="可选的Javadoc"><a href="#可选的Javadoc" class="headerlink" title="可选的Javadoc"></a>可选的Javadoc</h3><p>对于包外不可见的类和方法，如有需要，也是要使用Javadoc的。如果一个注释是用来定义一个类，方法，字段的整体目的或行为， 那么这个注释应该写成Javadoc，这样更统一更友好。</p>
-<hr>
-<p>参考：</p>
-<ul>
-<li><a href="https://google.github.io/styleguide/javaguide.html" target="_blank" rel="external">Google Java Style</a></li>
-<li><a href="http://www.hawstein.com/posts/google-java-style.html" target="_blank" rel="external">Google Style编程指南</a></li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;这份文档是Google Java编程风格规范的定义。在平时编写代码时应该养成一个良好的习惯，按照这个标准去编写容易维护的代码。当且仅当一个Java源文件符合此文档中的规则，我们才认为它符合Google的Java编程风格。&lt;/p&gt;
-&lt;h1 id=&quot;源文件基础&quot;&gt;&lt;a href
     
     </summary>
     
