@@ -4,6 +4,44 @@
   
     
     <entry>
+      <title><![CDATA[Java 的 Checked 和 Unchecked Exception【译】]]></title>
+      <url>http://wangzzu.github.io/2016/12/13/java-exception/</url>
+      <content type="html"><![CDATA[<p>如果在 Java 应用中对 Exception 能够正确处理，那么将会使你的程序更具有健壮性。但是很多人对 Exception 中的 <strong>Checked Exception</strong> 和 <strong>Unchecked Exception</strong> 并不理解，并且 Exception 又常常被被分为 JVM Exception 和程序 Exception，这就让一些开发者显得更加困惑了，本文就这几个概念详细讲述一下。（本文翻译自<a href="http://www.hacktrix.com/checked-and-unchecked-exceptions-in-java" target="_blank" rel="external">Checked and Unchecked Exceptions in Java</a>）</p>
+<h1 id="Checked-Exception"><a href="#Checked-Exception" class="headerlink" title="Checked Exception"></a>Checked Exception</h1><p>Checked Exception 是必须在代码中进行恰当处理的 Exception，而且编译器会强制开发者对其进行处理，否则编译会不通过。你可以使用 <code>catch</code> 语句捕获这些 Exception 或者在方法声明处使用 <code>throws</code> 语句抛出该异常。</p>
+<p>一般来说，Checked Exception 的发生主要是由于一些特殊情况没有考虑到，比如如果网络连接失败会抛出 IOException，但是我们的程序应该能够提前预料到这些可能发生的异常，并对其进行处理，这样程序在运行过程中才不会崩掉，这也是编译器强制开发者对 Checked Exception 进行处理的原因。假设在文件传输的过程中网络出现中断，这时候程序应该能够捕获到这种异常并进行处理（重新尝试传输文件）。</p>
+<h1 id="Unchecked-Exception"><a href="#Unchecked-Exception" class="headerlink" title="Unchecked Exception"></a>Unchecked Exception</h1><p>Unchecked Exception 的发生有一些是由于开发者代码逻辑错误造成的，比如：NullPointerException 这种异常可以通过检查一个引用是否为 null 来进行避免。</p>
+<p>但是也有一些 Unchecked Exception 出现并不是因为开发者程序的问题，这些 Exception 是 <code>java.lang.Error</code> 的子类。就像 OutOfMemoryError 可能发生在任意一个示例对象创建时，但我们不可能在每个对象实例创建时都使用 <code>catch</code> 块去捕获异常。因此，我们也就不可能预料这些异常的发生，编译器在编译时也无法检测到这些异常。</p>
+<h1 id="例子"><a href="#例子" class="headerlink" title="例子"></a>例子</h1><p>下面这个例子，由于没有对 Checked Exception 进行处理而导致编译失败。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">UnhandledException</span> </span>&#123;</div><div class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</div><div class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> Exception();</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>为了使上面的代码可以正确编译，我们可以在 <code>try/catch</code> 块中捕获相应的异常或者是使用 <code>throws</code> 在 main 方法声明处抛出异常。</p>
+<p>但是如果在 main 方法<strong>内部</strong>抛出一个 Unchecked Exception，依然可以正常编译，下面的例子就可以正确编译。正如前面所述，Unchecked Exception 在编译期间是无法提前检测，因此，不对其进行处理也不会影响到正常编译。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">UnhandledException</span> </span>&#123;</div><div class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</div><div class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h1 id="Exception-类层次结构"><a href="#Exception-类层次结构" class="headerlink" title="Exception 类层次结构"></a>Exception 类层次结构</h1><p><code>java.lang.Throwable</code> 类是一个 Checked Exception，Java 的 API 定义了 Throwable 的两个子类——<code>java.lang.Exception</code> 和 <code>java.lang.Error</code>， Error 类是 Unchecked Exception 类，而 Exception 则是 Checked Exception类。</p>
+<p>Exception 类有一个 Unchecked Exception 子类——<code>java.lang.RuntimeException</code>，NullPointerException 和 ClassCastException 都是 RuntimeException 的子类。RuntimeException 和 Error 的所有子类都是 Unchecked Exception，其他的  Exception 则都是 Checked Exception，如下图所示。</p>
+<p><img src="/images/java/Checked-and-Unchecked-Exceptions-in-Java.png" alt="Exception Hierarchy"></p>
+<p>如果创建一个自定义的异常类，它是 Checked Exception 还是 Unchecked Exception 则依赖其父类的类型。如果它继承于一个 Unchecked Exception 类，那么它就是一个 Unchecked Exception，反之依然。</p>
+<p>在对 Checked Exception 进行 <code>catch</code> 操作时，也需要遵循一定的规则：在 catch 块中捕获的异常，必须在 try 块中有出现这种异常的可能性。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">try</span> &#123;</div><div class="line">    System.out.println(<span class="string">"..."</span>);</div><div class="line">&#125; <span class="keyword">catch</span>(java.io.IOException e) &#123;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>上面的例子就不能成功编译，因为在 try 块中永远都不会抛出 IOException，所以你也不能去捕获这种异常。但是如果你捕获的是一个 Unchecked Exception，那么就不会有这种问题。</p>
+<p>Exception 和 Throwable 这两个类有些特殊，虽然它们都是 Checked Exception 类，但你依然可以捕获它们即使在 try 块中没有抛出该异常的可能性，因此，下面的代码的就可以正确编译。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">try</span> &#123;</div><div class="line">    System.out.println(<span class="string">"..."</span>);</div><div class="line">&#125; <span class="keyword">catch</span>(Exception ex) &#123;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>前面所说的规则对于 Exception 和 Throwable 这两个类并不是完全适用，这是因为对 Exception 和 Throwable 这两个类都有 Unchecked Exception 类型的子类，所以编译器允许你捕获它们（编译器认为你是在捕获一个 Unchecked Exception）。要清楚一点，<strong>编译器并不会检查 Unchecked Exception</strong>，RuntimeException 是 Exception 的子类，Error 是 Throwable的子类, 而 RuntimeException 和 Error 都是 Unchecked Exception 类。因此，上面的代码是可以正确编译的，编译允许这样做的原因就是因为这种方式是可以捕获到 Unchecked Exception 的。</p>
+<h1 id="JVM-和程序异常"><a href="#JVM-和程序异常" class="headerlink" title="JVM 和程序异常"></a>JVM 和程序异常</h1><p>JVM Exception 是由 JVM 自己抛出的异常，比如：如果调用的方法使用一个 null 引用，然后 JVM 就会抛出 NullPointerException，或者如果在程序中出现10除以0的情况，JVM 会抛出一个 ArithmeticException。这些异常都是自动地由 JVM 抛出。</p>
+<p>除了 JVM Exception 外，其他所有的异常都是由程序引起的异常。程序中，我们可以显式地使用 <code>throw</code> 语句抛出异常，这里以 NumberFormatException 为例。NumberFormatException 可能被方法 <code>Integer.parseInt</code> 或 <code>Float.parseFloat</code> 抛出，都是程序中可能出现的异常。在 <code>Integer</code> 类方法 <code>parseInt</code> 的实现中，可以找到如下的声明：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span> (s == <span class="keyword">null</span>) &#123;</div><div class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> NumberFormatException(<span class="string">"null"</span>);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>而 JVM 不会抛出这种类型的异常，这些异常是使用 <code>throw</code> 语句显式地程序中抛出。当然也可以如下所示在程序中抛出 JVM Exception。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span> (s == <span class="keyword">null</span>) &#123;</div><div class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"I told you s shouldn't be null"</span>);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>但是一般情况下，JVM Exception 是不会被开发者抛出的（JVM 自己抛出的），所有的 JVM Exception 都是 unchecked，而程序中的异常则可能是 checked 的或者 unchecked 的。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://docs.oracle.com/javase/specs/#44121" target="_blank" rel="external">Chapter11 Exception</a></li>
+<li><a href="http://www.hacktrix.com/checked-and-unchecked-exceptions-in-java" target="_blank" rel="external">Checked and Unchecked Exceptions in Java</a></li>
+</ul>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[Vim 快捷键总结]]></title>
       <url>http://wangzzu.github.io/2016/12/06/vim-basic/</url>
       <content type="html"><![CDATA[<p>Vim 到目前位置也用了将近两年，但是很多的快捷键每次要用到的时候还是会 Google 一下，只能记住很少的命令，查的过程其实还是会浪费很多时间，这里总结一下一些常用的 Vim 命令，以便以后查看。</p>

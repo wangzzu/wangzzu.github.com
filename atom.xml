@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://wangzzu.github.io/"/>
-  <updated>2016-12-06T14:02:51.000Z</updated>
+  <updated>2016-12-12T16:18:00.000Z</updated>
   <id>http://wangzzu.github.io/</id>
   
   <author>
@@ -14,6 +14,60 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Java 的 Checked 和 Unchecked Exception【译】</title>
+    <link href="http://wangzzu.github.io/2016/12/13/java-exception/"/>
+    <id>http://wangzzu.github.io/2016/12/13/java-exception/</id>
+    <published>2016-12-12T16:04:26.000Z</published>
+    <updated>2016-12-12T16:18:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>如果在 Java 应用中对 Exception 能够正确处理，那么将会使你的程序更具有健壮性。但是很多人对 Exception 中的 <strong>Checked Exception</strong> 和 <strong>Unchecked Exception</strong> 并不理解，并且 Exception 又常常被被分为 JVM Exception 和程序 Exception，这就让一些开发者显得更加困惑了，本文就这几个概念详细讲述一下。（本文翻译自<a href="http://www.hacktrix.com/checked-and-unchecked-exceptions-in-java" target="_blank" rel="external">Checked and Unchecked Exceptions in Java</a>）</p>
+<h1 id="Checked-Exception"><a href="#Checked-Exception" class="headerlink" title="Checked Exception"></a>Checked Exception</h1><p>Checked Exception 是必须在代码中进行恰当处理的 Exception，而且编译器会强制开发者对其进行处理，否则编译会不通过。你可以使用 <code>catch</code> 语句捕获这些 Exception 或者在方法声明处使用 <code>throws</code> 语句抛出该异常。</p>
+<p>一般来说，Checked Exception 的发生主要是由于一些特殊情况没有考虑到，比如如果网络连接失败会抛出 IOException，但是我们的程序应该能够提前预料到这些可能发生的异常，并对其进行处理，这样程序在运行过程中才不会崩掉，这也是编译器强制开发者对 Checked Exception 进行处理的原因。假设在文件传输的过程中网络出现中断，这时候程序应该能够捕获到这种异常并进行处理（重新尝试传输文件）。</p>
+<h1 id="Unchecked-Exception"><a href="#Unchecked-Exception" class="headerlink" title="Unchecked Exception"></a>Unchecked Exception</h1><p>Unchecked Exception 的发生有一些是由于开发者代码逻辑错误造成的，比如：NullPointerException 这种异常可以通过检查一个引用是否为 null 来进行避免。</p>
+<p>但是也有一些 Unchecked Exception 出现并不是因为开发者程序的问题，这些 Exception 是 <code>java.lang.Error</code> 的子类。就像 OutOfMemoryError 可能发生在任意一个示例对象创建时，但我们不可能在每个对象实例创建时都使用 <code>catch</code> 块去捕获异常。因此，我们也就不可能预料这些异常的发生，编译器在编译时也无法检测到这些异常。</p>
+<h1 id="例子"><a href="#例子" class="headerlink" title="例子"></a>例子</h1><p>下面这个例子，由于没有对 Checked Exception 进行处理而导致编译失败。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">UnhandledException</span> </span>&#123;</div><div class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</div><div class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> Exception();</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>为了使上面的代码可以正确编译，我们可以在 <code>try/catch</code> 块中捕获相应的异常或者是使用 <code>throws</code> 在 main 方法声明处抛出异常。</p>
+<p>但是如果在 main 方法<strong>内部</strong>抛出一个 Unchecked Exception，依然可以正常编译，下面的例子就可以正确编译。正如前面所述，Unchecked Exception 在编译期间是无法提前检测，因此，不对其进行处理也不会影响到正常编译。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">UnhandledException</span> </span>&#123;</div><div class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</div><div class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h1 id="Exception-类层次结构"><a href="#Exception-类层次结构" class="headerlink" title="Exception 类层次结构"></a>Exception 类层次结构</h1><p><code>java.lang.Throwable</code> 类是一个 Checked Exception，Java 的 API 定义了 Throwable 的两个子类——<code>java.lang.Exception</code> 和 <code>java.lang.Error</code>， Error 类是 Unchecked Exception 类，而 Exception 则是 Checked Exception类。</p>
+<p>Exception 类有一个 Unchecked Exception 子类——<code>java.lang.RuntimeException</code>，NullPointerException 和 ClassCastException 都是 RuntimeException 的子类。RuntimeException 和 Error 的所有子类都是 Unchecked Exception，其他的  Exception 则都是 Checked Exception，如下图所示。</p>
+<p><img src="/images/java/Checked-and-Unchecked-Exceptions-in-Java.png" alt="Exception Hierarchy"></p>
+<p>如果创建一个自定义的异常类，它是 Checked Exception 还是 Unchecked Exception 则依赖其父类的类型。如果它继承于一个 Unchecked Exception 类，那么它就是一个 Unchecked Exception，反之依然。</p>
+<p>在对 Checked Exception 进行 <code>catch</code> 操作时，也需要遵循一定的规则：在 catch 块中捕获的异常，必须在 try 块中有出现这种异常的可能性。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">try</span> &#123;</div><div class="line">    System.out.println(<span class="string">"..."</span>);</div><div class="line">&#125; <span class="keyword">catch</span>(java.io.IOException e) &#123;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>上面的例子就不能成功编译，因为在 try 块中永远都不会抛出 IOException，所以你也不能去捕获这种异常。但是如果你捕获的是一个 Unchecked Exception，那么就不会有这种问题。</p>
+<p>Exception 和 Throwable 这两个类有些特殊，虽然它们都是 Checked Exception 类，但你依然可以捕获它们即使在 try 块中没有抛出该异常的可能性，因此，下面的代码的就可以正确编译。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">try</span> &#123;</div><div class="line">    System.out.println(<span class="string">"..."</span>);</div><div class="line">&#125; <span class="keyword">catch</span>(Exception ex) &#123;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>前面所说的规则对于 Exception 和 Throwable 这两个类并不是完全适用，这是因为对 Exception 和 Throwable 这两个类都有 Unchecked Exception 类型的子类，所以编译器允许你捕获它们（编译器认为你是在捕获一个 Unchecked Exception）。要清楚一点，<strong>编译器并不会检查 Unchecked Exception</strong>，RuntimeException 是 Exception 的子类，Error 是 Throwable的子类, 而 RuntimeException 和 Error 都是 Unchecked Exception 类。因此，上面的代码是可以正确编译的，编译允许这样做的原因就是因为这种方式是可以捕获到 Unchecked Exception 的。</p>
+<h1 id="JVM-和程序异常"><a href="#JVM-和程序异常" class="headerlink" title="JVM 和程序异常"></a>JVM 和程序异常</h1><p>JVM Exception 是由 JVM 自己抛出的异常，比如：如果调用的方法使用一个 null 引用，然后 JVM 就会抛出 NullPointerException，或者如果在程序中出现10除以0的情况，JVM 会抛出一个 ArithmeticException。这些异常都是自动地由 JVM 抛出。</p>
+<p>除了 JVM Exception 外，其他所有的异常都是由程序引起的异常。程序中，我们可以显式地使用 <code>throw</code> 语句抛出异常，这里以 NumberFormatException 为例。NumberFormatException 可能被方法 <code>Integer.parseInt</code> 或 <code>Float.parseFloat</code> 抛出，都是程序中可能出现的异常。在 <code>Integer</code> 类方法 <code>parseInt</code> 的实现中，可以找到如下的声明：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span> (s == <span class="keyword">null</span>) &#123;</div><div class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> NumberFormatException(<span class="string">"null"</span>);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>而 JVM 不会抛出这种类型的异常，这些异常是使用 <code>throw</code> 语句显式地程序中抛出。当然也可以如下所示在程序中抛出 JVM Exception。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span> (s == <span class="keyword">null</span>) &#123;</div><div class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"I told you s shouldn't be null"</span>);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>但是一般情况下，JVM Exception 是不会被开发者抛出的（JVM 自己抛出的），所有的 JVM Exception 都是 unchecked，而程序中的异常则可能是 checked 的或者 unchecked 的。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://docs.oracle.com/javase/specs/#44121" target="_blank" rel="external">Chapter11 Exception</a></li>
+<li><a href="http://www.hacktrix.com/checked-and-unchecked-exceptions-in-java" target="_blank" rel="external">Checked and Unchecked Exceptions in Java</a></li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;如果在 Java 应用中对 Exception 能够正确处理，那么将会使你的程序更具有健壮性。但是很多人对 Exception 中的 &lt;strong&gt;Checked Exception&lt;/strong&gt; 和 &lt;strong&gt;Unchecked Exception&lt;/stro
+    
+    </summary>
+    
+      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="java" scheme="http://wangzzu.github.io/tags/java/"/>
+    
+  </entry>
   
   <entry>
     <title>Vim 快捷键总结</title>
@@ -3957,77 +4011,6 @@
     
       &lt;p&gt;Java的容器类，在程序中经常被用，而且也是在面试中经常被问到的部分，笔者近段就被问到过n次了，所以这里就根据网上的一些资料，并结合着openJDK的源码对这些容器类好好总结一下。&lt;/p&gt;
 &lt;h1 id=&quot;Java中的容器&quot;&gt;&lt;a href=&quot;#Java中的容器&quot; clas
-    
-    </summary>
-    
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="java" scheme="http://wangzzu.github.io/tags/java/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Java中对象的内存使用学习</title>
-    <link href="http://wangzzu.github.io/2016/05/07/java-object-memory/"/>
-    <id>http://wangzzu.github.io/2016/05/07/java-object-memory/</id>
-    <published>2016-05-07T08:33:22.000Z</published>
-    <updated>2016-11-19T09:02:22.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。</p>
-<p>本文主要介绍在Java中，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。</p>
-<h1 id="对象的内存"><a href="#对象的内存" class="headerlink" title="对象的内存"></a>对象的内存</h1><p>要想知道一个对象使用的内存量，需要将所有实例变量使用的内存与对象本身的开销（一般是16个字节）相加。这些开销包括一个指向对象的类的引用、垃圾收集信息以及同步信息。另外，一般内存的使用都会被填充为8个字节（64位计算机中的机器字）的倍数。如下图所示，对于一个<code>Integer</code>对象</p>
-<p><img src="/images/2016-05-07-java-object-mem/integer.png" alt="int"></p>
-<p>一个<code>Integer</code>对象会使用24字节（16个字节的对象开销，4个字节用于保存它的int值以及4个填充字节）。</p>
-<p>一个<code>Date</code>对象（如下图）需要使用32字节：16个字节的对象开销，3个int实例变量各需4个字节，以及4个填充字节。</p>
-<p><img src="/images/2016-05-07-java-object-mem/date.png" alt="date"></p>
-<p>对象的引用一般都是一个内存地址，因此会使用8个字节。</p>
-<p>例如对于一个<code>Counter</code>对象</p>
-<p><img src="/images/2016-05-07-java-object-mem/counter.png" alt="counter"></p>
-<p>它需要32字节：16个字节的对象开销，8个字节用于它的String型实例变量（<strong>一个引用</strong>），4字节用于int实例变量，以及4个填充字节。</p>
-<p>当我们说明一个引用所占的内存时，我们会单独说它所指向的对象所占用的内存，因此，这个内存使用总量并没有包含String对象所使用的内存。</p>
-<h1 id="数组"><a href="#数组" class="headerlink" title="数组"></a>数组</h1><p>在java中，数组一般被实现为对象，它们一般都会因为记录长度而需要额外的内存。</p>
-<p>一个原始数据类型的数组一般需要24字节的头信息（如下）和保存值所需的引用。</p>
-<ol>
-<li>16个字节的对象开销；</li>
-<li>4个字节用于保存长度；</li>
-<li>4个填充字节。</li>
-</ol>
-<p>下面分别介绍一下<code>int[]</code>、<code>double[]</code>、对象数组和二维数组的内存占用情况。</p>
-<p><img src="/images/2016-05-07-java-object-mem/array.png" alt="array"></p>
-<h2 id="int值的数组"><a href="#int值的数组" class="headerlink" title="int值的数组"></a>int值的数组</h2><p>一个含有N个int值的数组需要使用$24+4N$字节（<em>notice：最后会被填充为8的倍数</em>）。</p>
-<h2 id="double值的数组"><a href="#double值的数组" class="headerlink" title="double值的数组"></a>double值的数组</h2><p>一个含有N个double值的数组需要使用$24+8N$字节（<em>notice：最后会被填充为8的倍数</em>）。</p>
-<h2 id="对象的数组"><a href="#对象的数组" class="headerlink" title="对象的数组"></a>对象的数组</h2><p>一个对象的数组就是一个对象的引用的数组，所以我们应该在对象所需的内存之外再加上引用所需的内存。例如，对于一个含有N个<code>Date</code>对象的数组需要使用24字节（头信息）加上$8N$字节（所有的引用）加上每个对象的32字节，总共$24+40N$。</p>
-<h2 id="二维数组"><a href="#二维数组" class="headerlink" title="二维数组"></a>二维数组</h2><p>对于二维数组而言，它就是一个数组的数组（每个数组都是一个对象）。例如：一个$M*N$的double类型的二维数组需要使用24字节（头信息）加上$8M$字节（所有元素数组的引用）加上$24M$字节（所有元素的开销）加上$8MN$字节（$M$个长度为$N$的double类型的数组），总和共$8MN+32M+24$字节。</p>
-<h1 id="String"><a href="#String" class="headerlink" title="String"></a>String</h1><p>一个String对象</p>
-<p><img src="/images/2016-05-07-java-object-mem/string.png" alt="string"></p>
-<p>String的标准实现含有4个<strong>实例变量</strong>：</p>
-<ul>
-<li>一个指向字符数组的引用（8字节）；</li>
-<li>三个int值（4个字节）<ol>
-<li>第一个int值：字符数组中的偏移量；</li>
-<li>第二个int值：一个计数器，也就是字符串的长度，以上图为例，对象所表示的字符串由<code>value[offset]</code>到<code>value[offset+count-1]</code>中的字符组成；</li>
-<li>第三个int值：散列值。</li>
-</ol>
-</li>
-</ul>
-<p>因此，每个String对象都会使用40字节（16字节表示对象，三个int实例变量各需4个字节，加上数组引用的8个字节和4个填充字节）。这是除字符数组之外字符所需的内存空间，所有字符所需的内存需要另记，因为String的char数组常常是在多个字符串之间共享的。因为String对象是不可变的，这种设计使String的实现能够在多个对象都含有相同的<code>value[]</code>数组时节省内存。</p>
-<h1 id="字符串的值和子字符串"><a href="#字符串的值和子字符串" class="headerlink" title="字符串的值和子字符串"></a>字符串的值和子字符串</h1><p>字符串和子字符串的例子如下所示：</p>
-<p><img src="/images/2016-05-07-java-object-mem/substring.png" alt="substring"></p>
-<p>一个长度为N的String对象一般需要使用40字节（String对象本身）加上$24+2N$字节（字符数组），总共$64+2N$字节。但在处理字符串时经常会和子字符串打交道，所以Java对字符串的表示希望能够避免复制字符串中的字符。</p>
-<p>当调用<code>substring()</code>方法时，就创建了一个新的String对象（40字节），但它仍然重用了相同的<code>value[]</code>数组，因此该字符串的子字符串只会使用40字节的内存。含有原始字符串的字符数组的别名存在于子字符串中，字符串对象的偏移量和长度域标记了子字符串的位置。</p>
-<p>这些基础机制能够有效地帮助我们估计大量程序对内存的使用情况，但是很多复杂的因素仍然会使这个任务变得困难，这就得看一下JVM方面的书籍了。</p>
-<hr>
-<p>参考：</p>
-<ul>
-<li><a href="http://item.jd.com/11098789.html" target="_blank" rel="external">算法 第四版</a></li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。&lt;/p&gt;
-&lt;p&gt;本文主要介绍在Ja
     
     </summary>
     
