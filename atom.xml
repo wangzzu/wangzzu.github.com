@@ -74,7 +74,7 @@
     <link href="http://wangzzu.github.io/2016/12/06/vim-basic/"/>
     <id>http://wangzzu.github.io/2016/12/06/vim-basic/</id>
     <published>2016-12-06T14:02:51.000Z</published>
-    <updated>2016-12-06T14:02:51.000Z</updated>
+    <updated>2016-12-13T02:50:45.000Z</updated>
     
     <content type="html"><![CDATA[<p>Vim 到目前位置也用了将近两年，但是很多的快捷键每次要用到的时候还是会 Google 一下，只能记住很少的命令，查的过程其实还是会浪费很多时间，这里总结一下一些常用的 Vim 命令，以便以后查看。</p>
 <h1 id="光标移动"><a href="#光标移动" class="headerlink" title="光标移动"></a>光标移动</h1><table>
@@ -87,7 +87,7 @@
 <tbody>
 <tr>
 <td>h,j,k,l</td>
-<td>h表示往左，j表示往下，k表示往右，l表示往上</td>
+<td>h表示往左，j表示往下，k表示往上，l表示往右</td>
 </tr>
 <tr>
 <td>Ctrl+f</td>
