@@ -2795,11 +2795,16 @@
 </tbody>
 </table>
 <h2 id="chrome常用配置"><a href="#chrome常用配置" class="headerlink" title="chrome常用配置"></a>chrome常用配置</h2><p>chrome既方便又强大，于是乎，不得不单独弄出一小章来介绍。</p>
-<h3 id="常用小插件"><a href="#常用小插件" class="headerlink" title="常用小插件"></a>常用小插件</h3><ul>
+<h3 id="常用小插件"><a href="#常用小插件" class="headerlink" title="常用小插件"></a>常用小插件</h3><p>对工程师来说，可以参考这篇文章<a href="https://mp.weixin.qq.com/s?__biz=MzA4NTQwNDcyMA==&amp;mid=402064553&amp;idx=1&amp;sn=4bc95ed03916f87cc8dfd17baed54f24" target="_blank" rel="external">吐血推荐珍藏的Chrome插件</a>。</p>
+<ul>
 <li>代理：<a href="https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif" target="_blank" rel="external">switchyomega</a>；</li>
 <li>流程图：<a href="https://chrome.google.com/webstore/detail/gliffy-diagrams/bhmicilclplefnflapjmnngmkkkkpfad" target="_blank" rel="external">gliffy</a>;</li>
 <li>MarkDown：<a href="chrome-extension://elifhakcjgalahccnjkneoccemfahfoa/common/options.html" target="_blank" rel="external">MarkDown Here</a>;</li>
 <li>词典：<a href="https://chrome.google.com/webstore/detail/%E7%BF%B0%E6%9E%97%E8%8B%B1%E6%B1%89%E5%8F%8C%E8%A7%A3%E8%AF%8D%E5%85%B8/fidicgekecdkdmkjghdgadgdmcfodfid" target="_blank" rel="external">翰林英汉双解词典</a>;</li>
+<li>Momentum：使用这个插件每次打开一个 Tab 时，不再是一个空白页面，而是一副精美的图片；</li>
+<li>Alexa Traffic Rank：Alexa排名是指网站的世界排名，非常有权威。直接主流网站或博客绝对是有Alexa排名的，我们在浏览博客或者网站的时候就可以通过Alexa排名知晓该网站的流行程度，适用于经常看博客的人，装了这个插件一键查看网站排名；</li>
+<li>Isometric Contributions：一个小玩意，可以让在 GitHub 上的 commit 像盖楼一样的展示，很有趣；</li>
+<li>Avatars for Github：顾名思义，默认我们在 GitHub 主页动态只能看到 id 的，而安装了这个插件就可以看到 GitHub 头像了，让你一眼就能知道是谁；</li>
 </ul>
 <h1 id="Mac下常用快捷键"><a href="#Mac下常用快捷键" class="headerlink" title="Mac下常用快捷键"></a>Mac下常用快捷键</h1><table>
 <thead>
