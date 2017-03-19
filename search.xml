@@ -4,6 +4,66 @@
   
     
     <entry>
+      <title><![CDATA[Storm 对 0.10.x 版 Kafka 支持解析]]></title>
+      <url>http://wangzzu.github.io/2017/03/17/storm-kafka-0-10-1/</url>
+      <content type="html"><![CDATA[<p>由于 0.10.x 版 Kafka 与 0.8.x 版有很大的变化，这种变化对下游 Storm 有非常大的影响，0.10.x 版的 Kafka 不但增加了权限管理的功能，而且还将 simple 和 high consumer 的 offsets 进行统一管理，也就意味着在 0.8.x 中 Storm 需要去负责管理 offsets，而在 0.10.x 中，Storm 不需要关心 consumer 的 offsets 的问题，这对 KafkaSpout 的设计有很大的影响，本文就是对 <code>Storm 对 0.10.x 版 Kafka 支持的实现</code>部分的解析。</p>
+<h1 id="0-10-x-版-KafkaSpout-的实现"><a href="#0-10-x-版-KafkaSpout-的实现" class="headerlink" title="0.10.x 版 KafkaSpout 的实现"></a>0.10.x 版 KafkaSpout 的实现</h1><p>社区对新版 Kafka 的支持，总体分为两种情况：</p>
+<ol>
+<li>一种是选择自动 commit 机制；</li>
+<li>另一种是非自动 commit，就是将 commit 的权利交与 Storm 来控制。</li>
+</ol>
+<p>下面分别对这两种情况进行分析。</p>
+<p>Kafka Consumer 的一些配置会对 Storm 的性能很大影响，下面的三个参数的设置对其性能的影响最大（默认值是根据<a href="https://hortonworks.com/blog/microbenchmarking-storm-1-0-performance/" target="_blank" rel="external">MICROBENCHMARKING APACHE STORM 1.0 PERFORMANCE</a>测试得到）：</p>
+<ul>
+<li><code>fetch.min.bytes</code>：默认值 200；</li>
+<li><code>fetch.max.wait.ms</code>：默认值 30000（30s）；</li>
+<li><code>Kafka Consumer instance poll timeout</code>, 它可以在通过 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java" target="_blank" rel="external">KafkaSpoutConfig</a> 的方法 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L180-L184" target="_blank" rel="external">setPollTimeoutMs</a> 来配置，默认值是 10000000；</li>
+</ul>
+<h2 id="自动-commit-模式"><a href="#自动-commit-模式" class="headerlink" title="自动 commit 模式"></a>自动 commit 模式</h2><p>自动 commit 模式就是 commit 的时机由 Consumer 来控制，本质上是异步 commit，当定时达到时，就进行 commit。而 Storm 端并没有进行任何记录，也就是这部分的容错完全由 Consumer 端来控制，而 Consumer 并不会关心数据的处理成功与否，只关心数据是否 commit，如果未 commit，就会重新发送数据，那么就有可能导致下面这个后果：</p>
+<h3 id="造成那些已经-commit、但-Storm-端处理失败的数据丢失"><a href="#造成那些已经-commit、但-Storm-端处理失败的数据丢失" class="headerlink" title="造成那些已经 commit、但 Storm 端处理失败的数据丢失"></a>造成那些已经 commit、但 Storm 端处理失败的数据丢失</h3><p><strong>丢失的原因</strong></p>
+<p>一些数据发送到 Spout 之后，恰好 commit 的定时到达，进行了 commit，但是这中间有某条或者几条数据处理失败，这就是说，这几条处理失败的数据已经进行 commit 了，Kafka 端也就不会重新进行发送。</p>
+<p>可能出现的这种后果也确定了自动 commit 模式不能满足我们的需求，为了保证数据不丢，需要数据在 Storm 中 ack 之后才能被 commit，因此，commit 还是应该由 Storm 端来进行控制，才能保证数据被正确处理。</p>
+<h2 id="非自动-commit-模式"><a href="#非自动-commit-模式" class="headerlink" title="非自动 commit 模式"></a>非自动 commit 模式</h2><p>当选用非自动的 commit 机制（实际上就是使用 Consumer 的同步 commit 机制）时，需要手动去设置 commit 的参数，有以下两项需要设置：</p>
+<ul>
+<li><code>offset.commit.period.ms</code>：设置 spout 多久向 Kafka commit一次，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L189-L193" target="_blank" rel="external">setOffsetCommitPeriodMs</a> 中配置；</li>
+<li><code>max.uncommitted.offsets</code>：控制在下一次拉取数据之前最多可以有多少数据在等待 commit，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L211-L217" target="_blank" rel="external">setMaxUncommittedOffsets</a> 中配置；</li>
+</ul>
+<h3 id="spout-的处理过程"><a href="#spout-的处理过程" class="headerlink" title="spout 的处理过程"></a>spout 的处理过程</h3><p>关于 Kafka 的几个 offset 的概念，可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#offset-那些事"> offset的一些相关概念</a></p>
+<p>KafkaSpout 的处理过程主要是在 <code>nextTuple()</code> 方法，其处理过程如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">nextTuple</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">if</span> (initialized) &#123;</div><div class="line">        <span class="keyword">if</span> (commit()) &#123;<span class="comment">// Step1 非自动 commit,并且定时达到</span></div><div class="line">            commitOffsetsForAckedTuples();<span class="comment">// 对所有已经 ack 的 msgs 进行 commit</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (poll()) &#123;<span class="comment">//Step2 拉取的数据都已经发送,并且未 commit 的消息数小于设置的最大 uncommit 数</span></div><div class="line">            setWaitingToEmit(pollKafkaBroker());</div><div class="line">            <span class="comment">//将拉取的所有 record 都放到 waitingToEmit 集合中,可能会重复拉取数据（由于一些 msg 需要重试，通过修改 Last Committed Offset 的值来实现的）</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (waitingToEmit()) &#123;<span class="comment">//Step3 waitingToEmit 中还有数据</span></div><div class="line">            emit();<span class="comment">//发送数据,但会跳过已经 ack 或者已经发送的消息</span></div><div class="line">        &#125;</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">        LOG.debug(<span class="string">"Spout not initialized. Not sending tuples until initialization completes"</span>);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>上面主要分为三步：</p>
+<ol>
+<li>如果是非自动 commit，并且 commit 定时达到，那么就将所有已经 ack 的数据（<strong>这些数据的 offset 必须是连续的</strong>，不连续的数据不会进行 commit）进行 commit；</li>
+<li>如果拉取的数据都已经发送，并且未 commit 的消息数（记录在 <code>numUncommittedOffsets</code> 中）小于设置的最大 uncommit 数，那么就根据更新后的 offset （将 offset 重置到需要重试的 msg 的最小 offset，这样该 offset 后面的 msg 还是会被重新拉取）拉取数据，并将拉取到的数据存储到 <code>waitingToEmit</code> 集合中；</li>
+<li>如果 <code>waitingToEmit</code> 集合中还有数据，就发送数据，但在发送数据的过程中，会进行判断，只发送没有 ack 的数据。</li>
+</ol>
+<h3 id="KafkaSpout-如何进行容错"><a href="#KafkaSpout-如何进行容错" class="headerlink" title="KafkaSpout 如何进行容错"></a>KafkaSpout 如何进行容错</h3><p>举个示例，如下图所示</p>
+<p><img src="/images/kafka/KafkaSpout-error.png" alt="consumer offset"></p>
+<ol>
+<li>图1表示一个 <code>nextTuple()</code> 循环结束之后，offset 为14那条数据处理失败，而offset 为15-18的数据处理成功；</li>
+<li>图2表示在下次循环 Step 1 结束之后、Step 2 开始之前，Consumer 会将 the last committed offset 重置到 offset 为14的位置。</li>
+</ol>
+<p>也就是说从 offset 为14开始，后面的数据会重新发送。</p>
+<p><strong>有人可能会问，那样的话会不会造成数据重复发送？</strong></p>
+<p>Storm 是如何解决这个问题的呢？答案就是 Storm 会用一个 map 记录已经 ack 的数据（<code>acked</code>），Storm 在进行 commit 的时候也是根据这个 map 的数据进行 commit 的，不过 commit 数据的 offset 必须是连续的，如上图所示，只能将 offset 为11-13的数据 commit，而15-18的数据由于 offset 为14的数据未处理成功而不能 commit。offset 为11-13的数据在 commit 成功后会从 map 中移除，而 offset 为15-18的数据依然在 map 中，Storm 在将从 Kafka 拉取的数据加入到 <code>waitingToEmit</code> 集合时后，进行 emit 数据时，会先检测该数据是否存在 <code>acked</code> 中，如果存在的话，就证明该条数据已经处理过了，不会在进行发送。</p>
+<p>这里有几点需要注意的：</p>
+<ol>
+<li>对已经 ack 的 msg 进行 commit 时，所 commit 的 msg 的 offset 必须是<strong>连续</strong>的（该 msg 存储在一个 TreeMap 中，按 offset 排序），断续的数据会暂时接着保存在集合中，不会进行 commit，如果出现断续，那就证明中间有数据处理失败，需要重新处理；</li>
+<li>storm 处理 failed 的 msg，会保存到一个专门的集合中，在每次拉取数据时（是拉取数据，不是发送数据，发送数据时会检测该数据是否已经成功处理），会遍历该集合中包含的所有 TopicPartiion，获取该 partition 的 Last Committed Offset；</li>
+</ol>
+<p>这样设计有一个副作用就是：如果有一个 msg 一直不成功，就会导致 KafkaSpout 因为这一条数据的影响而不断地重复拉取这批数据，造成整个拓扑卡在这里。</p>
+<h3 id="Kafka-Rebalance-的影响"><a href="#Kafka-Rebalance-的影响" class="headerlink" title="Kafka Rebalance 的影响"></a>Kafka Rebalance 的影响</h3><p>Kafka Rebalance 可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#Consumer-Rebalance">Consumer Rebalance</a>.</p>
+<p>KafkaSpout 实现了一个内部类用来监控 Group Rebalance 的情况，实现了两个回调函数，一旦发现 group 的状态变为 <code>preparingRabalance</code> 之后</p>
+<ol>
+<li><code>onPartitionsRevoked</code> 这个方法会在 Consumer 停止拉取数据之后、group 进行 rebalance 操作之前调用，作用是对已经 ack 的 msg 进行 commit；</li>
+<li><code>onPartitionsAssigned</code> 这个方法 group 已经进行 reassignment 之后，开始拉取数据之前调用，作用是清理内存中不属于这个线程的 msg、获取 partition 的 last committed offset。</li>
+</ol>
+<h3 id="潜在的风险点"><a href="#潜在的风险点" class="headerlink" title="潜在的风险点"></a>潜在的风险点</h3><p>这部分还是有可能导致数据重复发送的，设想下面一种情况：</p>
+<p>如果之前由于一个条消息处理失败（Partition 1），造成部分数据没有 commit 成功，在进行 rebalance 后，恰好 Partition 1 被分配到其他 spout 线程时，那么当前的 spout 就会关于 Partition 1 的相关数据删除掉，导致部分已经 commit 成功的数据（记录在 acked 中）被删除，而另外的 spout 就会重新拉取这部分数据进行处理，那么就会导致这部分已经成功处理的数据<strong>重复处理</strong>。</p>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[Kafka 之 Group 状态变化分析及 Rebalance 过程]]></title>
       <url>http://wangzzu.github.io/2017/01/16/kafka-group/</url>
       <content type="html"><![CDATA[<p>前段时间看一下 Kafka 的部分源码（0.10.1.0 版），对一些地方做了一些相应的总结。本文主要就 Kafka Group 方面的内容做一下详细的讲述，重点讲述 Consumer Client 如何进行初始化、Server 端对应的 Consumer Group 状态如何进行变化以及对一些 Kafka 的新设计（与旧版不同之处）简单介绍一下。</p>
@@ -29,7 +89,7 @@
 <li>Dead：Group 内已经没有成员，并且它的 Meta 已经被移除（Group has no more members and its metadata is being removed）。</li>
 </ul>
 <p>其各个状态的定义及转换都在 <a href="https://github.com/apache/kafka/blob/0.10.1/core/src/main/scala/kafka/coordinator/GroupMetadata.scala" target="_blank" rel="external">GroupMetadata</a> 中定义，根据状态转移的条件和转移的结果做一个状态转移图如下所示</p>
-<p><img src="/images/kafka/group.png" alt="consumer offset"></p>
+<p><img src="/images/kafka/group.png" alt="group-state"></p>
 <p>各个状态转化的情况，只有有对应箭头才能进行转移，比如 Empty 到 PreparingRebalance 是可以转移的，而 Dead 到 PreparingRebalance 是不可以的。后面会根据一个 Consumer Client 启动的过程，讲述一下其 Group 状态变化情况。</p>
 <h1 id="Consumer-初始化"><a href="#Consumer-初始化" class="headerlink" title="Consumer 初始化"></a>Consumer 初始化</h1><p>Server 端 Group 状态的变化，其实更多的时候是由 Client 端触发的，一个 group 在最初初始化的过程总其实就是该 Group 第一个 Consumer Client 初始化的过程。</p>
 <h2 id="Consumer-poll-过程解析"><a href="#Consumer-poll-过程解析" class="headerlink" title="Consumer poll 过程解析"></a>Consumer poll 过程解析</h2><p>对 Consumer 的初始化，正如 <a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍</a> 这篇文章所述，Consumer 的核心逻辑部分主要在其 poll 模型。而其源码的实现上，主要的逻辑实现也是在 <code>pollOnce</code> 方法，如下所示。</p>
@@ -1944,7 +2004,7 @@
     </entry>
     
     <entry>
-      <title><![CDATA[TCP/IP 协议]]></title>
+      <title><![CDATA[TCP的三次握手和四次挥手]]></title>
       <url>http://wangzzu.github.io/2016/08/30/http-protocol/</url>
       <content type="html"><![CDATA[<p>TCP/IP 协议在计算机网络中是非常重要的部分，本文主要是简单介绍其中的 TCP 协议和 IP 协议，也会涉及一些在面试中经常遇到的问题。</p>
 <h1 id="TCP-IP-协议"><a href="#TCP-IP-协议" class="headerlink" title="TCP/IP 协议"></a>TCP/IP 协议</h1><p>在最项目开发中，经常会遇到各种协议，互联网基础通信框架就是 TCP/IP。TCP/IP 是个协议族，可分为四个层次：网络接口层（连接层）、网络层、传输层和应用层。</p>
@@ -2360,6 +2420,8 @@
 <h3 id="Kafka-Server-端配置"><a href="#Kafka-Server-端配置" class="headerlink" title="Kafka Server 端配置"></a>Kafka Server 端配置</h3><p>需要在 Kafka 安装目录下的config/server.properties文件中配置以下信息</p>
 <h2 id="Kafka-Server-端配置-1"><a href="#Kafka-Server-端配置-1" class="headerlink" title="Kafka Server 端配置"></a>Kafka Server 端配置</h2><p>在 kafka 安装目录下的<code>config/server.properties</code>配置一下信息</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">listeners=SASL_PLAINTEXT://ip:pot</div><div class="line">security.inter.broker.protocol=SASL_PLAINTEXT</div><div class="line">sasl.mechanism.inter.broker.protocol=PLAIN</div><div class="line">sasl.enabled.mechanisms=PLAIN</div><div class="line">authorizer.class.name = kafka.security.auth.SimpleAclAuthorizer</div><div class="line">super.users=User:admin</div></pre></td></tr></table></figure>
+<p>如果要配置多个超级账户，可以按如下配置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">super.users=User:admin;User:alice</div></pre></td></tr></table></figure>
 <p>还需要配置一个名 <code>kafka_server_jaas.conf</code> 的配置文件，将配置文件放置在<code>conf</code>目录下。</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">KafkaServer &#123;</div><div class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</div><div class="line">    username=&quot;admin&quot;</div><div class="line">    password=&quot;admin&quot;</div><div class="line">    user_admin=&quot;admin&quot;</div><div class="line">    user_alice=&quot;alice&quot;;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
 <p>这里，我们配置了两个用户：admin 和 alice，密码分别为 admin 和 alice。<br>最后需要为 Kafka 添加 <code>java.security.auth.login.config</code> 环境变量。在 <code>bin/kafka-run-class.sh</code> 中添加以下内容</p>
@@ -6096,6 +6158,7 @@
 <li><a href="http://www.cnblogs.com/huxi2b/tag/Kafka/" target="_blank" rel="external">胡夕-Kafka详细代码解释</a></li>
 <li><a href="http://zqhxuyuan.github.io/2017/01/01/Kafka-Code-Index/" target="_blank" rel="external">Kafka技术内幕</a></li>
 <li><a href="https://www.gitbook.com/book/zqhxuyuan1/kafka/details" target="_blank" rel="external">Kafka源码分析的GitBook</a></li>
+<li><a href="http://blog.csdn.net/chunlongyu/article/category/6417583" target="_blank" rel="external">Kafka源码深度解析</a></li>
 </ul>
 <p>Kafka最新动态</p>
 <ul>
@@ -6228,7 +6291,7 @@
 </ul>
 <p>理解了上述概念之后，再来看kafka就容易了。</p>
 <h3 id="1-3-kafka的应用场景"><a href="#1-3-kafka的应用场景" class="headerlink" title="1.3.kafka的应用场景"></a>1.3.kafka的应用场景</h3><p>Kafka主要用于处理流式数据。流式数据在web网站应用中非常常见，这些数据包括网站的pv、用户访问了什么内容，搜索了什么内容等。这些数据通常以日志的形式记录下来，然后每隔一段时间进行一次统计处理。Kafka的作用类似于缓存，能够很好地处理实时和离线应用。</p>
-<h2 id="2-组件详解"><a href="#2-组件详解" class="headerlink" title="2.组件详解"></a>2.组件详解</h2><h3 id="2-1-topic"><a href="#2-1-topic" class="headerlink" title="2.1.topic"></a>2.1.topic</h3><p>正如前面介绍的，topic是kafka发送消息的一个标识，一般以目录的形式存在，对于一个有三个partition的topic而言，它日志信息结构大概如下图所示：</p>
+<h2 id="2-概念详解"><a href="#2-概念详解" class="headerlink" title="2.概念详解"></a>2.概念详解</h2><h3 id="2-1-topic"><a href="#2-1-topic" class="headerlink" title="2.1.topic"></a>2.1.topic</h3><p>正如前面介绍的，topic是kafka发送消息的一个标识，一般以目录的形式存在，对于一个有三个partition的topic而言，它日志信息结构大概如下图所示：</p>
 <p><img src="/images/2015-11-14-kafka-introduce/log.png" alt="log"></p>
 <p>每一个partition实际上都是一个有序的，不可变的消息序列，producer发送到broker的消息会写入到相应的partition目录下，每个partition都会有一个有序的id（<code>offset</code>），这个offset确定这个消息在partition中的具体位置。</p>
 <p>举一个例子，我们在一个kafka集群中建立的名为<code>wangzzu</code>，partition数为3的topic，kafka就会在broker的<code>/tmp/kafka-logs</code>（目录可以修改，可参考我<a href="http://wangzzu.github.io/2015/11/13/kafka-install/">kafka集群安装与配置</a>）新建三个目录，这里我们直接指定将三个partition建立在同一个broker上，如下图所示：</p>

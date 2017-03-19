@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://wangzzu.github.io/"/>
-  <updated>2017-01-16T11:44:36.000Z</updated>
+  <updated>2017-03-19T05:47:26.000Z</updated>
   <id>http://wangzzu.github.io/</id>
   
   <author>
@@ -16,11 +16,89 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
+    <title>Storm 对 0.10.x 版 Kafka 支持解析</title>
+    <link href="http://wangzzu.github.io/2017/03/17/storm-kafka-0-10-1/"/>
+    <id>http://wangzzu.github.io/2017/03/17/storm-kafka-0-10-1/</id>
+    <published>2017-03-17T14:24:31.000Z</published>
+    <updated>2017-03-19T05:47:26.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>由于 0.10.x 版 Kafka 与 0.8.x 版有很大的变化，这种变化对下游 Storm 有非常大的影响，0.10.x 版的 Kafka 不但增加了权限管理的功能，而且还将 simple 和 high consumer 的 offsets 进行统一管理，也就意味着在 0.8.x 中 Storm 需要去负责管理 offsets，而在 0.10.x 中，Storm 不需要关心 consumer 的 offsets 的问题，这对 KafkaSpout 的设计有很大的影响，本文就是对 <code>Storm 对 0.10.x 版 Kafka 支持的实现</code>部分的解析。</p>
+<h1 id="0-10-x-版-KafkaSpout-的实现"><a href="#0-10-x-版-KafkaSpout-的实现" class="headerlink" title="0.10.x 版 KafkaSpout 的实现"></a>0.10.x 版 KafkaSpout 的实现</h1><p>社区对新版 Kafka 的支持，总体分为两种情况：</p>
+<ol>
+<li>一种是选择自动 commit 机制；</li>
+<li>另一种是非自动 commit，就是将 commit 的权利交与 Storm 来控制。</li>
+</ol>
+<p>下面分别对这两种情况进行分析。</p>
+<p>Kafka Consumer 的一些配置会对 Storm 的性能很大影响，下面的三个参数的设置对其性能的影响最大（默认值是根据<a href="https://hortonworks.com/blog/microbenchmarking-storm-1-0-performance/" target="_blank" rel="external">MICROBENCHMARKING APACHE STORM 1.0 PERFORMANCE</a>测试得到）：</p>
+<ul>
+<li><code>fetch.min.bytes</code>：默认值 200；</li>
+<li><code>fetch.max.wait.ms</code>：默认值 30000（30s）；</li>
+<li><code>Kafka Consumer instance poll timeout</code>, 它可以在通过 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java" target="_blank" rel="external">KafkaSpoutConfig</a> 的方法 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L180-L184" target="_blank" rel="external">setPollTimeoutMs</a> 来配置，默认值是 10000000；</li>
+</ul>
+<h2 id="自动-commit-模式"><a href="#自动-commit-模式" class="headerlink" title="自动 commit 模式"></a>自动 commit 模式</h2><p>自动 commit 模式就是 commit 的时机由 Consumer 来控制，本质上是异步 commit，当定时达到时，就进行 commit。而 Storm 端并没有进行任何记录，也就是这部分的容错完全由 Consumer 端来控制，而 Consumer 并不会关心数据的处理成功与否，只关心数据是否 commit，如果未 commit，就会重新发送数据，那么就有可能导致下面这个后果：</p>
+<h3 id="造成那些已经-commit、但-Storm-端处理失败的数据丢失"><a href="#造成那些已经-commit、但-Storm-端处理失败的数据丢失" class="headerlink" title="造成那些已经 commit、但 Storm 端处理失败的数据丢失"></a>造成那些已经 commit、但 Storm 端处理失败的数据丢失</h3><p><strong>丢失的原因</strong></p>
+<p>一些数据发送到 Spout 之后，恰好 commit 的定时到达，进行了 commit，但是这中间有某条或者几条数据处理失败，这就是说，这几条处理失败的数据已经进行 commit 了，Kafka 端也就不会重新进行发送。</p>
+<p>可能出现的这种后果也确定了自动 commit 模式不能满足我们的需求，为了保证数据不丢，需要数据在 Storm 中 ack 之后才能被 commit，因此，commit 还是应该由 Storm 端来进行控制，才能保证数据被正确处理。</p>
+<h2 id="非自动-commit-模式"><a href="#非自动-commit-模式" class="headerlink" title="非自动 commit 模式"></a>非自动 commit 模式</h2><p>当选用非自动的 commit 机制（实际上就是使用 Consumer 的同步 commit 机制）时，需要手动去设置 commit 的参数，有以下两项需要设置：</p>
+<ul>
+<li><code>offset.commit.period.ms</code>：设置 spout 多久向 Kafka commit一次，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L189-L193" target="_blank" rel="external">setOffsetCommitPeriodMs</a> 中配置；</li>
+<li><code>max.uncommitted.offsets</code>：控制在下一次拉取数据之前最多可以有多少数据在等待 commit，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L211-L217" target="_blank" rel="external">setMaxUncommittedOffsets</a> 中配置；</li>
+</ul>
+<h3 id="spout-的处理过程"><a href="#spout-的处理过程" class="headerlink" title="spout 的处理过程"></a>spout 的处理过程</h3><p>关于 Kafka 的几个 offset 的概念，可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#offset-那些事"> offset的一些相关概念</a></p>
+<p>KafkaSpout 的处理过程主要是在 <code>nextTuple()</code> 方法，其处理过程如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">nextTuple</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">if</span> (initialized) &#123;</div><div class="line">        <span class="keyword">if</span> (commit()) &#123;<span class="comment">// Step1 非自动 commit,并且定时达到</span></div><div class="line">            commitOffsetsForAckedTuples();<span class="comment">// 对所有已经 ack 的 msgs 进行 commit</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (poll()) &#123;<span class="comment">//Step2 拉取的数据都已经发送,并且未 commit 的消息数小于设置的最大 uncommit 数</span></div><div class="line">            setWaitingToEmit(pollKafkaBroker());</div><div class="line">            <span class="comment">//将拉取的所有 record 都放到 waitingToEmit 集合中,可能会重复拉取数据（由于一些 msg 需要重试，通过修改 Last Committed Offset 的值来实现的）</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (waitingToEmit()) &#123;<span class="comment">//Step3 waitingToEmit 中还有数据</span></div><div class="line">            emit();<span class="comment">//发送数据,但会跳过已经 ack 或者已经发送的消息</span></div><div class="line">        &#125;</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">        LOG.debug(<span class="string">"Spout not initialized. Not sending tuples until initialization completes"</span>);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>上面主要分为三步：</p>
+<ol>
+<li>如果是非自动 commit，并且 commit 定时达到，那么就将所有已经 ack 的数据（<strong>这些数据的 offset 必须是连续的</strong>，不连续的数据不会进行 commit）进行 commit；</li>
+<li>如果拉取的数据都已经发送，并且未 commit 的消息数（记录在 <code>numUncommittedOffsets</code> 中）小于设置的最大 uncommit 数，那么就根据更新后的 offset （将 offset 重置到需要重试的 msg 的最小 offset，这样该 offset 后面的 msg 还是会被重新拉取）拉取数据，并将拉取到的数据存储到 <code>waitingToEmit</code> 集合中；</li>
+<li>如果 <code>waitingToEmit</code> 集合中还有数据，就发送数据，但在发送数据的过程中，会进行判断，只发送没有 ack 的数据。</li>
+</ol>
+<h3 id="KafkaSpout-如何进行容错"><a href="#KafkaSpout-如何进行容错" class="headerlink" title="KafkaSpout 如何进行容错"></a>KafkaSpout 如何进行容错</h3><p>举个示例，如下图所示</p>
+<p><img src="/images/kafka/KafkaSpout-error.png" alt="consumer offset"></p>
+<ol>
+<li>图1表示一个 <code>nextTuple()</code> 循环结束之后，offset 为14那条数据处理失败，而offset 为15-18的数据处理成功；</li>
+<li>图2表示在下次循环 Step 1 结束之后、Step 2 开始之前，Consumer 会将 the last committed offset 重置到 offset 为14的位置。</li>
+</ol>
+<p>也就是说从 offset 为14开始，后面的数据会重新发送。</p>
+<p><strong>有人可能会问，那样的话会不会造成数据重复发送？</strong></p>
+<p>Storm 是如何解决这个问题的呢？答案就是 Storm 会用一个 map 记录已经 ack 的数据（<code>acked</code>），Storm 在进行 commit 的时候也是根据这个 map 的数据进行 commit 的，不过 commit 数据的 offset 必须是连续的，如上图所示，只能将 offset 为11-13的数据 commit，而15-18的数据由于 offset 为14的数据未处理成功而不能 commit。offset 为11-13的数据在 commit 成功后会从 map 中移除，而 offset 为15-18的数据依然在 map 中，Storm 在将从 Kafka 拉取的数据加入到 <code>waitingToEmit</code> 集合时后，进行 emit 数据时，会先检测该数据是否存在 <code>acked</code> 中，如果存在的话，就证明该条数据已经处理过了，不会在进行发送。</p>
+<p>这里有几点需要注意的：</p>
+<ol>
+<li>对已经 ack 的 msg 进行 commit 时，所 commit 的 msg 的 offset 必须是<strong>连续</strong>的（该 msg 存储在一个 TreeMap 中，按 offset 排序），断续的数据会暂时接着保存在集合中，不会进行 commit，如果出现断续，那就证明中间有数据处理失败，需要重新处理；</li>
+<li>storm 处理 failed 的 msg，会保存到一个专门的集合中，在每次拉取数据时（是拉取数据，不是发送数据，发送数据时会检测该数据是否已经成功处理），会遍历该集合中包含的所有 TopicPartiion，获取该 partition 的 Last Committed Offset；</li>
+</ol>
+<p>这样设计有一个副作用就是：如果有一个 msg 一直不成功，就会导致 KafkaSpout 因为这一条数据的影响而不断地重复拉取这批数据，造成整个拓扑卡在这里。</p>
+<h3 id="Kafka-Rebalance-的影响"><a href="#Kafka-Rebalance-的影响" class="headerlink" title="Kafka Rebalance 的影响"></a>Kafka Rebalance 的影响</h3><p>Kafka Rebalance 可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#Consumer-Rebalance">Consumer Rebalance</a>.</p>
+<p>KafkaSpout 实现了一个内部类用来监控 Group Rebalance 的情况，实现了两个回调函数，一旦发现 group 的状态变为 <code>preparingRabalance</code> 之后</p>
+<ol>
+<li><code>onPartitionsRevoked</code> 这个方法会在 Consumer 停止拉取数据之后、group 进行 rebalance 操作之前调用，作用是对已经 ack 的 msg 进行 commit；</li>
+<li><code>onPartitionsAssigned</code> 这个方法 group 已经进行 reassignment 之后，开始拉取数据之前调用，作用是清理内存中不属于这个线程的 msg、获取 partition 的 last committed offset。</li>
+</ol>
+<h3 id="潜在的风险点"><a href="#潜在的风险点" class="headerlink" title="潜在的风险点"></a>潜在的风险点</h3><p>这部分还是有可能导致数据重复发送的，设想下面一种情况：</p>
+<p>如果之前由于一个条消息处理失败（Partition 1），造成部分数据没有 commit 成功，在进行 rebalance 后，恰好 Partition 1 被分配到其他 spout 线程时，那么当前的 spout 就会关于 Partition 1 的相关数据删除掉，导致部分已经 commit 成功的数据（记录在 acked 中）被删除，而另外的 spout 就会重新拉取这部分数据进行处理，那么就会导致这部分已经成功处理的数据<strong>重复处理</strong>。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;由于 0.10.x 版 Kafka 与 0.8.x 版有很大的变化，这种变化对下游 Storm 有非常大的影响，0.10.x 版的 Kafka 不但增加了权限管理的功能，而且还将 simple 和 high consumer 的 offsets 进行统一管理，也就意味着在 
+    
+    </summary>
+    
+      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
+    
+      <category term="storm" scheme="http://wangzzu.github.io/tags/storm/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Kafka 之 Group 状态变化分析及 Rebalance 过程</title>
     <link href="http://wangzzu.github.io/2017/01/16/kafka-group/"/>
     <id>http://wangzzu.github.io/2017/01/16/kafka-group/</id>
     <published>2017-01-16T11:07:32.000Z</published>
-    <updated>2017-01-16T11:44:36.000Z</updated>
+    <updated>2017-03-09T03:39:24.000Z</updated>
     
     <content type="html"><![CDATA[<p>前段时间看一下 Kafka 的部分源码（0.10.1.0 版），对一些地方做了一些相应的总结。本文主要就 Kafka Group 方面的内容做一下详细的讲述，重点讲述 Consumer Client 如何进行初始化、Server 端对应的 Consumer Group 状态如何进行变化以及对一些 Kafka 的新设计（与旧版不同之处）简单介绍一下。</p>
 <h1 id="Group-状态机"><a href="#Group-状态机" class="headerlink" title="Group 状态机"></a>Group 状态机</h1><p>在 0.9.0.0 之后的 Kafka，出现了几个新变动，一个是在 Server 端增加了 GroupCoordinator 这个角色，另一个较大的变动是将 topic 的 offset 信息由之前存储在 zookeeper 上改为存储到一个特殊的 topic 中（<code>__consumer_offsets</code>）。</p>
@@ -45,7 +123,7 @@
 <li>Dead：Group 内已经没有成员，并且它的 Meta 已经被移除（Group has no more members and its metadata is being removed）。</li>
 </ul>
 <p>其各个状态的定义及转换都在 <a href="https://github.com/apache/kafka/blob/0.10.1/core/src/main/scala/kafka/coordinator/GroupMetadata.scala" target="_blank" rel="external">GroupMetadata</a> 中定义，根据状态转移的条件和转移的结果做一个状态转移图如下所示</p>
-<p><img src="/images/kafka/group.png" alt="consumer offset"></p>
+<p><img src="/images/kafka/group.png" alt="group-state"></p>
 <p>各个状态转化的情况，只有有对应箭头才能进行转移，比如 Empty 到 PreparingRebalance 是可以转移的，而 Dead 到 PreparingRebalance 是不可以的。后面会根据一个 Consumer Client 启动的过程，讲述一下其 Group 状态变化情况。</p>
 <h1 id="Consumer-初始化"><a href="#Consumer-初始化" class="headerlink" title="Consumer 初始化"></a>Consumer 初始化</h1><p>Server 端 Group 状态的变化，其实更多的时候是由 Client 端触发的，一个 group 在最初初始化的过程总其实就是该 Group 第一个 Consumer Client 初始化的过程。</p>
 <h2 id="Consumer-poll-过程解析"><a href="#Consumer-poll-过程解析" class="headerlink" title="Consumer poll 过程解析"></a>Consumer poll 过程解析</h2><p>对 Consumer 的初始化，正如 <a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍</a> 这篇文章所述，Consumer 的核心逻辑部分主要在其 poll 模型。而其源码的实现上，主要的逻辑实现也是在 <code>pollOnce</code> 方法，如下所示。</p>
@@ -2190,11 +2268,11 @@
   </entry>
   
   <entry>
-    <title>TCP/IP 协议</title>
+    <title>TCP的三次握手和四次挥手</title>
     <link href="http://wangzzu.github.io/2016/08/30/http-protocol/"/>
     <id>http://wangzzu.github.io/2016/08/30/http-protocol/</id>
     <published>2016-08-30T02:33:22.000Z</published>
-    <updated>2016-11-19T09:05:29.000Z</updated>
+    <updated>2017-02-28T02:20:38.000Z</updated>
     
     <content type="html"><![CDATA[<p>TCP/IP 协议在计算机网络中是非常重要的部分，本文主要是简单介绍其中的 TCP 协议和 IP 协议，也会涉及一些在面试中经常遇到的问题。</p>
 <h1 id="TCP-IP-协议"><a href="#TCP-IP-协议" class="headerlink" title="TCP/IP 协议"></a>TCP/IP 协议</h1><p>在最项目开发中，经常会遇到各种协议，互联网基础通信框架就是 TCP/IP。TCP/IP 是个协议族，可分为四个层次：网络接口层（连接层）、网络层、传输层和应用层。</p>
@@ -2607,7 +2685,7 @@
     <link href="http://wangzzu.github.io/2016/07/29/sasl-plain-kafka/"/>
     <id>http://wangzzu.github.io/2016/07/29/sasl-plain-kafka/</id>
     <published>2016-07-29T12:49:56.000Z</published>
-    <updated>2016-11-19T09:04:01.000Z</updated>
+    <updated>2017-03-10T03:03:27.000Z</updated>
     
     <content type="html"><![CDATA[<p>本文主要介绍一下使用官方发布的 Kafka 0.10.0 版如何实现 SASL/PLAIN 认证机制以及权限控制。</p>
 <h1 id="Kafka-安全机制"><a href="#Kafka-安全机制" class="headerlink" title="Kafka 安全机制"></a>Kafka 安全机制</h1><p> Kafka 的安全机制主要分为两部分：</p>
@@ -2643,6 +2721,8 @@
 <h3 id="Kafka-Server-端配置"><a href="#Kafka-Server-端配置" class="headerlink" title="Kafka Server 端配置"></a>Kafka Server 端配置</h3><p>需要在 Kafka 安装目录下的config/server.properties文件中配置以下信息</p>
 <h2 id="Kafka-Server-端配置-1"><a href="#Kafka-Server-端配置-1" class="headerlink" title="Kafka Server 端配置"></a>Kafka Server 端配置</h2><p>在 kafka 安装目录下的<code>config/server.properties</code>配置一下信息</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">listeners=SASL_PLAINTEXT://ip:pot</div><div class="line">security.inter.broker.protocol=SASL_PLAINTEXT</div><div class="line">sasl.mechanism.inter.broker.protocol=PLAIN</div><div class="line">sasl.enabled.mechanisms=PLAIN</div><div class="line">authorizer.class.name = kafka.security.auth.SimpleAclAuthorizer</div><div class="line">super.users=User:admin</div></pre></td></tr></table></figure>
+<p>如果要配置多个超级账户，可以按如下配置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">super.users=User:admin;User:alice</div></pre></td></tr></table></figure>
 <p>还需要配置一个名 <code>kafka_server_jaas.conf</code> 的配置文件，将配置文件放置在<code>conf</code>目录下。</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">KafkaServer &#123;</div><div class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</div><div class="line">    username=&quot;admin&quot;</div><div class="line">    password=&quot;admin&quot;</div><div class="line">    user_admin=&quot;admin&quot;</div><div class="line">    user_alice=&quot;alice&quot;;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
 <p>这里，我们配置了两个用户：admin 和 alice，密码分别为 admin 和 alice。<br>最后需要为 Kafka 添加 <code>java.security.auth.login.config</code> 环境变量。在 <code>bin/kafka-run-class.sh</code> 中添加以下内容</p>
@@ -3200,390 +3280,6 @@
     
     
       <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Mac常用软件及环境配置</title>
-    <link href="http://wangzzu.github.io/2016/07/09/mac-software/"/>
-    <id>http://wangzzu.github.io/2016/07/09/mac-software/</id>
-    <published>2016-07-09T13:01:56.000Z</published>
-    <updated>2017-01-03T04:06:18.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>近段时间因为在公司实习，公司提供的电脑都是Mac，还给发了一台全新的Mac pro，刚开始用的时候有很多不习惯的地方，但是用了几天之后就感觉Mac真的爽到爆啊，本篇文章就记录一下自己感觉在Mac上用到的一些不错的软件，以及Mac下一些常用编程工具的配置安装方法，这样也方便自己以后查看，本篇文章会一直保持更新。</p>
-<h1 id="Mac基本配置"><a href="#Mac基本配置" class="headerlink" title="Mac基本配置"></a>Mac基本配置</h1><p>推荐一些Mac下常用的软件</p>
-<ul>
-<li>笔记：<a href="https://www.yinxiang.com/download/?offer=www_menu" target="_blank" rel="external">Evernote</a>，<a href="http://www.jianshu.com/p/a26fffc3c746" target="_blank" rel="external">Evernote（印象笔记）用户如何使用Markdown</a>；</li>
-<li>MarkDown：<a href="http://zh.mweb.im/" target="_blank" rel="external">MWeb</a>、<a href="http://25.io/mou/" target="_blank" rel="external">Mou</a>、Ulysses、<a href="http://macdown.uranusjr.com/" target="_blank" rel="external">MacDown</a>；</li>
-<li>编辑器：<a href="https://atom.io/" target="_blank" rel="external">Atom</a>；</li>
-<li>思维导图：<a href="http://www.xmindchina.net/" target="_blank" rel="external">XMid</a>、SimpleMind；</li>
-<li>NTFS挂载：<a href="http://www.tuxera.com/products/tuxera-ntfs-for-mac/" target="_blank" rel="external">Tuxera NTFS</a>（<a href="http://www.orsoon.com/Mac/129966.html" target="_blank" rel="external">序列号</a>，建议买正版）；</li>
-<li>播放器：MPV（mpv安装及快捷键操作参考<a href="https://intxt.net/meet-mpv/" target="_blank" rel="external">mpv安装</a>一文，<a href="https://mpv.io/installation/" target="_blank" rel="external">mpv安装地址</a>）；</li>
-<li>浏览器：chrome，必须是chrome；</li>
-<li>上网：<a href="https://github.com/shadowsocks/shadowsocks-iOS/releases/" target="_blank" rel="external">shadowsocks</a>；</li>
-<li>英文写作检查的软件：1Checker;</li>
-<li><a href="http://www.jianshu.com/p/c98c73704ff6" target="_blank" rel="external">Mac vim高亮设置</a>;</li>
-</ul>
-<p>博文推荐</p>
-<ul>
-<li><a href="http://www.jianshu.com/p/19e8ffd91576" target="_blank" rel="external">Mac下开发常用的必备软件</a>，这里有office、ps等工具的安装；</li>
-<li><a href="http://www.iphoneba.net/231.html" target="_blank" rel="external">Adobe After Effects CC 2015 Mac</a>，推荐使用正版；</li>
-<li><a href="http://www.waitsun.com/lightroom-cc-6-0.html" target="_blank" rel="external">Adobe Photoshop Lightroom CC for Mac 6.0 优秀的图像后期处理软件</a>，推荐使用正版；</li>
-</ul>
-<h2 id="mpv-的一些常用快捷键"><a href="#mpv-的一些常用快捷键" class="headerlink" title="mpv 的一些常用快捷键"></a>mpv 的一些常用快捷键</h2><p>mpv 是 mac 下使用非常舒服的一款视频播放器，下面是一些常用的快捷键</p>
-<table>
-<thead>
-<tr>
-<th>快捷键</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>SPACE</td>
-<td>暂停/播放切换</td>
-</tr>
-<tr>
-<td>UP</td>
-<td>快进 60 秒</td>
-</tr>
-<tr>
-<td>DOWN</td>
-<td>回退 60 秒</td>
-</tr>
-<tr>
-<td>LEFT</td>
-<td>回退 5 秒</td>
-</tr>
-<tr>
-<td>RIGHT</td>
-<td>快进 5 秒</td>
-</tr>
-<tr>
-<td><code>]</code></td>
-<td>加速播放</td>
-</tr>
-<tr>
-<td><code>[</code></td>
-<td>减速播放</td>
-</tr>
-<tr>
-<td>j</td>
-<td>循环选择字幕</td>
-</tr>
-<tr>
-<td>J</td>
-<td>反向循环选择字幕</td>
-</tr>
-<tr>
-<td>#</td>
-<td>循环切换音轨</td>
-</tr>
-<tr>
-<td>f</td>
-<td>切换全屏状态</td>
-</tr>
-<tr>
-<td>T</td>
-<td>切换视频窗口是否总在最前</td>
-</tr>
-<tr>
-<td>s</td>
-<td>视频截图，包含字幕</td>
-</tr>
-<tr>
-<td>S</td>
-<td>视频截图，不带字幕</td>
-</tr>
-<tr>
-<td>Alt+s</td>
-<td>自动逐帧视频截图，再按一次停止截图</td>
-</tr>
-</tbody>
-</table>
-<h2 id="chrome常用配置"><a href="#chrome常用配置" class="headerlink" title="chrome常用配置"></a>chrome常用配置</h2><p>chrome既方便又强大，于是乎，不得不单独弄出一小章来介绍。</p>
-<h3 id="常用小插件"><a href="#常用小插件" class="headerlink" title="常用小插件"></a>常用小插件</h3><p>对工程师来说，可以参考这篇文章<a href="https://mp.weixin.qq.com/s?__biz=MzA4NTQwNDcyMA==&amp;mid=402064553&amp;idx=1&amp;sn=4bc95ed03916f87cc8dfd17baed54f24" target="_blank" rel="external">吐血推荐珍藏的Chrome插件</a>。</p>
-<ul>
-<li>代理：<a href="https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif" target="_blank" rel="external">switchyomega</a>；</li>
-<li>流程图：<a href="https://chrome.google.com/webstore/detail/gliffy-diagrams/bhmicilclplefnflapjmnngmkkkkpfad" target="_blank" rel="external">gliffy</a>;</li>
-<li>MarkDown：<a href="chrome-extension://elifhakcjgalahccnjkneoccemfahfoa/common/options.html" target="_blank" rel="external">MarkDown Here</a>;</li>
-<li>词典：<a href="https://chrome.google.com/webstore/detail/%E7%BF%B0%E6%9E%97%E8%8B%B1%E6%B1%89%E5%8F%8C%E8%A7%A3%E8%AF%8D%E5%85%B8/fidicgekecdkdmkjghdgadgdmcfodfid" target="_blank" rel="external">翰林英汉双解词典</a>;</li>
-<li>Momentum：使用这个插件每次打开一个 Tab 时，不再是一个空白页面，而是一副精美的图片；</li>
-<li>Alexa Traffic Rank：Alexa排名是指网站的世界排名，非常有权威。直接主流网站或博客绝对是有Alexa排名的，我们在浏览博客或者网站的时候就可以通过Alexa排名知晓该网站的流行程度，适用于经常看博客的人，装了这个插件一键查看网站排名；</li>
-<li>Isometric Contributions：一个小玩意，可以让在 GitHub 上的 commit 像盖楼一样的展示，很有趣；</li>
-<li>Avatars for Github：顾名思义，默认我们在 GitHub 主页动态只能看到 id 的，而安装了这个插件就可以看到 GitHub 头像了，让你一眼就能知道是谁；</li>
-</ul>
-<h1 id="Mac下常用快捷键"><a href="#Mac下常用快捷键" class="headerlink" title="Mac下常用快捷键"></a>Mac下常用快捷键</h1><table>
-<thead>
-<tr>
-<th>说明</th>
-<th>快捷键</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>网页刷新</td>
-<td>command+r</td>
-</tr>
-<tr>
-<td>自定义截图</td>
-<td>command+shfit+4</td>
-</tr>
-<tr>
-<td>显示器</td>
-<td>control+shift+电源键</td>
-</tr>
-<tr>
-<td>将文本编辑器由带格式变为存文本</td>
-<td>command+shfit+t</td>
-</tr>
-<tr>
-<td>EverNote无格式粘贴</td>
-<td>command+shift+option+v</td>
-</tr>
-<tr>
-<td>文件/文件夹重命名</td>
-<td>选中该文件/文件夹，点击回车键</td>
-</tr>
-</tbody>
-</table>
-<p>快捷键可以参考<a href="https://support.apple.com/zh-cn/HT201236" target="_blank" rel="external">Mac键盘快捷键</a>一文.</p>
-<p>这里有一篇Bash下的快捷键的wiki，<a href="https://github.com/hokein/Wiki/wiki/Bash-Shell%E5%B8%B8%E7%94%A8%E5%BF%AB%E6%8D%B7%E9%94%AE" target="_blank" rel="external">Bash Shell常用快捷键</a>，可以方便查找bash下的常用快捷键。</p>
-<p>其他博文推荐：</p>
-<ol>
-<li><a href="http://wuchong.me/blog/2014/06/29/the-first-experience-of-mac/" target="_blank" rel="external">Mac上手体验</a></li>
-<li><a href="http://www.macx.cn/thread-2133104-1-1.html" target="_blank" rel="external">Mac快速锁屏</a></li>
-<li><a href="https://support.apple.com/kb/PH18669?locale=zh_CN&amp;viewlocale=zh_CN" target="_blank" rel="external">Mac锁屏后设置需要输密码</a></li>
-<li><a href="http://www.hangge.com/blog/cache/detail_540.html" target="_blank" rel="external">Mac下文本编辑器</a></li>
-<li><a href="http://popozhu.github.io/2013/09/24/mac%E5%85%89%E6%A0%87%E9%80%9F%E5%BA%A6%E8%B0%83%E6%95%B4/" target="_blank" rel="external">Mac光标速度调整</a></li>
-</ol>
-<h1 id="Mac终端iTerm2配置"><a href="#Mac终端iTerm2配置" class="headerlink" title="Mac终端iTerm2配置"></a>Mac终端iTerm2配置</h1><p>Mac下的iTerm2用着真的超爽</p>
-<h2 id="iTerm2下载安装"><a href="#iTerm2下载安装" class="headerlink" title="iTerm2下载安装"></a>iTerm2下载安装</h2><p><a href="http://www.iterm2.com/" target="_blank" rel="external">iTerm2下载</a></p>
-<p>下载完直接安装即可。</p>
-<h2 id="安装oh-my-zsh"><a href="#安装oh-my-zsh" class="headerlink" title="安装oh-my-zsh"></a>安装oh-my-zsh</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">curl -L https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh | sh</div></pre></td></tr></table></figure>
-<p>安装成功后的效果如下图所示</p>
-<p><img src="/images/mac/iterm-1.png" alt="zsh"></p>
-<h2 id="安装powerline"><a href="#安装powerline" class="headerlink" title="安装powerline"></a>安装powerline</h2><p>关于powerline的介绍可以参考<a href="http://cenalulu.github.io/linux/mac-powerline/" target="_blank" rel="external">为Bash和VIM配置一个美观奢华的状态提示栏</a>这篇文章，powerline就是一个全局的状态提示栏，安装方法如下：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 先安装pip指令</span></div><div class="line">sudo easy_install pip</div><div class="line"><span class="comment"># 安装管道</span></div><div class="line">pip install powerline-status</div></pre></td></tr></table></figure>
-<p>在第二步安装时，出现了这个错误，<code>error: [Errno 1] Operation not permitted: u&#39;/System/Library/Frameworks/Python.framework/Versions/2.7/bin/powerline&#39;</code>，如下图所示</p>
-<p><img src="/images/mac/iterm-2.png" alt="error"></p>
-<p>这个问题出现的原因，因为没有安装python，解决办法如下</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 1.安装Homebrew</span></div><div class="line">/usr/bin/ruby <span class="_">-e</span> <span class="string">"<span class="variable">$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)</span>"</span></div><div class="line"><span class="comment"># 2.配置python</span></div><div class="line">brew install python</div><div class="line"><span class="comment"># 3.安装管道</span></div><div class="line">pip install --user powerline-status</div></pre></td></tr></table></figure>
-<p>powerline的安装可以参考：</p>
-<ol>
-<li>brew安装参考<a href="http://brew.sh/" target="_blank" rel="external">官网</a></li>
-<li>PowerLine安装参考<a href="http://powerline.readthedocs.io/en/latest/installation/osx.html" target="_blank" rel="external">官网</a></li>
-</ol>
-<h2 id="安装字体库"><a href="#安装字体库" class="headerlink" title="安装字体库"></a>安装字体库</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 下载字体库</span></div><div class="line">git <span class="built_in">clone</span> https://github.com/powerline/fonts.git</div><div class="line"><span class="comment"># 安装所有字体</span></div><div class="line"><span class="built_in">cd</span> fonts</div><div class="line">./install.sh</div></pre></td></tr></table></figure>
-<p>安装成功后，如下图所示</p>
-<p><img src="/images/mac/iterm-3.png" alt="font"></p>
-<p>安装完成后会提示所有的字体均已下载到<code>/Users/superdanny/Library/Fonts</code>路径。</p>
-<h2 id="字体设置、配色方案设置及主题设置"><a href="#字体设置、配色方案设置及主题设置" class="headerlink" title="字体设置、配色方案设置及主题设置"></a>字体设置、配色方案设置及主题设置</h2><h3 id="字体配置"><a href="#字体配置" class="headerlink" title="字体配置"></a>字体配置</h3><p>安装完字体库之后，把iTerm 2的设置里的Profile中的Text 选项卡中里的<code>Regular Font</code>和<code>Non-ASCII Font</code>的字体都设置成powerline的字体，我这里设置的字体是<code>14pt Meslo LG S DZ Regular for Powerline</code>.</p>
-<p><img src="/images/mac/iterm-4.png" alt="font-setting"></p>
-<h3 id="配色方案"><a href="#配色方案" class="headerlink" title="配色方案"></a>配色方案</h3><h4 id="安装配色方案"><a href="#安装配色方案" class="headerlink" title="安装配色方案"></a>安装配色方案</h4><p>需要先在github下下载solarized工程，<a href="https://github.com/altercation/solarized" target="_blank" rel="external">solarized github地址</a></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">git clone https://github.com/altercation/solarized</div></pre></td></tr></table></figure>
-<p>然后进入刚刚下载的工程的<code>solarized/iterm2-colors-solarized</code> 下双击 <code>Solarized Dark.itermcolors</code> 和 <code>Solarized Light.itermcolors</code> 两个文件就可以把配置文件导入到 iTerm2 里.</p>
-<h4 id="配置配色方案"><a href="#配置配色方案" class="headerlink" title="配置配色方案"></a>配置配色方案</h4><p>通过load presets选择刚刚安装的配色主题即可</p>
-<p><img src="/images/mac/iterm-5.png" alt="color"></p>
-<h3 id="主题设置"><a href="#主题设置" class="headerlink" title="主题设置"></a>主题设置</h3><p>这里使用的是agnoster主题，<a href="https://github.com/fcamblor/oh-my-zsh-agnoster-fcamblor" target="_blank" rel="external">oh-my-zsh-agnoster-fcamblor Github地址</a></p>
-<h4 id="下载安装"><a href="#下载安装" class="headerlink" title="下载安装"></a>下载安装</h4><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 1.下载主题</span></div><div class="line">git <span class="built_in">clone</span> https://github.com/fcamblor/oh-my-zsh-agnoster-fcamblor</div><div class="line"><span class="comment"># 2.安装主题</span></div><div class="line"><span class="built_in">cd</span> oh-my-zsh-agnoster-fcamblor</div><div class="line">./install</div></pre></td></tr></table></figure>
-<h4 id="设置该主题"><a href="#设置该主题" class="headerlink" title="设置该主题"></a>设置该主题</h4><p>编辑<code>~/.zshrc</code>文件，然后将<code>ZSH_THEME</code>后面的字段改为<code>agnoster</code>。<code>ZSH_THEME=&quot;agnoster&quot;</code>（agnoster即为要设置的主题）.</p>
-<h4 id="增加指令高亮效果"><a href="#增加指令高亮效果" class="headerlink" title="增加指令高亮效果"></a>增加指令高亮效果</h4><p>指令高亮效果作用是当用户输入正确命令时指令会绿色高亮，错误时命令红色高亮，这里需要先下载<code>zsh-syntax-highlighting</code></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 1.下载工程项目</span></div><div class="line">git <span class="built_in">clone</span> git://github.com/zsh-users/zsh-syntax-highlighting.git</div><div class="line"><span class="comment"># 2.打开.zshrc文件，在最后添加下面内容</span></div><div class="line"><span class="built_in">source</span> /Users/matt/git//zsh-syntax-highlighting/zsh-syntax-highlighting.zsh</div><div class="line"><span class="comment"># 3.打开.zshrc文件，在最后面添加下面内容</span></div><div class="line">plugins=(zsh-syntax-highlighting)</div></pre></td></tr></table></figure>
-<p>配置完之后效果如下图所示</p>
-<p><img src="/images/mac/iterm-6.png" alt="end"></p>
-<h2 id="iTerm2快捷键"><a href="#iTerm2快捷键" class="headerlink" title="iTerm2快捷键"></a>iTerm2快捷键</h2><p>iTerm2快捷键的使用可以参考<a href="http://cnbin.github.io/blog/2015/06/20/iterm2-kuai-jie-jian-da-quan/" target="_blank" rel="external">Iterm2快捷键</a>这篇文章，这里给出一些常用的命令</p>
-<table>
-<thead>
-<tr>
-<th>说明</th>
-<th>快捷键</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>新建标签</td>
-<td>command + t</td>
-</tr>
-<tr>
-<td>关闭标签</td>
-<td>command + w</td>
-</tr>
-<tr>
-<td>切换标签</td>
-<td>command + 数字 command + 左右方向键</td>
-</tr>
-<tr>
-<td>切换全屏</td>
-<td>command + enter</td>
-</tr>
-<tr>
-<td>查找</td>
-<td>command +f</td>
-</tr>
-<tr>
-<td>垂直分屏</td>
-<td>command + d</td>
-</tr>
-<tr>
-<td>水平分屏</td>
-<td>command + shift + d</td>
-</tr>
-<tr>
-<td>切换屏幕</td>
-<td>command + option + 方向键 command + [ 或 command + ]</td>
-</tr>
-<tr>
-<td>查看历史命令</td>
-<td>command + ;</td>
-</tr>
-<tr>
-<td>查看剪贴板历史</td>
-<td>command + shift + h</td>
-</tr>
-<tr>
-<td>清除当前行</td>
-<td>ctrl + u</td>
-</tr>
-<tr>
-<td>到行首</td>
-<td>ctrl + a</td>
-</tr>
-<tr>
-<td>到行尾</td>
-<td>ctrl + e</td>
-</tr>
-<tr>
-<td>前进后退</td>
-<td>ctrl + f/b (相当于左右方向键)</td>
-</tr>
-<tr>
-<td>上一条命令</td>
-<td>ctrl + p</td>
-</tr>
-<tr>
-<td>搜索命令历史</td>
-<td>ctrl + r</td>
-</tr>
-<tr>
-<td>删除当前光标的字符</td>
-<td>ctrl + d</td>
-</tr>
-<tr>
-<td>删除光标之前的字符</td>
-<td>ctrl + h</td>
-</tr>
-<tr>
-<td>删除光标之前的单词</td>
-<td>ctrl + w</td>
-</tr>
-<tr>
-<td>删除到文本末尾</td>
-<td>ctrl + k</td>
-</tr>
-<tr>
-<td>交换光标处文本</td>
-<td>ctrl + t</td>
-</tr>
-<tr>
-<td>清屏1</td>
-<td>command + r</td>
-</tr>
-<tr>
-<td>清屏2</td>
-<td>ctrl + l</td>
-</tr>
-</tbody>
-</table>
-<h1 id="编程环境配置"><a href="#编程环境配置" class="headerlink" title="编程环境配置"></a>编程环境配置</h1><h2 id="Java"><a href="#Java" class="headerlink" title="Java"></a>Java</h2><p>一般情况下，可能需要安装多个版本的JDK，具体各个版本的下载，JDK7和JDK8可以在官网上直接下载，而JDK6的下载资源就比较难找了，可以参考<a href="http://www.codecate.com/code/archives/16" target="_blank" rel="external">Mac安装jdk1.6 1.7 1.8</a>这篇文章</p>
-<p>下载安装完这三个版本的JDK之后，需要进行以下配置</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># bash下是~/.bashrc文件</span></div><div class="line"><span class="built_in">export</span> JAVA_6_HOME=/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Home/</div><div class="line"><span class="built_in">export</span> JAVA_7_HOME=/Library/Java/JavaVirtualMachines/jdk1.7.0_76.jdk/Contents/Home/</div><div class="line"><span class="built_in">export</span> JAVA_8_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_91.jdk/Contents/Home/</div><div class="line"><span class="built_in">export</span> JAVA_HOME=<span class="variable">$JAVA_7_HOME</span></div><div class="line"><span class="built_in">alias</span> jdk8=<span class="string">'export JAVA_HOME=$JAVA_8_HOME'</span></div><div class="line"><span class="built_in">alias</span> jdk7=<span class="string">'export JAVA_HOME=$JAVA_7_HOME'</span></div><div class="line"><span class="built_in">alias</span> jdk6=<span class="string">'export JAVA_HOME=$JAVA_6_HOME'</span></div><div class="line"><span class="built_in">export</span> PATH=<span class="variable">$PATH</span>:<span class="variable">$JAVA_HOME</span>/bin</div></pre></td></tr></table></figure>
-<h2 id="IntelliJ-IDEA"><a href="#IntelliJ-IDEA" class="headerlink" title="IntelliJ IDEA"></a>IntelliJ IDEA</h2><h3 id="idea安装"><a href="#idea安装" class="headerlink" title="idea安装"></a>idea安装</h3><p><a href="https://www.jetbrains.com/idea/download/" target="_blank" rel="external">idea下载地址</a></p>
-<p>如果下载的版本是2016.1版，这里有一个<a href="http://aiyougege.com/articles/022711.html" target="_blank" rel="external">激活码</a>，不过推荐购买正版，免费版推荐社区版，一般的开发也就够用了。</p>
-<h3 id="Google-Java编程规范配置"><a href="#Google-Java编程规范配置" class="headerlink" title="Google Java编程规范配置"></a>Google Java编程规范配置</h3><p>参考<a href="http://zacard.net/2016/04/11/idea-google-code-style/" target="_blank" rel="external">Idea直接导入xml文件</a>一文。</p>
-<p>idea可以支持自定义的code style，并且google code style也提供了对idea的xml配置，直接导入就可以在idea中使用google提倡的code style了。</p>
-<p>使用方法：</p>
-<ol>
-<li>从github上clone <a href="https://github.com/google/styleguide" target="_blank" rel="external">Google Style GitHub</a>；</li>
-<li>复制对应的xml配置（如intellij-java-google-style.xml）到“~/Library/Preferences/IDEA/codestyles/”下</li>
-<li>重启idea在Prefrence-&gt;Editor—&gt;Code Stytle-&gt;Java,选择GoogleStyle即可</li>
-</ol>
-<p>mac下格式化代码的快捷键： <code>command+alt+L</code></p>
-<h3 id="简单配置"><a href="#简单配置" class="headerlink" title="简单配置"></a>简单配置</h3><p>需要配置的内容主要有以下几项：</p>
-<ol>
-<li>自动行号显示</li>
-<li>字体</li>
-<li>SDK设置（就是jdk，scala等设置）</li>
-<li>maven设置</li>
-<li>快捷键</li>
-</ol>
-<h3 id="快捷键"><a href="#快捷键" class="headerlink" title="快捷键"></a>快捷键</h3><p>常用的快捷键如下表所示</p>
-<table>
-<thead>
-<tr>
-<th>说明</th>
-<th>快捷键</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>查看所选代码的源码</td>
-<td>cmd + ↓</td>
-</tr>
-<tr>
-<td>查看maven依赖</td>
-<td>opt+shift+cmd+U</td>
-</tr>
-<tr>
-<td>智能补齐代码</td>
-<td>opt + enter</td>
-</tr>
-<tr>
-<td>生成一些常用方法，如：toString、get 等</td>
-<td>control + enter</td>
-</tr>
-</tbody>
-</table>
-<p>关于快捷键可以参考<a href="http://wiki.jikexueyuan.com/project/intellij-idea-tutorial/keymap-mac-introduce.html" target="_blank" rel="external">Mac下idea快捷键</a>一文。</p>
-<ul>
-<li><a href="http://baowp.iteye.com/blog/1989575" target="_blank" rel="external">Mac下Idea打开Maven的jar包依赖图</a></li>
-</ul>
-<h2 id="PyCharm"><a href="#PyCharm" class="headerlink" title="PyCharm"></a>PyCharm</h2><h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><p><a href="https://www.jetbrains.com/pycharm/download/" target="_blank" rel="external">PyCharm下载地址</a></p>
-<p>2016版的可以使用<a href="http://blog.csdn.net/jiang314/article/details/51680072" target="_blank" rel="external">注册码</a>进行破解，不过推荐购买正版。</p>
-<h1 id="其他常用命令安装"><a href="#其他常用命令安装" class="headerlink" title="其他常用命令安装"></a>其他常用命令安装</h1><h2 id="tree命令安装"><a href="#tree命令安装" class="headerlink" title="tree命令安装"></a>tree命令安装</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 需要先安装HomeBrew</span></div><div class="line">brew install tree</div></pre></td></tr></table></figure>
-<h1 id="Mac下遇到的其他问题"><a href="#Mac下遇到的其他问题" class="headerlink" title="Mac下遇到的其他问题"></a>Mac下遇到的其他问题</h1><h2 id="bashrc每次打开iterm都要重新加载"><a href="#bashrc每次打开iterm都要重新加载" class="headerlink" title="~/.bashrc每次打开iterm都要重新加载"></a>~/.bashrc每次打开iterm都要重新加载</h2><p>参考<a href="http://www.zhihu.com/question/29653438" target="_blank" rel="external">文章</a></p>
-<p>原因：使用的zsh，而不是bash，所以zsh没有义务去加载<code>~/.bashrc</code>文件，zsh下别名一般放置到<code>~/.zshrc</code>文件中。</p>
-<p>解决办法：在<code>~/.zshrc</code>文件的最后添加<code>source ~/.bashrc</code>.</p>
-<h2 id="修改电脑名的方法"><a href="#修改电脑名的方法" class="headerlink" title="修改电脑名的方法"></a>修改电脑名的方法</h2><p>有人可能感觉跟我一样有强迫症，看到电脑名太长影响终端的显示，就想着怎么修改一下。</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 执行下面命令“mac”是你想要改的电脑名称</span></div><div class="line">sudo scutil --set HostName mac</div></pre></td></tr></table></figure>
-<blockquote>
-<p>注：关闭终端之后，重新打开终端就会生效。</p>
-</blockquote>
-<h2 id="修改电脑名导致的错误"><a href="#修改电脑名导致的错误" class="headerlink" title="修改电脑名导致的错误"></a>修改电脑名导致的错误</h2><p>使用上面的方法修改电脑名，可能会导致一个这样的错误.</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 其中 mac 为自己设置的电脑名，不同的电脑名显示不一样</span></div><div class="line">java.net.UnknownHostException: mac: mac: nodename nor servname provided, or not known</div></pre></td></tr></table></figure>
-<p>这个问题和路由映射有关系，处理方法就是对 mac 做个DNS解析指向127.0.0.1.</p>
-<p>修改文件 <code>/etc/hosts</code>，在里面增加对 127.0.0.1 的解析.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">127.0.0.1    mac    localhost</div></pre></td></tr></table></figure>
-<p>保存生效后，就没有问题了。</p>
-<hr>
-<p>参考：</p>
-<ul>
-<li><a href="http://www.jianshu.com/p/7de00c73a2bb" target="_blank" rel="external">iTerm 2 &amp;&amp; Oh My Zsh</a></li>
-<li><a href="http://cnbin.github.io/blog/2015/06/20/iterm2-kuai-jie-jian-da-quan/" target="_blank" rel="external">Iterm2快捷键</a></li>
-<li><a href="http://www.zhihu.com/question/29653438" target="_blank" rel="external">为什么我的Mac不加载/etc/bashrc文件呢？</a></li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;近段时间因为在公司实习，公司提供的电脑都是Mac，还给发了一台全新的Mac pro，刚开始用的时候有很多不习惯的地方，但是用了几天之后就感觉Mac真的爽到爆啊，本篇文章就记录一下自己感觉在Mac上用到的一些不错的软件，以及Mac下一些常用编程工具的配置安装方法，这样也方便自
-    
-    </summary>
-    
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="mac" scheme="http://wangzzu.github.io/tags/mac/"/>
     
   </entry>
   
