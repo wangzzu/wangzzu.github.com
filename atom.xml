@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://wangzzu.github.io/"/>
-  <updated>2017-06-17T16:34:21.000Z</updated>
+  <updated>2017-06-20T17:04:51.000Z</updated>
   <id>http://wangzzu.github.io/</id>
   
   <author>
@@ -14,6 +14,338 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>CSS 一些常用方法的总结</title>
+    <link href="http://wangzzu.github.io/2017/06/21/css-summary/"/>
+    <id>http://wangzzu.github.io/2017/06/21/css-summary/</id>
+    <published>2017-06-20T17:03:30.000Z</published>
+    <updated>2017-06-20T17:04:51.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>CSS 指的是层叠样式表（Cascading StyleSheet），在网页制作时采用层叠样式表技术，可以有效地对页面的布局、字体、颜色、背景和其它效果实现更加精确的控制，本文对 css 一些基本内容及常用功能进行一下总结，总结的内容主要是来自实验楼的 <a href="https://www.shiyanlou.com/courses/53" target="_blank" rel="external">CSS 速成教程</a>，这篇文章会实时更新，后续如果遇到什么好的有用功能，也会更新到这篇文章中。</p>
+<h1 id="css-基础语法"><a href="#css-基础语法" class="headerlink" title="css 基础语法"></a>css 基础语法</h1><p>CSS 规则由两个主要的部分构成：选择器，以及一条或多条声明。</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">selector &#123;</div><div class="line">    declaration1;</div><div class="line">    declaration2;</div><div class="line">    ...</div><div class="line">    declarationN;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>选择器通常是需要改变的 HTML 元素，每条声明都由一个属性和一个值组成，每个属性都有一个值，属性和值被冒号分开。</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="selector-tag">h1</span>&#123;</div><div class="line">   <span class="attribute">color</span>:red;</div><div class="line">   <span class="attribute">font-size</span>:<span class="number">14px</span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h1 id="css-基本样式"><a href="#css-基本样式" class="headerlink" title="css 基本样式"></a>css 基本样式</h1><p>介绍 css 的一些基本样式，这些都是 css 中一些常用的设置。</p>
+<h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>css 是允许使用纯色作为背景，也允许使用背景图像实现一些相当复杂的效果。</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>background-attachment</td>
+<td>背景图像是否固定或者随着页面的其余部分滚动</td>
+</tr>
+<tr>
+<td>background-color</td>
+<td>设置元素的背景颜色</td>
+</tr>
+<tr>
+<td>background-image</td>
+<td>把图片设置为背景</td>
+</tr>
+<tr>
+<td>background-position</td>
+<td>设置背景图片的起始位置</td>
+</tr>
+<tr>
+<td>background-repeat</td>
+<td>设置背景图片是否及如何重复，其中，<code>no-repeat</code>：表示不能重复，<code>repeat</code>：可重复（默认值），<code>repeat-x</code>：表示 x 轴重复，<code>repeat-y</code>：表示 y 轴重</td>
+</tr>
+<tr>
+<td>background-size</td>
+<td>规定背景图片的尺寸</td>
+</tr>
+<tr>
+<td>background-origin</td>
+<td>规定背景图片的定位区域</td>
+</tr>
+<tr>
+<td>background-clip</td>
+<td>规定背景的绘制区域</td>
+</tr>
+</tbody>
+</table>
+<p>举个例子，如下所示</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line">body&#123;</div><div class="line">   background-color: red;</div><div class="line">   background-image: url("hha.jpg");</div><div class="line">   background-repeat: no-repeat;</div><div class="line">   background-position: center top;</div><div class="line">   background-attachment: fixed;</div><div class="line">   background-size：100px 100px;</div><div class="line">&#125;</div><div class="line"></div><div class="line">p&#123;</div><div class="line">    width: 150px;</div><div class="line">    padding: 10px;</div><div class="line">    background-color: #0014ff;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="meta">&lt;!doctype html&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">meta</span> <span class="attr">charset</span>=<span class="string">"UTF-8"</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">title</span>&gt;</span><span class="tag">&lt;/<span class="name">title</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">link</span> <span class="attr">rel</span>=<span class="string">"stylesheet"</span> <span class="attr">href</span>=<span class="string">"style.css"</span> <span class="attr">type</span>=<span class="string">"text/css"</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">p</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
+<p>效果如下下图所示：</p>
+<p><img src="/images/web/css1.png" alt="效果图"></p>
+<h2 id="文本"><a href="#文本" class="headerlink" title="文本"></a>文本</h2><p>css 文本可定义文本的外观，通过文本的属性，可以改变文本的颜色、字符间距、对齐方式等等。</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>color</td>
+<td>文本颜色</td>
+</tr>
+<tr>
+<td>direction</td>
+<td>文本方向</td>
+</tr>
+<tr>
+<td>line-height</td>
+<td>行高</td>
+</tr>
+<tr>
+<td>letter-spacing</td>
+<td>字符间距</td>
+</tr>
+<tr>
+<td>text-align</td>
+<td>对齐元素中的文本，可选择 left、right 和 center</td>
+</tr>
+<tr>
+<td>text-decoration</td>
+<td>向文本添加修饰</td>
+</tr>
+<tr>
+<td>text-indent</td>
+<td>缩进元素中文本的首行</td>
+</tr>
+<tr>
+<td>text-transform</td>
+<td>元素中的字母</td>
+</tr>
+<tr>
+<td>unicode-bidi</td>
+<td>设置文本方向</td>
+</tr>
+<tr>
+<td>white-space</td>
+<td>元素中空白的处理方式</td>
+</tr>
+<tr>
+<td>word-spacing</td>
+<td>字间距</td>
+</tr>
+</tbody>
+</table>
+<p>应用时，可以进行以下设置</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="selector-tag">body</span>&#123;</div><div class="line">   <span class="attribute">color</span>: red;</div><div class="line">   <span class="attribute">text-align</span>: center;</div><div class="line">&#125;</div><div class="line"><span class="selector-tag">p</span> &#123;<span class="attribute">text-indent</span>: <span class="number">5em</span>;&#125;</div></pre></td></tr></table></figure>
+<p>在网页展现时，标签 <code>body</code> 和 <code>p</code> 中元素就会按照设置进行显示。</p>
+<h2 id="链接"><a href="#链接" class="headerlink" title="链接"></a>链接</h2><p>在 css 的链接属性中，可以对其颜色、字体、背景进行相应的设置，不同的状态我们可以设置对应的样式。</p>
+<h3 id="4种链接状态"><a href="#4种链接状态" class="headerlink" title="4种链接状态"></a>4种链接状态</h3><p>css 共有以下几种链接状态：</p>
+<ol>
+<li><code>a:link</code>：普通的、未被访问的链接；</li>
+<li><code>a:visited</code>：用户已访问的链接；</li>
+<li><code>a:hover</code>：鼠标指针位于链接的上方；</li>
+<li><code>a:active</code>：链接被点击的时刻。</li>
+</ol>
+<p>在进行设置中，有以下两种要求：</p>
+<ul>
+<li><code>a:hover</code> 必须位于 <code>a:link</code> 和 <code>a:visited</code> 之后；</li>
+<li><code>a:active</code> 必须位于 <code>a:hover</code> 之后。</li>
+</ul>
+<h3 id="修改链接下划线"><a href="#修改链接下划线" class="headerlink" title="修改链接下划线"></a>修改链接下划线</h3><p>只需要在链接属性中添加 <code>text-decoration</code> 属性，将对应的值设置为空即可。</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line"><span class="selector-tag">a</span><span class="selector-pseudo">:link</span>&#123;</div><div class="line">    <span class="attribute">background-color</span>:<span class="number">#B2FF99</span>;</div><div class="line">    <span class="attribute">text-decoration</span>:none;</div><div class="line">&#125;</div><div class="line"><span class="selector-tag">a</span><span class="selector-pseudo">:visited</span> &#123;<span class="attribute">background-color</span>:<span class="number">#FFFF85</span>;&#125;</div><div class="line"><span class="selector-tag">a</span><span class="selector-pseudo">:hover</span> &#123;<span class="attribute">background-color</span>:<span class="number">#FF704D</span>;&#125;</div><div class="line"><span class="selector-tag">a</span><span class="selector-pseudo">:active</span> &#123;<span class="attribute">background-color</span>:<span class="number">#FF704D</span>;&#125;</div></pre></td></tr></table></figure>
+<h2 id="列表"><a href="#列表" class="headerlink" title="列表"></a>列表</h2><p>在 html 中学习过列表的一些设置，这里主要讲述的是如何通过 css 进行列表的设置。</p>
+<h3 id="简单的列表类型"><a href="#简单的列表类型" class="headerlink" title="简单的列表类型"></a>简单的列表类型</h3><p>列表有无序、有序之分，无序列表又可以用不同的标记来区分，而 <code>list-style-type</code> 这个属性我们就可以用来控制标记类型。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># html 中添加以下内容</span></div><div class="line">&lt;ul class=<span class="string">"circle"</span>&gt;</div><div class="line">    &lt;li&gt;haha&lt;/li&gt;</div><div class="line">    &lt;li&gt;wawa&lt;/li&gt;</div><div class="line">&lt;/ul&gt;</div><div class="line"></div><div class="line">&lt;olclass=<span class="string">"square"</span>&gt;</div><div class="line">    &lt;li&gt;haha&lt;/li&gt;</div><div class="line">    &lt;li&gt;wawa&lt;/li&gt;</div><div class="line">&lt;/ol&gt;</div><div class="line"></div><div class="line"><span class="comment"># css 中的设置</span></div><div class="line">ul.circle &#123;list-style-type:circle&#125;</div><div class="line">ol.square &#123;list-style-type:upper-roman&#125;&#125;</div></pre></td></tr></table></figure>
+<h3 id="列表项图片"><a href="#列表项图片" class="headerlink" title="列表项图片"></a>列表项图片</h3><p>在无序列表中，除了进行一些默认的设置外，并没有其他可选的内容，但是 css 可以提供图片来作为标记。</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="selector-tag">ul</span><span class="selector-class">.img1</span>&#123;<span class="attribute">list-style-image</span>:<span class="built_in">url</span>(<span class="string">"1.ico"</span>)&#125;</div></pre></td></tr></table></figure>
+<h2 id="表格"><a href="#表格" class="headerlink" title="表格"></a>表格</h2><p>在 css 表格的设置中，需要先了解一下属性：</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>border-collapse</td>
+<td>设置是否把表格边框合并为单一的边框</td>
+</tr>
+<tr>
+<td>border-spacing</td>
+<td>设置分隔单元格边框的距离。</td>
+</tr>
+<tr>
+<td>caption-side</td>
+<td>设置表格标题的位置。</td>
+</tr>
+<tr>
+<td>empty-cells</td>
+<td>设置是否显示表格中的空单元格。</td>
+</tr>
+<tr>
+<td>table-layout</td>
+<td>设置显示单元、行和列的算法。</td>
+</tr>
+</tbody>
+</table>
+<p>这里也以一个例子来说明：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div></pre></td><td class="code"><pre><div class="line">/* html 部分 */</div><div class="line"><span class="tag">&lt;<span class="name">table</span> <span class="attr">id</span>=<span class="string">"tb"</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">tr</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">th</span>&gt;</span>name<span class="tag">&lt;/<span class="name">th</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">th</span>&gt;</span>age<span class="tag">&lt;/<span class="name">th</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">th</span>&gt;</span>number<span class="tag">&lt;/<span class="name">th</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">tr</span>&gt;</span></div><div class="line"></div><div class="line">    <span class="tag">&lt;<span class="name">tr</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>li<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>3<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>4<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">tr</span>&gt;</span></div><div class="line"></div><div class="line">    <span class="tag">&lt;<span class="name">tr</span> <span class="attr">class</span>=<span class="string">"tr2"</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>li<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>3<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>4<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">tr</span>&gt;</span></div><div class="line"></div><div class="line">    <span class="tag">&lt;<span class="name">tr</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>li<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>3<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>4<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">tr</span>&gt;</span></div><div class="line"></div><div class="line">    <span class="tag">&lt;<span class="name">tr</span> <span class="attr">class</span>=<span class="string">"tr2"</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>li<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>3<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">td</span>&gt;</span>4<span class="tag">&lt;/<span class="name">td</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">tr</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">table</span>&gt;</span></div></pre></td></tr></table></figure>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/* css 部分*/</span></div><div class="line"><span class="selector-id">#tb</span> <span class="selector-tag">td</span>,<span class="selector-tag">th</span>&#123;</div><div class="line">    <span class="attribute">border</span>: <span class="number">1px</span> solid green;</div><div class="line">    <span class="attribute">padding</span>: <span class="number">5px</span>;</div><div class="line">&#125;</div><div class="line"><span class="selector-id">#tb</span>&#123;</div><div class="line">    <span class="attribute">border-collapse</span>: collapse;</div><div class="line">    <span class="attribute">width</span>: <span class="number">500px</span>;</div><div class="line">    <span class="attribute">text-align</span>: center;</div><div class="line">&#125;</div><div class="line"><span class="selector-id">#tb</span> <span class="selector-tag">th</span>&#123;</div><div class="line">    <span class="attribute">text-align</span>: center;</div><div class="line">    <span class="attribute">color</span>: black;</div><div class="line">    <span class="attribute">background-color</span>: lightseagreen;</div><div class="line">&#125;</div><div class="line"><span class="selector-id">#tb</span> <span class="selector-tag">tr</span><span class="selector-class">.tr2</span> <span class="selector-tag">td</span>&#123;</div><div class="line">    <span class="attribute">color</span>: black;</div><div class="line">    <span class="attribute">background-color</span>: <span class="number">#B2FF99</span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>显示效果如下图</p>
+<p><img src="/images/web/css3.png" alt="效果图"></p>
+<h2 id="轮廓"><a href="#轮廓" class="headerlink" title="轮廓"></a>轮廓</h2><p>轮廓（outline）是绘制于元素周围的一条线，位于边框边缘的外围，可起到突出元素的作用。CSS outline 属性规定元素轮廓的样式、颜色和宽度。涉及到的属性有：</p>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>outline</td>
+<td>在一个声明中设置所有的轮廓属性。</td>
+</tr>
+<tr>
+<td>outline-color</td>
+<td>设置轮廓的颜色.</td>
+</tr>
+<tr>
+<td>outline-style</td>
+<td>设置轮廓的样式。</td>
+</tr>
+<tr>
+<td>outline-width</td>
+<td>设置轮廓的宽度。</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># html 部分</span></div><div class="line">&lt;p id=<span class="string">"p1"</span>&gt;matt<span class="string">'s blog&lt;/p&gt;</span></div><div class="line">&lt;p id="p2"&gt;This is mtt's blog.&lt;/p&gt;</div><div class="line"></div><div class="line"><span class="comment"># css 部分</span></div><div class="line"><span class="comment">#p1&#123;</span></div><div class="line">    outline-color: <span class="comment">#FF704D;</span></div><div class="line">    outline-style: groove;</div><div class="line">    outline-width: 10px;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">#p2&#123;</span></div><div class="line">    outline-style: dotted;</div><div class="line">    outline-color: green;</div><div class="line">    outline-width: 5px;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>显示效果如下图所示：</p>
+<p><img src="/images/web/css2.png" alt="效果图"></p>
+<h1 id="css-选择器"><a href="#css-选择器" class="headerlink" title="css 选择器"></a>css 选择器</h1><p>选择器是 css 中最常用的组件，本节就介绍一下 css 中最常见的几种选择器。</p>
+<h2 id="元素选择器"><a href="#元素选择器" class="headerlink" title="元素选择器"></a>元素选择器</h2><p>最常见的选择器就是元素选择器，文档的元素的就是最基本的选择器。比如<code>h1</code>、<code>a</code>等，在 css 中可以这样实现：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/*第一种，直接对某个元素进行相应的设置*/</span></div><div class="line"><span class="selector-tag">h1</span>&#123;</div><div class="line">  <span class="attribute">color</span>: cadetblue;  </div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">/*第二种，对多个元素执行同样的操作*/</span></div><div class="line"><span class="selector-tag">h1</span>,<span class="selector-tag">h2</span>,<span class="selector-tag">h3</span>,<span class="selector-tag">h4</span>&#123;</div><div class="line">  <span class="attribute">color</span>: cadetblue;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">/*第三种，对没有特别特定元素设置的元素都执行同样的操作（除 h4外，其他执行的操作都一样）*/</span></div><div class="line">*&#123;</div><div class="line">  <span class="attribute">color</span>: cadetblue;</div><div class="line">&#125;</div><div class="line"><span class="selector-tag">h4</span>&#123;</div><div class="line">    <span class="attribute">color</span>: darkslategray;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h2 id="类选择器"><a href="#类选择器" class="headerlink" title="类选择器"></a>类选择器</h2><p>类选择器允许以一种独立与文档元素的方式来制定样式。<code>.class{}</code> 这是类选择器的标志，点后面是属性名，大括号里面就是具体的设置，如：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/*第一种，最简单的使用方法*/</span></div><div class="line"><span class="comment">/* 调用方式：&lt;div class="div"&gt;matt&lt;/div&gt; */</span></div><div class="line"><span class="selector-class">.div</span>&#123;</div><div class="line">    <span class="attribute">color</span>: cadetblue;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">/*第二种，将类选择器结合元素选择器来使用，下面的例子这个 .div 就只会对 h1 起作用*/</span></div><div class="line"><span class="comment">/* 调用方式：&lt;h1 class="div"&gt;matt&lt;/div&gt; */</span></div><div class="line"><span class="selector-tag">h1</span><span class="selector-class">.div</span>&#123;</div><div class="line">    <span class="attribute">color</span>: cadetblue;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">/*第三种，多类选择器（.class.class&#123;&#125;），它可以继承多个类的作用*/</span></div><div class="line"><span class="comment">/* 调用方式：&lt;p class="p1 p2"&gt;shiyanlou is my home&lt;/p&gt; */</span></div><div class="line"><span class="selector-class">.p1</span>&#123;</div><div class="line">    <span class="attribute">color</span>: cadetblue;</div><div class="line">&#125;</div><div class="line"><span class="selector-class">.p2</span>&#123;</div><div class="line">    <span class="attribute">font-size</span>: <span class="number">20px</span>;</div><div class="line">&#125;</div><div class="line"><span class="selector-class">.p1</span><span class="selector-class">.p2</span>&#123;</div><div class="line">    <span class="attribute">font-style</span>: italic;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h2 id="id-选择器"><a href="#id-选择器" class="headerlink" title="id 选择器"></a>id 选择器</h2><p>id 选择器类似于类选择器，id 选择器的引入是用<code>#</code>，就和类选择器的<code>.</code>是一样的效果，它与类选择器的区别是：</p>
+<ul>
+<li>id 顾名思义只能在文档中使用一次，而类可以使用多次；</li>
+<li>id 选择器不能像刚才类选择器一样结合使用。</li>
+</ul>
+<figure class="highlight"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">/* html 中的用法 */</div><div class="line">&lt;p id="div"&gt;matt's blog&lt;/p&gt;</div><div class="line"></div><div class="line">/* css 中的配置*/</div><div class="line">#div&#123;</div><div class="line">    color: cadetblue;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h2 id="属性选择器"><a href="#属性选择器" class="headerlink" title="属性选择器"></a>属性选择器</h2><p>对带有指定属性的 HTML 元素设置样式。</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/* 第一种，对带有 title 属性的所有元素设置样式 */</span></div><div class="line"><span class="selector-attr">[title]</span> &#123;<span class="attribute">color</span>:red;&#125;</div><div class="line"></div><div class="line"><span class="comment">/* 第二种，为 title="te" 的所有元素设置样式 */</span></div><div class="line"><span class="selector-attr">[title=te]</span>&#123;</div><div class="line">    <span class="attribute">color</span>: red;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">/* 第三种，为 href="http://matt33.com" 的标签 a 设置元素样式 */</span></div><div class="line"><span class="comment">/* 调用方式：&lt;a href="http://matt33.com"&gt;matt's blog&lt;/a&gt; */</span></div><div class="line"><span class="selector-tag">a</span><span class="selector-attr">[href="http://matt33.com"]</span>&#123;</div><div class="line">    <span class="attribute">color</span>: cornflowerblue;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h2 id="其他选择器"><a href="#其他选择器" class="headerlink" title="其他选择器"></a>其他选择器</h2><p>其他的还有：</p>
+<ul>
+<li>后代选择器</li>
+<li>子元素选择器</li>
+<li>相邻兄弟选择器</li>
+</ul>
+<p>下面仅列出一种后代选择器</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">/* html */</div><div class="line">&lt;p&gt;This is &lt;strong&gt;my&lt;/strong&gt; blog.&lt;/p&gt;</div><div class="line"></div><div class="line">/* css */</div><div class="line">p strong&#123;</div><div class="line">    color: cadetblue;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h1 id="css-盒子模型"><a href="#css-盒子模型" class="headerlink" title="css 盒子模型"></a>css 盒子模型</h1><p> css 的盒子模型主要适用于网页的布局。</p>
+<h2 id="盒子模型概述"><a href="#盒子模型概述" class="headerlink" title="盒子模型概述"></a>盒子模型概述</h2><p>盒子的组成包括：</p>
+<ul>
+<li>margin(外边距)：边框以外就是外边距，默认外边距是透明的（可以为负）；</li>
+<li>border(边框)：内边距的边缘就是边框；</li>
+<li>padding(内边距)：直接包围内容的部分，它呈现了元素的背景；</li>
+<li>content(内容)：正文框的最内部分就是实际的内容.</li>
+</ul>
+<p>其中，内边距、边框和外边距都是可选的，默认值是0。下面用一张简单的图来描述它们的结构</p>
+<p><img src="/images/web/css4.png" alt="盒子模型"></p>
+<h2 id="内边距"><a href="#内边距" class="headerlink" title="内边距"></a>内边距</h2><p>内边据在正文（content）外、边框（border）内，控制该区域最简单的属性是 <code>padding</code> 属性</p>
+<ul>
+<li><code>padding</code> 属性接受长度值或百分比值，但不允许使用负值；</li>
+<li>也可以进行统一的内边距设置，也可以进行单边的内边距设置。</li>
+<li>设置某一边的边据时，可以通过以下四个属性：<code>padding-top</code>、<code>padding-right</code>、<code>padding-bottom</code>、<code>padding-left</code>.</li>
+</ul>
+<p>举个栗子</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># html 部分</span></div><div class="line">&lt;table border=<span class="string">"1"</span>&gt;</div><div class="line">    &lt;tr&gt;</div><div class="line">        &lt;td&gt;</div><div class="line">            &lt;h1&gt;正文&lt;/h1&gt;</div><div class="line">        &lt;/td&gt;</div><div class="line">    &lt;/tr&gt;</div><div class="line">&lt;/table&gt;</div><div class="line"></div><div class="line"><span class="comment"># css 部分</span></div><div class="line">h1 &#123;</div><div class="line">    padding-left: 5cm;</div><div class="line">    padding-right: 5cm;</div><div class="line">    padding-top: 30px;</div><div class="line">    padding-bottom: 30px;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p><img src="/images/web/css5.png" alt="内边距"></p>
+<h2 id="边框"><a href="#边框" class="headerlink" title="边框"></a>边框</h2><p>元素的边框 (border) 是围绕元素内容和内边距的一条或多条线。</p>
+<ul>
+<li>边框的宽度可以通过这几个参数来设置：<code>border-top-width</code>、<code>border-right-width</code>、<code>border-bottom-width</code>、<code>border-left-width</code>；</li>
+<li>同样可以使用属性控制各个边框的颜色：<code>border-top-color</code>、<code>border-right-color</code>、<code>border-bottom-color</code>、<code>border-left-color</code>。</li>
+</ul>
+<h2 id="外边距"><a href="#外边距" class="headerlink" title="外边距"></a>外边距</h2><p> 外边距就是围绕在内容框的区域，也可以使用任何长度的单位、百分数来进行设置。</p>
+<ul>
+<li>宽度的设置：<code>margin-top</code>、<code>margin-right</code>、<code>margin-bottom</code>、<code>margin-left</code>；</li>
+<li>margin 的默认值是 0;</li>
+<li>在宽度设置时，可以借助于对称复制；</li>
+</ul>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># html 部分</span></div><div class="line">&lt;div class=<span class="string">"wb"</span>&gt;</div><div class="line">    &lt;div class=<span class="string">"bk"</span>&gt;</div><div class="line">        &lt;div class=<span class="string">"nj"</span>&gt;</div><div class="line">            &lt;div class=<span class="string">"zw"</span>&gt;</div><div class="line">                matt<span class="string">'s blog</span></div><div class="line">            &lt;/div&gt;</div><div class="line">        &lt;/div&gt;</div><div class="line">    &lt;/div&gt;</div><div class="line">&lt;/div&gt;</div><div class="line"></div><div class="line"># css 部分</div><div class="line">.wb&#123;</div><div class="line">    margin: 100px;</div><div class="line">&#125;</div><div class="line">.bk&#123;</div><div class="line">    border-style: groove;</div><div class="line">&#125;</div><div class="line">.nj&#123;</div><div class="line">    padding: 10px;</div><div class="line">&#125;</div><div class="line">.zw&#123;</div><div class="line">    background-color: cornflowerblue;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p><img src="/images/web/css5.png" alt="盒子模型举例"></p>
+<h1 id="css-一些高级用法"><a href="#css-一些高级用法" class="headerlink" title="css 一些高级用法"></a>css 一些高级用法</h1><p> 这里是 css 中一些高级的常见用法</p>
+<h2 id="定位"><a href="#定位" class="headerlink" title="定位"></a>定位</h2><p>定位，就是定义元素框相对于其正常位置应该出现的位置，或者相对于父元素、另一个元素甚至浏览器窗口本身的位置。</p>
+<p>在 css 中，有三种基本的定位机制：</p>
+<ol>
+<li>普通流：在位置顺序决定排版顺序；</li>
+<li>浮动：浮动的框可以向左或向右移动，直到它的外边缘碰到包含框或另一个浮动框的边框为止；</li>
+<li>绝对定位：绝对定位使元素的位置与文档流无关，因此不占据空间。这一点与相对定位不同，相对定位实际上被看作普通流定位模型的一部分，因为元素的位置相对于它在普通流中的位置。</li>
+</ol>
+<p>定位有以下几个属性:</p>
+<ul>
+<li>position：将元素放在一个静态的，相对的，绝对的或固定的位置；</li>
+<li>通过对 top、left、right、bottom 这四个属性的赋值让元素向对应的方向偏移；</li>
+<li>overflow：设置元素溢出其区域发生的事情；</li>
+<li>clip：设置元素的显示形状，多用于图片；</li>
+<li>vertical-align：设置元素的垂直对其方式；</li>
+<li>z-index：设置元素的堆叠顺序。</li>
+</ul>
+<p><code>position</code> 属性，有以下四种设置：</p>
+<ol>
+<li>relative：就是普通流；</li>
+<li>absolute：这个就是绝对定位，该元素区域会与文档区域重合，因为它使用该元素与文档流无关；</li>
+<li>fixed：将元素固定下来,就算滚动屏幕,它也会在同一个地方不会动；</li>
+<li>static：设置以后,偏移量什么的就没用了。</li>
+</ol>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line"><span class="selector-class">.position1</span>&#123;</div><div class="line">    <span class="attribute">width</span>: <span class="number">100px</span>;</div><div class="line">    <span class="attribute">height</span>: <span class="number">100px</span>;</div><div class="line">    <span class="attribute">background-color</span>: cornflowerblue;</div><div class="line">    <span class="attribute">position</span>: relative;</div><div class="line">    <span class="attribute">left</span>: <span class="number">60px</span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h2 id="浮动"><a href="#浮动" class="headerlink" title="浮动"></a>浮动</h2><p>这里涉及到的属性就是 <code>float</code>，其值可以赋值为：</p>
+<ul>
+<li>left: 元素向左浮动；</li>
+<li>right: 元素向右浮动；</li>
+<li>none: 不浮动；</li>
+<li>inherit: 从父级继承浮动的属性；</li>
+<li>clear: 主要用于去掉向各方向的浮动属性(包括继承来的属性)。</li>
+</ul>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line">/* html 部分 */</div><div class="line"><span class="tag">&lt;<span class="name">div</span> <span class="attr">class</span>=<span class="string">"qd"</span>&gt;</span><span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">div</span> <span class="attr">class</span>=<span class="string">"wd"</span>&gt;</span><span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line"><span class="tag">&lt;<span class="name">div</span> <span class="attr">class</span>=<span class="string">"ed"</span>&gt;</span><span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line"></div><div class="line">/* css 部分 */</div><div class="line">.qd&#123;</div><div class="line">    width: 100px;</div><div class="line">    height: 100px;</div><div class="line">    background-color: lightskyblue;</div><div class="line">    float: left;</div><div class="line">&#125;</div><div class="line">.wd&#123;</div><div class="line">    width: 100px;</div><div class="line">    height: 100px;</div><div class="line">    background-color: lightseagreen;</div><div class="line">    float: left;</div><div class="line">&#125;</div><div class="line">.ed&#123;</div><div class="line">    width: 100px;</div><div class="line">    height: 100px;</div><div class="line">    background-color: lightsalmon;</div><div class="line">    float: right;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>效果如下图所示：</p>
+<p><img src="/images/web/css7.png" alt="css 浮动"></p>
+<h2 id="尺寸"><a href="#尺寸" class="headerlink" title="尺寸"></a>尺寸</h2><p>尺寸属性允许你控制元素的高度和宽度。同样，它允许你增加行间距。涉及到的属性有：</p>
+<ul>
+<li>height– 设置元素的高度。</li>
+<li>line-height –设置行高。</li>
+<li>max-height– 设置元素的最大高度。</li>
+<li>max-width –设置元素的最大宽度。</li>
+<li>min-height –设置元素的最小高度。</li>
+<li>min-width –设置元素的最小宽度。</li>
+<li><p>width –设置元素的宽度。</p>
+<p>举例说明</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line"> <span class="selector-class">.p1</span>&#123;</div><div class="line">    <span class="attribute">line-height</span>: normal;</div><div class="line">    <span class="attribute">width</span>: <span class="number">400px</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="selector-class">.p2</span>&#123;</div><div class="line">    <span class="attribute">line-height</span>: <span class="number">50%</span>;</div><div class="line">    <span class="attribute">width</span>: <span class="number">400px</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="selector-class">.p3</span>&#123;</div><div class="line">    <span class="attribute">line-height</span>: <span class="number">200%</span>;</div><div class="line">   <span class="attribute">width</span>: <span class="number">400px</span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+</li>
+</ul>
+<h2 id="导航栏"><a href="#导航栏" class="headerlink" title="导航栏"></a>导航栏</h2><p>这里通过一个示例来实现导航栏的功能。</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div></pre></td><td class="code"><pre><div class="line">/* html 部分 */</div><div class="line"><span class="tag">&lt;<span class="name">ul</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">li</span>&gt;</span><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">"http://matt33.com"</span>&gt;</span>blog1<span class="tag">&lt;/<span class="name">a</span>&gt;</span><span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">li</span>&gt;</span><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">"http://matt33.com"</span>&gt;</span>blog2<span class="tag">&lt;/<span class="name">a</span>&gt;</span><span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">li</span>&gt;</span><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">"http://matt33.com"</span>&gt;</span>blog3<span class="tag">&lt;/<span class="name">a</span>&gt;</span><span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">li</span>&gt;</span><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">"http://matt33.com"</span>&gt;</span>blog4<span class="tag">&lt;/<span class="name">a</span>&gt;</span><span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">ul</span>&gt;</span></div><div class="line"></div><div class="line">/* css 部分 */</div><div class="line">ul&#123;</div><div class="line">    list-style: none;</div><div class="line">&#125;</div><div class="line"></div><div class="line">li&#123;</div><div class="line">    float:left;</div><div class="line">&#125;</div><div class="line"></div><div class="line">a:link,a:visited&#123;</div><div class="line">   text-decoration: none;</div><div class="line">   background-color: lightgray;</div><div class="line">   display: block;</div><div class="line">   width: 100px;</div><div class="line">   margin:5px 10px;</div><div class="line">&#125;</div><div class="line">a:active,a:hover&#123;</div><div class="line">    background-color: cadetblue;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>显示效果如下：</p>
+<p><img src="/images/web/css9.png" alt="水平导航栏"></p>
+<h2 id="图片"><a href="#图片" class="headerlink" title="图片"></a>图片</h2><p>插入一张图片，加上一句描述符，使用 <code>div</code> 继承</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line">/* html 部分 */</div><div class="line"><span class="tag">&lt;<span class="name">div</span> <span class="attr">class</span>=<span class="string">"image"</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">"./hha.jpg"</span> <span class="attr">target</span>=<span class="string">"_self"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">img</span> <span class="attr">src</span>=<span class="string">"hha.jpg"</span> <span class="attr">width</span>=<span class="string">"150px"</span> <span class="attr">height</span>=<span class="string">"150px"</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">a</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">class</span>=<span class="string">"text"</span>&gt;</span>haha<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line"></div><div class="line">/* css 部分 */</div><div class="line">.image&#123;</div><div class="line">    border: 2px solid darkgrey;</div><div class="line">    width: auto;</div><div class="line">    height: auto;</div><div class="line">    float: left;</div><div class="line">    text-align: center;</div><div class="line">    padding: 5px;</div><div class="line">&#125;</div><div class="line">img&#123;</div><div class="line">    padding: 5px;</div><div class="line">&#125;</div><div class="line">.text&#123;</div><div class="line">    font-size: 20px;</div><div class="line">    margin-bottom: 5px;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>显示效果如下：</p>
+<p><img src="/images/web/css8.png" alt="css 图片"></p>
+<p>然后可以通过 <code>opacity</code> 属性来设置透明度，属性值的范围为0-1，0是完全透明，1是完全不透明。</p>
+<p>到这里，css 基本内容已经总结完了，不过本文后续会一直更新，遇到什么常用的设置，都会更新到本文中。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;CSS 指的是层叠样式表（Cascading StyleSheet），在网页制作时采用层叠样式表技术，可以有效地对页面的布局、字体、颜色、背景和其它效果实现更加精确的控制，本文对 css 一些基本内容及常用功能进行一下总结，总结的内容主要是来自实验楼的 &lt;a href=&quot;h
+    
+    </summary>
+    
+      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="web" scheme="http://wangzzu.github.io/tags/web/"/>
+    
+  </entry>
   
   <entry>
     <title>HTML 一些常用方法的总结</title>
@@ -3063,247 +3395,6 @@
     
     
       <category term="java" scheme="http://wangzzu.github.io/tags/java/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Kafka 0.10.0 SASL/PLAIN身份认证及权限实现</title>
-    <link href="http://wangzzu.github.io/2016/07/29/sasl-plain-kafka/"/>
-    <id>http://wangzzu.github.io/2016/07/29/sasl-plain-kafka/</id>
-    <published>2016-07-29T12:49:56.000Z</published>
-    <updated>2017-04-10T08:40:22.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>本文主要介绍一下使用官方发布的 Kafka 0.10.0 版如何实现 SASL/PLAIN 认证机制以及权限控制。</p>
-<h1 id="Kafka-安全机制"><a href="#Kafka-安全机制" class="headerlink" title="Kafka 安全机制"></a>Kafka 安全机制</h1><p> Kafka 的安全机制主要分为两部分：</p>
-<ul>
-<li>身份认证（Authentication）：对client 与服务器的连接进行身份认证。</li>
-<li>权限控制（Authorization）：实现对于消息级别的权限控制</li>
-</ul>
-<blockquote>
-<p>In release 0.9.0.0, the Kafka community added a number of features that, used either separately or together, increases security in a Kafka cluster.<br>These features are considered to be of beta quality. The following security measures are currently supported:</p>
-<ol>
-<li>Authentication of connections to brokers from clients (producers and consumers), other brokers and tools, using either SSL or SASL (Kerberos). SASL/PLAIN can also be used from release 0.10.0.0 onwards.</li>
-<li>Authentication of connections from brokers to ZooKeeper</li>
-<li>Encryption of data transferred between brokers and clients, between brokers, or between brokers and tools using SSL (Note that there is a performance degradation when SSL is enabled, the magnitude of which depends on the CPU type and the JVM implementation.)</li>
-<li>Authorization of read / write operations by clients</li>
-<li>Authorization is pluggable and integration with external authorization services is supported</li>
-</ol>
-</blockquote>
-<p>这段话的中文意思也就是说</p>
-<ol>
-<li>可以使用 SSL 或者 SASL 进行客户端（producer 和 consumer）、其他 brokers、tools与 brokers 之间连接的认证，SASL/PLAIN将在0.10.0中得到支持；</li>
-<li>对brokers和zookeeper之间的连接进行Authentication；</li>
-<li>数据传输用SSL加密，性能会下降；</li>
-<li>对clients的读写操作进行Authorization；</li>
-<li>Authorization 是pluggable，与外部的authorization services结合进行支持。</li>
-</ol>
-<h1 id="Kafka身份认证"><a href="#Kafka身份认证" class="headerlink" title="Kafka身份认证"></a>Kafka身份认证</h1><p>Kafka 目前支持SSL、SASL/Kerberos、SASL/PLAIN三种认证机制，关于这些认证机制的介绍可以参考一下三篇文章。</p>
-<ul>
-<li><a href="http://www.cnblogs.com/JeffreySun/archive/2010/06/24/1627247.html" target="_blank" rel="external">数字证书原理</a>;</li>
-<li><a href="http://www.cnblogs.com/mailingfeng/archive/2012/07/18/2597392.html" target="_blank" rel="external">数字证书, 数字签名, SSL(TLS) , SASL</a>;</li>
-<li><a href="http://www.ruanyifeng.com/blog/2014/09/ssl-latency.html" target="_blank" rel="external">SSL的延迟</a></li>
-</ul>
-<h2 id="SASL-PLAIN-认证"><a href="#SASL-PLAIN-认证" class="headerlink" title="SASL/PLAIN 认证"></a>SASL/PLAIN 认证</h2><p>可以参考<a href="http://orchome.com/270" target="_blank" rel="external">kafka使用SASL验证</a>，这个官方文档的中文版。</p>
-<h3 id="Kafka-Server-端配置"><a href="#Kafka-Server-端配置" class="headerlink" title="Kafka Server 端配置"></a>Kafka Server 端配置</h3><p>需要在 Kafka 安装目录下的 <code>config/server.properties</code> 文件中配置以下信息</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">listeners=SASL_PLAINTEXT://ip:pot</div><div class="line">security.inter.broker.protocol=SASL_PLAINTEXT</div><div class="line">sasl.mechanism.inter.broker.protocol=PLAIN</div><div class="line">sasl.enabled.mechanisms=PLAIN</div><div class="line">authorizer.class.name = kafka.security.auth.SimpleAclAuthorizer</div><div class="line">super.users=User:admin</div></pre></td></tr></table></figure>
-<p>如果要配置多个超级账户，可以按如下配置：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">super.users=User:admin;User:alice</div></pre></td></tr></table></figure>
-<p>还需要配置一个名 <code>kafka_server_jaas.conf</code> 的配置文件，将配置文件放置在<code>conf</code>目录下。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">KafkaServer &#123;</div><div class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</div><div class="line">    username=&quot;admin&quot;</div><div class="line">    password=&quot;admin&quot;</div><div class="line">    user_admin=&quot;admin&quot;</div><div class="line">    user_alice=&quot;alice&quot;;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
-<p>这里，我们配置了两个用户：admin 和 alice，密码分别为 admin 和 alice。<br>最后需要为 Kafka 添加 <code>java.security.auth.login.config</code> 环境变量。在 <code>bin/kafka-run-class.sh</code> 中添加以下内容</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">KAFKA_SASL_OPTS=<span class="string">'-Djava.security.auth.login.config=/opt/meituan/kafka_2.10-0.10.0.0/config/kafka_server_jaas.conf'</span></div><div class="line"><span class="comment"># Launch mode</span></div><div class="line"><span class="keyword">if</span> [ <span class="string">"x<span class="variable">$DAEMON_MODE</span>"</span> = <span class="string">"xtrue"</span> ]; <span class="keyword">then</span></div><div class="line">  nohup <span class="variable">$JAVA</span> <span class="variable">$KAFKA_HEAP_OPTS</span> <span class="variable">$KAFKA_JVM_PERFORMANCE_OPTS</span> <span class="variable">$KAFKA_GC_LOG_OPTS</span> <span class="variable">$KAFKA_SASL_OPTS</span> <span class="variable">$KAFKA_JMX_OPTS</span> <span class="variable">$KAFKA_LOG4J_OPTS</span> -cp <span class="variable">$CLASSPATH</span> <span class="variable">$KAFKA_OPTS</span> <span class="string">"<span class="variable">$@</span>"</span> &gt; <span class="string">"<span class="variable">$CONSOLE_OUTPUT_FILE</span>"</span> 2&gt;&amp;1 &lt; /dev/null &amp;</div><div class="line"><span class="keyword">else</span></div><div class="line">  <span class="built_in">exec</span> <span class="variable">$JAVA</span> <span class="variable">$KAFKA_HEAP_OPTS</span> <span class="variable">$KAFKA_JVM_PERFORMANCE_OPTS</span> <span class="variable">$KAFKA_GC_LOG_OPTS</span> <span class="variable">$KAFKA_SASL_OPTS</span> <span class="variable">$KAFKA_JMX_OPTS</span> <span class="variable">$KAFKA_LOG4J_OPTS</span> -cp <span class="variable">$CLASSPATH</span> <span class="variable">$KAFKA_OPTS</span> <span class="string">"<span class="variable">$@</span>"</span></div><div class="line"><span class="keyword">fi</span></div></pre></td></tr></table></figure>
-<blockquote>
-<p>注：实际上，我们只是添加了第一行，并在第4和第6行中添加了 $KAFKA_SASL_OPTS 这个环境变量。</p>
-</blockquote>
-<h3 id="KafkaClient-配置"><a href="#KafkaClient-配置" class="headerlink" title="KafkaClient 配置"></a>KafkaClient 配置</h3><p>首先需要在客户端配置 <code>kafka_client_jaas.conf</code> 文件</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">KafkaClient &#123;</div><div class="line">  org.apache.kafka.common.security.plain.PlainLoginModule required</div><div class="line">  username=&quot;alice&quot;</div><div class="line">  password=&quot;alice&quot;;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
-<p>然后在（producer 和 consumer）程序中添加环境变量和配置，如下所示</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">System.setProperty(<span class="string">"java.security.auth.login.config"</span>, <span class="string">".../kafka_client_jaas.conf"</span>); <span class="comment">// 环境变量添加，需要输入配置文件的路径</span></div><div class="line">props.put(<span class="string">"security.protocol"</span>, <span class="string">"SASL_PLAINTEXT"</span>);</div><div class="line">props.put(<span class="string">"sasl.mechanism"</span>, <span class="string">"PLAIN"</span>);</div></pre></td></tr></table></figure>
-<p>配置完以上内容后，就可以正常运行 producer 和 consumer 程序，如果账户密码错误的话，程序就不能正常进行，但是不会有任何提示，这方面后面会进行一些改进。</p>
-<h1 id="Kafka权限控制"><a href="#Kafka权限控制" class="headerlink" title="Kafka权限控制"></a>Kafka权限控制</h1><p>这个小节介绍一下 Kafka 的 ACL 。</p>
-<h2 id="权限的内容"><a href="#权限的内容" class="headerlink" title="权限的内容"></a>权限的内容</h2><table>
-<thead>
-<tr>
-<th>权限</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>READ</td>
-<td>读取topic</td>
-</tr>
-<tr>
-<td>WRITE</td>
-<td>写入topic</td>
-</tr>
-<tr>
-<td>DELETE</td>
-<td>删除topic</td>
-</tr>
-<tr>
-<td>CREATE</td>
-<td>创建topic</td>
-</tr>
-<tr>
-<td>ALTER</td>
-<td>修改topic</td>
-</tr>
-<tr>
-<td>DESCRIBE</td>
-<td>获取topic的信息</td>
-</tr>
-<tr>
-<td>ClusterAction</td>
-<td></td>
-</tr>
-<tr>
-<td>ALL</td>
-<td>所有权限</td>
-</tr>
-</tbody>
-</table>
-<p>访问控制列表ACL存储在zk上，路径为<code>/kafka-acl</code>。</p>
-<h2 id="权限配置"><a href="#权限配置" class="headerlink" title="权限配置"></a>权限配置</h2><p>Kafka 提供的命令如下表所示</p>
-<table>
-<thead>
-<tr>
-<th>Option</th>
-<th>Description</th>
-<th>Default</th>
-<th>Option type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>–add</td>
-<td>Indicates to the script that user is trying to add an acl.</td>
-<td></td>
-<td>Action</td>
-</tr>
-<tr>
-<td>–remove</td>
-<td>Indicates to the script that user is trying to remove an acl.</td>
-<td></td>
-<td>Action</td>
-</tr>
-<tr>
-<td>–list</td>
-<td>Indicates to the script that user is trying to list acts.</td>
-<td></td>
-<td>Action</td>
-</tr>
-<tr>
-<td>–authorizer</td>
-<td>Fully qualified class name of the authorizer.</td>
-<td>kafka.security.auth.SimpleAclAuthorizer</td>
-<td>Configuration</td>
-</tr>
-<tr>
-<td>–authorizer-properties</td>
-<td>key=val pairs that will be passed to authorizer for initialization. For the default authorizer the example values are: zookeeper.connect=localhost:2181</td>
-<td></td>
-<td>Configuration</td>
-</tr>
-<tr>
-<td>–cluster</td>
-<td>Specifies cluster as resource.</td>
-<td></td>
-<td>Resource</td>
-</tr>
-<tr>
-<td>–topic [topic-name]</td>
-<td>Specifies the topic as resource.</td>
-<td></td>
-<td>Resource</td>
-</tr>
-<tr>
-<td>–group [group-name]</td>
-<td>Specifies the consumer-group as resource.</td>
-<td></td>
-<td>Resource</td>
-</tr>
-<tr>
-<td>–allow-principal</td>
-<td>Principal is in PrincipalType:name format that will be added to ACL with <strong>Allow</strong> permission. You can specify multiple –allow-principal in a single command.</td>
-<td></td>
-<td>Principal</td>
-</tr>
-<tr>
-<td>–deny-principal</td>
-<td>Principal is in PrincipalType:name format that will be added to ACL with <strong>Deny</strong> permission. You can specify multiple –deny-principal in a single command.</td>
-<td></td>
-<td>Principal</td>
-</tr>
-<tr>
-<td>–allow-host</td>
-<td>IP address from which principals listed in –allow-principal will have access.</td>
-<td>if –allow-principal is specified defaults to * which translates to “all hosts”</td>
-<td>Host</td>
-</tr>
-<tr>
-<td>–deny-host</td>
-<td>IP address from which principals listed in –deny-principal will be denied access.</td>
-<td>if –deny-principal is specified defaults to * which translates to “all hosts”</td>
-<td>Host</td>
-</tr>
-<tr>
-<td>–operation</td>
-<td>Operation that will be allowed or denied. Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
-<td>All</td>
-<td>Operation</td>
-</tr>
-<tr>
-<td>–producer</td>
-<td>Convenience option to add/remove acls for producer role. This will generate acls that allows WRITE, DESCRIBE on topic and CREATE on cluster.</td>
-<td></td>
-<td>Convenience</td>
-</tr>
-<tr>
-<td>–consumer</td>
-<td>Convenience option to add/remove acls for consumer role. This will generate acls that allows READ, DESCRIBE on topic and READ on consumer-group.</td>
-<td></td>
-<td>Convenience</td>
-</tr>
-</tbody>
-</table>
-<h2 id="权限设置"><a href="#权限设置" class="headerlink" title="权限设置"></a>权限设置</h2><p>通过几个例子介绍一下如何进行权限设置。</p>
-<h3 id="add-操作"><a href="#add-操作" class="headerlink" title="add 操作"></a>add 操作</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 为用户 alice 在 test（topic）上添加读写的权限</span></div><div class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --add --allow-principal User:alice --operation Read --operation Write --topic <span class="built_in">test</span></div><div class="line"><span class="comment"># 对于 topic 为 test 的消息队列，拒绝来自 ip 为198.51.100.3账户为 BadBob  进行 read 操作，其他用户都允许</span></div><div class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic <span class="built_in">test</span></div><div class="line"><span class="comment"># 为bob 和 alice 添加all，以允许来自 ip 为198.51.100.0或者198.51.100.1的读写请求</span></div><div class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --add --allow-principal User:bob --allow-principal User:alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic <span class="built_in">test</span></div></pre></td></tr></table></figure>
-<h3 id="list-操作"><a href="#list-操作" class="headerlink" title="list 操作"></a>list 操作</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 列出 topic 为 test 的所有权限账户</span></div><div class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --list --topic <span class="built_in">test</span></div></pre></td></tr></table></figure>
-<p>输出信息为：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">Current ACLs <span class="keyword">for</span> resource `Topic:<span class="built_in">test</span>`:</div><div class="line">    User:alice has Allow permission <span class="keyword">for</span> operations: Describe from hosts: *</div><div class="line">    User:alice has Allow permission <span class="keyword">for</span> operations: Read from hosts: *</div><div class="line">    User:alice has Allow permission <span class="keyword">for</span> operations: Write from hosts: *</div></pre></td></tr></table></figure>
-<h3 id="remove-操作"><a href="#remove-操作" class="headerlink" title="remove 操作"></a>remove 操作</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"># 移除 acl</div><div class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic test</div></pre></td></tr></table></figure>
-<h3 id="producer-和-consumer-的操作"><a href="#producer-和-consumer-的操作" class="headerlink" title="producer 和 consumer 的操作"></a>producer 和 consumer 的操作</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># producer</span></div><div class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --add --allow-principal User:alice --producer --topic <span class="built_in">test</span></div><div class="line"></div><div class="line"><span class="comment">#consumer</span></div><div class="line">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=data-rt-dev02:2181/kafka_test10 --add --allow-principal User:alice --consumer --topic <span class="built_in">test</span> —group <span class="built_in">test</span>-group</div></pre></td></tr></table></figure>
-<h1 id="填坑"><a href="#填坑" class="headerlink" title="填坑"></a>填坑</h1><p>本小节记录了在使用 SASL/PLAIN 时遇到的一些坑。</p>
-<h2 id="Controller连接broker失败"><a href="#Controller连接broker失败" class="headerlink" title="Controller连接broker失败"></a>Controller连接broker失败</h2><p>错误信息如下：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line">[2016-07-27 17:45:46,047] WARN [Controller-1-to-broker-1-send-thread], Controller 1<span class="string">'s connection to broker XXXX:9092 (id: 1 rack: null) was unsuccessful (kafka.controller.RequestSendThread)</span></div><div class="line">java.io.IOException: Connection to XXXX:9092 (id: 1 rack: null) failed</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$$anonfun$blockingReady$extension$2.apply(NetworkClientBlockingOps.scala:63)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$$anonfun$blockingReady$extension$2.apply(NetworkClientBlockingOps.scala:59)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$.recursivePoll$1(NetworkClientBlockingOps.scala:112)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$.kafka$utils$NetworkClientBlockingOps$$pollUntil$extension(NetworkClientBlockingOps.scala:120)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$.blockingReady$extension(NetworkClientBlockingOps.scala:59)</div><div class="line">    at kafka.controller.RequestSendThread.brokerReady(ControllerChannelManager.scala:232)</div><div class="line">    at kafka.controller.RequestSendThread.liftedTree1$1(ControllerChannelManager.scala:181)</div><div class="line">    at kafka.controller.RequestSendThread.doWork(ControllerChannelManager.scala:180)</div><div class="line">    at kafka.utils.ShutdownableThread.run(ShutdownableThread.scala:63)</div><div class="line">[2016-07-27 17:45:46,056] INFO [delete-topics-thread-1], Starting  (kafka.controller.TopicDeletionManager$DeleteTopicsThread)</div><div class="line">[2016-07-27 17:45:46,057] DEBUG [Topic Deletion Manager 1], Waiting for signal to start or continue topic deletion (kafka.controller.TopicDeletionManager)</div><div class="line">[2016-07-27 17:45:46,351] WARN [Controller-1-to-broker-1-send-thread], Controller 1's connection to broker XXXX:9092 (id: 1 rack: null) was unsuccessful (kafka.controller.RequestSendThread)</div><div class="line">java.io.IOException: Connection to XXXX:9092 (id: 1 rack: null) failed</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$<span class="variable">$anonfun</span><span class="variable">$blockingReady</span><span class="variable">$extension</span><span class="variable">$2</span>.apply(NetworkClientBlockingOps.scala:63)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$<span class="variable">$anonfun</span><span class="variable">$blockingReady</span><span class="variable">$extension</span><span class="variable">$2</span>.apply(NetworkClientBlockingOps.scala:59)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$.recursivePoll<span class="variable">$1</span>(NetworkClientBlockingOps.scala:112)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$.kafka<span class="variable">$utils</span><span class="variable">$NetworkClientBlockingOps</span>$<span class="variable">$pollUntil</span><span class="variable">$extension</span>(NetworkClientBlockingOps.scala:120)</div><div class="line">    at kafka.utils.NetworkClientBlockingOps$.blockingReady<span class="variable">$extension</span>(NetworkClientBlockingOps.scala:59)</div><div class="line">    at kafka.controller.RequestSendThread.brokerReady(ControllerChannelManager.scala:232)</div><div class="line">    at kafka.controller.RequestSendThread.liftedTree1<span class="variable">$1</span>(ControllerChannelManager.scala:181)</div><div class="line">    at kafka.controller.RequestSendThread.doWork(ControllerChannelManager.scala:180)</div><div class="line">    at kafka.utils.ShutdownableThread.run(ShutdownableThread.scala:63)</div></pre></td></tr></table></figure>
-<p>查找原因查找了半天，之前以为是<code>kafka_server_jaas.conf</code>文件的格式有问题，改了之后发现 Kafka 有时启动正常，有时不能正常启动，修改之前 conf 文件为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">KafkaServer &#123;</div><div class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</div><div class="line">    username=&quot;admin&quot;</div><div class="line">    password=&quot;admin&quot;</div><div class="line">    user_matt=“33&quot;</div><div class="line">    user_alice=&quot;alice&quot;;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
-<p>最后分析可能是因为没有在 user 中配置 admin 账户，因为 broker 之间也开启了身份认证，修改之后的配置文件如下。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">KafkaServer &#123;</div><div class="line">    org.apache.kafka.common.security.plain.PlainLoginModule required</div><div class="line">    username=&quot;admin&quot;</div><div class="line">    password=&quot;admin&quot;</div><div class="line">    user_admin=&quot;admin&quot;</div><div class="line">    user_alice=&quot;alice&quot;;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
-<p>修改完之后，Kafka 就可以正常运行了。</p>
-<hr>
-<p>参考：</p>
-<ul>
-<li>confluent的官网博客：<a href="http://www.confluent.io/blog/apache-kafka-security-authorization-authentication-encryption" target="_blank" rel="external">Apache Kafka Security 101</a></li>
-<li>Kafka 官网：<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=51809888" target="_blank" rel="external">KIP-12 - Kafka Sasl/Kerberos and SSL implementation</a></li>
-<li><a href="https://cwiki.apache.org/confluence/display/KAFKA/Security" target="_blank" rel="external">Kafka Security</a></li>
-<li>Kafka 官网：<a href="http://kafka.apache.org/documentation.html#security" target="_blank" rel="external">Kafka security</a></li>
-<li>Kafka 官网中文翻译<a href="http://orchome.com/270" target="_blank" rel="external">kafka使用SASL验证</a></li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;本文主要介绍一下使用官方发布的 Kafka 0.10.0 版如何实现 SASL/PLAIN 认证机制以及权限控制。&lt;/p&gt;
-&lt;h1 id=&quot;Kafka-安全机制&quot;&gt;&lt;a href=&quot;#Kafka-安全机制&quot; class=&quot;headerlink&quot; title=&quot;Kafka 安
-    
-    </summary>
-    
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
     
   </entry>
   
