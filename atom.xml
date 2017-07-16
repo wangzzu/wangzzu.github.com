@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://wangzzu.github.io/"/>
-  <updated>2017-07-09T01:19:16.000Z</updated>
+  <updated>2017-07-16T02:36:01.000Z</updated>
   <id>http://wangzzu.github.io/</id>
   
   <author>
@@ -14,6 +14,313 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Linux 常用的一些系统命令</title>
+    <link href="http://wangzzu.github.io/2017/07/16/linux-system-cmd/"/>
+    <id>http://wangzzu.github.io/2017/07/16/linux-system-cmd/</id>
+    <published>2017-07-16T02:31:47.000Z</published>
+    <updated>2017-07-16T02:36:01.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>文章的内容，基本来自<a href="http://www.cnblogs.com/peida/tag/%E6%AF%8F%E6%97%A5%E4%B8%80linux%E5%91%BD%E4%BB%A4/" target="_blank" rel="external">每日一个 linux 命令</a>，选取了几个在工作常用的命令，有：top、iostat、netstat 、free 和 ps，本文的主要目的是在学习这几条命令的过程中，简单做一些记录，便于日后工作中更加熟练地使用这些命令。</p>
+<h1 id="top"><a href="#top" class="headerlink" title="top"></a>top</h1><p>top 命令是 Linux 下面实时展示系统运行情况的一个命令，它也可以显示当前每个任务的系统信息。在对系统的性能进行分析，它是一个最常用的命令。</p>
+<h2 id="命令常用参数"><a href="#命令常用参数" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><ol>
+<li>命令格式：<ul>
+<li>top [参数]</li>
+</ul>
+</li>
+<li>命令功能：<ul>
+<li>显示当前系统正在执行的进程的相关信息，包括进程ID、内存占用率、CPU占用率等</li>
+</ul>
+</li>
+<li>命令参数：<ul>
+<li><code>-b</code>: 批处理</li>
+<li><code>-c</code>: 显示完整的治命令</li>
+<li><code>-I</code>: 忽略失效过程</li>
+<li><code>-s</code>: 保密模式</li>
+<li><code>-S</code>: 累积模式</li>
+<li><code>-i&lt;时间&gt;</code>: 设置间隔时间</li>
+<li><code>-u&lt;用户名&gt;</code>: 指定用户名</li>
+<li><code>-p&lt;进程号&gt;</code>: 指定进程</li>
+<li><code>-n&lt;次数&gt;</code>: 循环显示的次数</li>
+</ul>
+</li>
+</ol>
+<h2 id="显示说明"><a href="#显示说明" class="headerlink" title="显示说明"></a>显示说明</h2><p>在命令行输入 <code>top</code> 命令，终端会展示当前系统的信息，如下所示</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ top</div><div class="line">top - 21:04:19 up 129 days, 20:31,  1 user,  load average: 58.32, 57.85, 57.50</div><div class="line">Tasks: 589 total,   1 running, 584 sleeping,   0 stopped,   4 zombie</div><div class="line">Cpu(s): 22.3%us, 11.8%sy,  0.0%ni, 63.2%id,  0.2%wa,  0.0%hi,  2.5%si,  0.0%st</div><div class="line">Mem:  132103752k total, 122070628k used, 10033124k free,    42940k buffers</div><div class="line">Swap:        0k total,        0k used,        0k free, 58734284k cached</div><div class="line"></div><div class="line">   PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND</div><div class="line"> 51179	matt   20   0 70.6g  24g  80m S 704.9 19.2  39244,38 java</div><div class="line">     1 root      20   0 1155m 1.1g  592 S  0.0  0.9   4020:57 init</div><div class="line">     2 root      20   0     0    0    0 S  0.0  0.0   0:00.01 kthreadd</div></pre></td></tr></table></figure>
+<p>上面只是截取了部分的信息，这里介绍以下上面的一些信息的说明。上面的前五行是当前系统情况整体的统计信息区。</p>
+<ol>
+<li>任务的队列信息，同 uptime 命令的执行结果<ul>
+<li><code>21:04:19</code>: 当前系统时间；</li>
+<li><code>up 129 days, 20:31</code>: 系统已经运行了129天20小时31分钟（这期间系统没有重启）；</li>
+<li><code>1 users</code>: 当前有1个用户登录系统；</li>
+<li><code>load average: 58.32, 57.85, 57.50</code>: load average 后面的三个数分别是1分钟、5分钟、15分钟的负载情况（<strong>这个数除以逻辑 CPU 的数量，结果高于5的时候就表明系统在超负荷运转</strong>）</li>
+</ul>
+</li>
+<li>Tasks — 任务（进程）的统计信息<ul>
+<li>系统现在共有589个进程，其中处于运行中的有1个，584个在休眠（sleep），stoped 状态的有0个，zombie 状态（僵尸）的有4个；</li>
+</ul>
+</li>
+<li>cpu 的状态信息<ul>
+<li><code>22.3%us</code>: 用户空间占用 CPU 的百分比</li>
+<li><code>11.8% sy</code>: 内核空间占用 CPU 的百分比</li>
+<li><code>0.0% ni</code>: 改变过优先级的进程占用 CPU 的百分比</li>
+<li><code>63.2% id</code>: 空闲 CPU 百分比</li>
+<li><code>0.2% wa</code>: IO 等待占用 CPU 的百分比</li>
+<li><code>0.0% hi</code>: 硬中断（Hardware IRQ）占用 CPU 的百分比</li>
+<li><code>2.5% si</code>: 软中断（Software Interrupts）占用 CPU 的百分比</li>
+<li><code>0.0% st</code>: 虚拟机占用的百分比</li>
+</ul>
+</li>
+<li>内存的状态信息<ul>
+<li><code>132103752k total</code>： 物理内存总量（128GB）</li>
+<li><code>122070628k used</code>： 使用中的内存总量（118GB）</li>
+<li><code>10033124k free</code>： 空闲内存总量（10GB）</li>
+<li><code>42940k buffers</code>： 缓存的内存量 （42M）</li>
+</ul>
+</li>
+<li>swap交换分区信息<ul>
+<li><code>0k total</code>: 交换区总量（0K）</li>
+<li><code>0k used</code>: 使用的交换区总量（0K）</li>
+<li><code>0k free</code>: 空闲交换区总量（0K）</li>
+<li><code>58734284k cached</code>: 缓冲的交换区总量（56GB）</li>
+</ul>
+</li>
+<li>空行，作为系统信息与进程信息的分界线</li>
+<li>各进程（任务）的状态监控<ul>
+<li><code>PID</code>: 进程id</li>
+<li><code>USER</code>: 进程所有者</li>
+<li><code>PR</code>: 进程优先级</li>
+<li><code>NI</code>: nice 值，负值表示高优先级，正值表示低优先级</li>
+<li><code>VIRT</code>: 进程使用的虚拟内存总量，单位 kb。VIRT=SWAP+RES</li>
+<li><code>RES</code>: 进程使用的、未被换出的物理内存大小，单位 kb。RES=CODE+DATA</li>
+<li><code>SHR</code>: 共享内存大小，单位 kb</li>
+<li><code>S</code>: 进程状态。D= 不可中断的睡眠状态 R= 运行 S= 睡眠 T= 跟踪/停止 Z= 僵尸进程</li>
+<li><code>%CPU</code>: 上次更新到现在的CPU时间占用百分比</li>
+<li><code>%MEM</code>: 进程使用的物理内存百分比</li>
+<li><code>TIME+</code>: 进程使用的CPU时间总计，单位1/100秒</li>
+<li><code>COMMAND</code>: 进程名称</li>
+</ul>
+</li>
+</ol>
+<p>其中，第四行中使用中的内存总量（used）指的是现在系统内核控制的内存数，空闲内存总量（free）是内核还未纳入其管控范围的数量。纳入内核管理的内存不见得都在使用中，还包括过去使用过的现在可以被重复利用的内存，内核并不把这些可被重新使用的内存交还到 free 中去，因此在 linux 上 free 内存会越来越少，但不用为此担心。</p>
+<h2 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h2><p>在工作中，常用的几个命令在 <a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a> 都已经介绍得比较全面了，这里，再简单重复一下。</p>
+<h3 id="多-CPU-监控"><a href="#多-CPU-监控" class="headerlink" title="多 CPU 监控"></a>多 CPU 监控</h3><p>在 top 的基本视图中，按键盘数字<strong>1</strong>，可监控每个逻辑CPU的状况：</p>
+<p><img src="/images/linux/top1.png" alt="TOP 多 CPU 监控"></p>
+<h3 id="高亮显示当前进程"><a href="#高亮显示当前进程" class="headerlink" title="高亮显示当前进程"></a>高亮显示当前进程</h3><p>敲击键盘<strong>b</strong>（打开/关闭加亮效果），top 的视图变化如下（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
+<p><img src="/images/linux/top2.png" alt="TOP 高亮"></p>
+<h3 id="进程字段排序"><a href="#进程字段排序" class="headerlink" title="进程字段排序"></a>进程字段排序</h3><p>默认进入 top 时，各进程是按照 CPU 的占用量来排序的，敲击键盘<strong>x</strong>（打开/关闭排序列的加亮效果），top 的视图变化如下所示，会将 CPU 占用量这行高亮（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
+<p><img src="/images/linux/top4.png" alt="TOP 按 CPU 占用量排序"></p>
+<p>通过 <code>shift + &gt;</code>或<code>shift + &lt;</code>可以向右或左改变排序列，下图是按一次<code>shift + &gt;</code>的效果图，视图现在已经按照 <code>%MEM</code> 来排序（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
+<p><img src="/images/linux/top5.png" alt="TOP 按内存排序"></p>
+<h3 id="显示进程完成命令"><a href="#显示进程完成命令" class="headerlink" title="显示进程完成命令"></a>显示进程完成命令</h3><p>敲击键盘<strong>c</strong>（打开/关闭进程完成命令），top 的视图变化如下（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
+<p><img src="/images/linux/top6.png" alt="TOP 显示完整命令"></p>
+<h3 id="其他命令"><a href="#其他命令" class="headerlink" title="其他命令"></a>其他命令</h3><ul>
+<li><code>top -p 574</code>: 显示指定的进程信息</li>
+<li><code>top -d 3</code>: 设置信息更新时间</li>
+<li><code>top -n 2</code>: 设置信息更新次数</li>
+<li><code>top -S</code>: 以累积模式显示程序信息</li>
+</ul>
+<h1 id="iostat"><a href="#iostat" class="headerlink" title="iostat"></a>iostat</h1><p>iostat 也即 I/O statistics（输入/输出统计），iostat 会对系统的磁盘操作活动进行监视。它的特点是汇报磁盘活动统计情况，同时也会汇报出 CPU 使用情况。但它不能对某个进程进行深入分析，仅对系统的整体情况进行分析。</p>
+<h2 id="命令常用参数-1"><a href="#命令常用参数-1" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><p>1．命令格式：</p>
+<ul>
+<li>iostat [参数][时间][次数]<br>2．命令功能：</li>
+<li>通过 iostat 方便查看 CPU、网卡、tty设备、磁盘、CD-ROM 等等设备的活动情况，负载信息。<br>3．命令参数：</li>
+<li><code>-C</code>: 显示CPU使用情况</li>
+<li><code>-d</code>: 显示磁盘使用情况</li>
+<li><code>-k</code>: 以 KB 为单位显示</li>
+<li><code>-m</code>: 以 M 为单位显示</li>
+<li><code>-N</code>: 显示磁盘阵列(LVM) 信息</li>
+<li><code>-n</code>: 显示NFS 使用情况</li>
+<li><code>-p[磁盘]</code>: 显示磁盘和分区的情况</li>
+<li><code>-t</code>: 显示终端和CPU的信息</li>
+<li><code>-x</code>: 显示详细信息</li>
+<li><code>-V</code>: 显示版本信息</li>
+</ul>
+<h2 id="显示说明-1"><a href="#显示说明-1" class="headerlink" title="显示说明"></a>显示说明</h2><p>使用 iostat 命令时，终端会显示很多很多的信息，这里介绍一下这些信息的含义。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ iostat</div><div class="line">Linux 2.6.32-431.20.3.el6.mt20150216.x86_64 (XXX) 	2017年07月16日 	_x86_64_	(32 CPU)</div><div class="line"></div><div class="line">avg-cpu:  %user   %nice %system %iowait  %steal   %idle</div><div class="line">          22.28    0.00   14.26    0.25    0.00   63.22</div><div class="line"></div><div class="line">Device:            tps   Blk_read/s   Blk_wrtn/s   Blk_read   Blk_wrtn</div><div class="line">sda              20.65       205.78       452.71 9429827972 20744862776</div></pre></td></tr></table></figure>
+<ol>
+<li>CPU 属性值说明：<ul>
+<li><code>%user</code>：CPU 处在用户模式下的时间百分比</li>
+<li><code>%nice</code>：CPU 处在带 NICE 值的用户模式下的时间百分比</li>
+<li><code>%system</code>：CPU 处在系统模式下的时间百分比</li>
+<li><code>%iowait</code>：CPU 等待输入输出完成时间的百分比</li>
+<li><code>%steal</code>：管理程序维护另一个虚拟处理器时，虚拟 CPU 的无意识等待时间百分比</li>
+<li><code>%idle</code>：CPU 空闲时间百分比</li>
+</ul>
+</li>
+<li>disk 属性<ul>
+<li><code>tps</code>：该设备每秒的传输次数（Indicate the number of transfers per second that were issued to the device.）。</li>
+<li><code>kB_read/s</code>：每秒从设备（drive expressed）读取的数据量；</li>
+<li><code>kB_wrtn/s</code>：每秒向设备（drive expressed）写入的数据量；</li>
+<li><code>kB_read</code>：读取的总数据量；</li>
+<li><code>kB_wrtn</code>：写入的总数量数据量，这些单位都为Kilobytes。</li>
+</ul>
+</li>
+</ol>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ iostat -xm 3</div><div class="line">Linux 2.6.32-431.20.3.el6.mt20150216.x86_64 (XXX) 	2017年07月16日 	_x86_64_	(32 CPU)</div><div class="line"></div><div class="line">avg-cpu:  %user   %nice %system %iowait  %steal   %idle</div><div class="line">          22.28    0.00   14.26    0.25    0.00   63.21</div><div class="line"></div><div class="line">Device:         rrqm/s   wrqm/s     r/s     w/s    rMB/s    wMB/s avgrq-sz avgqu-sz   await  svctm  %util</div><div class="line">sda               0.50    42.34    6.47   14.18     0.10     0.22    31.90     0.02    1.20   0.44   0.90</div></pre></td></tr></table></figure>
+<p>这里 disk 属性与上面的不太相同</p>
+<ul>
+<li><code>rrqm/s</code>: 每秒进行 merge 的读操作数目。即 rmerge/s</li>
+<li><code>wrqm/s</code>: 每秒进行 merge 的写操作数目。即 wmerge/s</li>
+<li><code>r/s</code>: 每秒完成的读 I/O 设备次数。即 rio/s</li>
+<li><code>w/s</code>: 每秒完成的写 I/O 设备次数。即 wio/s</li>
+<li><code>rsec/s</code>: 每秒读扇区数。即 rsect/s</li>
+<li><code>wsec/s</code>: 每秒写扇区数。即 wsect/s</li>
+<li><code>rkB/s</code>: 每秒读K字节数。是 rsect/s 的一半，因为每扇区大小为512字节。</li>
+<li><code>wkB/s</code>: 每秒写K字节数。是 wsect/s 的一半。</li>
+<li><code>avgrq-sz</code>: 平均每次设备 I/O 操作的数据大小 (扇区)。</li>
+<li><code>avgqu-sz</code>: 平均 I/O 队列长度。</li>
+<li><code>await</code>: 平均每次设备 I/O 操作的等待时间 (毫秒)。</li>
+<li><code>svctm</code>: 平均每次设备 I/O 操作的服务时间 (毫秒)。</li>
+<li><code>%util</code>: 一秒中有百分之多少的时间用于 I/O 操作，即被 IO 消耗的 CPU 百分比。</li>
+</ul>
+<p>其中，下面是在实践中积累的一些经验</p>
+<ol>
+<li>如果 <code>%iowait</code> 的值过高，表示硬盘存在 I/O 瓶颈；</li>
+<li><code>%idle</code> 值高，表示 CPU 较空闲，如果 <code>%idle</code> 值高但系统响应慢时，有可能是 CPU 等待分配内存，此时应加大内存容量。<code>%idle</code> 值如果持续低于 10，那么系统的 CPU 处理能力相对较低，表明系统中最需要解决的资源是 CPU；</li>
+<li>如果 <code>%util</code> 接近 100%，说明产生的I/O请求太多，I/O 系统已经满负荷，该磁盘可能存在瓶颈，其值大于 70% 时，磁盘的压力就很大了；</li>
+<li>如果 <code>svctm</code> 比较接近 <code>await</code>，说明 I/O 几乎没有等待时间；如果 <code>await</code> 远大于 <code>svctm</code>，说明 I/O 队列太长，IO 响应太慢，则需要进行必要优化；</li>
+<li>如果 <code>avgqu-sz</code> 比较大，也表示有当量 IO 在等待，它是 IO 调优时需要注意的地方，它是直接每次操作的数据的大小，如果次数多，但数据拿的小的话，其实 IO 也会很小；</li>
+<li>await 的大小一般取决于服务时间(svctm) 以及 I/O 队列的长度和 I/O 请求的发出模式。如果 svctm 比较接近 await，说明 I/O 几乎没有等待时间；如果 await 远大于 svctm，说明 I/O 队列太长，应用得到的响应时间变慢，如果响应时间超过了用户可以容许的范围，这时可以考虑更换更快的磁盘，调整内核 elevator 算法，优化应用，或者升级 CPU。</li>
+</ol>
+<h2 id="常用示例"><a href="#常用示例" class="headerlink" title="常用示例"></a>常用示例</h2><ul>
+<li><code>iostat 2 3</code>: 每隔 2 秒刷新显示，且显示 3 次；</li>
+<li><code>iostat -d sda</code>: 显示指定磁盘信息；</li>
+<li><code>iostat -t</code>: 显示 tty 和 CPU 信息；</li>
+<li><code>iostat -m</code>: 以M为单位显示所有信息；</li>
+<li><code>iostat -d -k 1 1</code>: 查看TPS和吞吐量信息；</li>
+<li><code>iostat -c 1 3</code>: 查看cpu状态；</li>
+</ul>
+<h1 id="ps"><a href="#ps" class="headerlink" title="ps"></a>ps</h1><p>ps —— 是 process status 的简称，它列出的是当前时刻那些进程的快照，如果想要动态的显示进程信息内容，可以使用 top 命令。</p>
+<p>使用 ps 可以做以下事情：</p>
+<ul>
+<li>确定有哪些进程正在运行、查看运行的状态；</li>
+<li>进程是否结束；</li>
+<li>进程有没有僵死；</li>
+<li>哪些进程占用了过多的资源等等。</li>
+</ul>
+<h2 id="Linux-进程的五种状态"><a href="#Linux-进程的五种状态" class="headerlink" title="Linux 进程的五种状态"></a>Linux 进程的五种状态</h2><p>在 Linux 上进程有5种状态，每种状态对应着不同的标识，如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th>Linux 上状态</th>
+<th>ps 的状态码</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>运行（正在运行或在运行队列中等待）</td>
+<td>R（running or on run queue）</td>
+</tr>
+<tr>
+<td>中断（休眠中、受阻、在等待某个条件的形成和接收到信号）</td>
+<td>S（sleeping）</td>
+</tr>
+<tr>
+<td>不可中断（收到信号不唤醒和不可运行, 进程必须等待直到有中断发生）</td>
+<td>D（uninterruptible sleep）</td>
+</tr>
+<tr>
+<td>僵死（进程已终止，但进程描述符存在，直到父进程调用wait4()后才会释放）</td>
+<td>Z（a defunct zombie process）</td>
+</tr>
+<tr>
+<td>停止（进程收到SIGSTOP, SIGSTP, SIGTIN, SIGTOU信号后停止运行运行）</td>
+<td>T（traced or stopped）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="命令常用参数-2"><a href="#命令常用参数-2" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><ol>
+<li>命令格式<ul>
+<li>ps [参数]</li>
+</ul>
+</li>
+<li>命令参数<ul>
+<li><code>a</code>：显示所有进程</li>
+<li><code>-a</code>：显示同一终端下的所有程序</li>
+<li><code>-A</code>：显示所有进程</li>
+<li><code>c</code>：显示进程的真实名称</li>
+<li><code>-N</code>：反向选择</li>
+<li><code>e</code>：显示环境变量</li>
+<li><code>f</code>：显示程序间的关系</li>
+<li><code>-H</code>：显示树状结构</li>
+<li><code>r</code>：显示当前终端的进程</li>
+<li><code>T</code>：显示当前终端的所有程序</li>
+<li><code>u</code>：指定用户的所有进程</li>
+<li><code>-au</code>：显示较详细的资讯</li>
+<li><code>-aux</code>：显示所有包含其他使用者的行程</li>
+<li><code>-C&lt;命令&gt;</code>：列出指定命令的状况</li>
+<li><code>--lines&lt;行数&gt;</code>：每页显示的行数</li>
+<li><code>--width&lt;字符数&gt;</code>：每页显示的字符数</li>
+<li><code>--help</code>：显示帮助信息</li>
+<li><code>--version</code>：显示版本显示</li>
+</ul>
+</li>
+</ol>
+<h2 id="显示说明-2"><a href="#显示说明-2" class="headerlink" title="显示说明"></a>显示说明</h2><h3 id="将当前这次登入的-PID-与相关信息列示出来"><a href="#将当前这次登入的-PID-与相关信息列示出来" class="headerlink" title="将当前这次登入的 PID 与相关信息列示出来"></a>将当前这次登入的 PID 与相关信息列示出来</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ ps <span class="_">-l</span></div><div class="line">F S   UID    PID   PPID  C PRI  NI ADDR SZ WCHAN  TTY          TIME CMD</div><div class="line">0 S   10 120177 120176  0  80   0 - 27078 <span class="built_in">wait</span>   pts/0    00:00:00 bash</div><div class="line">0 R   10 137912 120177  0  80   0 - 27031 -      pts/0    00:00:00 ps</div></pre></td></tr></table></figure>
+<p>上面各个参数的含义：</p>
+<ul>
+<li><code>F</code>: 代表这个程序的旗标 (flag)， 4 代表使用者为 super user</li>
+<li><code>S</code>: 代表这个程序的状态 (STAT)，关于各 STAT 的意义将在内文介绍</li>
+<li><code>UID</code>: 程序被该 UID 所拥有</li>
+<li><code>PID</code>: 就是这个程序的 ID</li>
+<li><code>PPID</code>: 则是其上级父程序的ID</li>
+<li><code>C</code>: CPU 使用的资源百分比</li>
+<li><code>PRI</code>: 这个是 Priority (优先执行序) 的缩写</li>
+<li><code>NI</code>: 这个是 Nice 值</li>
+<li><code>ADDR</code>: 这个是 kernel function，指出该程序在内存的那个部分。如果是个 running的程序，一般就是 “-“</li>
+<li><code>SZ</code>: 使用掉的内存大小</li>
+<li><code>WCHAN</code>: 目前这个程序是否正在运作当中，若为 - 表示正在运作</li>
+<li><code>TTY</code>: 登入者的终端机位置</li>
+<li><code>TIME</code>: 使用掉的 CPU 时间。</li>
+<li><code>CMD</code>: 所下达的指令为何</li>
+</ul>
+<h3 id="ps-aux"><a href="#ps-aux" class="headerlink" title="ps aux"></a>ps aux</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ ps aux</div><div class="line">USER        PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND</div><div class="line">root          1  0.5  0.8 1184632 1166268 ?     Ss    2016 4029:48 /sbin/init</div><div class="line">root          2  0.0  0.0      0     0 ?        S     2016   0:00 [kthreadd]</div><div class="line">root          3  0.0  0.0      0     0 ?        S     2016  36:36 [migration/0]</div></pre></td></tr></table></figure>
+<p>上面各个参数的含义：</p>
+<ul>
+<li><code>USER</code>：该 process 属于那个使用者账号的</li>
+<li><code>PID</code>：该 process 的号码</li>
+<li><code>%CPU</code>：该 process 使用掉的 CPU 资源百分比</li>
+<li><code>%MEM</code>：该 process 所占用的物理内存百分比</li>
+<li><code>VSZ</code>：该 process 使用掉的虚拟内存量 (Kbytes)</li>
+<li><code>RSS</code>：该 process 占用的固定的内存量 (Kbytes)</li>
+<li><code>TTY</code>：该 process 是在那个终端机上面运作，若与终端机无关，则显示 <code>?</code>，若为 <code>pts/0</code> 等等的，则表示为由网络连接进主机的程序。</li>
+<li><code>STAT</code>：该程序目前的状态</li>
+<li><code>START</code>：该 process 被触发启动的时间</li>
+<li><code>TIME</code>：该 process 实际使用 CPU 运作的时间</li>
+<li><code>COMMAND</code>：该程序的实际指令</li>
+</ul>
+<h2 id="使用示例"><a href="#使用示例" class="headerlink" title="使用示例"></a>使用示例</h2><p>ps 的常用命令主要有以下几种用法：</p>
+<ul>
+<li><code>ps -A</code>: 显示所有进程信息</li>
+<li><code>ps -u root</code>: 显示指定用户信息</li>
+<li><code>ps -ef</code>: 显示所有进程信息，连同命令行</li>
+<li>与 <code>grep</code> 一起，来查看指定的进程。</li>
+</ul>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a></li>
+<li><a href="http://www.cnblogs.com/peida/archive/2013/03/08/2949194.html" target="_blank" rel="external">每天一个linux命令（56）：netstat命令</a></li>
+<li><a href="http://www.cnblogs.com/peida/archive/2012/12/28/2837345.html" target="_blank" rel="external">每天一个linux命令（47）：iostat命令</a></li>
+<li><a href="http://www.cnblogs.com/peida/archive/2012/12/19/2824418.html" target="_blank" rel="external">每天一个linux命令（41）：ps命令</a></li>
+<li><a href="http://www.cnblogs.com/peida/archive/2012/12/25/2831814.html" target="_blank" rel="external">每天一个linux命令（45）：free 命令</a></li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;文章的内容，基本来自&lt;a href=&quot;http://www.cnblogs.com/peida/tag/%E6%AF%8F%E6%97%A5%E4%B8%80linux%E5%91%BD%E4%BB%A4/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;每
+    
+    </summary>
+    
+      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="linux" scheme="http://wangzzu.github.io/tags/linux/"/>
+    
+  </entry>
   
   <entry>
     <title>Kafka 源码分析之 Producer Metadata 更新机制（二）</title>
@@ -829,7 +1136,7 @@
 <p>通过表格来设计一个网页如下图所示。</p>
 <p><img src="/images/web/html_lianxi.png" alt="示例"></p>
 <p>上面的示例使用表格来进行表示的一个网页，如果使用 <code>div</code> 元素应该怎么做，下面使用 <code>div</code> 元素来重新设计一下上面的网页。</p>
-<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="css"></span></div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#container</span>&#123;<span class="attribute">width</span>:<span class="number">1000px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#header</span> &#123;<span class="attribute">background-color</span>: royalblue ;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">text-align</span>:center;<span class="attribute">font-size</span>: <span class="number">20px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#sidebar</span>&#123;<span class="attribute">background-color</span>: darkorange;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">300px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#mainbody</span> &#123;<span class="attribute">background-color</span>: forestgreen;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">700px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#footer</span> &#123;<span class="attribute">background-color</span>: powderblue;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">clear</span>:both;<span class="attribute">text-align</span>:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="undefined"></span></div><div class="line">            div#container&#123;width:1000px&#125;</div><div class="line">            div#header &#123;background-color: royalblue ;height: 100px;text-align:center;font-size: 20px&#125;</div><div class="line">            div#sidebar&#123;background-color: darkorange;height:400px;width:300px;float:left;&#125;</div><div class="line">            div#mainbody &#123;background-color: forestgreen;height:400px;width:700px;float:left;&#125;</div><div class="line">            div#footer &#123;background-color: powderblue;height: 100px;clear:both;text-align:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
 <h2 id="HTML-表单"><a href="#HTML-表单" class="headerlink" title="HTML 表单"></a>HTML 表单</h2><p>表单标签是什么呢？这个是在网页是很常见的，表单标签就是用于网页中的数据提交，比如我们注册网页，在留言板中留言、评论等可以填写数据，提交处理地方都需要表单标签，<code>form</code> 表单标签内有输入框 input、单选、多选、<code>select</code> 下拉列表菜单与跳转菜单、提交按钮等标签内容。</p>
 <figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    user：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"text"</span> <span class="attr">name</span>=<span class="string">"user"</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    password：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"password"</span> <span class="attr">name</span>=<span class="string">"password"</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"male"</span> /&gt;</span> Male</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"female"</span> /&gt;</span> Female</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"married"</span> /&gt;</span></div><div class="line">    married</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"have a job"</span> /&gt;</span></div><div class="line">    have a job</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"chinese"</span> /&gt;</span></div><div class="line">    chinese</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div></pre></td></tr></table></figure>
 <p>其中，name 是明文显示，password 是隐藏的，<code>radio</code> 属性是单选，<code>checkbox</code> 属性是双选，上面展示的效果如下图所示。</p>
@@ -2615,53 +2922,6 @@
     
     
       <category term="思考" scheme="http://wangzzu.github.io/tags/%E6%80%9D%E8%80%83/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>json 对象添加 double 型数值遇到的问题</title>
-    <link href="http://wangzzu.github.io/2016/10/15/json-kafka-bug/"/>
-    <id>http://wangzzu.github.io/2016/10/15/json-kafka-bug/</id>
-    <published>2016-10-15T12:49:56.000Z</published>
-    <updated>2016-11-19T09:04:56.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>这是一个关于修改 Kafka 源码时遇到的一个 bug，以及后续引起的一些思考。</p>
-<h1 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h1><p>我们的目标是将 Kafka 中的 <code>Producer</code> 和 <code>Consumer</code> 客户端提供的 metrics，写入到一个 Json 对象中，然后再将这个 Json 对象通过 Http 请求发送到一个 service 服务上。</p>
-<p>Kafka 原生提供的 metrics 信息非常多，这些 metrics 信息的大概内容如下图所示。</p>
-<p><img src="/images/kafka/kafka-metrics.png" alt="Client Metrics"></p>
-<p>在使用下面代码将 metrics 写入到 json 对象</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">for</span> (Map.Entry&lt;MetricName, ? extends Metric&gt; metricEntry : metrics.entrySet()) &#123;</div><div class="line">	jsonObject.put(metricEntry.getKey().toString(),metricEntry.getValue().value();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>因为这部分是直接添加到 <code>kafka-client</code> 中的，将 <code>kafka-client</code> 打包后，再依赖这个 jar 包，client 在启动时就报了错误，但是并没有退出。</p>
-<h1 id="原因查找"><a href="#原因查找" class="headerlink" title="原因查找"></a>原因查找</h1><p>刚开始以为json 对象的大小超出了 Http 协议中的长度限制，因为重写了 <code>MetricName</code> 类的 <code>toString()</code> 方法，如下</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> String <span class="title">toFlitString</span><span class="params">()</span> </span>&#123;</div><div class="line">        <span class="keyword">return</span> <span class="string">"MetricName [name="</span> + name + <span class="string">", group="</span> + group + <span class="string">", tags="</span> + tags + <span class="string">"]"</span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>将长度过长而且用途不大的 <code>description</code> 字段去掉，但是结果依然，并没有解决问题。</p>
-<p>接下来为了想知道是往 json 对象添加 metrics 这部分是否执行，因此在 <code>for</code> 循环内添加了一行输出，最后发现输出十行后程序就不再输出，这一行的内容如下所示</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">Key: MetricName [name=request-latency-max, group=consumer-node-metrics, description=, tags=&#123;client-id=consumer-1, node-id=node-2&#125;]	Value: -Infinity</div></pre></td></tr></table></figure>
-<p>这时候发现了 <code>-Infinity</code> 这个值，参考这篇文章 <a href="http://www.cnblogs.com/zhisuoyu/archive/2016/03/24/5314541.html" target="_blank" rel="external">java中的NAN和INFINITY</a>，才知道这是一个特殊的值，所以就怀疑是这个问题，因此，写了一个小测试用例</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">package</span> com.meituan.kafka.json;</div><div class="line"></div><div class="line"><span class="keyword">import</span> org.json.JSONObject;</div><div class="line"></div><div class="line"><span class="comment">/**</span></div><div class="line"> * Created by wangmeng on 15/10/2016.</div><div class="line"> */</div><div class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JsonTest</span> </span>&#123;</div><div class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</div><div class="line">        JSONObject jsonObject=<span class="keyword">new</span> JSONObject();</div><div class="line">        jsonObject.put(<span class="string">"name"</span>,<span class="string">"matt"</span>);</div><div class="line">        jsonObject.put(<span class="string">"age"</span>,<span class="number">24</span>);</div><div class="line">        jsonObject.put(<span class="string">"double"</span>,<span class="number">10</span>/<span class="number">0.0</span>);</div><div class="line">        System.out.println(jsonObject.toString());</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>程序结果真是报错，报错内容如下：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">Exception in thread &quot;main&quot; org.json.JSONException: JSON does not allow non-finite numbers.</div><div class="line">	at org.json.JSONObject.testValidity(JSONObject.java:1578)</div><div class="line">	at org.json.JSONObject.put(JSONObject.java:1291)</div><div class="line">	at org.json.JSONObject.put(JSONObject.java:1220)</div><div class="line">	at com.meituan.kafka.json.JsonTest.main(JsonTest.java:13)</div><div class="line">	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)</div><div class="line">	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:57)</div><div class="line">	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)</div><div class="line">	at java.lang.reflect.Method.invoke(Method.java:606)</div><div class="line">	at com.intellij.rt.execution.application.AppMain.main(AppMain.java:144)</div></pre></td></tr></table></figure>
-<p>因此，查看了一下 <code>org.json.JSONObject.testValidity</code> 源码，内容如下</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/**</span></div><div class="line"> * Put a key/value pair in the JSONObject. If the value is null, then the</div><div class="line"> * key will be removed from the JSONObject if it is present.</div><div class="line"> *</div><div class="line"> * <span class="doctag">@param</span> key</div><div class="line"> *            A key string.</div><div class="line"> * <span class="doctag">@param</span> value</div><div class="line"> *            An object which is the value. It should be of one of these</div><div class="line"> *            types: Boolean, Double, Integer, JSONArray, JSONObject, Long,</div><div class="line"> *            String, or the JSONObject.NULL object.</div><div class="line"> * <span class="doctag">@return</span> this.</div><div class="line"> * <span class="doctag">@throws</span> JSONException</div><div class="line"> *             If the value is non-finite number or if the key is null.</div><div class="line"> */</div><div class="line"><span class="function"><span class="keyword">public</span> JSONObject <span class="title">put</span><span class="params">(String key, Object value)</span> <span class="keyword">throws</span> JSONException </span>&#123;</div><div class="line">    <span class="keyword">if</span> (key == <span class="keyword">null</span>) &#123;</div><div class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"Null key."</span>);</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">if</span> (value != <span class="keyword">null</span>) &#123;</div><div class="line">        testValidity(value);</div><div class="line">        <span class="keyword">this</span>.map.put(key, value);</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">        <span class="keyword">this</span>.remove(key);</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> <span class="keyword">this</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">/**</span></div><div class="line"> * Throw an exception if the object is a NaN or infinite number.</div><div class="line"> *</div><div class="line"> * <span class="doctag">@param</span> o</div><div class="line"> *            The object to test.</div><div class="line"> * <span class="doctag">@throws</span> JSONException</div><div class="line"> *             If o is a non-finite number.</div><div class="line"> */</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">testValidity</span><span class="params">(Object o)</span> <span class="keyword">throws</span> JSONException </span>&#123;</div><div class="line">    <span class="keyword">if</span> (o != <span class="keyword">null</span>) &#123;</div><div class="line">        <span class="keyword">if</span> (o <span class="keyword">instanceof</span> Double) &#123;</div><div class="line">            <span class="keyword">if</span> (((Double) o).isInfinite() || ((Double) o).isNaN()) &#123;</div><div class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> JSONException(</div><div class="line">                        <span class="string">"JSON does not allow non-finite numbers."</span>);</div><div class="line">            &#125;</div><div class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (o <span class="keyword">instanceof</span> Float) &#123;</div><div class="line">            <span class="keyword">if</span> (((Float) o).isInfinite() || ((Float) o).isNaN()) &#123;</div><div class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> JSONException(</div><div class="line">                        <span class="string">"JSON does not allow non-finite numbers."</span>);</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>查到这里，找到了具体的原因，对 <code>Double</code> 类型的对象，其值不能为 <code>NAN</code> 和 <code>INFINITY</code>，下面再看一下这个两个值在 java 中是如何定义的，对于 double 型的变量</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">Double</span> <span class="keyword">extends</span> <span class="title">Number</span> <span class="keyword">implements</span> <span class="title">Comparable</span>&lt;<span class="title">Double</span>&gt; </span>&#123;</div><div class="line">    <span class="comment">/**</span></div><div class="line">     * A constant holding the positive infinity of type</div><div class="line">     * &#123;<span class="doctag">@code</span> double&#125;. It is equal to the value returned by</div><div class="line">     * &#123;<span class="doctag">@code</span> Double.longBitsToDouble(0x7ff0000000000000L)&#125;.</div><div class="line">     */</div><div class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">double</span> POSITIVE_INFINITY = <span class="number">1.0</span> / <span class="number">0.0</span>;</div><div class="line"></div><div class="line">    <span class="comment">/**</span></div><div class="line">     * A constant holding the negative infinity of type</div><div class="line">     * &#123;<span class="doctag">@code</span> double&#125;. It is equal to the value returned by</div><div class="line">     * &#123;<span class="doctag">@code</span> Double.longBitsToDouble(0xfff0000000000000L)&#125;.</div><div class="line">     */</div><div class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">double</span> NEGATIVE_INFINITY = -<span class="number">1.0</span> / <span class="number">0.0</span>;</div><div class="line"></div><div class="line">    <span class="comment">/**</span></div><div class="line">     * A constant holding a Not-a-Number (NaN) value of type</div><div class="line">     * &#123;<span class="doctag">@code</span> double&#125;. It is equivalent to the value returned by</div><div class="line">     * &#123;<span class="doctag">@code</span> Double.longBitsToDouble(0x7ff8000000000000L)&#125;.</div><div class="line">     */</div><div class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">double</span> NaN = <span class="number">0.0</span>d / <span class="number">0.0</span>;</div><div class="line">    .....</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>至此，对于这个问题，我们已经完整地解决了，并且也查找到了最终的原因。</p>
-<h1 id="写在最后"><a href="#写在最后" class="headerlink" title="写在最后"></a>写在最后</h1><p>之前的文章，总是会写<code>写在前面</code>这一章，本文写了一章<code>写在最后</code>。</p>
-<p>这本是一个 bug，实际上并没必要写成一篇文章进行分析，而我这样做的原因是：告诉自己，或者是提醒自己，遇到问题，不但要想着解决问题，还要深入理解这个问题产生的原因。</p>
-<p>以前自己在开发中，遇到过很多的坑，很多坑，找到解决办法之后就过去了，后来好久之后再遇到这个问题时，结果还需要花一些时间去查找，一个是自己的记性确实不是太好，另一个当时并没有对遇到的问题深入剖析，把问题的内部原因详细记录下来，希望这篇文章是一个起点，以后博客中，不但要有总结性的文章、思考性的文章，还要有一些详细剖析 bug 的文章。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;这是一个关于修改 Kafka 源码时遇到的一个 bug，以及后续引起的一些思考。&lt;/p&gt;
-&lt;h1 id=&quot;问题描述&quot;&gt;&lt;a href=&quot;#问题描述&quot; class=&quot;headerlink&quot; title=&quot;问题描述&quot;&gt;&lt;/a&gt;问题描述&lt;/h1&gt;&lt;p&gt;我们的目标是将 Kafka 
-    
-    </summary>
-    
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="bug" scheme="http://wangzzu.github.io/tags/bug/"/>
     
   </entry>
   
