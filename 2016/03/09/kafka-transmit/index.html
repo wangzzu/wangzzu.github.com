@@ -4,7 +4,7 @@
 <li>Kafka是如何保证可靠性？</li>
 <li>消费机制是consumer pull还是broker push？, 如果是push的话，kafka是否知道数据传输成功</li>
 </ol>
-<h2 id="0-写在前面"><a href="#0-写在前面" class="headerlink" title="0.写在前面"></a>0.写在前面</h2><p>昨天整理完<a href="http://wangzzu.github.io/2016/03/08/kafka-store">Kafka之数据存储</a>之后，今天决定再把笔记中kafka消息传输部分整理一下，逐步去完善kafka系列的博文。本文中讲述的kafka是<code>0.8.1</code>版，目前最新版的<code>0.9.0</code>版把consumer的<code>The high-level Consumer API</code>和<code>The SimpleConsumer API</code>结合到了一起，这个是最新版的变化的最大之处，这个以后再讲（本来打算分两篇讲解consumer的，看来这样写了）。</p>
+<h2 id="0-写在前面"><a href="#0-写在前面" class="headerlink" title="0.写在前面"></a>0.写在前面</h2><p>昨天整理完<a href="http://matt33.com/2016/03/08/kafka-store">Kafka之数据存储</a>之后，今天决定再把笔记中kafka消息传输部分整理一下，逐步去完善kafka系列的博文。本文中讲述的kafka是<code>0.8.1</code>版，目前最新版的<code>0.9.0</code>版把consumer的<code>The high-level Consumer API</code>和<code>The SimpleConsumer API</code>结合到了一起，这个是最新版的变化的最大之处，这个以后再讲（本来打算分两篇讲解consumer的，看来这样写了）。</p>
 <h2 id="1-消息传递机制"><a href="#1-消息传递机制" class="headerlink" title="1.消息传递机制"></a>1.消息传递机制</h2><p>kafka在保证消息在producer和consumer之间的传输，主要有以下几种可能的delivery guaratee:</p>
 <ul>
 <li><strong>At most once</strong>：消息可能会丢，但绝不会重复传输;</li>
@@ -166,10 +166,10 @@
 <li><a href="http://blog.csdn.net/suifeng3051/article/details/48053965" target="_blank" rel="external">Kafka设计与原理详解</a></li>
 <li><a href="http://www.jasongj.com/2015/04/24/KafkaColumn2/" target="_blank" rel="external">kafka设计解析2</a></li>
 </ul>
-</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://wangzzu.github.io/2016/03/09/kafka-transmit/" data-id="cj5gc54qy002bvdagv2wq50m0" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/kafka/">kafka</a></div><div class="post-nav"><a href="/2016/03/22/java-learn/" class="pre">Java工程师成神之路【转】</a><a href="/2016/03/08/kafka-store/" class="next">Kafka之数据存储</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2016/03/09/kafka-transmit/" data-id="cj5gc54qy002bvdagv2wq50m0" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/kafka/">kafka</a></div><div class="post-nav"><a href="/2016/03/22/java-learn/" class="pre">Java工程师成神之路【转】</a><a href="/2016/03/08/kafka-store/" class="next">Kafka之数据存储</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
 var disqus_identifier = '2016/03/09/kafka-transmit/';
 var disqus_title = 'Kafka之消息传输';
-var disqus_url = 'http://wangzzu.github.io/2016/03/09/kafka-transmit/';
+var disqus_url = 'http://matt33.com/2016/03/09/kafka-transmit/';
 $('.btn_click_load').click(function() {
   (function() {
     var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;

@@ -4,9 +4,9 @@
   <subtitle>wangzzu</subtitle>
   <link href="/atom.xml" rel="self"/>
   
-  <link href="http://wangzzu.github.io/"/>
+  <link href="http://matt33.com/"/>
   <updated>2017-07-21T15:42:07.000Z</updated>
-  <id>http://wangzzu.github.io/</id>
+  <id>http://matt33.com/</id>
   
   <author>
     <name>Matt</name>
@@ -17,8 +17,8 @@
   
   <entry>
     <title>Kafka 源码分析之 topic 创建过程（三）</title>
-    <link href="http://wangzzu.github.io/2017/07/21/kafka-topic-create/"/>
-    <id>http://wangzzu.github.io/2017/07/21/kafka-topic-create/</id>
+    <link href="http://matt33.com/2017/07/21/kafka-topic-create/"/>
+    <id>http://matt33.com/2017/07/21/kafka-topic-create/</id>
     <published>2017-07-21T15:49:03.000Z</published>
     <updated>2017-07-21T15:42:07.000Z</updated>
     
@@ -216,17 +216,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
     
   </entry>
   
   <entry>
     <title>Linux 常用的一些系统命令</title>
-    <link href="http://wangzzu.github.io/2017/07/16/linux-system-cmd/"/>
-    <id>http://wangzzu.github.io/2017/07/16/linux-system-cmd/</id>
+    <link href="http://matt33.com/2017/07/16/linux-system-cmd/"/>
+    <id>http://matt33.com/2017/07/16/linux-system-cmd/</id>
     <published>2017-07-16T02:31:47.000Z</published>
     <updated>2017-07-16T02:36:01.000Z</updated>
     
@@ -523,17 +523,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="linux" scheme="http://wangzzu.github.io/tags/linux/"/>
+      <category term="linux" scheme="http://matt33.com/tags/linux/"/>
     
   </entry>
   
   <entry>
     <title>Kafka 源码分析之 Producer Metadata 更新机制（二）</title>
-    <link href="http://wangzzu.github.io/2017/07/08/kafka-producer-metadata/"/>
-    <id>http://wangzzu.github.io/2017/07/08/kafka-producer-metadata/</id>
+    <link href="http://matt33.com/2017/07/08/kafka-producer-metadata/"/>
+    <id>http://matt33.com/2017/07/08/kafka-producer-metadata/</id>
     <published>2017-07-08T15:51:00.000Z</published>
     <updated>2017-07-09T01:19:16.000Z</updated>
     
@@ -616,17 +616,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
     
   </entry>
   
   <entry>
     <title>买房感想</title>
-    <link href="http://wangzzu.github.io/2017/07/02/buy-little-room/"/>
-    <id>http://wangzzu.github.io/2017/07/02/buy-little-room/</id>
+    <link href="http://matt33.com/2017/07/02/buy-little-room/"/>
+    <id>http://matt33.com/2017/07/02/buy-little-room/</id>
     <published>2017-07-02T13:38:38.000Z</published>
     <updated>2017-07-03T15:22:15.000Z</updated>
     
@@ -726,17 +726,17 @@
     
     </summary>
     
-      <category term="随笔" scheme="http://wangzzu.github.io/categories/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/categories/%E9%9A%8F%E7%AC%94/"/>
     
     
-      <category term="随笔" scheme="http://wangzzu.github.io/tags/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/tags/%E9%9A%8F%E7%AC%94/"/>
     
   </entry>
   
   <entry>
     <title>Kafka 源码分析之 Producer 发送模型（一）</title>
-    <link href="http://wangzzu.github.io/2017/06/25/kafka-producer-send-module/"/>
-    <id>http://wangzzu.github.io/2017/06/25/kafka-producer-send-module/</id>
+    <link href="http://matt33.com/2017/06/25/kafka-producer-send-module/"/>
+    <id>http://matt33.com/2017/06/25/kafka-producer-send-module/</id>
     <published>2017-06-25T04:53:39.000Z</published>
     <updated>2017-06-25T15:06:01.000Z</updated>
     
@@ -808,17 +808,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
     
   </entry>
   
   <entry>
     <title>CSS 一些常用方法的总结</title>
-    <link href="http://wangzzu.github.io/2017/06/21/css-summary/"/>
-    <id>http://wangzzu.github.io/2017/06/21/css-summary/</id>
+    <link href="http://matt33.com/2017/06/21/css-summary/"/>
+    <id>http://matt33.com/2017/06/21/css-summary/</id>
     <published>2017-06-20T17:03:30.000Z</published>
     <updated>2017-06-20T17:08:56.000Z</updated>
     
@@ -1140,17 +1140,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="web" scheme="http://wangzzu.github.io/tags/web/"/>
+      <category term="web" scheme="http://matt33.com/tags/web/"/>
     
   </entry>
   
   <entry>
     <title>HTML 一些常用方法的总结</title>
-    <link href="http://wangzzu.github.io/2017/06/18/html-summary/"/>
-    <id>http://wangzzu.github.io/2017/06/18/html-summary/</id>
+    <link href="http://matt33.com/2017/06/18/html-summary/"/>
+    <id>http://matt33.com/2017/06/18/html-summary/</id>
     <published>2017-06-17T16:24:31.000Z</published>
     <updated>2017-06-17T16:34:21.000Z</updated>
     
@@ -1359,17 +1359,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="web" scheme="http://wangzzu.github.io/tags/web/"/>
+      <category term="web" scheme="http://matt33.com/tags/web/"/>
     
   </entry>
   
   <entry>
     <title>入职培训感想</title>
-    <link href="http://wangzzu.github.io/2017/05/27/induction-training-think/"/>
-    <id>http://wangzzu.github.io/2017/05/27/induction-training-think/</id>
+    <link href="http://matt33.com/2017/05/27/induction-training-think/"/>
+    <id>http://matt33.com/2017/05/27/induction-training-think/</id>
     <published>2017-05-27T13:44:51.000Z</published>
     <updated>2017-05-29T02:46:32.000Z</updated>
     
@@ -1526,17 +1526,17 @@
     
     </summary>
     
-      <category term="随笔" scheme="http://wangzzu.github.io/categories/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/categories/%E9%9A%8F%E7%AC%94/"/>
     
     
-      <category term="随笔" scheme="http://wangzzu.github.io/tags/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/tags/%E9%9A%8F%E7%AC%94/"/>
     
   </entry>
   
   <entry>
     <title>腾讯传，一个激情澎湃的时代</title>
-    <link href="http://wangzzu.github.io/2017/04/16/tencent-read/"/>
-    <id>http://wangzzu.github.io/2017/04/16/tencent-read/</id>
+    <link href="http://matt33.com/2017/04/16/tencent-read/"/>
+    <id>http://matt33.com/2017/04/16/tencent-read/</id>
     <published>2017-04-16T08:11:14.000Z</published>
     <updated>2017-06-21T00:22:07.000Z</updated>
     
@@ -1640,17 +1640,17 @@
     
     </summary>
     
-      <category term="书屋" scheme="http://wangzzu.github.io/categories/%E4%B9%A6%E5%B1%8B/"/>
+      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
     
     
-      <category term="思考" scheme="http://wangzzu.github.io/tags/%E6%80%9D%E8%80%83/"/>
+      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
     
   </entry>
   
   <entry>
     <title>欧洲简史</title>
-    <link href="http://wangzzu.github.io/2017/04/04/read/"/>
-    <id>http://wangzzu.github.io/2017/04/04/read/</id>
+    <link href="http://matt33.com/2017/04/04/read/"/>
+    <id>http://matt33.com/2017/04/04/read/</id>
     <published>2017-04-04T08:11:14.000Z</published>
     <updated>2017-07-21T15:54:08.000Z</updated>
     
@@ -1732,19 +1732,19 @@
     
     </summary>
     
-      <category term="书屋" scheme="http://wangzzu.github.io/categories/%E4%B9%A6%E5%B1%8B/"/>
+      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
     
     
-      <category term="思考" scheme="http://wangzzu.github.io/tags/%E6%80%9D%E8%80%83/"/>
+      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
     
   </entry>
   
   <entry>
     <title>Storm 对 0.10.x 版 Kafka 支持解析</title>
-    <link href="http://wangzzu.github.io/2017/03/17/storm-kafka-0-10-1/"/>
-    <id>http://wangzzu.github.io/2017/03/17/storm-kafka-0-10-1/</id>
+    <link href="http://matt33.com/2017/03/17/storm-kafka-0-10-1/"/>
+    <id>http://matt33.com/2017/03/17/storm-kafka-0-10-1/</id>
     <published>2017-03-17T14:24:31.000Z</published>
-    <updated>2017-03-19T05:47:26.000Z</updated>
+    <updated>2017-07-23T07:00:57.000Z</updated>
     
     <content type="html"><![CDATA[<p>由于 0.10.x 版 Kafka 与 0.8.x 版有很大的变化，这种变化对下游 Storm 有非常大的影响，0.10.x 版的 Kafka 不但增加了权限管理的功能，而且还将 simple 和 high consumer 的 offsets 进行统一管理，也就意味着在 0.8.x 中 Storm 需要去负责管理 offsets，而在 0.10.x 中，Storm 不需要关心 consumer 的 offsets 的问题，这对 KafkaSpout 的设计有很大的影响，本文就是对 <code>Storm 对 0.10.x 版 Kafka 支持的实现</code>部分的解析。</p>
 <h1 id="0-10-x-版-KafkaSpout-的实现"><a href="#0-10-x-版-KafkaSpout-的实现" class="headerlink" title="0.10.x 版 KafkaSpout 的实现"></a>0.10.x 版 KafkaSpout 的实现</h1><p>社区对新版 Kafka 的支持，总体分为两种情况：</p>
@@ -1768,7 +1768,7 @@
 <li><code>offset.commit.period.ms</code>：设置 spout 多久向 Kafka commit一次，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L189-L193" target="_blank" rel="external">setOffsetCommitPeriodMs</a> 中配置；</li>
 <li><code>max.uncommitted.offsets</code>：控制在下一次拉取数据之前最多可以有多少数据在等待 commit，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L211-L217" target="_blank" rel="external">setMaxUncommittedOffsets</a> 中配置；</li>
 </ul>
-<h3 id="spout-的处理过程"><a href="#spout-的处理过程" class="headerlink" title="spout 的处理过程"></a>spout 的处理过程</h3><p>关于 Kafka 的几个 offset 的概念，可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#offset-那些事"> offset的一些相关概念</a></p>
+<h3 id="spout-的处理过程"><a href="#spout-的处理过程" class="headerlink" title="spout 的处理过程"></a>spout 的处理过程</h3><p>关于 Kafka 的几个 offset 的概念，可以参考<a href="http://matt33.com/2017/01/16/kafka-group/#offset-那些事"> offset的一些相关概念</a></p>
 <p>KafkaSpout 的处理过程主要是在 <code>nextTuple()</code> 方法，其处理过程如下：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">nextTuple</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">if</span> (initialized) &#123;</div><div class="line">        <span class="keyword">if</span> (commit()) &#123;<span class="comment">// Step1 非自动 commit,并且定时达到</span></div><div class="line">            commitOffsetsForAckedTuples();<span class="comment">// 对所有已经 ack 的 msgs 进行 commit</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (poll()) &#123;<span class="comment">//Step2 拉取的数据都已经发送,并且未 commit 的消息数小于设置的最大 uncommit 数</span></div><div class="line">            setWaitingToEmit(pollKafkaBroker());</div><div class="line">            <span class="comment">//将拉取的所有 record 都放到 waitingToEmit 集合中,可能会重复拉取数据（由于一些 msg 需要重试，通过修改 Last Committed Offset 的值来实现的）</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (waitingToEmit()) &#123;<span class="comment">//Step3 waitingToEmit 中还有数据</span></div><div class="line">            emit();<span class="comment">//发送数据,但会跳过已经 ack 或者已经发送的消息</span></div><div class="line">        &#125;</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">        LOG.debug(<span class="string">"Spout not initialized. Not sending tuples until initialization completes"</span>);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
 <p>上面主要分为三步：</p>
@@ -1792,7 +1792,7 @@
 <li>storm 处理 failed 的 msg，会保存到一个专门的集合中，在每次拉取数据时（是拉取数据，不是发送数据，发送数据时会检测该数据是否已经成功处理），会遍历该集合中包含的所有 TopicPartiion，获取该 partition 的 Last Committed Offset；</li>
 </ol>
 <p>这样设计有一个副作用就是：如果有一个 msg 一直不成功，就会导致 KafkaSpout 因为这一条数据的影响而不断地重复拉取这批数据，造成整个拓扑卡在这里。</p>
-<h3 id="Kafka-Rebalance-的影响"><a href="#Kafka-Rebalance-的影响" class="headerlink" title="Kafka Rebalance 的影响"></a>Kafka Rebalance 的影响</h3><p>Kafka Rebalance 可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#Consumer-Rebalance">Consumer Rebalance</a>.</p>
+<h3 id="Kafka-Rebalance-的影响"><a href="#Kafka-Rebalance-的影响" class="headerlink" title="Kafka Rebalance 的影响"></a>Kafka Rebalance 的影响</h3><p>Kafka Rebalance 可以参考<a href="http://matt33.com/2017/01/16/kafka-group/#Consumer-Rebalance">Consumer Rebalance</a>.</p>
 <p>KafkaSpout 实现了一个内部类用来监控 Group Rebalance 的情况，实现了两个回调函数，一旦发现 group 的状态变为 <code>preparingRabalance</code> 之后</p>
 <ol>
 <li><code>onPartitionsRevoked</code> 这个方法会在 Consumer 停止拉取数据之后、group 进行 rebalance 操作之前调用，作用是对已经 ack 的 msg 进行 commit；</li>
@@ -1808,21 +1808,21 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
     
-      <category term="storm" scheme="http://wangzzu.github.io/tags/storm/"/>
+      <category term="storm" scheme="http://matt33.com/tags/storm/"/>
     
   </entry>
   
   <entry>
     <title>Kafka 之 Group 状态变化分析及 Rebalance 过程</title>
-    <link href="http://wangzzu.github.io/2017/01/16/kafka-group/"/>
-    <id>http://wangzzu.github.io/2017/01/16/kafka-group/</id>
+    <link href="http://matt33.com/2017/01/16/kafka-group/"/>
+    <id>http://matt33.com/2017/01/16/kafka-group/</id>
     <published>2017-01-16T11:07:32.000Z</published>
-    <updated>2017-03-09T03:39:24.000Z</updated>
+    <updated>2017-07-23T07:01:02.000Z</updated>
     
     <content type="html"><![CDATA[<p>前段时间看一下 Kafka 的部分源码（0.10.1.0 版），对一些地方做了一些相应的总结。本文主要就 Kafka Group 方面的内容做一下详细的讲述，重点讲述 Consumer Client 如何进行初始化、Server 端对应的 Consumer Group 状态如何进行变化以及对一些 Kafka 的新设计（与旧版不同之处）简单介绍一下。</p>
 <h1 id="Group-状态机"><a href="#Group-状态机" class="headerlink" title="Group 状态机"></a>Group 状态机</h1><p>在 0.9.0.0 之后的 Kafka，出现了几个新变动，一个是在 Server 端增加了 GroupCoordinator 这个角色，另一个较大的变动是将 topic 的 offset 信息由之前存储在 zookeeper 上改为存储到一个特殊的 topic 中（<code>__consumer_offsets</code>）。</p>
@@ -1850,7 +1850,7 @@
 <p><img src="/images/kafka/group.png" alt="group-state"></p>
 <p>各个状态转化的情况，只有有对应箭头才能进行转移，比如 Empty 到 PreparingRebalance 是可以转移的，而 Dead 到 PreparingRebalance 是不可以的。后面会根据一个 Consumer Client 启动的过程，讲述一下其 Group 状态变化情况。</p>
 <h1 id="Consumer-初始化"><a href="#Consumer-初始化" class="headerlink" title="Consumer 初始化"></a>Consumer 初始化</h1><p>Server 端 Group 状态的变化，其实更多的时候是由 Client 端触发的，一个 group 在最初初始化的过程总其实就是该 Group 第一个 Consumer Client 初始化的过程。</p>
-<h2 id="Consumer-poll-过程解析"><a href="#Consumer-poll-过程解析" class="headerlink" title="Consumer poll 过程解析"></a>Consumer poll 过程解析</h2><p>对 Consumer 的初始化，正如 <a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍</a> 这篇文章所述，Consumer 的核心逻辑部分主要在其 poll 模型。而其源码的实现上，主要的逻辑实现也是在 <code>pollOnce</code> 方法，如下所示。</p>
+<h2 id="Consumer-poll-过程解析"><a href="#Consumer-poll-过程解析" class="headerlink" title="Consumer poll 过程解析"></a>Consumer poll 过程解析</h2><p>对 Consumer 的初始化，正如 <a href="http://matt33.com/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍</a> 这篇文章所述，Consumer 的核心逻辑部分主要在其 poll 模型。而其源码的实现上，主要的逻辑实现也是在 <code>pollOnce</code> 方法，如下所示。</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//<span class="doctag">NOTE:</span> 一次 poll 过程</span></div><div class="line"><span class="keyword">private</span> Map&lt;TopicPartition, List&lt;ConsumerRecord&lt;K, V&gt;&gt;&gt; pollOnce(<span class="keyword">long</span> timeout) &#123;</div><div class="line">    coordinator.poll(time.milliseconds());<span class="comment">//NOTE： 获取 GroupCoordinator 并连接、加入 Group、Group 进行 rebalance 并获取 assignment</span></div><div class="line"></div><div class="line">    <span class="comment">// fetch positions if we have partitions we're subscribed to that we</span></div><div class="line">    <span class="comment">// don't know the offset for</span></div><div class="line">    <span class="keyword">if</span> (!subscriptions.hasAllFetchPositions())<span class="comment">//<span class="doctag">NOTE:</span> 更新 offset</span></div><div class="line">        updateFetchPositions(<span class="keyword">this</span>.subscriptions.missingFetchPositions());</div><div class="line"></div><div class="line">    <span class="comment">// if data is available already, return it immediately</span></div><div class="line">    Map&lt;TopicPartition, List&lt;ConsumerRecord&lt;K, V&gt;&gt;&gt; records = fetcher.fetchedRecords();</div><div class="line">    <span class="comment">//NOTE： 根据最大限制拉取数据（按 partition 拉取,这个 partition 数据拉取完之后,拉取下一个 partition）</span></div><div class="line">    <span class="keyword">if</span> (!records.isEmpty())</div><div class="line">        <span class="keyword">return</span> records;</div><div class="line">    <span class="comment">//<span class="doctag">NOTE:</span> 说明上次 fetch 到是的数据已经全部拉取了,需要再次发送 fetch 请求,从 broker 拉取数据</span></div><div class="line"></div><div class="line">    <span class="comment">// send any new fetches (won't resend pending fetches)</span></div><div class="line">    fetcher.sendFetches();<span class="comment">//<span class="doctag">NOTE:</span> 向订阅的所有 partition 发送 fetch 请求,会从多个 partition 拉取数据</span></div><div class="line"></div><div class="line">    <span class="keyword">long</span> now = time.milliseconds();</div><div class="line">    <span class="keyword">long</span> pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);</div><div class="line"></div><div class="line">    client.poll(pollTimeout, now, <span class="keyword">new</span> PollCondition() &#123;</div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">shouldBlock</span><span class="params">()</span> </span>&#123;</div><div class="line">            <span class="comment">// since a fetch might be completed by the background thread, we need this poll condition</span></div><div class="line">            <span class="comment">// to ensure that we do not block unnecessarily in poll()</span></div><div class="line">            <span class="keyword">return</span> !fetcher.hasCompletedFetches();</div><div class="line">        &#125;</div><div class="line">    &#125;);</div><div class="line"></div><div class="line">    <span class="comment">// after the long poll, we should check whether the group needs to rebalance</span></div><div class="line">    <span class="comment">// prior to returning data so that the group can stabilize faster</span></div><div class="line">    <span class="keyword">if</span> (coordinator.needRejoin())</div><div class="line">        <span class="keyword">return</span> Collections.emptyMap();</div><div class="line"></div><div class="line">    <span class="keyword">return</span> fetcher.fetchedRecords();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
 <p>与 Server 进行交互，尤其初始化 Group 这一部分，主要是在 <code>coordinator.poll()</code> 方法，源码如下</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">poll</span><span class="params">(<span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">    invokeCompletedOffsetCommitCallbacks();<span class="comment">//<span class="doctag">NOTE:</span> 触发回调函数</span></div><div class="line"></div><div class="line">    <span class="keyword">if</span> (subscriptions.partitionsAutoAssigned() &amp;&amp; coordinatorUnknown()) &#123;</div><div class="line">        <span class="comment">//<span class="doctag">NOTE:</span> 通过 subscribe() 方法订阅 topic,并且 coordinator 未知</span></div><div class="line">        ensureCoordinatorReady();<span class="comment">//<span class="doctag">NOTE:</span> 获取 GroupCoordinator 地址,并且建立连接</span></div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="keyword">if</span> (needRejoin()) &#123;<span class="comment">//<span class="doctag">NOTE:</span> 判断是否需要重新加入 group,如果订阅的 partition 变化或则分配的 partition 变化时,需要 rejoin</span></div><div class="line">        <span class="comment">// due to a race condition between the initial metadata fetch and the initial rebalance,</span></div><div class="line">        <span class="comment">// we need to ensure that the metadata is fresh before joining initially. This ensures</span></div><div class="line">        <span class="comment">// that we have matched the pattern against the cluster's topics at least once before joining.</span></div><div class="line">        <span class="keyword">if</span> (subscriptions.hasPatternSubscription())</div><div class="line">            client.ensureFreshMetadata();</div><div class="line"></div><div class="line">        ensureActiveGroup();</div><div class="line">        <span class="comment">//<span class="doctag">NOTE:</span> 确保 group 是 active;加入 group;分配订阅的 partition</span></div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    pollHeartbeat(now);<span class="comment">//<span class="doctag">NOTE:</span> 检查心跳线程运行是否正常,如果心跳线程失败,则抛出异常,反之更新 poll 调用的时间</span></div><div class="line">    maybeAutoCommitOffsetsAsync(now);<span class="comment">//<span class="doctag">NOTE:</span> 自动 commit 时,当定时达到时,进行自动 commit</span></div><div class="line">&#125;</div></pre></td></tr></table></figure>
@@ -1872,17 +1872,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="kafka" scheme="http://wangzzu.github.io/tags/kafka/"/>
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
     
   </entry>
   
   <entry>
     <title>别人向上，我们却在向下</title>
-    <link href="http://wangzzu.github.io/2017/01/08/book/"/>
-    <id>http://wangzzu.github.io/2017/01/08/book/</id>
+    <link href="http://matt33.com/2017/01/08/book/"/>
+    <id>http://matt33.com/2017/01/08/book/</id>
     <published>2017-01-08T08:11:14.000Z</published>
     <updated>2017-01-08T15:18:53.000Z</updated>
     
@@ -2016,24 +2016,24 @@
     
     </summary>
     
-      <category term="书屋" scheme="http://wangzzu.github.io/categories/%E4%B9%A6%E5%B1%8B/"/>
+      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
     
     
-      <category term="思考" scheme="http://wangzzu.github.io/tags/%E6%80%9D%E8%80%83/"/>
+      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
     
   </entry>
   
   <entry>
     <title>2016年终总结</title>
-    <link href="http://wangzzu.github.io/2016/12/31/2016-summary/"/>
-    <id>http://wangzzu.github.io/2016/12/31/2016-summary/</id>
+    <link href="http://matt33.com/2016/12/31/2016-summary/"/>
+    <id>http://matt33.com/2016/12/31/2016-summary/</id>
     <published>2016-12-31T05:14:44.000Z</published>
-    <updated>2017-01-05T02:11:25.000Z</updated>
+    <updated>2017-07-23T07:01:07.000Z</updated>
     
     <content type="html"><![CDATA[<p>今天凌晨2点吃完饭回来之后，真是辗转反侧，不知为何，一直难以入眠，或许因为过了睡点，又或许因为昨晚的年会玩得太嗨，也可能是感觉对过去的一年有些许遗憾……</p>
 <p>昨晚参加了最后一次实验室的年会，前两年中的都是三等奖（100块钱），没想到昨晚运气大爆发了，中了特等奖（Kindle Voyage），也算是2016年一个比较好的收官。然而，晚上睡觉时内心却是如何也无法平静下来，脑海中一直不断闪烁着过去一年、甚至过去两三年发生的一些事，不管怎样，时间就是这样，过去的就是过去了，并不以我们的意志为转移。</p>
 <p>孟子说“吾日三省吾身”，这句话我们上小学时都学过，可是大多数人并没有去认真践行过，可能是现在这个社会给人压力大得已经很少有时间去思考、去反思。但是很多人却都有年终总结的习惯，总结一下过去一年做了什么事，是否完成了去年年终总结定的计划，再做一下未来一年的计划。有计划的人生总是会好一点，至少会给未来一年指引方向，甚至可以通过一些量化的指标来屏蔽一些重要的问题：我要想什么样的人生，我想要什么样的生活。这两个问题真的很难去回答，其实我们每个人也只是在不断地去摸索，因为我们原本就没有一个很清晰的目标。即使有了清晰的目标也很难在未来一年的时间里去完成，而我们又都是如此地急功近利，如果一件事情要花费自己三五年的时间、甚至十年时间的话，很多人可能都会选择放弃，去选择一些易于在短期内实现的目标。如果一个人没有一个清晰的长远目标，或者没有这个概念的话，那么年度目标其实也就是督促自己做点事而已。对于我们这种即将毕业或者刚步入职场的人来说，虽然并不一定有一个非常清晰的长远目标，但是至少是要有一个这样的概念。选取一个或者多个对你非常重要、或者能给你带来很大的提高、而短期无法实现的长远目标，把这个分割到每一年里慢慢去实现，但有一点要明确的是长远目标的制定依然是为了那两个问题而设置的，那两个问题肯定会在未来十年甚至二十年的时间不断地困扰我们，我们能做的，也只是不断地尝试，不断地去追寻内心（以上只是个人感慨，下面开始流水账）。</p>
-<h1 id="工作"><a href="#工作" class="headerlink" title="工作"></a>工作</h1><p>从今年开始也算是正式迈入了职场，毕竟也在公司实习了半年多了，今年最重要的事情就是找工作这件事了，人生的第一份工作，好在最后去的部门、做的事情是自己想要的（找工作的感想可以参考<a href="http://wangzzu.github.io/2016/11/15/job-summary/">校招找工作小记</a>）。</p>
+<h1 id="工作"><a href="#工作" class="headerlink" title="工作"></a>工作</h1><p>从今年开始也算是正式迈入了职场，毕竟也在公司实习了半年多了，今年最重要的事情就是找工作这件事了，人生的第一份工作，好在最后去的部门、做的事情是自己想要的（找工作的感想可以参考<a href="http://matt33.com/2016/11/15/job-summary/">校招找工作小记</a>）。</p>
 <p>除了正式工作，另一件非常重要的事就是毕业这件事了。记得去年下半年一直在绞尽脑汁，憋了好久才写了一篇小论文的大概，没写出多少，今年年初来了之后就边找实习边写小论文，最后也很幸运地成功水了一个会议。小论文之后又是大论文，纸老虎打了一个总是还会再出现一个，在实习前火急火燎地完成了初稿，后来又花了半个多月改了一下，到目前为止还没出现什么问题，祈祷盲审不中，明年顺利毕业。</p>
 <p>关于明年，希望自己在工作上能有所建树，自己在公司未来的方向就是 Kafka 平台的开发和运维，希望自己能实现以下几个小目标：</p>
 <ol>
@@ -2079,17 +2079,17 @@
     
     </summary>
     
-      <category term="随笔" scheme="http://wangzzu.github.io/categories/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/categories/%E9%9A%8F%E7%AC%94/"/>
     
     
-      <category term="随笔" scheme="http://wangzzu.github.io/tags/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/tags/%E9%9A%8F%E7%AC%94/"/>
     
   </entry>
   
   <entry>
     <title>Java 的 Checked 和 Unchecked Exception【译】</title>
-    <link href="http://wangzzu.github.io/2016/12/13/java-exception/"/>
-    <id>http://wangzzu.github.io/2016/12/13/java-exception/</id>
+    <link href="http://matt33.com/2016/12/13/java-exception/"/>
+    <id>http://matt33.com/2016/12/13/java-exception/</id>
     <published>2016-12-12T16:04:26.000Z</published>
     <updated>2016-12-12T16:18:00.000Z</updated>
     
@@ -2133,17 +2133,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="java" scheme="http://wangzzu.github.io/tags/java/"/>
+      <category term="java" scheme="http://matt33.com/tags/java/"/>
     
   </entry>
   
   <entry>
     <title>Vim 快捷键总结</title>
-    <link href="http://wangzzu.github.io/2016/12/06/vim-basic/"/>
-    <id>http://wangzzu.github.io/2016/12/06/vim-basic/</id>
+    <link href="http://matt33.com/2016/12/06/vim-basic/"/>
+    <id>http://matt33.com/2016/12/06/vim-basic/</id>
     <published>2016-12-06T14:02:51.000Z</published>
     <updated>2016-12-13T02:50:45.000Z</updated>
     
@@ -2463,17 +2463,17 @@
     
     </summary>
     
-      <category term="技术" scheme="http://wangzzu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
-      <category term="linux" scheme="http://wangzzu.github.io/tags/linux/"/>
+      <category term="linux" scheme="http://matt33.com/tags/linux/"/>
     
   </entry>
   
   <entry>
     <title>技巧，其实并没有什么技巧，只不过多了些毅力罢了</title>
-    <link href="http://wangzzu.github.io/2016/11/29/book/"/>
-    <id>http://wangzzu.github.io/2016/11/29/book/</id>
+    <link href="http://matt33.com/2016/11/29/book/"/>
+    <id>http://matt33.com/2016/11/29/book/</id>
     <published>2016-11-29T14:14:26.000Z</published>
     <updated>2016-11-29T15:51:01.000Z</updated>
     
@@ -2744,17 +2744,17 @@
     
     </summary>
     
-      <category term="书屋" scheme="http://wangzzu.github.io/categories/%E4%B9%A6%E5%B1%8B/"/>
+      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
     
     
-      <category term="思考" scheme="http://wangzzu.github.io/tags/%E6%80%9D%E8%80%83/"/>
+      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
     
   </entry>
   
   <entry>
     <title>观念在变化、在成长</title>
-    <link href="http://wangzzu.github.io/2016/11/25/book/"/>
-    <id>http://wangzzu.github.io/2016/11/25/book/</id>
+    <link href="http://matt33.com/2016/11/25/book/"/>
+    <id>http://matt33.com/2016/11/25/book/</id>
     <published>2016-11-25T14:22:30.000Z</published>
     <updated>2016-11-25T16:27:22.000Z</updated>
     
@@ -2979,17 +2979,17 @@
     
     </summary>
     
-      <category term="书屋" scheme="http://wangzzu.github.io/categories/%E4%B9%A6%E5%B1%8B/"/>
+      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
     
     
-      <category term="思考" scheme="http://wangzzu.github.io/tags/%E6%80%9D%E8%80%83/"/>
+      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
     
   </entry>
   
   <entry>
     <title>从《驴得水》到《我不是潘金莲》的一些思考</title>
-    <link href="http://wangzzu.github.io/2016/11/20/movie-think/"/>
-    <id>http://wangzzu.github.io/2016/11/20/movie-think/</id>
+    <link href="http://matt33.com/2016/11/20/movie-think/"/>
+    <id>http://matt33.com/2016/11/20/movie-think/</id>
     <published>2016-11-20T10:47:19.000Z</published>
     <updated>2016-11-20T10:49:23.000Z</updated>
     
@@ -3016,19 +3016,19 @@
     
     </summary>
     
-      <category term="影如人生" scheme="http://wangzzu.github.io/categories/%E5%BD%B1%E5%A6%82%E4%BA%BA%E7%94%9F/"/>
+      <category term="影如人生" scheme="http://matt33.com/categories/%E5%BD%B1%E5%A6%82%E4%BA%BA%E7%94%9F/"/>
     
     
-      <category term="电影随想" scheme="http://wangzzu.github.io/tags/%E7%94%B5%E5%BD%B1%E9%9A%8F%E6%83%B3/"/>
+      <category term="电影随想" scheme="http://matt33.com/tags/%E7%94%B5%E5%BD%B1%E9%9A%8F%E6%83%B3/"/>
     
   </entry>
   
   <entry>
     <title>校招找工作小记</title>
-    <link href="http://wangzzu.github.io/2016/11/15/job-summary/"/>
-    <id>http://wangzzu.github.io/2016/11/15/job-summary/</id>
+    <link href="http://matt33.com/2016/11/15/job-summary/"/>
+    <id>http://matt33.com/2016/11/15/job-summary/</id>
     <published>2016-11-15T10:51:40.000Z</published>
-    <updated>2016-11-19T09:04:36.000Z</updated>
+    <updated>2017-07-23T07:01:25.000Z</updated>
     
     <content type="html"><![CDATA[<p>2016年，是一个很重要的年份，不但是自己的本命年，还是自己要踏出校园、走向工作的一年。从今年过完年回到学校，记得大概是2月底，这期间经历刷题、找实习、校招，直到前两天把三方交上，今天公司盖完章拿到回执信，工作也算终于确定了下来。在这过程中，经历过失落、兴奋、伤心等等，中间的喜悲，也只有自己最清楚了，趁着这几天晚上有点时间，回想一下过去几个月的心理路程写一篇校招的小记，也算是对这几个月的酸甜苦辣做一下总结。</p>
 <blockquote>
@@ -3051,7 +3051,7 @@
 <p>面完某米之后，没过几天就收到了美团的面试通知，然后就去美团面试，面美团之前想的是面面再说，反正最后也不一定去，当时约的是两点，我去的比较早，一点半就到了，然后到了一个会议室开始面试，记得当时跟一面面试官聊了一个半小时，关于 Kafka 相关的聊了近 40 min，聊的还比较深，然后又聊了很多基础知识，还写了两道算法。当时面完一面之后，当时感觉自己拿这个 offer 应该还是很稳的，因为自己在实验室做的跟这边做的完全对口。过了一会就开始了二面，刚好跟二面面试官是老乡，二面面试官是做实时的，聊了很多 storm 相关的，因为美团要求前二面必须手写算法，所以又做了一道算法，基本上就结束了，大概也聊了六七十分钟。最后又跟三面面试官聊了半个小时，三面聊了一点点技术，其他的基本上就是聊聊兴趣、聊聊人生什么的。当时从下午两点开始面，面完基本上快六点了，当时面完的感觉是美团这边招人还是挺严格的，纯技术面一口气面了三面。不过美团真的很给力，面完的第二天就给了 offer，因为我当时7月份才能实习，面试官也愿意等我到七月份入职，当时考虑一周之后，就把 offer 签了，决定去美团这边实习，当然最主要的原因是跟我的之前做的很对口，还有就是感觉那边面试还是挺严格的，所以觉得技术应该也不会差到哪去。</p>
 <h1 id="实习篇"><a href="#实习篇" class="headerlink" title="实习篇"></a>实习篇</h1><p>到了七月之后，准时到公司报到，去的时候第一周就领到了全新的 Mac pro，之前没用过 mac，各种不顺手，不过用了一周之后，就觉得 Mac 用着真特么爽。去了之后，才知道，当时我的一面面试官，就是之后带我的 Mentor，他已经工作五年了，之前在阿里工作过4年，技术还是很不错的，当时觉得自己还是很幸运的，能有这位师兄带我，之前二面面试官是我们小组的 leader，三面面试官是我们大部门的 leader，被称为百度的 Metrcis 之父，还真没想到这边居然还卧虎藏龙。所以，在刚开始那段时间对自己的工作特别满意，自己在这边确实也能学到东西，被 Mator 逼着看 Kafka 的源码（感谢）。</p>
 <p>这里，顺便说一下关于大公司与小公司的选择问题吧。下面纯属个人想法，关于这个选择，如果由能力能去清华的计算机，那不用考虑去就行了，毕竟那里牛人更多、氛围也更好，但是如果去不了清华的计算机，而只能去清华的XX（就是就业很不好的那种小众专业），那完全可以选择去北航的计算机或北邮的计算机。也就是说，如果有能力拿到 BAT 的核心部门的 offer，那就去；但如果只能拿到边缘部门的 offer，那完全可以选择其他公司（某滴、某米、某团）的核心部门。毕竟选择一家公司，不能只看公司的名气、薪酬，还要看当你哪天离开这家公司的时候，你自己成长了多少，个人感觉，这个才是最重要的，在大公司当螺丝钉，也只有在大公司这个环境下你才有价值，一旦离开这个大环境，你能选择的就很少了，所以，应该把个人能力的提升放在一个比较重要的位置。这里，对于应届生，我是比较推荐这六家公司（国外的公司暂不讨论），一些较小或者偏初期的创业公司，对于应届生来说，还是要谨慎一些好。还有就是哪些处在风口的企业，也要慎重，哪些公司估值泡沫很大，而且明显让人感觉的是：哇塞，今年这家公司开的好高，但是明年开高公司又变成了另外一家，所以还是要慎重，在找工作的时候，一定要有一个清晰的目标。</p>
-<h1 id="急急忙忙校招"><a href="#急急忙忙校招" class="headerlink" title="急急忙忙校招"></a>急急忙忙校招</h1><p>在美团实习了两个月之后，这时候就已经到了九月份，帝都的互联网校招基本上也开始了，记得当时在论坛随便找了一个师兄内推了 X 狐，然后就通知周末去面试，去之前心里是一点都没普，毕竟算法好久没看了，很多东西长时间不看是会忘的，算法就是这样，当时就随便准备了一下就去面试了，结果很出乎意料，在面试之前，看了一些关于 Java 并发、多线程的内容，当时还做了一下总结，写了一篇博客——<a href="http://wangzzu.github.io/2016/08/21/java-concurrency/">Java 并发学习(一)</a>，没想到的是面试官问了很多这方面的内容，虽然二面的时候有一些关于 OOM 调试的问题答的不怎么好，但没过几天 X 狐还是给发了 offer，当时可以说我拿到第一个校招，虽然最后没怎么去，还是很感觉 X 狐能给我这次机会的。</p>
+<h1 id="急急忙忙校招"><a href="#急急忙忙校招" class="headerlink" title="急急忙忙校招"></a>急急忙忙校招</h1><p>在美团实习了两个月之后，这时候就已经到了九月份，帝都的互联网校招基本上也开始了，记得当时在论坛随便找了一个师兄内推了 X 狐，然后就通知周末去面试，去之前心里是一点都没普，毕竟算法好久没看了，很多东西长时间不看是会忘的，算法就是这样，当时就随便准备了一下就去面试了，结果很出乎意料，在面试之前，看了一些关于 Java 并发、多线程的内容，当时还做了一下总结，写了一篇博客——<a href="http://matt33.com/2016/08/21/java-concurrency/">Java 并发学习(一)</a>，没想到的是面试官问了很多这方面的内容，虽然二面的时候有一些关于 OOM 调试的问题答的不怎么好，但没过几天 X 狐还是给发了 offer，当时可以说我拿到第一个校招，虽然最后没怎么去，还是很感觉 X 狐能给我这次机会的。</p>
 <p>面完 X 狐之后又陆陆续续投一批简历，参加了一批笔试，前面已经说了 BAT 的经历，除了 BAT 之外，其他能投的公司并没有多少，之后参加了某滴的内推笔试，笔试挂，某滴今年招了很多的社招的人，B 家听说有很多人跳到了某滴，阿里正明也去滴滴了，某滴今年真是大热，不过由于发展过快，外面也爆出了很多关于某滴内部管理混乱的问题，最近 zf 又出了一系列政策，导致某滴的日子其实也不好过，今年也能明确感受到某滴校招力度较小，总之，没拿到某滴的面试机会。接着又投了某米，参加了某米的笔试，感觉笔试题做的还是不错的，后来通知去面试，面了某米的互娱事业部，一面聊的还挺好，二面问了一些很基础、平且一般接触不到的问题，比如：Java 泛型的设计有什么不好的地方？问的问题有种说不出来的感觉，当时感觉某米应该是可以过的，结果很尴尬，没有收到 offer。之后由于实习拿过XX街的 offer，所以直接参加了XX街的终面，大神华黎亲自面的（不知道华黎是谁，可以看看这本书<a href="http://item.jd.com/11449803.html" target="_blank" rel="external">《大型网站系统与Java中间件实践》</a>，华黎可是当年阿里中间件核心人物之一），后来顺利拿到了 offer，不过因为其他的一些个人原因，没有选择去，很是抱歉。十月底又顺便水了一把华为的面试，也算是见到了华为的壮观面试场景，三点半的面试，等到了6点才面，一面20min 就结束了，而且面试官跟我做的完全不对口，甚至连 CentOS 都没听说过，接着又等到了七点半开始二面，二面还是一对二同时面（一个面试官同时面两个人），面试问的问题基本上就是 hr 问得那些，后来虽然也收到 offer，但总感觉心里没谱，所以就没去，毕竟华为的声名在外啊，对华为的感觉就是，重点看学校、看学习成绩，按学校级别给工资，基本上一看是好学校差不多的话都会要，进去之后估计是再统一培训，有些人比较喜欢这种，我是不太喜欢这种文化，这也是没选择华为的原因之一。</p>
 <p>接着说一下，对今年校招的感觉吧，今年的校招的工资整体要比全年高一个档次，但就业其实并没有去年好，只不过是前面那批人把校招工资拉开了一个档次，当然主要的原因还是今年互联网被华为搅得天翻地覆，谁让华为有钱，而且一招招几千甚至上万人。虽然去年也有一些公司工资开得很高，但招的人太少，影响不了互联网大局。华为就不一样了，招人多，还只招好学校的，还就完全不一样了。在之前，华为都是捡漏的，今年不但薪资高，而且校招还特别早，身边真的有很多人选择了华为放弃了 BAT。听说，当初有人拿到 BAT 其中某家的 offer，因为批发价太低，想谈一下工资，结果人家不给谈，他拿到华为 offer 之后直接就放弃了这家，再后来，这家公司开始给之前放弃 offer 的人打电话，表示工资可以谈，而且还开始补招，真是呵里个呵啊（前面的”他”实际上代表的是他们，泛指很多人）。从今年的情况来看华为的影响力还是相当大的，带动了整个互联网的薪酬水平。如果单纯讨论互联网公司，个人感觉今年首先 A 家招人很少，除了实习生转正和内推，基本上没有校招；B 家招人挺多，可能因为这家公司人员流动性比较大，每年招的人都挺多；T 家不太清楚，感觉跟那边不太对口；美团今年招人还是挺多的，比往年招的力度都要大，公司对于技术还是很重视的；某滴招人也不多，可能是社招人太多还有公司业务发展受限的原因；某米，感觉招人也不少吧，记得某米去年只招了100+人，今年发出的 offer 肯定是比这个高的。互联网公司整体校招力度跟去年比可能稍微差一些，不过由于华为今年突然发力，对于好的学校而言，整体的就业形式并不去年差。</p>
 <h1 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h1><p>这里，推荐一篇文章，黑桃夹克师兄当时找工作的时候写的：<a href="http://wuchong.me/blog/2014/09/30/looking-for-a-job-summary/" target="_blank" rel="external">找工作小记——善待挫折</a>，在拿到美团 offer 之前，我也经历一段很不自信、很沮丧的时段，这篇文章在这段时间给我了很大的鼓励，很感谢师兄分享自己的经历。毕竟像师兄这种能到阿里中间件 offer 的牛人，在找工作的时候也并不是一帆风顺的。</p>
@@ -3068,10 +3068,10 @@
     
     </summary>
     
-      <category term="随笔" scheme="http://wangzzu.github.io/categories/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/categories/%E9%9A%8F%E7%AC%94/"/>
     
     
-      <category term="随笔" scheme="http://wangzzu.github.io/tags/%E9%9A%8F%E7%AC%94/"/>
+      <category term="随笔" scheme="http://matt33.com/tags/%E9%9A%8F%E7%AC%94/"/>
     
   </entry>
   

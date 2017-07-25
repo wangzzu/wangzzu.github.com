@@ -5,7 +5,7 @@
     
     <entry>
       <title><![CDATA[Kafka 源码分析之 topic 创建过程（三）]]></title>
-      <url>http://wangzzu.github.io/2017/07/21/kafka-topic-create/</url>
+      <url>http://matt33.com/2017/07/21/kafka-topic-create/</url>
       <content type="html"><![CDATA[<p>本文是 Kafka 源码解析的第三篇，主要讲述一个 topic 的创建过程，从 topic 是如何创建到 topic 真正创建成功的中间详细过程，文章主要内容可以分为以下几个部分：</p>
 <ol>
 <li>topic 是如何创建的？<ul>
@@ -194,7 +194,7 @@
     
     <entry>
       <title><![CDATA[Linux 常用的一些系统命令]]></title>
-      <url>http://wangzzu.github.io/2017/07/16/linux-system-cmd/</url>
+      <url>http://matt33.com/2017/07/16/linux-system-cmd/</url>
       <content type="html"><![CDATA[<p>文章的内容，基本来自<a href="http://www.cnblogs.com/peida/tag/%E6%AF%8F%E6%97%A5%E4%B8%80linux%E5%91%BD%E4%BB%A4/" target="_blank" rel="external">每日一个 linux 命令</a>，选取了几个在工作常用的命令，有：top、iostat、netstat 、free 和 ps，本文的主要目的是在学习这几条命令的过程中，简单做一些记录，便于日后工作中更加熟练地使用这些命令。</p>
 <h1 id="top"><a href="#top" class="headerlink" title="top"></a>top</h1><p>top 命令是 Linux 下面实时展示系统运行情况的一个命令，它也可以显示当前每个任务的系统信息。在对系统的性能进行分析，它是一个最常用的命令。</p>
 <h2 id="命令常用参数"><a href="#命令常用参数" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><ol>
@@ -485,7 +485,7 @@
     
     <entry>
       <title><![CDATA[Kafka 源码分析之 Producer Metadata 更新机制（二）]]></title>
-      <url>http://wangzzu.github.io/2017/07/08/kafka-producer-metadata/</url>
+      <url>http://matt33.com/2017/07/08/kafka-producer-metadata/</url>
       <content type="html"><![CDATA[<p>在上一篇文章中，已经介绍了 Producer 的发送模型，Producer <code>dosend()</code> 方法中的第一步，就是获取相关的 topic 的 metadata，但在上篇中并没有深入展开，因为这部分的内容比较多，所以本文单独一篇文章进行介绍，本文主要来讲述以下三个问题：</p>
 <ol>
 <li>metadata 内容是什么；</li>
@@ -562,7 +562,7 @@
     
     <entry>
       <title><![CDATA[买房感想]]></title>
-      <url>http://wangzzu.github.io/2017/07/02/buy-little-room/</url>
+      <url>http://matt33.com/2017/07/02/buy-little-room/</url>
       <content type="html"><![CDATA[<p>落户+买房的事情终于搞定得差不多了（就差贷款合同的签署），六月份这个月已经往来杭州3趟，从四月底开始看房到现在，这一路真是五味杂粮、感慨颇多，亲身地感觉到生活之不易，无忧无虑的生活从离开大学的那一刻开始就已经结束，读研这两年半看似浑浑噩噩，但早已没有大学时的那种轻松惬意，或许这就是成长。</p>
 <h2 id="去库存历史进程"><a href="#去库存历史进程" class="headerlink" title="去库存历史进程"></a>去库存历史进程</h2><p>从四月底看房到7.1签合同，杭州房价整体至少涨了20%（间接地上涨，刚需买房的成本涨得更多），简单举几个例子，都是个人的亲身经历：</p>
 <ul>
@@ -656,7 +656,7 @@
     
     <entry>
       <title><![CDATA[Kafka 源码分析之 Producer 发送模型（一）]]></title>
-      <url>http://wangzzu.github.io/2017/06/25/kafka-producer-send-module/</url>
+      <url>http://matt33.com/2017/06/25/kafka-producer-send-module/</url>
       <content type="html"><![CDATA[<p>早就开始计划写 Kafka 源码分析的文章，但却一直迟迟没有动手，直到看到一位同事的博客 <a href="http://blog.bcmeng.com/" target="_blank" rel="external">编程小梦</a>，彻底受到了打击，这位同事是去年本科毕业，年龄算起来应该比我小两岁，但是非常厉害，在刚工作半年的时候就成为了 Apache Kylin 的 commiter，看到身边同事这么优秀，而且还这么努力 （<a href="http://blog.bcmeng.com/post/booklist.html" target="_blank" rel="external">编程小梦-我的书单</a>），自己实在没有理由不努力了，因此，在 github 上给自己提了一个 issue <a href="https://github.com/wangzzu/awesome/issues/7" target="_blank" rel="external">Kafka 源码分析系列</a>，希望自己能够在未来半年里，至少每两周输出一篇 Kafka 源码分析的文章，本文是这个系列的第一篇 —— Producer 的发送模型（以 <strong>Kafka 0.10.2</strong> 为例）。</p>
 <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>Kafka，作为目前在大数据领域应用最为广泛的消息队列，其内部实现和设计有很多值得深入研究和分析的地方。</p>
 <p>再 0.10.2 的 Kafka 中，其 Client 端是由 Java 实现，Server 端是由 Scala 来实现的，在使用 Kafka 时，Client 是用户最先接触到部分，因此，计划写的源码分析也会从 Client 端开始，会先从 Producer 端开始，今天讲的是 Producer 端的发送模型的实现。</p>
@@ -722,7 +722,7 @@
     
     <entry>
       <title><![CDATA[CSS 一些常用方法的总结]]></title>
-      <url>http://wangzzu.github.io/2017/06/21/css-summary/</url>
+      <url>http://matt33.com/2017/06/21/css-summary/</url>
       <content type="html"><![CDATA[<p>CSS 指的是层叠样式表（Cascading StyleSheet），在网页制作时采用层叠样式表技术，可以有效地对页面的布局、字体、颜色、背景和其它效果实现更加精确的控制，本文对 css 一些基本内容及常用功能进行一下总结，总结的内容主要是来自实验楼的 <a href="https://www.shiyanlou.com/courses/53" target="_blank" rel="external">CSS 速成教程</a>，这篇文章会实时更新，后续如果遇到什么好的有用功能，也会更新到这篇文章中。</p>
 <h1 id="css-基础语法"><a href="#css-基础语法" class="headerlink" title="css 基础语法"></a>css 基础语法</h1><p>CSS 规则由两个主要的部分构成：选择器，以及一条或多条声明。</p>
 <figure class="highlight"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">selector &#123;</div><div class="line">    declaration1;</div><div class="line">    declaration2;</div><div class="line">    ...</div><div class="line">    declarationN;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
@@ -1038,7 +1038,7 @@
     
     <entry>
       <title><![CDATA[HTML 一些常用方法的总结]]></title>
-      <url>http://wangzzu.github.io/2017/06/18/html-summary/</url>
+      <url>http://matt33.com/2017/06/18/html-summary/</url>
       <content type="html"><![CDATA[<p>HTML 是一种语言，是用来描述网页的语言，它是一种标记语言，HTML 就是使用标记标签来描述网页。</p>
 <p>HTML 算是最容易学习的语言之一，它也是必须掌握的一门语言，之前对 HTML 只是大概了解，并没有开发过前端页面，现在在工作中，会使用前端框架已经成为了一项必备技能，所以花了点时间简单看了一下<a href="https://www.shiyanlou.com/courses/19" target="_blank" rel="external">实验楼-HTML 基础课</a>，稍微再学习一下 HTML 的相关知识，本文记录一下一些常用的 HTML 内容，后期还会对 css 简单总结一下。</p>
 <h1 id="HTML-最基本用法"><a href="#HTML-最基本用法" class="headerlink" title="HTML 最基本用法"></a>HTML 最基本用法</h1><p>这里先介绍一下 HTML 的最基本用法。</p>
@@ -1240,7 +1240,7 @@
     
     <entry>
       <title><![CDATA[入职培训感想]]></title>
-      <url>http://wangzzu.github.io/2017/05/27/induction-training-think/</url>
+      <url>http://matt33.com/2017/05/27/induction-training-think/</url>
       <content type="html"><![CDATA[<p>这周参加了公司的封闭式入职培训，总共是五天的时间，今年是公司第一次进行校招封闭式培训。记得去年七月份来公司实习，一起入职的校招同事参加的入职培训才两天时间，而且也不是封闭式的，一年的时间，变化还是很大的，这也间接证明公司的发展速度很快。作为公司第一届参加封闭式入职培训的员工（不是这届的第一批），在这五天中明显感觉到了收获了很多，这里记录总结一下。</p>
 <h2 id="周一"><a href="#周一" class="headerlink" title="周一"></a>周一</h2><p>今天上午九点从公司出发到酒店，早上起来的时候还只是小雨，九点多出发的时候已经变成了大到暴雨，京城的雨本来就很少，但是很多时候一旦雨一下来就收不住了。从公司门口到大巴车只有短短的100米，但全身已被淋湿了很多，好在到了酒店之后雨已经差不多停了。</p>
 <p>到了酒店会议室之后，已经快到中午了，同组同学相互认识一下，然后负责培训的同事介绍一下培训期间的一些规则，之后就到了吃午饭的时间（关于伙食就不想多介绍了，冷暖自知😂）。</p>
@@ -1391,7 +1391,7 @@
     
     <entry>
       <title><![CDATA[腾讯传，一个激情澎湃的时代]]></title>
-      <url>http://wangzzu.github.io/2017/04/16/tencent-read/</url>
+      <url>http://matt33.com/2017/04/16/tencent-read/</url>
       <content type="html"><![CDATA[<p>这两周把<a href="https://book.douban.com/subject/26929955/" target="_blank" rel="external">《腾讯传》</a>看完了，这本书去年出版的时候就想去看，但是一拖就拖到了现在，直到上周出去玩，回来的时候路上遇到了堵车，车上实在无聊，就开始看这本书。我平时是比较喜欢看这类科技史或科技公司史的书，第一次看这种类型的书，读的吴军老师的<a href="https://book.douban.com/subject/6709783/" target="_blank" rel="external">《浪潮之巅》</a>，当时真叫是一个过瘾，至今还记得当时那种情景 —— 怎一个爽字了得，一口气连着两天在图书馆把这本书看完了。可是现在在看《腾讯传》时，已经没有了那种感觉，但最后还是在两周的时间里把这本书看完了，跟着吴晓波一起重温了一个伟大互联网公司（3Q 之后的腾讯）发展历程 —— 一个激情澎湃的时代。</p>
 <p>改革开放三十多年以来，个人认为给中国经济带来最大贡献的应该是两个方面：制造业和互联网。这十几年来，互联网公司上市造富神话，可以说是激励一批又一批的有志青年投身创业大潮。互联网这个行业应该可以说是所有行业里面竞争最透明、最激烈的行业了，它成功冲破了国企垄断的壁垒、也幸运地战胜了美国的一些互联网巨头的入侵，使得中国市场在全球显得独树一帜。从八十年代中国第一次连入到全球互联网开始，中国的互联网主要经历了三个重要阶段：</p>
 <ol>
@@ -1489,7 +1489,7 @@
     
     <entry>
       <title><![CDATA[欧洲简史]]></title>
-      <url>http://wangzzu.github.io/2017/04/04/read/</url>
+      <url>http://matt33.com/2017/04/04/read/</url>
       <content type="html"><![CDATA[<p>最近几周把这本<a href="https://book.douban.com/subject/5366248/" target="_blank" rel="external">你一定爱读的极简欧洲史</a>读完了，在阅读的过程中，感觉真的是很爽，不愧是豆瓣的8+分图书。读完本书，可以对欧洲的历史有一个大概的了解，即便是最后很多的细节记不清楚，但是整个历史过程还是会有一定的印象，能建立一个大概的时间线。读完本书，如果再有人问你<code>为什么现代科学、政治制度会诞生在西方，而不是一直领先的中国？</code>你应该也能说几个理由的。</p>
 <p>全本主要分为两个部分，第一部分整体介绍了一下欧洲的大概历史进程，第二部分选取了其中的六个比较重要的方面进行介绍。纵观欧洲整个历史，大题可分为三个时代：古典时期、中世纪和近代，如下图所示。古典时期主要是古希腊和古罗马时代，而中世纪又称黑暗的中世纪，直到公元十五世纪开始文艺复兴之后，欧洲才逐渐从中世纪中走出来，进入到近代。</p>
 <p><img src="http://upload-images.jianshu.io/upload_images/573840-8f214b350ec6cd08.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="欧洲历史年表"></p>
@@ -1565,7 +1565,7 @@
     
     <entry>
       <title><![CDATA[Storm 对 0.10.x 版 Kafka 支持解析]]></title>
-      <url>http://wangzzu.github.io/2017/03/17/storm-kafka-0-10-1/</url>
+      <url>http://matt33.com/2017/03/17/storm-kafka-0-10-1/</url>
       <content type="html"><![CDATA[<p>由于 0.10.x 版 Kafka 与 0.8.x 版有很大的变化，这种变化对下游 Storm 有非常大的影响，0.10.x 版的 Kafka 不但增加了权限管理的功能，而且还将 simple 和 high consumer 的 offsets 进行统一管理，也就意味着在 0.8.x 中 Storm 需要去负责管理 offsets，而在 0.10.x 中，Storm 不需要关心 consumer 的 offsets 的问题，这对 KafkaSpout 的设计有很大的影响，本文就是对 <code>Storm 对 0.10.x 版 Kafka 支持的实现</code>部分的解析。</p>
 <h1 id="0-10-x-版-KafkaSpout-的实现"><a href="#0-10-x-版-KafkaSpout-的实现" class="headerlink" title="0.10.x 版 KafkaSpout 的实现"></a>0.10.x 版 KafkaSpout 的实现</h1><p>社区对新版 Kafka 的支持，总体分为两种情况：</p>
 <ol>
@@ -1588,7 +1588,7 @@
 <li><code>offset.commit.period.ms</code>：设置 spout 多久向 Kafka commit一次，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L189-L193" target="_blank" rel="external">setOffsetCommitPeriodMs</a> 中配置；</li>
 <li><code>max.uncommitted.offsets</code>：控制在下一次拉取数据之前最多可以有多少数据在等待 commit，在 KafkaSpoutConfig 的 <a href="https://github.com/apache/storm/blob/1.0.x-branch/external/storm-kafka-client/src/main/java/org/apache/storm/kafka/spout/KafkaSpoutConfig.java#L211-L217" target="_blank" rel="external">setMaxUncommittedOffsets</a> 中配置；</li>
 </ul>
-<h3 id="spout-的处理过程"><a href="#spout-的处理过程" class="headerlink" title="spout 的处理过程"></a>spout 的处理过程</h3><p>关于 Kafka 的几个 offset 的概念，可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#offset-那些事"> offset的一些相关概念</a></p>
+<h3 id="spout-的处理过程"><a href="#spout-的处理过程" class="headerlink" title="spout 的处理过程"></a>spout 的处理过程</h3><p>关于 Kafka 的几个 offset 的概念，可以参考<a href="http://matt33.com/2017/01/16/kafka-group/#offset-那些事"> offset的一些相关概念</a></p>
 <p>KafkaSpout 的处理过程主要是在 <code>nextTuple()</code> 方法，其处理过程如下：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">nextTuple</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">if</span> (initialized) &#123;</div><div class="line">        <span class="keyword">if</span> (commit()) &#123;<span class="comment">// Step1 非自动 commit,并且定时达到</span></div><div class="line">            commitOffsetsForAckedTuples();<span class="comment">// 对所有已经 ack 的 msgs 进行 commit</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (poll()) &#123;<span class="comment">//Step2 拉取的数据都已经发送,并且未 commit 的消息数小于设置的最大 uncommit 数</span></div><div class="line">            setWaitingToEmit(pollKafkaBroker());</div><div class="line">            <span class="comment">//将拉取的所有 record 都放到 waitingToEmit 集合中,可能会重复拉取数据（由于一些 msg 需要重试，通过修改 Last Committed Offset 的值来实现的）</span></div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (waitingToEmit()) &#123;<span class="comment">//Step3 waitingToEmit 中还有数据</span></div><div class="line">            emit();<span class="comment">//发送数据,但会跳过已经 ack 或者已经发送的消息</span></div><div class="line">        &#125;</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">        LOG.debug(<span class="string">"Spout not initialized. Not sending tuples until initialization completes"</span>);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
 <p>上面主要分为三步：</p>
@@ -1612,7 +1612,7 @@
 <li>storm 处理 failed 的 msg，会保存到一个专门的集合中，在每次拉取数据时（是拉取数据，不是发送数据，发送数据时会检测该数据是否已经成功处理），会遍历该集合中包含的所有 TopicPartiion，获取该 partition 的 Last Committed Offset；</li>
 </ol>
 <p>这样设计有一个副作用就是：如果有一个 msg 一直不成功，就会导致 KafkaSpout 因为这一条数据的影响而不断地重复拉取这批数据，造成整个拓扑卡在这里。</p>
-<h3 id="Kafka-Rebalance-的影响"><a href="#Kafka-Rebalance-的影响" class="headerlink" title="Kafka Rebalance 的影响"></a>Kafka Rebalance 的影响</h3><p>Kafka Rebalance 可以参考<a href="http://wangzzu.github.io/2017/01/16/kafka-group/#Consumer-Rebalance">Consumer Rebalance</a>.</p>
+<h3 id="Kafka-Rebalance-的影响"><a href="#Kafka-Rebalance-的影响" class="headerlink" title="Kafka Rebalance 的影响"></a>Kafka Rebalance 的影响</h3><p>Kafka Rebalance 可以参考<a href="http://matt33.com/2017/01/16/kafka-group/#Consumer-Rebalance">Consumer Rebalance</a>.</p>
 <p>KafkaSpout 实现了一个内部类用来监控 Group Rebalance 的情况，实现了两个回调函数，一旦发现 group 的状态变为 <code>preparingRabalance</code> 之后</p>
 <ol>
 <li><code>onPartitionsRevoked</code> 这个方法会在 Consumer 停止拉取数据之后、group 进行 rebalance 操作之前调用，作用是对已经 ack 的 msg 进行 commit；</li>
@@ -1625,7 +1625,7 @@
     
     <entry>
       <title><![CDATA[Kafka 之 Group 状态变化分析及 Rebalance 过程]]></title>
-      <url>http://wangzzu.github.io/2017/01/16/kafka-group/</url>
+      <url>http://matt33.com/2017/01/16/kafka-group/</url>
       <content type="html"><![CDATA[<p>前段时间看一下 Kafka 的部分源码（0.10.1.0 版），对一些地方做了一些相应的总结。本文主要就 Kafka Group 方面的内容做一下详细的讲述，重点讲述 Consumer Client 如何进行初始化、Server 端对应的 Consumer Group 状态如何进行变化以及对一些 Kafka 的新设计（与旧版不同之处）简单介绍一下。</p>
 <h1 id="Group-状态机"><a href="#Group-状态机" class="headerlink" title="Group 状态机"></a>Group 状态机</h1><p>在 0.9.0.0 之后的 Kafka，出现了几个新变动，一个是在 Server 端增加了 GroupCoordinator 这个角色，另一个较大的变动是将 topic 的 offset 信息由之前存储在 zookeeper 上改为存储到一个特殊的 topic 中（<code>__consumer_offsets</code>）。</p>
 <h2 id="offset-那些事"><a href="#offset-那些事" class="headerlink" title="offset 那些事"></a>offset 那些事</h2><p>在 Kafka 中，无论是写入 topic，还是从 topic 读取数据，都免不了与 offset 打交道，关于 Kafka 的 offset 主要有以下几个概念，如下图。</p>
@@ -1652,7 +1652,7 @@
 <p><img src="/images/kafka/group.png" alt="group-state"></p>
 <p>各个状态转化的情况，只有有对应箭头才能进行转移，比如 Empty 到 PreparingRebalance 是可以转移的，而 Dead 到 PreparingRebalance 是不可以的。后面会根据一个 Consumer Client 启动的过程，讲述一下其 Group 状态变化情况。</p>
 <h1 id="Consumer-初始化"><a href="#Consumer-初始化" class="headerlink" title="Consumer 初始化"></a>Consumer 初始化</h1><p>Server 端 Group 状态的变化，其实更多的时候是由 Client 端触发的，一个 group 在最初初始化的过程总其实就是该 Group 第一个 Consumer Client 初始化的过程。</p>
-<h2 id="Consumer-poll-过程解析"><a href="#Consumer-poll-过程解析" class="headerlink" title="Consumer poll 过程解析"></a>Consumer poll 过程解析</h2><p>对 Consumer 的初始化，正如 <a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍</a> 这篇文章所述，Consumer 的核心逻辑部分主要在其 poll 模型。而其源码的实现上，主要的逻辑实现也是在 <code>pollOnce</code> 方法，如下所示。</p>
+<h2 id="Consumer-poll-过程解析"><a href="#Consumer-poll-过程解析" class="headerlink" title="Consumer poll 过程解析"></a>Consumer poll 过程解析</h2><p>对 Consumer 的初始化，正如 <a href="http://matt33.com/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍</a> 这篇文章所述，Consumer 的核心逻辑部分主要在其 poll 模型。而其源码的实现上，主要的逻辑实现也是在 <code>pollOnce</code> 方法，如下所示。</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//<span class="doctag">NOTE:</span> 一次 poll 过程</span></div><div class="line"><span class="keyword">private</span> Map&lt;TopicPartition, List&lt;ConsumerRecord&lt;K, V&gt;&gt;&gt; pollOnce(<span class="keyword">long</span> timeout) &#123;</div><div class="line">    coordinator.poll(time.milliseconds());<span class="comment">//NOTE： 获取 GroupCoordinator 并连接、加入 Group、Group 进行 rebalance 并获取 assignment</span></div><div class="line"></div><div class="line">    <span class="comment">// fetch positions if we have partitions we're subscribed to that we</span></div><div class="line">    <span class="comment">// don't know the offset for</span></div><div class="line">    <span class="keyword">if</span> (!subscriptions.hasAllFetchPositions())<span class="comment">//<span class="doctag">NOTE:</span> 更新 offset</span></div><div class="line">        updateFetchPositions(<span class="keyword">this</span>.subscriptions.missingFetchPositions());</div><div class="line"></div><div class="line">    <span class="comment">// if data is available already, return it immediately</span></div><div class="line">    Map&lt;TopicPartition, List&lt;ConsumerRecord&lt;K, V&gt;&gt;&gt; records = fetcher.fetchedRecords();</div><div class="line">    <span class="comment">//NOTE： 根据最大限制拉取数据（按 partition 拉取,这个 partition 数据拉取完之后,拉取下一个 partition）</span></div><div class="line">    <span class="keyword">if</span> (!records.isEmpty())</div><div class="line">        <span class="keyword">return</span> records;</div><div class="line">    <span class="comment">//<span class="doctag">NOTE:</span> 说明上次 fetch 到是的数据已经全部拉取了,需要再次发送 fetch 请求,从 broker 拉取数据</span></div><div class="line"></div><div class="line">    <span class="comment">// send any new fetches (won't resend pending fetches)</span></div><div class="line">    fetcher.sendFetches();<span class="comment">//<span class="doctag">NOTE:</span> 向订阅的所有 partition 发送 fetch 请求,会从多个 partition 拉取数据</span></div><div class="line"></div><div class="line">    <span class="keyword">long</span> now = time.milliseconds();</div><div class="line">    <span class="keyword">long</span> pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);</div><div class="line"></div><div class="line">    client.poll(pollTimeout, now, <span class="keyword">new</span> PollCondition() &#123;</div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">shouldBlock</span><span class="params">()</span> </span>&#123;</div><div class="line">            <span class="comment">// since a fetch might be completed by the background thread, we need this poll condition</span></div><div class="line">            <span class="comment">// to ensure that we do not block unnecessarily in poll()</span></div><div class="line">            <span class="keyword">return</span> !fetcher.hasCompletedFetches();</div><div class="line">        &#125;</div><div class="line">    &#125;);</div><div class="line"></div><div class="line">    <span class="comment">// after the long poll, we should check whether the group needs to rebalance</span></div><div class="line">    <span class="comment">// prior to returning data so that the group can stabilize faster</span></div><div class="line">    <span class="keyword">if</span> (coordinator.needRejoin())</div><div class="line">        <span class="keyword">return</span> Collections.emptyMap();</div><div class="line"></div><div class="line">    <span class="keyword">return</span> fetcher.fetchedRecords();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
 <p>与 Server 进行交互，尤其初始化 Group 这一部分，主要是在 <code>coordinator.poll()</code> 方法，源码如下</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">poll</span><span class="params">(<span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">    invokeCompletedOffsetCommitCallbacks();<span class="comment">//<span class="doctag">NOTE:</span> 触发回调函数</span></div><div class="line"></div><div class="line">    <span class="keyword">if</span> (subscriptions.partitionsAutoAssigned() &amp;&amp; coordinatorUnknown()) &#123;</div><div class="line">        <span class="comment">//<span class="doctag">NOTE:</span> 通过 subscribe() 方法订阅 topic,并且 coordinator 未知</span></div><div class="line">        ensureCoordinatorReady();<span class="comment">//<span class="doctag">NOTE:</span> 获取 GroupCoordinator 地址,并且建立连接</span></div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="keyword">if</span> (needRejoin()) &#123;<span class="comment">//<span class="doctag">NOTE:</span> 判断是否需要重新加入 group,如果订阅的 partition 变化或则分配的 partition 变化时,需要 rejoin</span></div><div class="line">        <span class="comment">// due to a race condition between the initial metadata fetch and the initial rebalance,</span></div><div class="line">        <span class="comment">// we need to ensure that the metadata is fresh before joining initially. This ensures</span></div><div class="line">        <span class="comment">// that we have matched the pattern against the cluster's topics at least once before joining.</span></div><div class="line">        <span class="keyword">if</span> (subscriptions.hasPatternSubscription())</div><div class="line">            client.ensureFreshMetadata();</div><div class="line"></div><div class="line">        ensureActiveGroup();</div><div class="line">        <span class="comment">//<span class="doctag">NOTE:</span> 确保 group 是 active;加入 group;分配订阅的 partition</span></div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    pollHeartbeat(now);<span class="comment">//<span class="doctag">NOTE:</span> 检查心跳线程运行是否正常,如果心跳线程失败,则抛出异常,反之更新 poll 调用的时间</span></div><div class="line">    maybeAutoCommitOffsetsAsync(now);<span class="comment">//<span class="doctag">NOTE:</span> 自动 commit 时,当定时达到时,进行自动 commit</span></div><div class="line">&#125;</div></pre></td></tr></table></figure>
@@ -1671,7 +1671,7 @@
     
     <entry>
       <title><![CDATA[别人向上，我们却在向下]]></title>
-      <url>http://wangzzu.github.io/2017/01/08/book/</url>
+      <url>http://matt33.com/2017/01/08/book/</url>
       <content type="html"><![CDATA[<p>花了两周多的时间把钱穆老先生这部神作读完了，读完之后的感觉是，书中有太多的观点让我有醍醐灌顶之感，钱老读史思考的深度远非常人所及，这本书非常值得拜读，豆瓣上也同样给出了9分以上评价，真的名不虚传（<a href="https://book.douban.com/subject/11229072/" target="_blank" rel="external">《中国历代政治得失》</a>）。因为这本书并不是一气看完，大部分是在上下班的班车上看的，每天看一部分，持续半个月之后才看完，所以书中一些感觉很不错的观点到现在可能已经忘了一部分，现在回忆起整本书，大概有三点让我印象非常深刻，下面也会就这三点讲述一下。</p>
 <p>第一点印象最深的地方当然是<strong>制度</strong>这一部分了，全文几乎都是在围绕着历代的政治制度而讲述。好的制度可以让这个国家更简单、更高效地运转，中国自古有句俗话，叫做”打天下容易，坐天下难”，在打天下的时候，少则几年、多则十几年就能打下天下。但随着队伍、领地的扩大，很多问题会暴露出来，由于之前是战时，这些问题可以暂时不管，而一旦国家归于统一、社会稳定下来之后，这些问题就不能不管了，如何为政府选取人才、如何指定合理的徒土地政策、赋役政策以及军队政策等，这些问题哪一个处理不好，都可能会导致功亏一篑，所以说坐天下难。但是难也得干下去，正所谓在其位谋其政，历代政府都使出自己的浑身解数，制定了一套政策，让这个庞大的国家开始缓慢地运转，而有些政策因其非常重要可能会以明文记载作为制度来保证政策高效地运行，制度一旦形成，甚至就如信仰一般，无人敢违逆。每个朝代在开始时期，都会指定一套保证政府运转的制度（而有的朝代却攻于权术，想着各种手段维护自己的统治，而不是尽一个政府的职责），而这些制度一旦形成，随着发展，到后期可能会变得漏洞百出而成为一些利息集团的保护伞，正所谓此一时彼一时，时代在发展，历史上也没有一套制度可以高效地运作几千年或者几百年而不离其初心。而且一旦利息集团形成，后世的知识分子又如何去改变呢？有的知识分子虽然看到这些弊端，如王安石，他同样也身居高危开始变法，也有了皇帝的支持，可是最后依然没有成功，中国人老是讲一句”祖宗之法不能改”。这种观念反而束缚了后世，如果制度不用变，后世还要政治家干什么？这也导致一个朝代兴起之后，后来因慌于人事而逐渐走向下坡路。朝代初兴之时，一般会出现很多人才，也会有圣明的皇帝，这种情况下，一些制度是可以按照其初心正常运作，而几十年或者百年之后，如果人事不给力，谁来保证？多少朝代由于这而毁，这也就突出一个好制度的重要性。制度，名义上一种规章制度，是大家共同遵守的信仰，也是约束大家的法则，但制度又不能一成不变，中国有时候就非常认死理，制度竟然可以原封不动运行几百年，这到后面怎么可能不出问题？这时候如果说中国没有法制观念反而不合适，我们反观一下西方人，他们的制度或法律其实是不在不断变化的、或者是进入了一个不断完善的轨道，西方的一些政府人员是是由人民选举出来，所以必然会代表多数人的利益，要不然下次肯定会被选下去，所以他们的制度或者法律也是会必然代表多数人的利益，而多数人的利益在发展的过程中是在不断变化的、而不是一成不变的，这也是它们制度能够自我完善的一个原因。而历史中的我们，就很难做到这一点，如果皇帝大臣是圣人君子还好，如果不是，受苦的只能是老百姓，这就说明，我们虽然有制度，但是并没有好的制度来保证这个国家的长久运转。</p>
 <p>第二点说一下利益集团，或者是权力集团，钱老提出的这点观点还是很令我感到新奇的。西方社会刚开始的权力是把握在教会手中，后来又到了贵族手中，从来没有开放给全社会，这也是西方民众对主权、对权力的非常看重的原因，而我们则不一样，可以说从秦朝开始权力就已经开放给全社会或者很大一部分开放给全社会了，除了皇室，其他的职位到后来已经没有世袭，只要你有能力有才华而且又能证明自己，即使你出身低贱也能走向巅峰，如商鞅、韩信等。后来到了唐朝之后，就开始形成了科举制度，读书人科举成功即可入朝为官，可以说从此之后，中国社会的权力集团就是这些知识分子，他们才是保证这个国家运转的核心。虽说中国是皇权社会，但是皇帝只是一个人，不可能管理整个国家，皇帝的背后必然会有一群体支持着皇帝，帮着皇帝去管理整个国家。有了科举制度之后，整个国家的运转就靠着这些选举出来的人才来管理，而那些朝廷大员又非世袭，很多丞相或者内个大学士都出身贫苦，国家靠着这些读书人管理着整个国家，所以可以说中国是一个”仕人社会”，只不过到了元朝和清朝就变成了”部族社会”，这就另说了。</p>
@@ -1799,11 +1799,11 @@
     
     <entry>
       <title><![CDATA[2016年终总结]]></title>
-      <url>http://wangzzu.github.io/2016/12/31/2016-summary/</url>
+      <url>http://matt33.com/2016/12/31/2016-summary/</url>
       <content type="html"><![CDATA[<p>今天凌晨2点吃完饭回来之后，真是辗转反侧，不知为何，一直难以入眠，或许因为过了睡点，又或许因为昨晚的年会玩得太嗨，也可能是感觉对过去的一年有些许遗憾……</p>
 <p>昨晚参加了最后一次实验室的年会，前两年中的都是三等奖（100块钱），没想到昨晚运气大爆发了，中了特等奖（Kindle Voyage），也算是2016年一个比较好的收官。然而，晚上睡觉时内心却是如何也无法平静下来，脑海中一直不断闪烁着过去一年、甚至过去两三年发生的一些事，不管怎样，时间就是这样，过去的就是过去了，并不以我们的意志为转移。</p>
 <p>孟子说“吾日三省吾身”，这句话我们上小学时都学过，可是大多数人并没有去认真践行过，可能是现在这个社会给人压力大得已经很少有时间去思考、去反思。但是很多人却都有年终总结的习惯，总结一下过去一年做了什么事，是否完成了去年年终总结定的计划，再做一下未来一年的计划。有计划的人生总是会好一点，至少会给未来一年指引方向，甚至可以通过一些量化的指标来屏蔽一些重要的问题：我要想什么样的人生，我想要什么样的生活。这两个问题真的很难去回答，其实我们每个人也只是在不断地去摸索，因为我们原本就没有一个很清晰的目标。即使有了清晰的目标也很难在未来一年的时间里去完成，而我们又都是如此地急功近利，如果一件事情要花费自己三五年的时间、甚至十年时间的话，很多人可能都会选择放弃，去选择一些易于在短期内实现的目标。如果一个人没有一个清晰的长远目标，或者没有这个概念的话，那么年度目标其实也就是督促自己做点事而已。对于我们这种即将毕业或者刚步入职场的人来说，虽然并不一定有一个非常清晰的长远目标，但是至少是要有一个这样的概念。选取一个或者多个对你非常重要、或者能给你带来很大的提高、而短期无法实现的长远目标，把这个分割到每一年里慢慢去实现，但有一点要明确的是长远目标的制定依然是为了那两个问题而设置的，那两个问题肯定会在未来十年甚至二十年的时间不断地困扰我们，我们能做的，也只是不断地尝试，不断地去追寻内心（以上只是个人感慨，下面开始流水账）。</p>
-<h1 id="工作"><a href="#工作" class="headerlink" title="工作"></a>工作</h1><p>从今年开始也算是正式迈入了职场，毕竟也在公司实习了半年多了，今年最重要的事情就是找工作这件事了，人生的第一份工作，好在最后去的部门、做的事情是自己想要的（找工作的感想可以参考<a href="http://wangzzu.github.io/2016/11/15/job-summary/">校招找工作小记</a>）。</p>
+<h1 id="工作"><a href="#工作" class="headerlink" title="工作"></a>工作</h1><p>从今年开始也算是正式迈入了职场，毕竟也在公司实习了半年多了，今年最重要的事情就是找工作这件事了，人生的第一份工作，好在最后去的部门、做的事情是自己想要的（找工作的感想可以参考<a href="http://matt33.com/2016/11/15/job-summary/">校招找工作小记</a>）。</p>
 <p>除了正式工作，另一件非常重要的事就是毕业这件事了。记得去年下半年一直在绞尽脑汁，憋了好久才写了一篇小论文的大概，没写出多少，今年年初来了之后就边找实习边写小论文，最后也很幸运地成功水了一个会议。小论文之后又是大论文，纸老虎打了一个总是还会再出现一个，在实习前火急火燎地完成了初稿，后来又花了半个多月改了一下，到目前为止还没出现什么问题，祈祷盲审不中，明年顺利毕业。</p>
 <p>关于明年，希望自己在工作上能有所建树，自己在公司未来的方向就是 Kafka 平台的开发和运维，希望自己能实现以下几个小目标：</p>
 <ol>
@@ -1845,7 +1845,7 @@
     
     <entry>
       <title><![CDATA[Java 的 Checked 和 Unchecked Exception【译】]]></title>
-      <url>http://wangzzu.github.io/2016/12/13/java-exception/</url>
+      <url>http://matt33.com/2016/12/13/java-exception/</url>
       <content type="html"><![CDATA[<p>如果在 Java 应用中对 Exception 能够正确处理，那么将会使你的程序更具有健壮性。但是很多人对 Exception 中的 <strong>Checked Exception</strong> 和 <strong>Unchecked Exception</strong> 并不理解，并且 Exception 又常常被被分为 JVM Exception 和程序 Exception，这就让一些开发者显得更加困惑了，本文就这几个概念详细讲述一下。（本文翻译自<a href="http://www.hacktrix.com/checked-and-unchecked-exceptions-in-java" target="_blank" rel="external">Checked and Unchecked Exceptions in Java</a>）</p>
 <h1 id="Checked-Exception"><a href="#Checked-Exception" class="headerlink" title="Checked Exception"></a>Checked Exception</h1><p>Checked Exception 是必须在代码中进行恰当处理的 Exception，而且编译器会强制开发者对其进行处理，否则编译会不通过。你可以使用 <code>catch</code> 语句捕获这些 Exception 或者在方法声明处使用 <code>throws</code> 语句抛出该异常。</p>
 <p>一般来说，Checked Exception 的发生主要是由于一些特殊情况没有考虑到，比如如果网络连接失败会抛出 IOException，但是我们的程序应该能够提前预料到这些可能发生的异常，并对其进行处理，这样程序在运行过程中才不会崩掉，这也是编译器强制开发者对 Checked Exception 进行处理的原因。假设在文件传输的过程中网络出现中断，这时候程序应该能够捕获到这种异常并进行处理（重新尝试传输文件）。</p>
@@ -1883,7 +1883,7 @@
     
     <entry>
       <title><![CDATA[Vim 快捷键总结]]></title>
-      <url>http://wangzzu.github.io/2016/12/06/vim-basic/</url>
+      <url>http://matt33.com/2016/12/06/vim-basic/</url>
       <content type="html"><![CDATA[<p>Vim 到目前位置也用了将近两年，但是很多的快捷键每次要用到的时候还是会 Google 一下，只能记住很少的命令，查的过程其实还是会浪费很多时间，这里总结一下一些常用的 Vim 命令，以便以后查看。</p>
 <h1 id="光标移动"><a href="#光标移动" class="headerlink" title="光标移动"></a>光标移动</h1><table>
 <thead>
@@ -2196,7 +2196,7 @@
     
     <entry>
       <title><![CDATA[技巧，其实并没有什么技巧，只不过多了些毅力罢了]]></title>
-      <url>http://wangzzu.github.io/2016/11/29/book/</url>
+      <url>http://matt33.com/2016/11/29/book/</url>
       <content type="html"><![CDATA[<p>本文是关于<a href="https://book.douban.com/subject/26874593/" target="_blank" rel="external">技巧</a>这本书的读书笔记。这本书是作者根据自己的生活学习经历悟出的一些方法论，满满的正能力，但有不同于一般的鸡汤文，书中提到的那些<strong>技巧</strong>，其实每个人都可以做到，但实际上却很少有人做到，正如作者所说<code>因为别人都睡着，你醒着那么你就是杰出的</code>。方法其实还是那种最简单的方法，简要来说就是<strong>行动+坚持</strong>，这也是最难的方法，因为坚持是最难的。用这种方法达到自己想要效果的人就认为这种方法非常有用，就如作者学习英语一样，而对于大多数那些坚持不下去的人来说，他们感觉这就是在扯犊子，正所谓方法因人而异。如果一味地去追求 XX 天精通 XX，其实最后的结果只会是<strong>从入门到放弃</strong>。</p>
 <p>写着写着突然想讨论一下关于<strong>读书</strong>这个问题，在自己的印象中，自己第一次真正意义上、主动去读书应该是在中考结束的那个暑假，我现在已经忘了当时是什么原因让自己在那个暑假里读了好几本书，记得当时读了《三国演义》，在读完《三国演义》时觉得这本书应该是四大名著里写得最好的了，搞不懂为啥是《红楼梦》。而《红楼梦》这本书当时是强迫自己看下去的，这点还是有印象的，但当看到三十回之后，就被深深吸引住了，一发不可收拾，当时基本上晚上睡觉前都在读。当然，现在对于其中很多的细节都已经想不起来了，书中很多的故事也忘得差不多了，当年背了很久的《葬花词》也记不起几句了。我现在唯一有印象的，可能就是当时那段时光每天都在看书的场景（虽然是小说 :joy:），回忆起来还是很怀念的。再后来，上了高中之后，基本上就没有自己自主支配的时间，也就再也没有怎么看过书（非学科类的书）了。这就是在大学之前我与书的故事，很简单，但事实上，对于那个时候的我，并不知道怎么去读书，也不知道读这些书对自己有什么用，只是被书中的故事吸引而已，当然也就没有像红学研究者那样去思考这本书后面的故事。</p>
 <p>到了大学之后，自己看的书也不是很多，其实是很少，这是我关于大学的遗憾之一，并没有在看书上花太多时间，大学四年自己看的书应该不会超过二十本。忘了是大二还是大三的时候，当时室友买了一本<a href="https://book.douban.com/subject/1013208/" target="_blank" rel="external">《如何阅读一本书》</a>，当时我在看到这本书的名字，对他不屑一顾地嘲笑了一番，当时感觉看书还需要学习、还需要让一本书来教你？看书不是每个人都会的吗？当时还没有开始接触豆瓣，并不知道在豆瓣上评分8.5的书意味着什么。</p>
@@ -2461,7 +2461,7 @@
     
     <entry>
       <title><![CDATA[观念在变化、在成长]]></title>
-      <url>http://wangzzu.github.io/2016/11/25/book/</url>
+      <url>http://matt33.com/2016/11/25/book/</url>
       <content type="html"><![CDATA[<p>之前公司推送了一位大神的推荐书单，当中推荐了这本<a href="https://book.douban.com/subject/20463108/" target="_blank" rel="external">《观念的水位》</a>，那是第一次看到这本书，记得当时看到这本书的名字，瞬间就吸引了我的兴趣，然后就在豆瓣上搜索了一下，看到评价还不错，就加到了自己的书单里。再后来，回到学校就在网上找到这本书的电子版，下载到手机里就开始看了起来，中间大概花了半个月的时间把这本书看完，那段时间基本上每天在公司上下班的班车和地铁上都在看这本书。在看的过程中，根据每篇文章看后的感想，做了一部分的笔记，在文章的后面会列出来。</p>
 <p>在刚开始读的时候，就感觉这本书写得很深刻，披露得也很现实，甚至有点怀疑这本书是不是在大陆出版的。从书的整体上来看，感觉这本书，可以分为三大部分，第一部分是作者根据身边的实事写的一些思考和感悟，主要是以作者在英国的生活经历为主；第二部分，确切的是说应该是作者对于一些名著（或小说）的读后感；第三部分，是作者对电影的一些感悟。因为作者主要是研究历史、政治经济学（确切应该是政治学）这一块，当然其中也有关于人性和心理学的内容，作者根据身边的实事、电影以及小说，对宪政、人性进入了很多深入的分析，其中很多的地方都是我从来没想过的点（书读得少，没办法）。最令自己的敬佩的是，作者每读一本书，都会写一篇文章，看一些好电影也是这样，作者都会去深入地思考，这些都是自己应该去学习的地方。</p>
 <p>当然，这本书在豆瓣能达到8分以上，证明书的内容也不会差到哪去。在读这本书的过程中，有种当时读《野火集》的感觉，感觉我们国家相比于欧美发达国家而言，政治文明、法制文明、宪政制度真的相差很远，而且我们国家在发展的过程中，还出现了各种各样的问题，这些问题都影响着我们每一个人。我们都知道法制的重要性，可是一个没有独立司法环境的社会，如何保障法制社会的建立、如何保障公民权利，一个人既当球员又当裁判，该如何保障另一球队的公平性？</p>
@@ -2680,7 +2680,7 @@
     
     <entry>
       <title><![CDATA[从《驴得水》到《我不是潘金莲》的一些思考]]></title>
-      <url>http://wangzzu.github.io/2016/11/20/movie-think/</url>
+      <url>http://matt33.com/2016/11/20/movie-think/</url>
       <content type="html"><![CDATA[<p>今年好久没去电影院看过电影了，今天趁着周末去看场电影，选了最近比较火的<a href="https://movie.douban.com/subject/26630781/?from=showing" target="_blank" rel="external">《我不是潘金莲》</a>，据说这部电影跟《驴得水》有些相似之处，比较贴近现实，并那么做作。看完之后确实感慨很多，相比于以前的那些烂电影真的要好很多。</p>
 <p>今年上映的国产电影，不得不说有几部确实还是挺不错的，虽然还是烂片居多。关于电影，其实我一直都是有个疑问，之前看过很多的韩国电影，看完真心感觉很多韩国电影拍得很不错，尤其是近几年，韩国的犯罪系列电影拍得很精彩，韩国也拍了很多反应社会现实的电影，如《熔炉》、《金福南杀人事件》，这些电影其实都可以归结于人性系列。那么问题来了，为什么韩国的电影近几年能够异军突起，甚至有成为亚洲电影骄傲的趋势，而我们大陆拍得电影，几乎每年都被在吐槽烂、简直扶不上墙，更别提走出国门了，一年上映几百部的电影，而豆瓣评分过7分也只有个位数，原因何在？是我们的导演不如韩国？编剧不如韩国？或者说文化氛围不如韩国？貌似这些理由都没有说服力，毕竟我们曾经拍出《让子弹飞》、《霸王别姬》、《大话西游》等这些优秀的电影，而且我们国家也出了诺贝尔文学奖获得者莫言，那么原因在哪里？很多人说是广电总局的问题，说我们国家的电影审核太严，我同样也认为这是其重要的原因之一，电影的剧本要符合主流价值观，这也使得很多好的题材并不能过审。而近段上映的两部电影——《驴得水》和《我不是潘金莲》，多多少少让我们感觉到影中的情景就是赤赤裸裸的现实，让我们明显感觉到中国电影的环境在慢慢变得健康，而不像以前那样的畸形，这两部电影的大热也不是没有原因的。</p>
 <p>电影是艺术的一种，关于这一点，是我们不可否认的，一部好的艺术作品，是能够启发每个人的思考，而不仅仅是嘻嘻哈哈就过去了，对于电影作品也是如此。</p>
@@ -2701,7 +2701,7 @@
     
     <entry>
       <title><![CDATA[校招找工作小记]]></title>
-      <url>http://wangzzu.github.io/2016/11/15/job-summary/</url>
+      <url>http://matt33.com/2016/11/15/job-summary/</url>
       <content type="html"><![CDATA[<p>2016年，是一个很重要的年份，不但是自己的本命年，还是自己要踏出校园、走向工作的一年。从今年过完年回到学校，记得大概是2月底，这期间经历刷题、找实习、校招，直到前两天把三方交上，今天公司盖完章拿到回执信，工作也算终于确定了下来。在这过程中，经历过失落、兴奋、伤心等等，中间的喜悲，也只有自己最清楚了，趁着这几天晚上有点时间，回想一下过去几个月的心理路程写一篇校招的小记，也算是对这几个月的酸甜苦辣做一下总结。</p>
 <blockquote>
 <p>莎士比亚：不要因为一次失败，就放弃你原来决心想达到的目标。</p>
@@ -2723,7 +2723,7 @@
 <p>面完某米之后，没过几天就收到了美团的面试通知，然后就去美团面试，面美团之前想的是面面再说，反正最后也不一定去，当时约的是两点，我去的比较早，一点半就到了，然后到了一个会议室开始面试，记得当时跟一面面试官聊了一个半小时，关于 Kafka 相关的聊了近 40 min，聊的还比较深，然后又聊了很多基础知识，还写了两道算法。当时面完一面之后，当时感觉自己拿这个 offer 应该还是很稳的，因为自己在实验室做的跟这边做的完全对口。过了一会就开始了二面，刚好跟二面面试官是老乡，二面面试官是做实时的，聊了很多 storm 相关的，因为美团要求前二面必须手写算法，所以又做了一道算法，基本上就结束了，大概也聊了六七十分钟。最后又跟三面面试官聊了半个小时，三面聊了一点点技术，其他的基本上就是聊聊兴趣、聊聊人生什么的。当时从下午两点开始面，面完基本上快六点了，当时面完的感觉是美团这边招人还是挺严格的，纯技术面一口气面了三面。不过美团真的很给力，面完的第二天就给了 offer，因为我当时7月份才能实习，面试官也愿意等我到七月份入职，当时考虑一周之后，就把 offer 签了，决定去美团这边实习，当然最主要的原因是跟我的之前做的很对口，还有就是感觉那边面试还是挺严格的，所以觉得技术应该也不会差到哪去。</p>
 <h1 id="实习篇"><a href="#实习篇" class="headerlink" title="实习篇"></a>实习篇</h1><p>到了七月之后，准时到公司报到，去的时候第一周就领到了全新的 Mac pro，之前没用过 mac，各种不顺手，不过用了一周之后，就觉得 Mac 用着真特么爽。去了之后，才知道，当时我的一面面试官，就是之后带我的 Mentor，他已经工作五年了，之前在阿里工作过4年，技术还是很不错的，当时觉得自己还是很幸运的，能有这位师兄带我，之前二面面试官是我们小组的 leader，三面面试官是我们大部门的 leader，被称为百度的 Metrcis 之父，还真没想到这边居然还卧虎藏龙。所以，在刚开始那段时间对自己的工作特别满意，自己在这边确实也能学到东西，被 Mator 逼着看 Kafka 的源码（感谢）。</p>
 <p>这里，顺便说一下关于大公司与小公司的选择问题吧。下面纯属个人想法，关于这个选择，如果由能力能去清华的计算机，那不用考虑去就行了，毕竟那里牛人更多、氛围也更好，但是如果去不了清华的计算机，而只能去清华的XX（就是就业很不好的那种小众专业），那完全可以选择去北航的计算机或北邮的计算机。也就是说，如果有能力拿到 BAT 的核心部门的 offer，那就去；但如果只能拿到边缘部门的 offer，那完全可以选择其他公司（某滴、某米、某团）的核心部门。毕竟选择一家公司，不能只看公司的名气、薪酬，还要看当你哪天离开这家公司的时候，你自己成长了多少，个人感觉，这个才是最重要的，在大公司当螺丝钉，也只有在大公司这个环境下你才有价值，一旦离开这个大环境，你能选择的就很少了，所以，应该把个人能力的提升放在一个比较重要的位置。这里，对于应届生，我是比较推荐这六家公司（国外的公司暂不讨论），一些较小或者偏初期的创业公司，对于应届生来说，还是要谨慎一些好。还有就是哪些处在风口的企业，也要慎重，哪些公司估值泡沫很大，而且明显让人感觉的是：哇塞，今年这家公司开的好高，但是明年开高公司又变成了另外一家，所以还是要慎重，在找工作的时候，一定要有一个清晰的目标。</p>
-<h1 id="急急忙忙校招"><a href="#急急忙忙校招" class="headerlink" title="急急忙忙校招"></a>急急忙忙校招</h1><p>在美团实习了两个月之后，这时候就已经到了九月份，帝都的互联网校招基本上也开始了，记得当时在论坛随便找了一个师兄内推了 X 狐，然后就通知周末去面试，去之前心里是一点都没普，毕竟算法好久没看了，很多东西长时间不看是会忘的，算法就是这样，当时就随便准备了一下就去面试了，结果很出乎意料，在面试之前，看了一些关于 Java 并发、多线程的内容，当时还做了一下总结，写了一篇博客——<a href="http://wangzzu.github.io/2016/08/21/java-concurrency/">Java 并发学习(一)</a>，没想到的是面试官问了很多这方面的内容，虽然二面的时候有一些关于 OOM 调试的问题答的不怎么好，但没过几天 X 狐还是给发了 offer，当时可以说我拿到第一个校招，虽然最后没怎么去，还是很感觉 X 狐能给我这次机会的。</p>
+<h1 id="急急忙忙校招"><a href="#急急忙忙校招" class="headerlink" title="急急忙忙校招"></a>急急忙忙校招</h1><p>在美团实习了两个月之后，这时候就已经到了九月份，帝都的互联网校招基本上也开始了，记得当时在论坛随便找了一个师兄内推了 X 狐，然后就通知周末去面试，去之前心里是一点都没普，毕竟算法好久没看了，很多东西长时间不看是会忘的，算法就是这样，当时就随便准备了一下就去面试了，结果很出乎意料，在面试之前，看了一些关于 Java 并发、多线程的内容，当时还做了一下总结，写了一篇博客——<a href="http://matt33.com/2016/08/21/java-concurrency/">Java 并发学习(一)</a>，没想到的是面试官问了很多这方面的内容，虽然二面的时候有一些关于 OOM 调试的问题答的不怎么好，但没过几天 X 狐还是给发了 offer，当时可以说我拿到第一个校招，虽然最后没怎么去，还是很感觉 X 狐能给我这次机会的。</p>
 <p>面完 X 狐之后又陆陆续续投一批简历，参加了一批笔试，前面已经说了 BAT 的经历，除了 BAT 之外，其他能投的公司并没有多少，之后参加了某滴的内推笔试，笔试挂，某滴今年招了很多的社招的人，B 家听说有很多人跳到了某滴，阿里正明也去滴滴了，某滴今年真是大热，不过由于发展过快，外面也爆出了很多关于某滴内部管理混乱的问题，最近 zf 又出了一系列政策，导致某滴的日子其实也不好过，今年也能明确感受到某滴校招力度较小，总之，没拿到某滴的面试机会。接着又投了某米，参加了某米的笔试，感觉笔试题做的还是不错的，后来通知去面试，面了某米的互娱事业部，一面聊的还挺好，二面问了一些很基础、平且一般接触不到的问题，比如：Java 泛型的设计有什么不好的地方？问的问题有种说不出来的感觉，当时感觉某米应该是可以过的，结果很尴尬，没有收到 offer。之后由于实习拿过XX街的 offer，所以直接参加了XX街的终面，大神华黎亲自面的（不知道华黎是谁，可以看看这本书<a href="http://item.jd.com/11449803.html" target="_blank" rel="external">《大型网站系统与Java中间件实践》</a>，华黎可是当年阿里中间件核心人物之一），后来顺利拿到了 offer，不过因为其他的一些个人原因，没有选择去，很是抱歉。十月底又顺便水了一把华为的面试，也算是见到了华为的壮观面试场景，三点半的面试，等到了6点才面，一面20min 就结束了，而且面试官跟我做的完全不对口，甚至连 CentOS 都没听说过，接着又等到了七点半开始二面，二面还是一对二同时面（一个面试官同时面两个人），面试问的问题基本上就是 hr 问得那些，后来虽然也收到 offer，但总感觉心里没谱，所以就没去，毕竟华为的声名在外啊，对华为的感觉就是，重点看学校、看学习成绩，按学校级别给工资，基本上一看是好学校差不多的话都会要，进去之后估计是再统一培训，有些人比较喜欢这种，我是不太喜欢这种文化，这也是没选择华为的原因之一。</p>
 <p>接着说一下，对今年校招的感觉吧，今年的校招的工资整体要比全年高一个档次，但就业其实并没有去年好，只不过是前面那批人把校招工资拉开了一个档次，当然主要的原因还是今年互联网被华为搅得天翻地覆，谁让华为有钱，而且一招招几千甚至上万人。虽然去年也有一些公司工资开得很高，但招的人太少，影响不了互联网大局。华为就不一样了，招人多，还只招好学校的，还就完全不一样了。在之前，华为都是捡漏的，今年不但薪资高，而且校招还特别早，身边真的有很多人选择了华为放弃了 BAT。听说，当初有人拿到 BAT 其中某家的 offer，因为批发价太低，想谈一下工资，结果人家不给谈，他拿到华为 offer 之后直接就放弃了这家，再后来，这家公司开始给之前放弃 offer 的人打电话，表示工资可以谈，而且还开始补招，真是呵里个呵啊（前面的”他”实际上代表的是他们，泛指很多人）。从今年的情况来看华为的影响力还是相当大的，带动了整个互联网的薪酬水平。如果单纯讨论互联网公司，个人感觉今年首先 A 家招人很少，除了实习生转正和内推，基本上没有校招；B 家招人挺多，可能因为这家公司人员流动性比较大，每年招的人都挺多；T 家不太清楚，感觉跟那边不太对口；美团今年招人还是挺多的，比往年招的力度都要大，公司对于技术还是很重视的；某滴招人也不多，可能是社招人太多还有公司业务发展受限的原因；某米，感觉招人也不少吧，记得某米去年只招了100+人，今年发出的 offer 肯定是比这个高的。互联网公司整体校招力度跟去年比可能稍微差一些，不过由于华为今年突然发力，对于好的学校而言，整体的就业形式并不去年差。</p>
 <h1 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h1><p>这里，推荐一篇文章，黑桃夹克师兄当时找工作的时候写的：<a href="http://wuchong.me/blog/2014/09/30/looking-for-a-job-summary/" target="_blank" rel="external">找工作小记——善待挫折</a>，在拿到美团 offer 之前，我也经历一段很不自信、很沮丧的时段，这篇文章在这段时间给我了很大的鼓励，很感谢师兄分享自己的经历。毕竟像师兄这种能到阿里中间件 offer 的牛人，在找工作的时候也并不是一帆风顺的。</p>
@@ -2737,7 +2737,7 @@
     
     <entry>
       <title><![CDATA[人类简史，一段不知走向何处的简史]]></title>
-      <url>http://wangzzu.github.io/2016/10/23/brief-history-of-humankind/</url>
+      <url>http://matt33.com/2016/10/23/brief-history-of-humankind/</url>
       <content type="html"><![CDATA[<p>陆陆续续从7月份开始读这本书，直到昨天（10月底）才把这本书，拖这么久之后，发现，书中讲的很多东西已忘记的差不多了，也没有刚开始看前几章时那种爱不释手的感觉。只能根据自己一些浅显的记忆以及当时在书中记录的一些笔记来述说一下自己的感悟。</p>
 <p><img src="/images/book/brief-history.jpg" alt="人类简史"></p>
 <p>当初想要看这本书，是因为这本书被很多大牛们推荐，而且豆瓣也给出了<a href="https://book.douban.com/subject/25985021/" target="_blank" rel="external">人类简史-豆瓣</a> 9.3分的高分，好评如潮，感觉不得不看看这部神作。关于读书这个问题，这段时间也在同时看<a href="https://book.douban.com/subject/26874593/" target="_blank" rel="external">《技巧》</a>和<a href="https://book.douban.com/subject/26761696/" target="_blank" rel="external">《精进》</a>这两本书，这两本书都提到了学习方法、读书的方法论，作者根据自己的实践经验进行的一些总结。我个人的大概的理解是：如果是读过某本书，并没有去仔细思考， 那就是读死书，效率很低，如果能能够尝试着去理解作者的思维逻辑，然后去思考自己有哪些东西可以学习、借鉴或者是可以丰富自己的知识体系，这才是读书的真谛，想着去学习作者的经验，而不是简简单单地把书读完，等把这两本书读完，到时候会详细记录一下自己的感悟。</p>
@@ -2778,7 +2778,7 @@
     
     <entry>
       <title><![CDATA[json 对象添加 double 型数值遇到的问题]]></title>
-      <url>http://wangzzu.github.io/2016/10/15/json-kafka-bug/</url>
+      <url>http://matt33.com/2016/10/15/json-kafka-bug/</url>
       <content type="html"><![CDATA[<p>这是一个关于修改 Kafka 源码时遇到的一个 bug，以及后续引起的一些思考。</p>
 <h1 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h1><p>我们的目标是将 Kafka 中的 <code>Producer</code> 和 <code>Consumer</code> 客户端提供的 metrics，写入到一个 Json 对象中，然后再将这个 Json 对象通过 Http 请求发送到一个 service 服务上。</p>
 <p>Kafka 原生提供的 metrics 信息非常多，这些 metrics 信息的大概内容如下图所示。</p>
@@ -2808,7 +2808,7 @@
     
     <entry>
       <title><![CDATA[JVM 学习——垃圾收集器与内存分配策略]]></title>
-      <url>http://wangzzu.github.io/2016/09/18/jvm-basic2/</url>
+      <url>http://matt33.com/2016/09/18/jvm-basic2/</url>
       <content type="html"><![CDATA[<p>本文主要是对《深入理解java虚拟机 第二版》第三章部分做的总结，文章中大部分内容都来自这章内容，也是博客 JVM 学习的第二部分。</p>
 <h1 id="简述"><a href="#简述" class="headerlink" title="简述"></a>简述</h1><p>说到垃圾收集（Garbage Collection，GC），很多人可能会认为这是 Java 自有的特性，曾经我也一度这样想，后来才知道 GC 的历史要远远长于 Java，它第一次真正使用是在 Lisp 中，现在，像 python、go 等都有自己的垃圾收集器。在 GC 最开始设计时，人们在思考 GC 时就需要完成三件事情：</p>
 <ol>
@@ -3218,7 +3218,7 @@
     
     <entry>
       <title><![CDATA[JVM学习——java 内存区域与内存溢出分析]]></title>
-      <url>http://wangzzu.github.io/2016/09/07/jvm-basic1/</url>
+      <url>http://matt33.com/2016/09/07/jvm-basic1/</url>
       <content type="html"><![CDATA[<p>本文主要是对《深入理解java虚拟机 第二版》第二章部分做的总结，文章中大部分内容都来自这章内容，之所以记录到博客，是想通过这个过程加深自己的理解，并且方便以后遇到相关问题之后进行查阅。</p>
 <h1 id="JVM"><a href="#JVM" class="headerlink" title="JVM"></a>JVM</h1><p>Java 虚拟机屏蔽了与具体操作系统平台相关的信息，使得 Java 语言编译程序只需生成在 Java 虚拟机上运行的目标代码(字节码)，就可以在多种平台上不加修改地运行。Java 虚拟机在执行字节码时，实际上最终还是把字节码解释成具体平台上的机器指令执行。</p>
 <h1 id="运行时数据区"><a href="#运行时数据区" class="headerlink" title="运行时数据区"></a>运行时数据区</h1><p>Java 虚拟机在执行 Java 程序的过程中会把它所管理的内存划分为若干个不同的数据区域。这些区域都有各自的用途，以及创建和销毁的时间，有的区域随着虚拟机进程的启动而存在，有些区域则依赖用户线程的启动和结束而建立和销毁。</p>
@@ -3358,7 +3358,7 @@
     
     <entry>
       <title><![CDATA[数据库事务性（MySQL 存储引擎及索引结构）]]></title>
-      <url>http://wangzzu.github.io/2016/08/31/database-transaction/</url>
+      <url>http://matt33.com/2016/08/31/database-transaction/</url>
       <content type="html"><![CDATA[<h1 id="数据库事务性"><a href="#数据库事务性" class="headerlink" title="数据库事务性"></a>数据库事务性</h1><p>并非任意的对数据库的操作序列都是数据库事务。事务应该具有4个属性：原子性、一致性、隔离性、持久性。这四个属性通常称为ACID特性。</p>
 <ol>
 <li>原子性（Atomicity）：事务作为一个整体被执行，包含在其中的对数据库的操作要么全部被执行，要么都不执行。</li>
@@ -3565,7 +3565,7 @@
     
     <entry>
       <title><![CDATA[TCP的三次握手和四次挥手]]></title>
-      <url>http://wangzzu.github.io/2016/08/30/http-protocol/</url>
+      <url>http://matt33.com/2016/08/30/http-protocol/</url>
       <content type="html"><![CDATA[<p>TCP/IP 协议在计算机网络中是非常重要的部分，本文主要是简单介绍其中的 TCP 协议和 IP 协议，也会涉及一些在面试中经常遇到的问题。</p>
 <h1 id="TCP-IP-协议"><a href="#TCP-IP-协议" class="headerlink" title="TCP/IP 协议"></a>TCP/IP 协议</h1><p>在最项目开发中，经常会遇到各种协议，互联网基础通信框架就是 TCP/IP。TCP/IP 是个协议族，可分为四个层次：网络接口层（连接层）、网络层、传输层和应用层。</p>
 <p>可以这样理解它们的作用：</p>
@@ -3701,7 +3701,7 @@
     
     <entry>
       <title><![CDATA[Java 并发学习（一）]]></title>
-      <url>http://wangzzu.github.io/2016/08/21/java-concurrency/</url>
+      <url>http://matt33.com/2016/08/21/java-concurrency/</url>
       <content type="html"><![CDATA[<p>本文主要是根据华黎的《大型网站系统与Java中间件实践》和 <a href="http://www.jasongj.com/categories/java/" target="_blank" rel="external">Jason</a> 的几篇博客，对 Java 并发方面的内容做的一些总结，会着重讲述并发方面一些常见的类、接口和方法。</p>
 <h1 id="多线程编程"><a href="#多线程编程" class="headerlink" title="多线程编程"></a>多线程编程</h1><p>对于多线程编程，线程安全是我们首先要考虑的问题，关于线程安全有三个核心概念：原子性、可见性和顺序性，这三个概念需要先理解清楚。</p>
 <h2 id="三个核心概念"><a href="#三个核心概念" class="headerlink" title="三个核心概念"></a>三个核心概念</h2><h3 id="原子性"><a href="#原子性" class="headerlink" title="原子性"></a>原子性</h3><p>与数据库中事务的原子性概念相似，即对于一个操作（有可能包含有多个子操作）要么全部执行，要么全部都不执行。</p>
@@ -3945,7 +3945,7 @@
     
     <entry>
       <title><![CDATA[Kafka 0.10.0 SASL/PLAIN身份认证及权限实现]]></title>
-      <url>http://wangzzu.github.io/2016/07/29/sasl-plain-kafka/</url>
+      <url>http://matt33.com/2016/07/29/sasl-plain-kafka/</url>
       <content type="html"><![CDATA[<p>本文主要介绍一下使用官方发布的 Kafka 0.10.0 版如何实现 SASL/PLAIN 认证机制以及权限控制。</p>
 <h1 id="Kafka-安全机制"><a href="#Kafka-安全机制" class="headerlink" title="Kafka 安全机制"></a>Kafka 安全机制</h1><p> Kafka 的安全机制主要分为两部分：</p>
 <ul>
@@ -4169,8 +4169,8 @@
     
     <entry>
       <title><![CDATA[Apache Kafka 0.10.0 new Consumer使用]]></title>
-      <url>http://wangzzu.github.io/2016/07/22/kafak-new-consumer-use/</url>
-      <content type="html"><![CDATA[<p>本文主要介绍一下Kafka new Consumer的使用，关于new Consumer的基本概念可以参考上一篇博文<a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍【译】</a>，这篇对于Kafka的new Consumer介绍得比较清楚。本文的一部分内容也来自上一篇文章。</p>
+      <url>http://matt33.com/2016/07/22/kafak-new-consumer-use/</url>
+      <content type="html"><![CDATA[<p>本文主要介绍一下Kafka new Consumer的使用，关于new Consumer的基本概念可以参考上一篇博文<a href="http://matt33.com/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍【译】</a>，这篇对于Kafka的new Consumer介绍得比较清楚。本文的一部分内容也来自上一篇文章。</p>
 <h1 id="Consumer-Client"><a href="#Consumer-Client" class="headerlink" title="Consumer Client"></a>Consumer Client</h1><p>本节主要介绍Kafka从一些topic消费数据的示例。</p>
 <h2 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h2><p>使用新版的Consumer，需要先在工程中添加kafka-clients依赖，添加的配置信息如下：</p>
 <figure class="highlight xml"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.kafka<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>kafka-clients<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>0.10.0.0<span class="tag">&lt;/<span class="name">version</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></div></pre></td></tr></table></figure>
@@ -4376,7 +4376,7 @@
     
     <entry>
       <title><![CDATA[Apache Kafka 0.9 Consumer Client 介绍【译】]]></title>
-      <url>http://wangzzu.github.io/2016/07/21/kafka-new-consumer/</url>
+      <url>http://matt33.com/2016/07/21/kafka-new-consumer/</url>
       <content type="html"><![CDATA[<p>近段时间在公司实习，有一项任务就是负责对Kafka新版本的一些feature做一下调研，主要是调研的内容是Kafka在0.9.0版本中提供的两个新特性：New Consumer API和安全认证机制，本文是在研究Kafka的新consumer API时看过的一篇文章，对于理解新API的设计理念以及应用，有很多的帮助，因此就打算翻译一下，帮助自己更好理解的同时也为开源做一些贡献。本文译自<a href="http://www.confluent.io/blog/tutorial-getting-started-with-the-new-apache-kafka-0.9-consumer-client" target="_blank" rel="external">Introducing the Kafka Consumer: Getting Started with the New Apache Kafka 0.9 Consumer Client</a>一文，是Confluent官方出的一篇关于Kafka新Consumer客户端介绍的文章。</p>
 <blockquote>
 <p>注：个人的英文及写作水平有限，虽然有些地方能够理解作者的意思，但是可能自己会表达不准确，读者遇到难以理解的地方，可以对照英文原文进行阅读。另外，有些在Kafka中经常出现专有英文名词，本文会尽量还用英文表示，本来直接看这些英文名词就非常简洁，翻译成中文反而难以理解。</p>
@@ -4498,7 +4498,7 @@
     
     <entry>
       <title><![CDATA[Mac常用软件及环境配置]]></title>
-      <url>http://wangzzu.github.io/2016/07/09/mac-software/</url>
+      <url>http://matt33.com/2016/07/09/mac-software/</url>
       <content type="html"><![CDATA[<p>近段时间因为在公司实习，公司提供的电脑都是Mac，还给发了一台全新的Mac pro，刚开始用的时候有很多不习惯的地方，但是用了几天之后就感觉Mac真的爽到爆啊，本篇文章就记录一下自己感觉在Mac上用到的一些不错的软件，以及Mac下一些常用编程工具的配置安装方法，这样也方便自己以后查看，本篇文章会一直保持更新。</p>
 <h1 id="Mac基本配置"><a href="#Mac基本配置" class="headerlink" title="Mac基本配置"></a>Mac基本配置</h1><p>推荐一些Mac下常用的软件</p>
 <ul>
@@ -4874,7 +4874,7 @@
     
     <entry>
       <title><![CDATA[Redis简单介绍]]></title>
-      <url>http://wangzzu.github.io/2016/06/06/redis-introduce/</url>
+      <url>http://matt33.com/2016/06/06/redis-introduce/</url>
       <content type="html"><![CDATA[<p>本文是根据我在<a href="https://www.shiyanlou.com/courses/106" target="_blank" rel="external">实验楼-Redis基础教程</a>中学习的总结，简单讲述了一下Redis的安装和使用。</p>
 <h1 id="Redis简介"><a href="#Redis简介" class="headerlink" title="Redis简介"></a>Redis简介</h1><h2 id="什么是Redis"><a href="#什么是Redis" class="headerlink" title="什么是Redis"></a>什么是Redis</h2><p>REmote DIctionary Server(Redis) 是一个由Salvatore Sanfilippo写的key-value存储系统。Redis提供了一些丰富的数据结构，包括 <code>lists</code>, <code>sets</code>, <code>ordered sets</code> 以及 <code>hashes</code> ，当然还有和<code>Memcached</code>一样的 strings结构。Redis当然还包括了对这些数据结构的丰富操作。</p>
 <p>Redis常被称作是一款数据结构服务器（<code>data structure server</code>）。Redis的键值可以包括字符串（strings）类型，同时它还包括哈希（hashes）、列表（lists）、集合（sets）和 有序集合（sorted sets）等数据类型。 对于这些数据类型，你可以执行原子操作。例如：对字符串进行附加操作（<code>append</code>）；递增哈希中的值；向列表中增加元素；计算集合的交集、并集与差集等。</p>
@@ -5125,7 +5125,7 @@
     
     <entry>
       <title><![CDATA[Java序列化学习]]></title>
-      <url>http://wangzzu.github.io/2016/05/21/java-serializable/</url>
+      <url>http://matt33.com/2016/05/21/java-serializable/</url>
       <content type="html"><![CDATA[<h1 id="写在前面"><a href="#写在前面" class="headerlink" title="写在前面"></a>写在前面</h1><p>本文主要是对Java序列化学习的一些总结，一来是方便自己以后查阅，二来是希望通过本文能给他人带来一些帮助。</p>
 <h1 id="对象序列化"><a href="#对象序列化" class="headerlink" title="对象序列化"></a>对象序列化</h1><p>Java提供了一种对象序列化的机制，在该机制中，一个对象可以被表示为一个字节序列，该字节序列包括该对象的数据、有关对象的类型的信息和存储在对象中数据的类型。将序列化对象写入文件之后，可以再从文件中读取出来，并且对它进行反序列化，也就是说，可以根据对象的类型信息、对象的数据、还有对象中的数据类型可以在内存中新建该对象。</p>
 <p>在实际的应用中，我们为什么需要对象序列化机制呢？因为在一般情况下，只有当JVM进程处于运行时，JVM建立的对象才可能存在，也就是说，这些对象的生命周期不会比JVM进程的生命周期更长。但是在现实的应用中，有时需要在JVM进程停止运行之后能够保存(持久化)指定的对象，并且在将来某个时刻重新读取被保存的对象，或者我们希望将一个进程创建的对象传送到另一个JVM进程中。Java的对象序列化机制就能够帮助我们实现这些功能（这就意味着序列化机制是可以自动弥补不同操作系统之间的差异）。</p>
@@ -5210,7 +5210,7 @@
     
     <entry>
       <title><![CDATA[Java容器学习]]></title>
-      <url>http://wangzzu.github.io/2016/05/13/java-collection/</url>
+      <url>http://matt33.com/2016/05/13/java-collection/</url>
       <content type="html"><![CDATA[<p>Java的容器类，在程序中经常被用，而且也是在面试中经常被问到的部分，笔者近段就被问到过n次了，所以这里就根据网上的一些资料，并结合着openJDK的源码对这些容器类好好总结一下。</p>
 <h1 id="Java中的容器"><a href="#Java中的容器" class="headerlink" title="Java中的容器"></a>Java中的容器</h1><p>在Java（以JDK1.7为例）中，如果一个程序包含固定数量的且生命周期已知的对象，那么我们可以使用数组来保存这些对象。但是一般情况下，我们在写程序时不知道需要保存多少个对象，对于这种情况，Java的实用类库中提供了一套相当完整的容器类来解决这个问题，其中基本的类型是：</p>
 <ol>
@@ -5531,7 +5531,7 @@
     
     <entry>
       <title><![CDATA[Java中对象的内存使用学习]]></title>
-      <url>http://wangzzu.github.io/2016/05/07/java-object-memory/</url>
+      <url>http://matt33.com/2016/05/07/java-object-memory/</url>
       <content type="html"><![CDATA[<p>本文的内容来自《算法 第四版》，上次看这一部分的时候应该是一年前了，不过因为昨天在面试中，被问到String对象在内存是如何存储，虽然之前看过这方面的内容，对这还有一点模糊印象，但终究没想起来，所以就想再看一下，顺便写成博客，方便以后查看。</p>
 <p>本文主要介绍在Java中，对象、数组、字符串在内存是如何存储的，它们需要占用多少内存。</p>
 <h1 id="对象的内存"><a href="#对象的内存" class="headerlink" title="对象的内存"></a>对象的内存</h1><p>要想知道一个对象使用的内存量，需要将所有实例变量使用的内存与对象本身的开销（一般是16个字节）相加。这些开销包括一个指向对象的类的引用、垃圾收集信息以及同步信息。另外，一般内存的使用都会被填充为8个字节（64位计算机中的机器字）的倍数。如下图所示，对于一个<code>Integer</code>对象</p>
@@ -5585,7 +5585,7 @@
     
     <entry>
       <title><![CDATA[Google Java Style]]></title>
-      <url>http://wangzzu.github.io/2016/04/22/google-java-style/</url>
+      <url>http://matt33.com/2016/04/22/google-java-style/</url>
       <content type="html"><![CDATA[<p>这份文档是Google Java编程风格规范的定义。在平时编写代码时应该养成一个良好的习惯，按照这个标准去编写容易维护的代码。当且仅当一个Java源文件符合此文档中的规则，我们才认为它符合Google的Java编程风格。</p>
 <h1 id="源文件基础"><a href="#源文件基础" class="headerlink" title="源文件基础"></a>源文件基础</h1><h2 id="源文件名"><a href="#源文件名" class="headerlink" title="源文件名"></a>源文件名</h2><p>源文件以其最顶层的类名来命名，大小写敏感，文件扩展名为<code>.java</code>。</p>
 <h2 id="文件编码"><a href="#文件编码" class="headerlink" title="文件编码"></a>文件编码</h2><p>源文件编码格式为：<strong>UTF-8</strong>。</p>
@@ -5830,7 +5830,7 @@
     
     <entry>
       <title><![CDATA[postgres安装]]></title>
-      <url>http://wangzzu.github.io/2016/04/14/postgres-install/</url>
+      <url>http://matt33.com/2016/04/14/postgres-install/</url>
       <content type="html"><![CDATA[<p>本文主要介绍一下在linux（CentOS7.1）下postgres的安装，后续的一篇博文会着重的介绍一下SQL操作。</p>
 <p>注：</p>
 <ul>
@@ -5908,7 +5908,7 @@
     
     <entry>
       <title><![CDATA[zookeeper之学习笔记]]></title>
-      <url>http://wangzzu.github.io/2016/04/13/zookeeper-learn/</url>
+      <url>http://matt33.com/2016/04/13/zookeeper-learn/</url>
       <content type="html"><![CDATA[<p>Zookeeper的重要性及应用的广泛性，这里就不再叙述了，本文是学习<a href="https://www.amazon.cn/Hadoop%E6%9D%83%E5%A8%81%E6%8C%87%E5%8D%97-%E6%80%80%E7%89%B9/dp/B0055QFIA6/ref=sr_1_3?ie=UTF8&amp;qid=1460778185&amp;sr=8-3&amp;keywords=hadoop%E6%9D%83%E5%A8%81%E6%8C%87%E5%8D%97" target="_blank" rel="external">Hadoop权威指南</a>的基础上进行的总结，当然本文大部分内容来自此书，中间会穿插一些个人的理解。本文主要分以下几块进行详述。</p>
 <blockquote>
 <ul>
@@ -6301,7 +6301,7 @@
     
     <entry>
       <title><![CDATA[Thrift之学习笔记]]></title>
-      <url>http://wangzzu.github.io/2016/04/07/thrift-learn/</url>
+      <url>http://matt33.com/2016/04/07/thrift-learn/</url>
       <content type="html"><![CDATA[<p>本文主要是对Thrift学习的一些总结，主要讲述了Thrift的开发、基本数据类型服务类型的介绍，然后会通过两个例子来学习如何使用Thrift进行开发，同时会介绍Thrift在大数据框架方面的应用。</p>
 <h2 id="thrift-介绍"><a href="#thrift-介绍" class="headerlink" title="thrift 介绍"></a>thrift 介绍</h2><p>Apache Thrift 是由 Facebook 开发的一种远程服务调用（RPC Remote Procedure Call）的框架。下面应用官网的一句话对其进行介绍：</p>
 <blockquote class="blockquote-center">IThe Apache Thrift software framework, for scalable cross-language services development, combines a software stack with a code generation engine to build services that work efficiently and seamlessly between C++, Java, Python, PHP, Ruby, Erlang, Perl, Haskell, C#, Cocoa, JavaScript, Node.js, Smalltalk, OCaml and Delphi and other languages.</blockquote>
@@ -6419,7 +6419,7 @@
     
     <entry>
       <title><![CDATA[从Jekyll转向Hexo]]></title>
-      <url>http://wangzzu.github.io/2016/03/30/hexo-set/</url>
+      <url>http://matt33.com/2016/03/30/hexo-set/</url>
       <content type="html"><![CDATA[<p>之前的博客，是使用Jekyll搭建的，因为学过一些ruby，也会一些ruby on rails，所以对Jekyll有天生的好感，看不上wordpress、hexo之类的。不过后来当我看到了hexo的next主题时，被它的简洁所吸引，因此决定转向hexo，本文记录使用hexo构建博客的方法（PS；我只是一个搬运工，针对Linux用户而言）。</p>
 <h2 id="Hexo"><a href="#Hexo" class="headerlink" title="Hexo"></a>Hexo</h2><p>Hexo 是一个快速、简洁且高效的博客框架。Hexo 使用 Markdown（或其他渲染引擎）解析文章，在几秒内，即可利用靓丽的主题生成静态网页。</p>
 <h3 id="Hexo安装"><a href="#Hexo安装" class="headerlink" title="Hexo安装"></a>Hexo安装</h3><p>安装Hexo需要三步，需要安装以下三个部分：</p>
@@ -6579,7 +6579,7 @@
     
     <entry>
       <title><![CDATA[排序算法总结]]></title>
-      <url>http://wangzzu.github.io/2016/03/26/algorithm-sort/</url>
+      <url>http://matt33.com/2016/03/26/algorithm-sort/</url>
       <content type="html"><![CDATA[<p>排序算法是算法中基础的部分，也是面试中经常被问到的地方。因此，根据对《算法》和《算法导论》关于这部分的学习，做一下总结，以后再遇到排序方面的问题就可以直接看一下博文就行了（文中算法用java实现）。</p>
 <ul>
 <li>选择排序</li>
@@ -6954,7 +6954,7 @@
     
     <entry>
       <title><![CDATA[Java工程师成神之路【转】]]></title>
-      <url>http://wangzzu.github.io/2016/03/22/java-learn/</url>
+      <url>http://matt33.com/2016/03/22/java-learn/</url>
       <content type="html"><![CDATA[<p>原文转自<a href="http://www.hollischuang.com/archives/489" target="_blank" rel="external">Java工程师成神之路</a>，并对原文根据自己的学习及经验做了一些修改。</p>
 <h1 id="基础篇"><a href="#基础篇" class="headerlink" title="基础篇"></a>基础篇</h1><p>先推荐一个网址<a href="https://google.github.io/styleguide/javaguide.html" target="_blank" rel="external">Google Code Style for Java</a>，这是Google出的一个关于Java代码规范化的文章，代码规范化的好处及重要性这里就不再叙述了，希望大家都能按照这个要求去写代码，这样才能写出真正易读的优秀代码。</p>
 <h2 id="JVM"><a href="#JVM" class="headerlink" title="JVM"></a>JVM</h2><h3 id="Java内存模型"><a href="#Java内存模型" class="headerlink" title="Java内存模型"></a>Java内存模型</h3><ul>
@@ -7167,14 +7167,14 @@
     
     <entry>
       <title><![CDATA[Kafka之消息传输]]></title>
-      <url>http://wangzzu.github.io/2016/03/09/kafka-transmit/</url>
+      <url>http://matt33.com/2016/03/09/kafka-transmit/</url>
       <content type="html"><![CDATA[<p>问题研究：</p>
 <ol>
 <li>研究Kafka consumer和broker之间的数据传输方式？</li>
 <li>Kafka是如何保证可靠性？</li>
 <li>消费机制是consumer pull还是broker push？, 如果是push的话，kafka是否知道数据传输成功</li>
 </ol>
-<h2 id="0-写在前面"><a href="#0-写在前面" class="headerlink" title="0.写在前面"></a>0.写在前面</h2><p>昨天整理完<a href="http://wangzzu.github.io/2016/03/08/kafka-store">Kafka之数据存储</a>之后，今天决定再把笔记中kafka消息传输部分整理一下，逐步去完善kafka系列的博文。本文中讲述的kafka是<code>0.8.1</code>版，目前最新版的<code>0.9.0</code>版把consumer的<code>The high-level Consumer API</code>和<code>The SimpleConsumer API</code>结合到了一起，这个是最新版的变化的最大之处，这个以后再讲（本来打算分两篇讲解consumer的，看来这样写了）。</p>
+<h2 id="0-写在前面"><a href="#0-写在前面" class="headerlink" title="0.写在前面"></a>0.写在前面</h2><p>昨天整理完<a href="http://matt33.com/2016/03/08/kafka-store">Kafka之数据存储</a>之后，今天决定再把笔记中kafka消息传输部分整理一下，逐步去完善kafka系列的博文。本文中讲述的kafka是<code>0.8.1</code>版，目前最新版的<code>0.9.0</code>版把consumer的<code>The high-level Consumer API</code>和<code>The SimpleConsumer API</code>结合到了一起，这个是最新版的变化的最大之处，这个以后再讲（本来打算分两篇讲解consumer的，看来这样写了）。</p>
 <h2 id="1-消息传递机制"><a href="#1-消息传递机制" class="headerlink" title="1.消息传递机制"></a>1.消息传递机制</h2><p>kafka在保证消息在producer和consumer之间的传输，主要有以下几种可能的delivery guaratee:</p>
 <ul>
 <li><strong>At most once</strong>：消息可能会丢，但绝不会重复传输;</li>
@@ -7341,13 +7341,13 @@
     
     <entry>
       <title><![CDATA[Kafka之数据存储]]></title>
-      <url>http://wangzzu.github.io/2016/03/08/kafka-store/</url>
+      <url>http://matt33.com/2016/03/08/kafka-store/</url>
       <content type="html"><![CDATA[<p>本文主要讲述以下两部分内容：</p>
 <ul>
 <li>kafka数据的存储方式；</li>
 <li>kafka如何通过offset查找message。</li>
 </ul>
-<h3 id="1-前言"><a href="#1-前言" class="headerlink" title="1.前言"></a>1.前言</h3><p>写介绍kafka的几个重要概念（可以参考之前的博文<a href="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka">Kafka的简单介绍</a>）：</p>
+<h3 id="1-前言"><a href="#1-前言" class="headerlink" title="1.前言"></a>1.前言</h3><p>写介绍kafka的几个重要概念（可以参考之前的博文<a href="http://matt33.com/2015/11/14/The-Introduce-of-Kafka">Kafka的简单介绍</a>）：</p>
 <ul>
 <li><strong>Broker</strong>：消息中间件处理结点，一个Kafka节点就是一个broker，多个broker可以组成一个Kafka集群；</li>
 <li><strong>Topic</strong>：一类消息，例如page view日志、click日志等都可以以topic的形式存在，Kafka集群能够同时负责多个topic的分发；</li>
@@ -7475,7 +7475,7 @@
     
     <entry>
       <title><![CDATA[MapReduce之Shuffle过程详述]]></title>
-      <url>http://wangzzu.github.io/2016/03/02/hadoop-shuffle/</url>
+      <url>http://matt33.com/2016/03/02/hadoop-shuffle/</url>
       <content type="html"><![CDATA[<h1 id="写在前面"><a href="#写在前面" class="headerlink" title="写在前面"></a>写在前面</h1><p>MapReduce作为Hadoop的编程框架，对于大数据开发或者想要接触大数据开发的开发者来说，是必须要掌握的，它是一种经典大数据计算框架，现在有很多开源项目的内部实现都会直接或间接地借鉴了MR过程的实现。我在经过了一些hadoop项目的开发，然后前几天又系统地学习MapReduc内部实现过程，尤其是学习中间的Shuffle过程之后，准备对这一块做一下总结，希望这篇文章能给需要的人带来一些帮助（文中Shuffle的分析还是以Hadoop1.0为例，这个跟2.0的区别并不是很大）。</p>
 <h1 id="总述"><a href="#总述" class="headerlink" title="总述"></a>总述</h1><p>对于MapReduce作业，完整的作业运行流程，这里借用刘军老师的<a href="http://item.jd.com/11315351.html" target="_blank" rel="external">Hadoop大数据处理</a>中的一张图：</p>
 <p><img src="/images/2016-03-02-HadoopShuffle/hadoop.png" alt="hadoop"></p>
@@ -7623,7 +7623,7 @@
     
     <entry>
       <title><![CDATA[Travel to Nanjing | 元旦南京之旅]]></title>
-      <url>http://wangzzu.github.io/2016/01/14/TravelToNanjing/</url>
+      <url>http://matt33.com/2016/01/14/TravelToNanjing/</url>
       <content type="html"><![CDATA[<p>这篇文章是我2016年的第一篇博客，之前本来想着新年的开篇应该写一篇掉炸天的技术博客，最后，想了想，还是准备写篇旅行博客吧，因为这次南京游玩不仅仅是旅行。</p>
 <h2 id="1-Day1"><a href="#1-Day1" class="headerlink" title="1.Day1"></a>1.Day1</h2><p>第一天应该是最辛苦的，因为去的地方比较多，有：玄武湖，狮子桥，中山陵，明孝陵，美龄宫，秦淮河和夫子庙。大家出去玩的时候一定要穿双舒服的鞋（就是走很多路也不会磨脚的那种），这点要切记，森哥（一同去玩的朋友）就是因为这导致第一天就把脚磨破，再后面两天几非常惨了。</p>
 <p>南京火车站南出口一出来就是玄武湖，只不过这天雾霾比较大，景色没有想象中得好。如果南京的空气要是好些的话，还确实是座宜居的城市，在玄武湖的周围有一个专门跑步的跑道，我本身比较喜欢跑步，所以我是特别喜欢这种湖边跑道，要是自己以后能住在湖边，而湖边又有跑道，那该多么幸福！我之所以会羡慕这种城市，可能主要我是北方人的原因，越是缺少什么东西越是喜欢什么吧。好了，先放几张图。</p>
@@ -7691,7 +7691,7 @@
     
     <entry>
       <title><![CDATA[关于Kafka学习的一些资料]]></title>
-      <url>http://wangzzu.github.io/2015/12/21/kafka-learn/</url>
+      <url>http://matt33.com/2015/12/21/kafka-learn/</url>
       <content type="html"><![CDATA[<h2 id="kafka一些重要博客参考"><a href="#kafka一些重要博客参考" class="headerlink" title="kafka一些重要博客参考"></a>kafka一些重要博客参考</h2><p>kafka设计部分的文档：</p>
 <ul>
 <li><a href="http://kafka.apache.org/documentation.html#design" target="_blank" rel="external">官网设计英文版</a></li>
@@ -7711,7 +7711,7 @@
 <ul>
 <li><a href="http://my.oschina.net/u/591402/blog/158139" target="_blank" rel="external">Kafka监控之mx4j-tool</a></li>
 <li><a href="http://my.oschina.net/u/591402/blog/158150" target="_blank" rel="external">Kafka监控之mx4jLoader</a></li>
-<li><a href="http://wangzzu.github.io/2015/12/08/2015-12-8-kafka-monitor/">Kafka监控软件</a></li>
+<li><a href="http://matt33.com/2015/12/08/2015-12-8-kafka-monitor/">Kafka监控软件</a></li>
 </ul>
 <p>Kafka测试：</p>
 <ul>
@@ -7734,7 +7734,7 @@
     
     <entry>
       <title><![CDATA[Kafka监控软件介绍]]></title>
-      <url>http://wangzzu.github.io/2015/12/08/2015-12-8-kafka-monitor/</url>
+      <url>http://matt33.com/2015/12/08/2015-12-8-kafka-monitor/</url>
       <content type="html"><![CDATA[<h1 id="KafkaOffsetMonitor"><a href="#KafkaOffsetMonitor" class="headerlink" title="KafkaOffsetMonitor"></a>KafkaOffsetMonitor</h1><h2 id="下载安装"><a href="#下载安装" class="headerlink" title="下载安装"></a>下载安装</h2><ul>
 <li><a href="https://github.com/quantifind/KafkaOffsetMonitor" target="_blank" rel="external">源码下载地址</a></li>
 <li><a href="https://github.com/quantifind/KafkaOffsetMonitor/releases/download/v0.2.1/KafkaOffsetMonitor-assembly-0.2.1.jar" target="_blank" rel="external">jar下载地址</a></li>
@@ -7775,9 +7775,9 @@
     
     <entry>
       <title><![CDATA[Kafka程序设计之Producer]]></title>
-      <url>http://wangzzu.github.io/2015/11/27/kafka-code1/</url>
+      <url>http://matt33.com/2015/11/27/kafka-code1/</url>
       <content type="html"><![CDATA[<p>本文主要是介绍一下kafka基于<code>Producer API</code>的程序设计，使用的kafka版本为<code>2.10-0.8.1.1</code>。</p>
-<h2 id="1-前言"><a href="#1-前言" class="headerlink" title="1.前言"></a>1.前言</h2><p>在写完<a href="http://wangzzu.github.io/2015/11/13/kafka-install/">Kafka集群的安装与配置</a>和<a href="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/">Kafka的简单介绍</a>这两篇博客之后，从本文开始准备介绍一下Kafka的程序设计部分，大概会分为三篇介绍，第一篇是基于<code>Kafka Producer API</code>的程序设计，也就是本文，第二篇是基于<code>Kafka High Level Consumer API</code>的程序设计，第三篇是基于<code>Kafka Simple Consumer API</code>的程序设计。本文主要是根据kafka提供的官方文档来介绍，希望能给刚接触kafka程序设计的初学者提供一些帮助。</p>
+<h2 id="1-前言"><a href="#1-前言" class="headerlink" title="1.前言"></a>1.前言</h2><p>在写完<a href="http://matt33.com/2015/11/13/kafka-install/">Kafka集群的安装与配置</a>和<a href="http://matt33.com/2015/11/14/The-Introduce-of-Kafka/">Kafka的简单介绍</a>这两篇博客之后，从本文开始准备介绍一下Kafka的程序设计部分，大概会分为三篇介绍，第一篇是基于<code>Kafka Producer API</code>的程序设计，也就是本文，第二篇是基于<code>Kafka High Level Consumer API</code>的程序设计，第三篇是基于<code>Kafka Simple Consumer API</code>的程序设计。本文主要是根据kafka提供的官方文档来介绍，希望能给刚接触kafka程序设计的初学者提供一些帮助。</p>
 <p>我们知道，kafka的基本架构其实非常简单，但kafka作为管道传输为了保证其强大的功能与稳定的性能，kafka在内部实现上是做了非常多的努力的，这些我会在后续的文章中慢慢讲解。然而对大部分人而言重要的就是如何进行程序设计来实现所需的功能，kafka给我们提供了丰富而简介的API接口，本文的例子是通过<a href="https://github.com/apache/kafka/tree/trunk/examples/src/main/java/kafka/examples" target="_blank" rel="external">Kafka Examples</a>中的例子来讲解如何使用这些API接口来进行程序设计。本文中使用的kafka的版本为<code>kafka_2.10-0.8.1.1</code>，并且使用maven建立工程，需要在pom.xml文件加入如下的依赖包：</p>
 <figure class="highlight xml"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></div><div class="line">	<span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.kafka<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></div><div class="line">	<span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>kafka_2.10<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></div><div class="line">	<span class="tag">&lt;<span class="name">version</span>&gt;</span>0.8.1<span class="tag">&lt;/<span class="name">version</span>&gt;</span></div><div class="line">	<span class="tag">&lt;<span class="name">exclusions</span>&gt;</span></div><div class="line">		<span class="tag">&lt;<span class="name">exclusion</span>&gt;</span></div><div class="line">			<span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>jms<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></div><div class="line">			<span class="tag">&lt;<span class="name">groupId</span>&gt;</span>javax.jms<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></div><div class="line">		<span class="tag">&lt;/<span class="name">exclusion</span>&gt;</span></div><div class="line">		<span class="tag">&lt;<span class="name">exclusion</span>&gt;</span></div><div class="line">			<span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>jmxtools<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></div><div class="line">			<span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.sun.jdmk<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></div><div class="line">		<span class="tag">&lt;/<span class="name">exclusion</span>&gt;</span></div><div class="line">		<span class="tag">&lt;<span class="name">exclusion</span>&gt;</span></div><div class="line">			<span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>jmxri<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></div><div class="line">			<span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.sun.jmx<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></div><div class="line">		<span class="tag">&lt;/<span class="name">exclusion</span>&gt;</span></div><div class="line">	<span class="tag">&lt;/<span class="name">exclusions</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></div></pre></td></tr></table></figure>
 <p>下面具体讲解一下<code>Producer</code>。</p>
@@ -7832,7 +7832,7 @@
     
     <entry>
       <title><![CDATA[Kafka的简单介绍]]></title>
-      <url>http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/</url>
+      <url>http://matt33.com/2015/11/14/The-Introduce-of-Kafka/</url>
       <content type="html"><![CDATA[<p>这篇文章主要是简单地把Kafka的背景，基础知识和应用场景介绍一下，算是一篇入门的文章。</p>
 <h2 id="1-kafka介绍"><a href="#1-kafka介绍" class="headerlink" title="1.kafka介绍"></a>1.kafka介绍</h2><p>关于kafka入门的文章最好的就莫过于kafka的<a href="http://kafka.apache.org/documentation.html" target="_blank" rel="external">官方文档</a>了，这上面对kafka的定义是：</p>
 <blockquote>
@@ -7859,7 +7859,7 @@
 <h2 id="2-概念详解"><a href="#2-概念详解" class="headerlink" title="2.概念详解"></a>2.概念详解</h2><h3 id="2-1-topic"><a href="#2-1-topic" class="headerlink" title="2.1.topic"></a>2.1.topic</h3><p>正如前面介绍的，topic是kafka发送消息的一个标识，一般以目录的形式存在，对于一个有三个partition的topic而言，它日志信息结构大概如下图所示：</p>
 <p><img src="/images/2015-11-14-kafka-introduce/log.png" alt="log"></p>
 <p>每一个partition实际上都是一个有序的，不可变的消息序列，producer发送到broker的消息会写入到相应的partition目录下，每个partition都会有一个有序的id（<code>offset</code>），这个offset确定这个消息在partition中的具体位置。</p>
-<p>举一个例子，我们在一个kafka集群中建立的名为<code>wangzzu</code>，partition数为3的topic，kafka就会在broker的<code>/tmp/kafka-logs</code>（目录可以修改，可参考我<a href="http://wangzzu.github.io/2015/11/13/kafka-install/">kafka集群安装与配置</a>）新建三个目录，这里我们直接指定将三个partition建立在同一个broker上，如下图所示：</p>
+<p>举一个例子，我们在一个kafka集群中建立的名为<code>wangzzu</code>，partition数为3的topic，kafka就会在broker的<code>/tmp/kafka-logs</code>（目录可以修改，可参考我<a href="http://matt33.com/2015/11/13/kafka-install/">kafka集群安装与配置</a>）新建三个目录，这里我们直接指定将三个partition建立在同一个broker上，如下图所示：</p>
 <p><img src="/images/2015-11-14-kafka-introduce/topic.png" alt="topic"></p>
 <p>当启动producer程序时，就会向kafka集群发送信息，而kafka就会把中间信息存储在这三个目录下，具体的发送方式和消息存储结构会在以后的文章中介绍。</p>
 <h3 id="2-2-producer"><a href="#2-2-producer" class="headerlink" title="2.2.producer"></a>2.2.producer</h3><p>producer这部分相比较而言，是比较简单的，就是把消息发送给它所选择的topic，也可以具体指定发给这个topic的哪个一个partition，否则producer就会使用<code>hashing-based partitioner</code>来决定发送到哪个partition，这个问题还是需要多说一些，之前我在测试kafka速度的时候就遇到了这个问题，当我们增加broker的数量时，kafka的发送速度并没有线性增加，最后发现就是因为这个原因，没有指明发送数据到哪个partition，具体的解释我就引用官网<a href="https://cwiki.apache.org/confluence/display/KAFKA/FAQ" target="_blank" rel="external">WIKI</a>中给出回答：</p>
@@ -7878,7 +7878,7 @@
 <li>如果group中的consumer数大于topic中的partition数，那么group中就会有一部分的consumer处于空闲状态。</li>
 </ul>
 <h2 id="3-kafka的简单使用"><a href="#3-kafka的简单使用" class="headerlink" title="3.kafka的简单使用"></a>3.kafka的简单使用</h2><p>这部分是利用kafka自带的<code>kafka-console-producer.sh</code>和<code>kafka-console-consumer.sh</code>来发送和接收消息，而具体如何调用 kafka  API使用kafka会在后续的文章中介绍。</p>
-<p>首先要启动kafka和建立topic，可参考<a href="http://wangzzu.github.io/2015/05/20/KafkaOrder/">Kafka常用的一些命令</a></p>
+<p>首先要启动kafka和建立topic，可参考<a href="http://matt33.com/2015/05/20/KafkaOrder/">Kafka常用的一些命令</a></p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">nohup bin/kafka-server-start.sh config/server.properties &amp; <span class="comment">#启动kafka，并且使用nohup将日志输出到当前目录的nohup.out中，使用&amp;后台运行</span></div></pre></td></tr></table></figure>
 <p>topic还接着使用<code>wangzzu</code>（建立topic命令参考2.1中的图片），下面开启<code>kafka-console-producer.sh</code>并发送几条消息</p>
 <p><img src="/images/2015-11-14-kafka-introduce/produce.png" alt="producer"></p>
@@ -7895,7 +7895,7 @@
     
     <entry>
       <title><![CDATA[Kafka集群的安装与配置]]></title>
-      <url>http://wangzzu.github.io/2015/11/13/kafka-install/</url>
+      <url>http://matt33.com/2015/11/13/kafka-install/</url>
       <content type="html"><![CDATA[<p>使用过kafka的童鞋应该都知道，kafka的安装是比较简单的，尤其跟hadoop，storm这类相比。本文就主要介绍kafka集群的安装和配置方法。</p>
 <h1 id="安装环境"><a href="#安装环境" class="headerlink" title="安装环境"></a>安装环境</h1><p>本人在安装kafka集群时，因为集群已经配置好了CDH的环境，在CDH环境安装kafka就变得非常简单。集群环境如下：</p>
 <table>
@@ -7943,7 +7943,7 @@
     
     <entry>
       <title><![CDATA[收藏的一些不错的网站]]></title>
-      <url>http://wangzzu.github.io/2015/11/12/WebsiteCollect/</url>
+      <url>http://matt33.com/2015/11/12/WebsiteCollect/</url>
       <content type="html"><![CDATA[<p>这篇主要是整理一下自己书签里收藏一些个人感觉不错的网站，它们大都是一些比较小众的网站，因为是技术出身，推荐的很大一部分网站可能都是偏技术类的，这点希望大家能够理解～。</p>
 <h1 id="在线教育"><a href="#在线教育" class="headerlink" title="在线教育"></a>在线教育</h1><p>主要是推荐一些我自己用过的，感觉对自己比较有帮助的一些网站，当然免费是最好的了。</p>
 <ul>
@@ -8015,7 +8015,7 @@
     
     <entry>
       <title><![CDATA[Java的几个基本类型之间的相互转换]]></title>
-      <url>http://wangzzu.github.io/2015/10/27/TheTransformOfJava/</url>
+      <url>http://matt33.com/2015/10/27/TheTransformOfJava/</url>
       <content type="html"><![CDATA[<p>之前在写java程序的时候，经常会遇到很多的需要需要转换基础数据类型的情况，然后我就一直去记录这些情况，今天做了一下总结，当然转换的方法肯定不止我写的这些，有的我可能只会写其中的一种，以后再遇到其他的情况的话，我会慢慢来补充，希望这篇文章会对大家能有所帮助。</p>
 <hr>
 <h1 id="String的转换"><a href="#String的转换" class="headerlink" title="String的转换"></a>String的转换</h1><p>首先介绍一下String类型的转换，一般遇到的情况可能会有以下几种：Strng转int，String转long，String转byte数组，String转float，下面主要介绍这四种情况。</p>
@@ -8106,7 +8106,7 @@
     
     <entry>
       <title><![CDATA[Java关键字之final和static]]></title>
-      <url>http://wangzzu.github.io/2015/10/17/The-keyword-of-java/</url>
+      <url>http://matt33.com/2015/10/17/The-keyword-of-java/</url>
       <content type="html"><![CDATA[<p>本篇文章主要对java中经常使用<code>final</code>和<code>static</code>两个关键字的用法做一下总结，主要参考了《Java编程思想》和网上的一些博客。</p>
 <h1 id="final"><a href="#final" class="headerlink" title="final"></a>final</h1><p>final应该是程序中经常使用的关键字之一，final关键字使用的对象是：类、方法、变量，下面依次介绍这几种使用final的情况。</p>
 <h2 id="final类"><a href="#final类" class="headerlink" title="final类"></a>final类</h2><p>当一个类声明为final类，也就证明这个类是不能够被继承的，即禁止继承，因此final类的成员方法是没有机会被覆盖的，这个final类的功能是完整的。在Java中有很多类是final的，如String、Interger以及其他包装类。</p>
@@ -8214,7 +8214,7 @@
     
     <entry>
       <title><![CDATA[Maven之仓库配置]]></title>
-      <url>http://wangzzu.github.io/2015/10/14/the-setting-of-repertory-maven/</url>
+      <url>http://matt33.com/2015/10/14/the-setting-of-repertory-maven/</url>
       <content type="html"><![CDATA[<p>徐晓斌的《Maven实战》，实在是一本很不错的书，本文也是在我读过这本书的仓库一章后，根据自己的经验，做的一个总结。</p>
 <h1 id="仓库"><a href="#仓库" class="headerlink" title="仓库"></a>仓库</h1><p>先介绍一个构件和仓库的概念。</p>
 <p>构件：在Maven中，任何一个依赖、插件或者项目构建的输出，都是一个构件。如：依赖包是一个构件、编译的插件是一个构件；</p>
@@ -8327,7 +8327,7 @@
     
     <entry>
       <title><![CDATA[Maven之依赖]]></title>
-      <url>http://wangzzu.github.io/2015/10/11/the-dependency-of-maven/</url>
+      <url>http://matt33.com/2015/10/11/the-dependency-of-maven/</url>
       <content type="html"><![CDATA[<p>最近一年做项目时，一直在与Maven打交道，在网上也看了很多的博客，也看了《Maven实战》这本书，感觉受益匪浅，但是过一段时间很多东西也会忘记，所以就想根据这本书上看到的，还有自己的经验，写几篇Maven的博客来梳理一下核心点。</p>
 <h1 id="依赖配置"><a href="#依赖配置" class="headerlink" title="依赖配置"></a>依赖配置</h1><p>一个依赖包的声明主要包括以下的一些元素：</p>
 <figure class="highlight xml"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">project</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>...<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>...<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">version</span>&gt;</span>...<span class="tag">&lt;/<span class="name">version</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">type</span>&gt;</span>...<span class="tag">&lt;/<span class="name">type</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">scope</span>&gt;</span>...<span class="tag">&lt;/<span class="name">scope</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">optional</span>&gt;</span>...<span class="tag">&lt;/<span class="name">optional</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">exclusions</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">exclusion</span>&gt;</span></div><div class="line">                ...</div><div class="line">                <span class="tag">&lt;/<span class="name">exclusion</span>&gt;</span></div><div class="line">                ...</div><div class="line">            <span class="tag">&lt;/<span class="name">exclusions</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></div><div class="line">        ...</div><div class="line">    <span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></div><div class="line">    ...</div><div class="line"><span class="tag">&lt;/<span class="name">project</span>&gt;</span></div></pre></td></tr></table></figure>
@@ -8475,7 +8475,7 @@
     
     <entry>
       <title><![CDATA[Travel to Qinghai Lake | 青海湖骑行之旅]]></title>
-      <url>http://wangzzu.github.io/2015/09/27/Travel-to-Qinghai-Lake/</url>
+      <url>http://matt33.com/2015/09/27/Travel-to-Qinghai-Lake/</url>
       <content type="html"><![CDATA[<p>今年的青海湖之行给我留下了很美好的回忆，骑行的过程确实是很艰辛，但我们每一个人都按照原计划到达了终点。</p>
 <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>这一段姑且算作是前言吧。首先介绍一下我自己，我是北京邮电大学的一名研究生，17年毕业，也就是明年就要找工作了，所以今年暑假是学生时代的最后一个暑假了。之前我一直有个梦想，就是想来一段说走就走的旅行，刚好在朋友圈看到朋友经常骑行的照片，而我也是一个热爱旅行、热爱骑行的人，所以就想来一段短期的旅行————去青海。</p>
 <h3 id="骑行前准备"><a href="#骑行前准备" class="headerlink" title="骑行前准备"></a>骑行前准备</h3><p>骑行前第一步首先是招募小伙伴。我就在学校的BBS上，发了一个帖子（征友去青海骑行），第二天帖子居然被坛友们顶上了十大，有很多小伙伴跟我的想法一样，我们就很顺利组建了我们的青海小分队。</p>
@@ -8587,7 +8587,7 @@
     
     <entry>
       <title><![CDATA[Storm之配置文件]]></title>
-      <url>http://wangzzu.github.io/2015/07/27/storm-configuration/</url>
+      <url>http://matt33.com/2015/07/27/storm-configuration/</url>
       <content type="html"><![CDATA[<p>Storm的配置文件一般存放在<code>$STORM_HOME/conf</code>下，通常名为<code>storm.yaml</code>，它符合yaml格式要求。Storm的配置参数对任务的稳定运行以及吞吐率至关重要，这里介绍一下storm常见的配置项参数。</p>
 <h1 id="storm基本配置"><a href="#storm基本配置" class="headerlink" title="storm基本配置"></a>storm基本配置</h1><ul>
 <li><strong>storm.local.dir</strong>: nimbus 和supervisor进程存储一些状态信息（conf或者jars）的本地路径，需要每台storm node单独创建该目录并保证该目录有正确的读写权限;</li>
@@ -8708,7 +8708,7 @@
     
     <entry>
       <title><![CDATA[Json文件的读取]]></title>
-      <url>http://wangzzu.github.io/2015/07/13/json/</url>
+      <url>http://matt33.com/2015/07/13/json/</url>
       <content type="html"><![CDATA[<p>本人遇到的情况：在一个工程中需要引用另外一个jar包，而引用的jar里有Json配置文件，这里出现了Json文件找不到的错误。这实际上也是java从jar包中读取配置文件的问题。</p>
 <h1 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h1><p>取stackoverflow上的一个例子来说明。<br>我们的Json文件为：</p>
 <figure class="highlight json"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    <span class="attr">"pagination"</span>: &#123;</div><div class="line">        <span class="attr">"time"</span>: <span class="number">1</span>,</div><div class="line">        <span class="attr">"url"</span>: <span class="number">2</span>,</div><div class="line">        <span class="attr">"host"</span>: <span class="number">3</span>,</div><div class="line">        <span class="attr">"serverip"</span>: <span class="number">4</span>,</div><div class="line">        <span class="attr">"clientip"</span>: <span class="number">5</span></div><div class="line">    &#125;,</div><div class="line">    <span class="attr">"separator"</span>: <span class="string">"\t"</span></div><div class="line">&#125;</div></pre></td></tr></table></figure>
@@ -8730,7 +8730,7 @@
     
     <entry>
       <title><![CDATA[Storm简单介绍]]></title>
-      <url>http://wangzzu.github.io/2015/05/26/the-basis-of-storm/</url>
+      <url>http://matt33.com/2015/05/26/the-basis-of-storm/</url>
       <content type="html"><![CDATA[<p>本文是参考网上的博客以及一些书籍根据自己的一些理解整理得到的，主要是为了更好地理解storm的内部机制（当时使用Storm的版本是<code>0.9.3</code>）。</p>
 <h1 id="基础"><a href="#基础" class="headerlink" title="基础"></a>基础</h1><h2 id="Storm的Topology模型"><a href="#Storm的Topology模型" class="headerlink" title="Storm的Topology模型"></a>Storm的Topology模型</h2><p>一个storm Topology的一般模型为：</p>
 <p><img src="/images/2015-05-26-theBasisOfStorm/2015-05-26-topology.png" alt="topology"></p>
@@ -8853,7 +8853,7 @@
     
     <entry>
       <title><![CDATA[CentOS7.0的常用配置]]></title>
-      <url>http://wangzzu.github.io/2015/05/25/centos70/</url>
+      <url>http://matt33.com/2015/05/25/centos70/</url>
       <content type="html"><![CDATA[<h1 id="Windows开机引导"><a href="#Windows开机引导" class="headerlink" title="Windows开机引导"></a>Windows开机引导</h1><p>在<code>/etc/grub.d/40_custom</code>中加入以下代码：</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">menuentry <span class="string">"Windows"</span>&#123;</div><div class="line">    <span class="built_in">set</span> root=(hd0,1)</div><div class="line">    chainloader +1</div><div class="line">&#125;</div></pre></td></tr></table></figure>
 <p>然后更新引导</p>
@@ -8902,7 +8902,7 @@
     
     <entry>
       <title><![CDATA[Strom之tuple]]></title>
-      <url>http://wangzzu.github.io/2015/05/21/stromtuple/</url>
+      <url>http://matt33.com/2015/05/21/stromtuple/</url>
       <content type="html"><![CDATA[<p>这几天一直在看storm，其中注意到了storm中主要的数据结构类型tuple，刚开始对这种数据还是很不理解，看几个程序之后，才豁然开朗，下面就主要介绍一些storm中最简单的、最基础的东西——tuple。</p>
 <p>storm中的数据首先是有spout收集，类似于一个消息源，spout的open()函数一般就是接收数据的地方，然后spout的 nextTuple()是发送(emit)tuple的地方。tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named of values where each value can be any type.”  tuple是一个类似于列表的东西，存储的每个元素叫做field（字段）。我们用getString(i)可以获得tuple的第i个字段。而其中的每个字段都可以任意类型的，也可以一个很长的字符串。我们可以用：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">String A = tuple.getString(<span class="number">0</span>);</div><div class="line"><span class="keyword">long</span> a= tuple.getLong(<span class="number">1</span>);</div></pre></td></tr></table></figure>
@@ -8912,7 +8912,7 @@
     
     <entry>
       <title><![CDATA[Kafka常用的一些命令]]></title>
-      <url>http://wangzzu.github.io/2015/05/20/KafkaOrder/</url>
+      <url>http://matt33.com/2015/05/20/KafkaOrder/</url>
       <content type="html"><![CDATA[<h1 id="开启Kafka"><a href="#开启Kafka" class="headerlink" title="开启Kafka"></a>开启Kafka</h1><p>先进入kafka的安装目录</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">bin/kafka-server-start.sh config/server.properties</div></pre></td></tr></table></figure>
 <h1 id="运行程序"><a href="#运行程序" class="headerlink" title="运行程序"></a>运行程序</h1><p>有以下两种方式来运行程序：</p>
@@ -8948,7 +8948,7 @@
     
     <entry>
       <title><![CDATA[为什么你应该（从现在就开始）写博客【转】]]></title>
-      <url>http://wangzzu.github.io/2014/10/24/hello-world/</url>
+      <url>http://matt33.com/2014/10/24/hello-world/</url>
       <content type="html"><![CDATA[<p>向大家推荐一篇blog，刘未鹏大神的<a href="http://mindhacks.cn/2009/02/15/why-you-should-start-blogging-now/" target="_blank" rel="external">为什么你应该（从现在开始就）写博客</a>.下面的内容<strong>转载</strong>于这篇博文。</p>
 <h3 id="1-为什么你应该（从现在开始就）写博客"><a href="#1-为什么你应该（从现在开始就）写博客" class="headerlink" title="1.为什么你应该（从现在开始就）写博客"></a>1.为什么你应该（从现在开始就）写博客</h3><p>用一句话来说就是，写一个博客有很多好处，却没有任何明显的坏处。（阿灵顿的情况属于例外，而非常态，就像不能拿抽烟活到一百岁的英国老太太的个例来反驳抽烟对健康的极大损伤一样）</p>
 <p>让我说得更明确一点：用博客的形式来记录下你有价值的思考，会带来很多好处，却没有任何明显的坏处。Note：碎碎念不算思考、心情琐记不算思考、唠唠叨叨也不算思考、没话找话也不算思考，请以此类推。</p>
@@ -9005,12 +9005,12 @@
     
     <entry>
       <title><![CDATA[Matt 的中文简历]]></title>
-      <url>http://wangzzu.github.io/2014/09/01/resume/</url>
+      <url>http://matt33.com/2014/09/01/resume/</url>
       <content type="html"><![CDATA[<hr>
 <h1 id="个人信息"><a href="#个人信息" class="headerlink" title="个人信息"></a>个人信息</h1><ul>
 <li>王蒙/男/1992</li>
 <li>硕士/北京邮电大学信息与通信工程（2014-2017） 本科/郑州大学电子信息工程专业（2010-2014）</li>
-<li>技术博客：<a href="http://wangzzu.github.io">Matt’s Blog</a></li>
+<li>技术博客：<a href="http://matt33.com/">Matt’s Blog</a></li>
 <li><p>Github：<a href="http://github.com/wangzzu" target="_blank" rel="external">wangzzu</a></p>
 <hr>
 </li>
@@ -9062,9 +9062,9 @@
 <li><a href="https://issues.apache.org/jira/browse/KAFKA-4328" target="_blank" rel="external">KAFKA-4328</a>：在阅读源码中，发现其中在创建 zk 实例时，参数调用有误；</li>
 </ul>
 <h2 id="技术文章"><a href="#技术文章" class="headerlink" title="技术文章"></a>技术文章</h2><ul>
-<li><a href="http://wangzzu.github.io/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍【译】</a>：翻译自 Confluent 官网博客；</li>
-<li><a href="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/">Kafka的简单介绍</a>：Kafka 基本入门文章；</li>
-<li><a href="http://wangzzu.github.io/2016/03/02/hadoop-shuffle/">MapReduce之Shuffle过程详述</a>：介绍 MapReduce 中最核心部分—— Shuffle 的一篇文章。</li>
+<li><a href="http://matt33.com/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍【译】</a>：翻译自 Confluent 官网博客；</li>
+<li><a href="http://matt33.com/2015/11/14/The-Introduce-of-Kafka/">Kafka的简单介绍</a>：Kafka 基本入门文章；</li>
+<li><a href="http://matt33.com/2016/03/02/hadoop-shuffle/">MapReduce之Shuffle过程详述</a>：介绍 MapReduce 中最核心部分—— Shuffle 的一篇文章。</li>
 </ul>
 <h2 id="游记"><a href="#游记" class="headerlink" title="游记"></a>游记</h2><p>个人非常喜欢户外跟旅行，经常会在<a href="http://www.jianshu.com/users/e50b355579a9/latest_articles" target="_blank" rel="external">简书</a>上分享一些个人的旅行攻略。</p>
 <ul>

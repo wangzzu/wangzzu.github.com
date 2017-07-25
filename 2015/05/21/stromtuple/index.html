@@ -2,10 +2,10 @@
 <p>storm中的数据首先是有spout收集，类似于一个消息源，spout的open()函数一般就是接收数据的地方，然后spout的 nextTuple()是发送(emit)tuple的地方。tuple到底是什么？感觉还是用英语来说比较容易理解吧，”A tuple is a named of values where each value can be any type.”  tuple是一个类似于列表的东西，存储的每个元素叫做field（字段）。我们用getString(i)可以获得tuple的第i个字段。而其中的每个字段都可以任意类型的，也可以一个很长的字符串。我们可以用：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">String A = tuple.getString(<span class="number">0</span>);</div><div class="line"><span class="keyword">long</span> a= tuple.getLong(<span class="number">1</span>);</div></pre></td></tr></table></figure>
 <p>来得到我想要的数据，不过前提你是要知道你的tuple的组成。具体tuple是什么类型，完全取决于自己的程序，取决于spout中nextTuple()方法中emit发送的类型。</p>
-</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://wangzzu.github.io/2015/05/21/stromtuple/" data-id="cj5gc54p1000lvdagrdut8gxg" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/storm/">storm</a><a href="/tags/java/">java</a></div><div class="post-nav"><a href="/2015/05/25/centos70/" class="pre">CentOS7.0的常用配置</a><a href="/2015/05/20/KafkaOrder/" class="next">Kafka常用的一些命令</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2015/05/21/stromtuple/" data-id="cj5gc54p1000lvdagrdut8gxg" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/storm/">storm</a><a href="/tags/java/">java</a></div><div class="post-nav"><a href="/2015/05/25/centos70/" class="pre">CentOS7.0的常用配置</a><a href="/2015/05/20/KafkaOrder/" class="next">Kafka常用的一些命令</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
 var disqus_identifier = '2015/05/21/stromtuple/';
 var disqus_title = 'Strom之tuple';
-var disqus_url = 'http://wangzzu.github.io/2015/05/21/stromtuple/';
+var disqus_url = 'http://matt33.com/2015/05/21/stromtuple/';
 $('.btn_click_load').click(function() {
   (function() {
     var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;

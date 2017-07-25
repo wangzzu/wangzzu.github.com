@@ -24,7 +24,7 @@
 <h2 id="2-概念详解"><a href="#2-概念详解" class="headerlink" title="2.概念详解"></a>2.概念详解</h2><h3 id="2-1-topic"><a href="#2-1-topic" class="headerlink" title="2.1.topic"></a>2.1.topic</h3><p>正如前面介绍的，topic是kafka发送消息的一个标识，一般以目录的形式存在，对于一个有三个partition的topic而言，它日志信息结构大概如下图所示：</p>
 <p><img src="/images/2015-11-14-kafka-introduce/log.png" alt="log"></p>
 <p>每一个partition实际上都是一个有序的，不可变的消息序列，producer发送到broker的消息会写入到相应的partition目录下，每个partition都会有一个有序的id（<code>offset</code>），这个offset确定这个消息在partition中的具体位置。</p>
-<p>举一个例子，我们在一个kafka集群中建立的名为<code>wangzzu</code>，partition数为3的topic，kafka就会在broker的<code>/tmp/kafka-logs</code>（目录可以修改，可参考我<a href="http://wangzzu.github.io/2015/11/13/kafka-install/">kafka集群安装与配置</a>）新建三个目录，这里我们直接指定将三个partition建立在同一个broker上，如下图所示：</p>
+<p>举一个例子，我们在一个kafka集群中建立的名为<code>wangzzu</code>，partition数为3的topic，kafka就会在broker的<code>/tmp/kafka-logs</code>（目录可以修改，可参考我<a href="http://matt33.com/2015/11/13/kafka-install/">kafka集群安装与配置</a>）新建三个目录，这里我们直接指定将三个partition建立在同一个broker上，如下图所示：</p>
 <p><img src="/images/2015-11-14-kafka-introduce/topic.png" alt="topic"></p>
 <p>当启动producer程序时，就会向kafka集群发送信息，而kafka就会把中间信息存储在这三个目录下，具体的发送方式和消息存储结构会在以后的文章中介绍。</p>
 <h3 id="2-2-producer"><a href="#2-2-producer" class="headerlink" title="2.2.producer"></a>2.2.producer</h3><p>producer这部分相比较而言，是比较简单的，就是把消息发送给它所选择的topic，也可以具体指定发给这个topic的哪个一个partition，否则producer就会使用<code>hashing-based partitioner</code>来决定发送到哪个partition，这个问题还是需要多说一些，之前我在测试kafka速度的时候就遇到了这个问题，当我们增加broker的数量时，kafka的发送速度并没有线性增加，最后发现就是因为这个原因，没有指明发送数据到哪个partition，具体的解释我就引用官网<a href="https://cwiki.apache.org/confluence/display/KAFKA/FAQ" target="_blank" rel="external">WIKI</a>中给出回答：</p>
@@ -43,7 +43,7 @@
 <li>如果group中的consumer数大于topic中的partition数，那么group中就会有一部分的consumer处于空闲状态。</li>
 </ul>
 <h2 id="3-kafka的简单使用"><a href="#3-kafka的简单使用" class="headerlink" title="3.kafka的简单使用"></a>3.kafka的简单使用</h2><p>这部分是利用kafka自带的<code>kafka-console-producer.sh</code>和<code>kafka-console-consumer.sh</code>来发送和接收消息，而具体如何调用 kafka  API使用kafka会在后续的文章中介绍。</p>
-<p>首先要启动kafka和建立topic，可参考<a href="http://wangzzu.github.io/2015/05/20/KafkaOrder/">Kafka常用的一些命令</a></p>
+<p>首先要启动kafka和建立topic，可参考<a href="http://matt33.com/2015/05/20/KafkaOrder/">Kafka常用的一些命令</a></p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">nohup bin/kafka-server-start.sh config/server.properties &amp; <span class="comment">#启动kafka，并且使用nohup将日志输出到当前目录的nohup.out中，使用&amp;后台运行</span></div></pre></td></tr></table></figure>
 <p>topic还接着使用<code>wangzzu</code>（建立topic命令参考2.1中的图片），下面开启<code>kafka-console-producer.sh</code>并发送几条消息</p>
 <p><img src="/images/2015-11-14-kafka-introduce/produce.png" alt="producer"></p>
@@ -55,10 +55,10 @@
 <h4 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h4><ul>
 <li><a href="http://kafka.apache.org/documentation.html" target="_blank" rel="external">Kafka官方文档</a></li>
 </ul>
-</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/" data-id="cj5gc54qh001nvdagkwyi6iyr" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/kafka/">kafka</a></div><div class="post-nav"><a href="/2015/11/27/kafka-code1/" class="pre">Kafka程序设计之Producer</a><a href="/2015/11/13/kafka-install/" class="next">Kafka集群的安装与配置</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2015/11/14/The-Introduce-of-Kafka/" data-id="cj5gc54qh001nvdagkwyi6iyr" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/kafka/">kafka</a></div><div class="post-nav"><a href="/2015/11/27/kafka-code1/" class="pre">Kafka程序设计之Producer</a><a href="/2015/11/13/kafka-install/" class="next">Kafka集群的安装与配置</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
 var disqus_identifier = '2015/11/14/The-Introduce-of-Kafka/';
 var disqus_title = 'Kafka的简单介绍';
-var disqus_url = 'http://wangzzu.github.io/2015/11/14/The-Introduce-of-Kafka/';
+var disqus_url = 'http://matt33.com/2015/11/14/The-Introduce-of-Kafka/';
 $('.btn_click_load').click(function() {
   (function() {
     var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
