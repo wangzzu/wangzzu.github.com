@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2017-08-06T14:42:29.000Z</updated>
+  <updated>2017-08-12T10:21:02.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,275 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>谈一谈 Java IO 模型</title>
+    <link href="http://matt33.com/2017/08/12/java-nio/"/>
+    <id>http://matt33.com/2017/08/12/java-nio/</id>
+    <published>2017-08-12T09:51:56.000Z</published>
+    <updated>2017-08-12T10:21:02.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>Java IO 模型对于 Java 开发工程师来说，是日常工作中经常接触的内容，特别是随着分布式系统的兴起，IO 也显得越来越重要，Java 的 IO 模型本质上还是利用操作系统提供的接口来实现，不熟悉这一部分内容的话，可以先看一下上篇文章<a href="http://matt33.com/2017/08/06/unix-io/">Unix 网络 IO 模型及 Linux 的 IO 多路复用模型</a>，本文跟上篇的内容是紧密相连的，特别是本文的重点 —— Java NIO 部分，其底层原理就是 UNIX 的 IO 多路复用，IO 多路复用在上篇文章中讲述了很多。</p>
+<p>这篇文章大概内容如下：</p>
+<ol>
+<li>Java IO 模型的简单介绍；</li>
+<li>BIO 、NIO、AIO 模型的介绍，会详细介绍 NIO；</li>
+<li>几种 IO 模型的对比。</li>
+</ol>
+<h1 id="Java-IO-模型介绍"><a href="#Java-IO-模型介绍" class="headerlink" title="Java IO 模型介绍"></a>Java IO 模型介绍</h1><p>在 JDK 推出 Java NIO 之前，基于 Java 的所有 Socket 通信都采用了同步阻塞模式（BIO），这种一对一的通信模型虽然简化了开发的难度，但在性能和可靠性方面却存在这巨大的瓶颈，特别是无法处理高并发的场景，使得 Java 在服务器端应用十分有限。</p>
+<p>正是由于 Java 传统 BIO 的拙劣表现，使得 Java 不得不去开发新版的 IO 模型，最终，JDK1.4 提供了新的 NIO 类库，Java 可以支持非阻塞 IO；之后，JDK1.7 正式发布，不但对 NIO 进行了升级，还提供了 AIO 功能。本文就是在对 Java 这些 IO 模型学习后，总结的一篇笔记。</p>
+<h2 id="网络编程"><a href="#网络编程" class="headerlink" title="网络编程"></a>网络编程</h2><p>网络编程的基本模型是 Client/Server 模型，也就是两个进程之间进行相互通信，其中服务端提供位置信息（绑定的 IP 地址和端口），客户端通过连接操作向服务端监听的地址发起连接请求，通过三次握手建立连接，如果连接成功，双方就可以通过网络套接字（socket）进行通信（可以参考<a href="http://localhost:8080/2016/08/30/http-protocol/" target="_blank" rel="external">TCP的三次握手和四次挥手</a>），下面先看一下两种对 IO 模型常见的分类方式。</p>
+<h2 id="同步与异步"><a href="#同步与异步" class="headerlink" title="同步与异步"></a>同步与异步</h2><p>描述的是用户线程与内核的交互方式，与消息的通知机制有关：</p>
+<ol>
+<li>同步：当一个同步调用发出后，需要等待返回消息（用户线程不断去询问），才能继续进行；</li>
+<li>异步：当一个异步调用发出后，调用者不能立即得到返回消息，完成后会通过状态、通知和回调来通知调用者。</li>
+</ol>
+<p>简单来说就是：</p>
+<ol>
+<li>同步：同步等待消息通知，消息返回才能继续进行；</li>
+<li>异步：异步等待消息通知，完成后被调系统通过回调等来通过调用者。</li>
+</ol>
+<h2 id="阻塞与非阻塞"><a href="#阻塞与非阻塞" class="headerlink" title="阻塞与非阻塞"></a>阻塞与非阻塞</h2><p>阻塞和非阻塞指的是不能立刻得到结果之前，会不会阻塞当前线程。</p>
+<ol>
+<li>阻塞：当前线程会被挂起，直到结果返回；</li>
+<li>非阻塞：指在不能立刻得到结果之前，该函数不会阻塞当前线程，而会立刻返回（会导致线程切换的增加）。</li>
+</ol>
+<p>举个栗子说明：</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>示例</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>同步阻塞</td>
+<td>在银行排队，不干别的事情</td>
+<td>效率最低</td>
+</tr>
+<tr>
+<td>同步非阻塞</td>
+<td>排队时，边打电话边抬头看是否到自己了</td>
+<td>效率低下</td>
+</tr>
+<tr>
+<td>异步阻塞</td>
+<td>在银行领一个号后，在银行里等，不能做别的事情</td>
+<td></td>
+</tr>
+<tr>
+<td>异步非阻塞</td>
+<td>领完号后，在忙着自己的事情，直到柜台通知</td>
+<td>效率较高</td>
+</tr>
+</tbody>
+</table>
+<h1 id="BIO"><a href="#BIO" class="headerlink" title="BIO"></a>BIO</h1><p>BIO 模型是 Java IO 最开始提供的一种 IO 模型，BIO 又可以细分为两种模型，一是传统的同步阻塞模型，二是在对传统 BIO 模型的基本上进行的优化，又称为伪异步 IO 模型。</p>
+<h2 id="传统的-BIO-模型"><a href="#传统的-BIO-模型" class="headerlink" title="传统的 BIO 模型"></a>传统的 BIO 模型</h2><p>传统 BIO 中，ServerSocket 负责绑定 IP 地址，启动监听端口；Socket 负责发起连接操作，连接成功后，双方通过输入和输出流进行同步阻塞通信。采用 BIO 通信模型的 Server，通常由一个独立的 Acceptor 线程负责监听 Client 端的连接，它接受到 Client 端连接请求后为每个 Client 创建一个新的线程进行处理，处理完之后，通过输出流返回给 Client 端，线程销毁，过程如下图所示（图来自《Netty 权威指南》）。</p>
+<p><img src="/images/java/BIO.png" alt="传统 Java BIO 模型"></p>
+<p>这个模型最大的问题是：</p>
+<ul>
+<li>缺乏扩展性，不能处理高性能、高并发场景，线程是 JVM 中非常宝贵的资源，当线程数膨胀后，系统的性能就会急剧下降，随着并发访问量的继续增大，系统就会出现线程堆栈溢出、创建新线程失败等问题，导致 Server 不能对外提供服务。</li>
+</ul>
+<p>示例代码参考 <a href="https://github.com/wangzzu/ProgramlLearn/tree/aab89008091660f1f231763660eb329eb5928bde/java_learn/java_socket/src/main/java/bio/" target="_blank" rel="external">Java BIO 示例</a>。</p>
+<h2 id="伪异步-IO-模型"><a href="#伪异步-IO-模型" class="headerlink" title="伪异步 IO 模型"></a>伪异步 IO 模型</h2><p>为了改进这种一对一的连接模型，后来又演进出了一种通过线程池或者消息队列实现 1 个或者多个线程处理所有 Client 请求的模型，由于它底层依然是同步阻塞 IO，所以被称为【伪异步 IO 模型】。相比于传统 BIO 后端不断创建新的线程处理 Client 请求，它在后端使用一个<strong>线程池</strong>来代替，通过线程池可以灵活的调配线程资源，设置线程的最大值，防止由于海量并发接入导致线程资源耗尽，过程如下图所示（图来自《Netty 权威指南》）。</p>
+<p><img src="/images/java/BIO2.png" alt="伪异步 IO 模型"></p>
+<p>看似这个模型解决了 BIO 面对的问题，实际上，由于它是面向数据流的模型，底层依然是同步阻塞模型，在处理一个 socket 输入流，它会一直阻塞下去，除非：有数据可读、可用数据读取完毕、有异常，否则会一直一直阻塞下去。这个模型最大的问题是：</p>
+<ul>
+<li>阻塞的时间取决于对应 IO 线程的处理速度和网络 IO 的传输速度，处理效率不可控。</li>
+</ul>
+<h1 id="Java-NIO"><a href="#Java-NIO" class="headerlink" title="Java NIO"></a>Java NIO</h1><p>Java NIO 是 Java IO 模型中最重要的 IO 模型，也是本文主要讲述的内容，正式由于 NIO 的出现，Java 才能在服务端获得跟 C 和 C++ 一样的运行效率，NIO 是 New IO（或者 Non-block IO）的简称。</p>
+<p>与 Socket 类和 ServerSocket 类相对应，NIO 也提供了 SocketChannel 和 ServerSocketChannel 两种不同套接字通道的实现，它们都支持阻塞和非阻塞两种模式。一般来说，低负载、低并发的应用程序可以选择同步阻塞 IO 以降低复杂度，但是高负载、高并发的网络应用，需要使用 NIO 的非阻塞模式进行开发。</p>
+<h2 id="基本概念"><a href="#基本概念" class="headerlink" title="基本概念"></a>基本概念</h2><p>在 NIO 中有三种非常重要的概念：</p>
+<ul>
+<li>缓冲区（buffer）：本质上是一个数组，它包含一些要读写的数据；</li>
+<li>通道（channel）：是一个通道，通过它读写数据，类似于自来水管；</li>
+<li>多路复用器（selector）：用于选择已经就绪的任务，selector 会轮询注册在其上的 channel，选出已经就绪的 channel。</li>
+</ul>
+<p><img src="/images/java/NIO.png" alt="NIO 的简单模型"></p>
+<p>三者之间的关系如上图所示，这里先简单概括一下：</p>
+<ul>
+<li>Buffer：是缓冲区，任何时候访问 NIO 数据，都是通过 Buffer 进行；</li>
+<li>Channel：通过它读写 Buffer 中的数据，可以用于读、写或同时读写；</li>
+<li>Selector：多路复用器，Selector 不断轮询注册在其上的 Channel，如果某个 Channel 有新的 TCP 链接接入、读和写事件，这个 Channel 就处于就绪状态，会被 Selector 轮组出来，然后通过<code>SelectionKey()</code> 可以获取就绪 Channel 的集合，进行后续的 IO 操作。</li>
+</ul>
+<p>下面详细介绍一下这三个概念。</p>
+<h3 id="Channel"><a href="#Channel" class="headerlink" title="Channel"></a>Channel</h3><p>Channel 是全双工的，可以比流更好地映射底层操作系统的 API，与流也非常相似，有以下几点区别：</p>
+<ul>
+<li>Channel 可以读也可以写，但流（InputStream 或 OutputStream）是单向的；</li>
+<li>通道可以异步读写；</li>
+<li>它是基于缓冲区（Buffer）进行读写；</li>
+</ul>
+<p>在 Java 中提供以下几种 Channel：</p>
+<ol>
+<li>FileChannel：用于文件的读写；</li>
+<li>DatagramChannel：用于 UDP 数据读写；</li>
+<li>SocketChannel：用于 Socket 数据读写；</li>
+<li>ServerSocketChannel：监听 TCP 连接请求。</li>
+</ol>
+<p>这些 Channel 类之间的继承关系如下图所示</p>
+<p><img src="/images/java/channel.png" alt="Channel 之间的继承关系"></p>
+<p>从上图中，可以看出，Channel 可以分为两大类：用于网络读写的 <code>SelectableChannel</code> 和用于文件操作的 <code>FileChannel</code>。</p>
+<p>其中，FileChannel 只能在阻塞模式下工作，具体可以参考<a href="http://wiki.jikexueyuan.com/project/java-nio-zh/java-nio-filechannel.html" target="_blank" rel="external">Java NIO FileChannel文件通道</a>。</p>
+<h4 id="NIO-Scatter-Gather"><a href="#NIO-Scatter-Gather" class="headerlink" title="NIO Scatter/Gather"></a>NIO Scatter/Gather</h4><p>Java NIO 发布时内置了对 scatter/gather的支持：</p>
+<ul>
+<li>Scattering read 指的是从通道读取的操作能把数据写入多个 Buffer，也就是 sctters 代表了数据从一个 Channel 到多个 Buffer的过程。</li>
+<li>Gathering write 则正好相反，表示的是从多个 Buffer 把数据写入到一个 Channel中。</li>
+</ul>
+<p><img src="/images/java/scatter-gather.png" alt="Channel 之间的继承关系"></p>
+<p>示例如下，具体参考 <a href="http://wiki.jikexueyuan.com/project/java-nio-zh/java-nio-scatter-gather.html" target="_blank" rel="external">Java NIO Scatter / Gather</a></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// Scattering read</span></div><div class="line">ByteBuffer header = ByteBuffer.allocate(<span class="number">128</span>);</div><div class="line">ByteBuffer body   = ByteBuffer.allocate(<span class="number">1024</span>);</div><div class="line"></div><div class="line">ByteBuffer[] bufferArray = &#123; header, body &#125;;</div><div class="line">channel.read(bufferArray);</div><div class="line"></div><div class="line"><span class="comment">// Gathering write</span></div><div class="line">ByteBuffer header = ByteBuffer.allocate(<span class="number">128</span>);</div><div class="line">ByteBuffer body   = ByteBuffer.allocate(<span class="number">1024</span>);</div><div class="line"></div><div class="line">ByteBuffer[] bufferArray = &#123; header, body &#125;;</div><div class="line">channel.write(bufferArray);</div></pre></td></tr></table></figure>
+<h3 id="Buffer"><a href="#Buffer" class="headerlink" title="Buffer"></a>Buffer</h3><p>Buffer，本质上是一块内存区，可以用来读写数据，它包含一些要写入或者要读出的数据。在 NIO 中，所有数据都是通过 Buffer 处理的，读取数据时，它是直接读到缓冲区中，写入数据时，写入到缓冲区。</p>
+<p>最常用的缓冲区是 ByteBuffer，一个 ByteBuffer 提供了一组功能用于操作 byte 数组，除了 ByteBuffer，还有其他的一些 Buffer，如：CharBuffer、IntBuffer 等，它们之间的关系如下图所示。</p>
+<p><img src="/images/java/buffer.png" alt="Buffer 之间的继承关系"></p>
+<h4 id="基本用法"><a href="#基本用法" class="headerlink" title="基本用法"></a>基本用法</h4><p>Buffer 基本用法（读写数据过程）：</p>
+<ol>
+<li>把数据写入 Buffer；</li>
+<li>调用 <code>flip()</code>，Buffer 由写模式变为读模式；</li>
+<li>Buffer 中读取数据；</li>
+<li>调用 <code>clear()</code> 清空 buffer，等待下次写入。</li>
+</ol>
+<p>示例如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">byte</span>[] req = <span class="string">"QUERY TIME ORDER"</span>.getBytes();</div><div class="line">ByteBuffer byteBuffer = ByteBuffer.allocate(req.length);</div><div class="line">byteBuffer.put(req);</div><div class="line">byteBuffer.flip();</div><div class="line"><span class="keyword">while</span> (byteBuffer.hasRemaining())&#123;</div><div class="line">     System.out.println((<span class="keyword">char</span>) byteBuffer.get());</div><div class="line">&#125;</div><div class="line">byteBuffer.clear();</div></pre></td></tr></table></figure>
+<h4 id="Buffer-位置信息"><a href="#Buffer-位置信息" class="headerlink" title="Buffer 位置信息"></a>Buffer 位置信息</h4><p>Buffer 实质上就是一块内存，用于读写数据，这块内存被 NIO Buffer 管理，一个 Buffer 有三个属性是必须掌握的，分别是：</p>
+<ul>
+<li>capacity：容量；</li>
+<li>position：位置；</li>
+<li>limit：限制；</li>
+</ul>
+<p>其中，position 和 limit 的具体含义取决于当前 buffer 的模式，capacity 在两种模式下都表示容量，Buffer 读模式和写模式如下图所示。</p>
+<p><img src="/images/java/buffer-position.png" alt="Buffer 的位置信息"></p>
+<ol>
+<li>容量（capacity）<ul>
+<li>Buffer 有一块固定的内存，其大小就是 capacity，一旦 Buffer 写满，就需要清空已读数据以便下次继续写入新的数据；</li>
+</ul>
+</li>
+<li>位置（Position）<ul>
+<li>写模式时，当写入数据到 Buffer 的时候从一个确定的位置开始，初始化时这个位置 position 为0，写入数据后，position 的值就会指向数据之后的单元，position 最大的值可以达到 <code>capacity-1</code>；</li>
+<li>读模式时，也需要从一个确定的位置开始，Buffer 从写模式变为读模式时，position 会归零，每次读取后，position 向后移动；</li>
+</ul>
+</li>
+<li>上限（limit）<ul>
+<li>写模式时，limit 就是能写入的最大数据量，等同于 Buffer 的容量；</li>
+<li>读模式时，limit 代表我们能读取的最大容量，它的值等同于写模式下 position 位置。</li>
+</ul>
+</li>
+</ol>
+<h4 id="Buffer-常用方法"><a href="#Buffer-常用方法" class="headerlink" title="Buffer 常用方法"></a>Buffer 常用方法</h4><ul>
+<li><code>flip()</code>：把 buffer 从模式调整为读模式，在读模式下，可以读取所有已经写入的数据；</li>
+<li><code>clear()</code>：清空整个 buffer；</li>
+<li><code>compact()</code>：只清空已读取的数据，未被读取的数据会被移动到 buffer 的开始位置，写入位置则紧跟着未读数据之后；</li>
+<li><code>rewind()</code>：将 position 置为0，这样我们可以重复读取 Buffer 中的数据，limit 保持不变；</li>
+<li><code>mark()</code>和<code>reset()</code>：通过mark方法可以标记当前的position，通过reset来恢复mark的位置</li>
+<li><code>equals()</code>：判断两个 Buffer 是否相等，需满足：类型相同、Buffer 中剩余字节数相同、所有剩余字节相等；</li>
+<li><code>compareTo()</code>：compareTo 比较 Buffer 中的剩余元素，只不过这个方法适用于比较排序的。</li>
+</ul>
+<h3 id="Selector"><a href="#Selector" class="headerlink" title="Selector"></a>Selector</h3><p>Selector 是 Java NIO 核心部分，简单来说，它的作用就是：Selector 不断轮询注册在其上的 Channel，如果某个 Channel 上面有新的 TCP 连接、读和写事件，这个 Channel 就处于就绪状态，会被 Selector 轮询出来，然后通过 <code>SelectorKey()</code> 可以获取就绪 Channel 的集合，进行后续的 IO 操作。</p>
+<p>一个 Selector 可以轮询多个 Channel，由于 JDK 底层使用了 <code>epoll()</code> 实现，它并没有最大连接句柄 1024/2048 的限制，这就意味着只需要一个线程负责 Selector 的轮询，就可以连接上千上万的 Client。</p>
+<h4 id="注册-Channel"><a href="#注册-Channel" class="headerlink" title="注册 Channel"></a>注册 Channel</h4><p>举一个栗子，简单介绍 <code>Selector</code> 的使用。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 创建一个 Selector</span></div><div class="line">Selector selector = Selector.open();</div><div class="line"><span class="comment">// 将一个 Channel 注册到 Selector 上</span></div><div class="line">channel.configureBlocking(<span class="keyword">false</span>);</div><div class="line">SelectionKey key = channel.register(selector, SelectionKey.OP_READ);</div></pre></td></tr></table></figure>
+<p><code>register()</code> 的第二个参数代表的是 selector 监听的事件类型，Selector 可以监听事件类型总共有以下四种：</p>
+<ol>
+<li>SelectionKey.OP_CONNECT：只会注册一次，成功之后（TCP 连接建立之后），这个监听事件就取消了；</li>
+<li>SelectionKey.OP_ACCEPT：主要用于服务端，就是监听是否有新的连接请求；</li>
+<li>SelectionKey.OP_READ：注册之后不会取消；</li>
+<li>SelectionKey.OP_WRITE：每次调用一个 send，就注册一次，send 成功后，就取消。</li>
+</ol>
+<h4 id="SelectionKey"><a href="#SelectionKey" class="headerlink" title="SelectionKey"></a>SelectionKey</h4><p><code>Set&lt;SelectionKey&gt; selectionKeys = selector.selectedKeys();</code> 返回的是已经就绪的 Channel 集合，<code>SelectionKey</code> 对象的详细属性如下图所示。</p>
+<p><img src="/images/java/SelectionKey.png" alt="SelectionKey 的详情"></p>
+<h2 id="NIO-原理"><a href="#NIO-原理" class="headerlink" title="NIO 原理"></a>NIO 原理</h2><p>Java NIO 实现的关键是 IO 多路复用（具体可以参考上篇文章：<a href="http://matt33.com/2017/08/06/unix-io/#Linux-的-IO-多路复用模型">Linux 的 IO 多路复用模型</a>），在 Linux 平台，Java NIO 是基于 epoll（2.6以上，之前是 Select） 来实现的。</p>
+<p>Linux 的 select/epoll  使用的是 Reactor 网络 IO 模式。网络编程中，有两种常用的设计模式，它们都是基于事件驱动：</p>
+<ul>
+<li>Reactor 模式：主动模式，应用程序不断去轮询，问操作系统 IO 是否就绪，实际的 IO 操作还是由应用实现（IO 多路复用采用的模式）；</li>
+<li>Proactor 模式：被动模式，操作系统把 IO 完成后通知应用程序，此时数据已经就绪。</li>
+</ul>
+<p>这两种模式详细内容可以参考<a href="http://daoluan.net/linux/%E5%AD%A6%E4%B9%A0%E6%80%BB%E7%BB%93/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/2013/08/20/two-high-performance-io-design-patterns.html" target="_blank" rel="external">两种高性能 I/O 设计模式 Reactor 和 Proactor</a>一文。</p>
+<h2 id="NIO-编程"><a href="#NIO-编程" class="headerlink" title="NIO 编程"></a>NIO 编程</h2><p>关于 Java NIO，有两种最常见的使用方式：</p>
+<ul>
+<li>使用原生的 Java NIO（如 Kafka）；</li>
+<li>使用 Netty（Hadoop 的 RPC 框架 Avro 底层使用 Netty 做通信框架）。</li>
+</ul>
+<p>在实际使用中，推荐第二种，使用 Netty 将会大大提高开发效率，后续会写篇关于 Netty 的文章，介绍一下 Netty 的具体内容，这里使用一个基于 Java 原生 NIO API 的小示例，讲述一下 NIO 的使用方法。</p>
+<h3 id="Client-端"><a href="#Client-端" class="headerlink" title="Client 端"></a>Client 端</h3><p>NIO Client 创建序列图如下图所示（图片来自《Netty 权威指南》）。</p>
+<p><img src="/images/java/nio-client.png" alt="NIO Client 端序列图"></p>
+<p>具体的代码及注释参考：<a href="https://github.com/wangzzu/ProgramlLearn/tree/aab89008091660f1f231763660eb329eb5928bde/java_learn/java_socket/src/main/java/nio/client/" target="_blank" rel="external">NIO Client 端代码</a>。</p>
+<h3 id="Server-端"><a href="#Server-端" class="headerlink" title="Server 端"></a>Server 端</h3><p>NIO Server 创建序列图如下图所示（图片来自《Netty 权威指南》）。</p>
+<p><img src="/images/java/nio-server.png" alt="NIO Server 端序列图"></p>
+<p>具体的代码及注释参考：<a href="https://github.com/wangzzu/ProgramlLearn/tree/aab89008091660f1f231763660eb329eb5928bde/java_learn/java_socket/src/main/java/nio/server/" target="_blank" rel="external">NIO Server 端代码</a>。</p>
+<h1 id="IO-模型对比"><a href="#IO-模型对比" class="headerlink" title="IO 模型对比"></a>IO 模型对比</h1><p>在对比之前，先简单介绍 Java AIO 模型，这里就不再进行相应的展开了。</p>
+<h2 id="AIO"><a href="#AIO" class="headerlink" title="AIO"></a>AIO</h2><p>NIO 2.0 中引入异步通道的概念，并提供了异步文件通道和异步套接字导通的实现，它是真正的异步非阻塞I IO，底层是利用事件驱动（AIO）实现，不需要多路复用器（Selector）对注册的通道进行轮组操作即可实现异步读写。</p>
+<p>可以参考<a href="https://www.ibm.com/developerworks/cn/java/j-lo-nio2/" target="_blank" rel="external">在 Java 7 中体会 NIO.2 异步执行的快乐</a></p>
+<h2 id="几种-IO-模型功能和特性对比"><a href="#几种-IO-模型功能和特性对比" class="headerlink" title="几种 IO 模型功能和特性对比"></a>几种 IO 模型功能和特性对比</h2><table>
+<thead>
+<tr>
+<th></th>
+<th>传统 BIO</th>
+<th>伪异步 IO</th>
+<th>NIO</th>
+<th>AIO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>client 数：IO 线程数</td>
+<td>1：1</td>
+<td>M：N（M 可以大于 N）</td>
+<td>M：1</td>
+<td>M：0（不需要额外的线程，被动回调）</td>
+</tr>
+<tr>
+<td>IO 类型（阻塞）</td>
+<td>阻塞IO</td>
+<td>阻塞IO</td>
+<td>非阻塞IO</td>
+<td>非阻塞IO</td>
+</tr>
+<tr>
+<td>IO 类型（同步）</td>
+<td>同步 IO</td>
+<td>同步 IO</td>
+<td>同步 IO（IO 多路复用）</td>
+<td>异步 IO</td>
+</tr>
+<tr>
+<td>可靠性</td>
+<td>非常差</td>
+<td>差</td>
+<td>高</td>
+<td>高</td>
+</tr>
+<tr>
+<td>吞吐量</td>
+<td>低</td>
+<td>中</td>
+<td>高</td>
+<td>高</td>
+</tr>
+</tbody>
+</table>
+<p>本文主要是对 Java IO 模型总结，特别是对 NIO 模型的总结。</p>
+<hr>
+<p>参考</p>
+<ul>
+<li>《Netty 权威指南》；</li>
+<li>Java NIO <a href="http://tutorials.jenkov.com/java-nio/index.html" target="_blank" rel="external">英文版</a>，<a href="http://ifeve.com/java-nio-all/" target="_blank" rel="external">中文版</a>；</li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;Java IO 模型对于 Java 开发工程师来说，是日常工作中经常接触的内容，特别是随着分布式系统的兴起，IO 也显得越来越重要，Java 的 IO 模型本质上还是利用操作系统提供的接口来实现，不熟悉这一部分内容的话，可以先看一下上篇文章&lt;a href=&quot;http://m
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="linux" scheme="http://matt33.com/tags/linux/"/>
+    
+  </entry>
   
   <entry>
     <title>Unix 网络 IO 模型及 Linux 的 IO 多路复用模型</title>
@@ -3132,43 +3401,6 @@
     
     
       <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>从《驴得水》到《我不是潘金莲》的一些思考</title>
-    <link href="http://matt33.com/2016/11/20/movie-think/"/>
-    <id>http://matt33.com/2016/11/20/movie-think/</id>
-    <published>2016-11-20T10:47:19.000Z</published>
-    <updated>2016-11-20T10:49:23.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>今年好久没去电影院看过电影了，今天趁着周末去看场电影，选了最近比较火的<a href="https://movie.douban.com/subject/26630781/?from=showing" target="_blank" rel="external">《我不是潘金莲》</a>，据说这部电影跟《驴得水》有些相似之处，比较贴近现实，并那么做作。看完之后确实感慨很多，相比于以前的那些烂电影真的要好很多。</p>
-<p>今年上映的国产电影，不得不说有几部确实还是挺不错的，虽然还是烂片居多。关于电影，其实我一直都是有个疑问，之前看过很多的韩国电影，看完真心感觉很多韩国电影拍得很不错，尤其是近几年，韩国的犯罪系列电影拍得很精彩，韩国也拍了很多反应社会现实的电影，如《熔炉》、《金福南杀人事件》，这些电影其实都可以归结于人性系列。那么问题来了，为什么韩国的电影近几年能够异军突起，甚至有成为亚洲电影骄傲的趋势，而我们大陆拍得电影，几乎每年都被在吐槽烂、简直扶不上墙，更别提走出国门了，一年上映几百部的电影，而豆瓣评分过7分也只有个位数，原因何在？是我们的导演不如韩国？编剧不如韩国？或者说文化氛围不如韩国？貌似这些理由都没有说服力，毕竟我们曾经拍出《让子弹飞》、《霸王别姬》、《大话西游》等这些优秀的电影，而且我们国家也出了诺贝尔文学奖获得者莫言，那么原因在哪里？很多人说是广电总局的问题，说我们国家的电影审核太严，我同样也认为这是其重要的原因之一，电影的剧本要符合主流价值观，这也使得很多好的题材并不能过审。而近段上映的两部电影——《驴得水》和《我不是潘金莲》，多多少少让我们感觉到影中的情景就是赤赤裸裸的现实，让我们明显感觉到中国电影的环境在慢慢变得健康，而不像以前那样的畸形，这两部电影的大热也不是没有原因的。</p>
-<p>电影是艺术的一种，关于这一点，是我们不可否认的，一部好的艺术作品，是能够启发每个人的思考，而不仅仅是嘻嘻哈哈就过去了，对于电影作品也是如此。</p>
-<p>在《驴得水》中，首先是基层人员为了能够获得更多的利益，谎报在编正式人员数，甚至不惜伪造；其次，中层领队对上级拨下来的教育扶贫资金克扣，影中克扣了70%，剩下的30%在基层人员手里大家再分一点，最后真正落到实处的都不足两成、甚至不足一成；最后，为了应付上级领导的检查，中层领导和基层人员为了各自的利益一起糊弄上级领导。这种现象在现实中大家都应该深有体会，尤其对那些三四五线的小城市，恐怕更为严重，这也是年轻人毕业 之后纷纷选择竞争更为公平的一线强二线的城市去打拼的原因（当然并不是说一线强二线就是绝对公平的，相比于三四五线还是要好很多的）。记得当时看过驴得水之后，为影中的剧情拍手叫好，当时看完电影甚至感觉有些诧异，这种电影竟然过审了？</p>
-<p>今天看了《我不是潘金莲》，女主李雪莲因为一件离婚案去县里、市里告，在去市里喊冤的时候，为了不影响市里的精神文明检查她还在省委领导视察期间被关进派出所，最后幸运的是她去北京告状的时候遇到了中央的首长，更幸运的是遇到了一个比较好的中央首长，当然故事还在继续，就是因为她这一告从法院院长、县长、市长都一并被处置了，但唯独没有处置她的前夫秦玉河，这里先不讨论李雪莲是否有理（其实这个并不重要，李雪莲确实是个法盲，这部电影给人的思考更应该关注这些人民公仆的表现），在这个过程中我们看到了从下到上、从县到省是如何对待普通公民李雪莲的。首先判官李公道对这个案子判决根据我们已有的法律知识是没有问题的，但是后面的各个官员对于普通公民的态度呢？影片中也出现了法院院长喝酒应酬的情景，李雪莲前去告状，他们连深入了解这个案件的耐心都没有，甚至还生怕李雪莲在前任院长面前说了什么不该说的话，他们直接告诉李雪莲你要是对法院判决不服那就去市里告、检举法院厅长的话去检察院，这跟我们没关系，然后李雪莲就问：你们难道就不管了吗？那人说：我们什么时候说不管了，关键是我们管不了。</p>
-<p>这些说的这听起来确实也没有错，当李雪莲在法院院长应酬的饭店外面蹲点，去拦截法院院长的车告状，这里看一下当时影中的情景是怎样的？</p>
-<ul>
-<li>李雪莲前去告状，法院中另一人直接抱住李雪莲，不让李雪莲在前任院长面前说话，生怕李雪莲说了什么队他们的不利的东西，当时前任院长有心想问一下，这时候他老婆说了一句：你已经退休了，这些事情你管不了了。这个场景我想我们大家都有深有体会的，因为很真实、很现实；</li>
-<li>那些法院公职人员对待公民的态度问题，其中那个抱住李雪莲的人还一把把李雪莲推倒在地上，反而自己还大吼道：你想干嘛，真是巨大的讽刺。</li>
-<li>影中还出现了两次（记得是两次）打扮颇为靓丽的年轻女子，一次在与两人法院院长吃饭的饭局上，另一次在市长与县长谈话的那个小桥边，同样也有讽刺意味十足。</li>
-</ul>
-<p>影片也丝毫没有遮掩下级干部是如何欺瞒、甚至糊弄上级，影中连省长向中央首长汇报都是这样，省长都向人代表明确暗示在首长面前不要多说话、讨论仅限昨天会议问题、绝对不能扯远，由此可见，别说民意上达中央了，估计省里都懒得去管。个人认为《我不是潘金莲》这部影片最牛逼的地方在于它直接就映照现实，这些东西以前可都是忌口，就连《驴得水》还用了民国做背景，而它倒好，故事背景直接就发生在近二十年，故事的最后也提高了计划生育政策，普通公民为了多生一个孩子甚至不惜以离婚作掩护，而现在的现实是很多夫妻为了多买套房、享受优惠不惜假离婚，当然也出现了一些假的变成了真的场景，在新闻上是屡见不鲜，可见一切都在改变，而似乎有些东西又丝毫没变，不知道那些这样做的人，过了二十年之后再回忆会是什么感想。</p>
-<p>从《驴得水》到《我不是潘金莲》这两部电影，其实我感慨最多还是中国的电影环境在变化，大家都知道2015年和2016年这两年其中一个处在风口的行业是什么？是内容，广大普通民众对于那些套用各大明星的烂电影简直是深恶痛绝，也对那些省级卫视里那些无聊的电视剧和娱乐节目感到厌烦。记得前段时间看新闻，还说今年的票房相比去年下降了很多，我想这更多就是民众再对烂电影的一次共同抗议吧。但这也成了很多用心做内容公司一次机遇，就以电影行业为例，心迷宫、夏洛特烦恼、大圣回来等小投资的电影大热，口碑和票房双丰收，可见市场这只无形的手确实在发挥它应用的作用。</p>
-<p>内容行业的人估计也在意识到现在的一些年轻人喜好正在发生改变，假大空、没有任何深入的电影，真的让人无法接受，浪费钱就不说了，更重要的是浪费了我们宝贵的时间。这种结果也是互联网对这个行业冲击的影响，首先，互联网对电影口碑的传播几乎起着决定性的作用，之前是豆瓣评分，现在朋友圈好友推荐，口碑传播的方式在慢慢变化，一部作品的口碑对其最后的成功与否也起着越来越大的作用；再者，互联网的发展，让普通民众接收到了不同信息，民众也不再像以前那样，给什么信息我们就只能接收什么信息，信息的接收渠道十分有限，但是现在我们可以接收到更多的信息，这也在潜移默化影响我们的生活，其实，我就是想说一句话，随着经济的发展，公民观念的水位在慢慢上升。举一个例子，之前那段时间我们一直都在看美国的总统大选，看得好不热闹，然后这两天也刚我们国家的人大代表换届选举，搞笑的场景就出现了，新闻上有一个地方川普的得票率达到了10%，而这个地方总投票率却不到半数，最后选举只好重新举行。对于在大城市生活的人来说，我们还是能明确感受普通公民权利意识的觉醒，这也是我们国家正在进步的表现。</p>
-<p>最后，一部好的电影作品是应该引人思考、深入人性的，希望我们国家拍得电影越来越好。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;今年好久没去电影院看过电影了，今天趁着周末去看场电影，选了最近比较火的&lt;a href=&quot;https://movie.douban.com/subject/26630781/?from=showing&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;《我不是潘
-    
-    </summary>
-    
-      <category term="影如人生" scheme="http://matt33.com/categories/%E5%BD%B1%E5%A6%82%E4%BA%BA%E7%94%9F/"/>
-    
-    
-      <category term="电影随想" scheme="http://matt33.com/tags/%E7%94%B5%E5%BD%B1%E9%9A%8F%E6%83%B3/"/>
     
   </entry>
   
