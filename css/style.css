@@ -24,6 +24,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-size: 14px; }
 
+.analytics {
+  display: none; }
+
 .body_container {
   padding: 0 60px;
   max-width: 1150px;
