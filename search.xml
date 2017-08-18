@@ -172,9 +172,8 @@
 <li>SelectionKey.OP_CONNECT：只会注册一次，成功之后（TCP 连接建立之后），这个监听事件就取消了；</li>
 <li>SelectionKey.OP_ACCEPT：主要用于服务端，就是监听是否有新的连接请求；</li>
 <li>SelectionKey.OP_READ：注册之后不会取消，监听是否数据到来；</li>
-<li>SelectionKey.OP_WRITE：最好的使用方法是每当发送数据时，就注册一次，然后再取消，否则每次 select 轮询时，注册 OP_WRITE 事件的 Channel 都是 ready 的，除非 socket send buffer 满了（参考 [Communicating between nio OP_READ and OP_WRITE operations</li>
+<li>SelectionKey.OP_WRITE：最好的使用方法是每当发送数据时，就注册一次，然后再取消，否则每次 select 轮询时，注册 OP_WRITE 事件的 Channel 都是 ready 的，除非 socket send buffer 满了（参考 <a href="https://stackoverflow.com/questions/23136079/communicating-between-nio-op-read-and-op-write-operations" target="_blank" rel="external">Communicating between nio OP_READ and OP_WRITE operations</a>）。</li>
 </ol>
-<p>](<a href="https://stackoverflow.com/questions/23136079/communicating-between-nio-op-read-and-op-write-operations)）。" target="_blank" rel="external">https://stackoverflow.com/questions/23136079/communicating-between-nio-op-read-and-op-write-operations)）。</a></p>
 <h4 id="SelectionKey"><a href="#SelectionKey" class="headerlink" title="SelectionKey"></a>SelectionKey</h4><p><code>Set&lt;SelectionKey&gt; selectionKeys = selector.selectedKeys();</code> 返回的是已经就绪的 Channel 集合，<code>SelectionKey</code> 对象的详细属性如下图所示。</p>
 <p><img src="/images/java/SelectionKey.png" alt="SelectionKey 的详情"></p>
 <h2 id="NIO-原理"><a href="#NIO-原理" class="headerlink" title="NIO 原理"></a>NIO 原理</h2><p>Java NIO 实现的关键是 IO 多路复用（具体可以参考上篇文章：<a href="http://matt33.com/2017/08/06/unix-io/#Linux-的-IO-多路复用模型">Linux 的 IO 多路复用模型</a>），在 Linux 平台，Java NIO 是基于 epoll（2.6以上，之前是 Select） 来实现的。</p>
