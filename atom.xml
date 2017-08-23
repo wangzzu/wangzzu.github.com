@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2017-08-18T14:03:40.000Z</updated>
+  <updated>2017-08-23T13:39:14.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,145 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Kafka 源码分析之 Producer NIO 网络模型（四）</title>
+    <link href="http://matt33.com/2017/08/22/producer-nio/"/>
+    <id>http://matt33.com/2017/08/22/producer-nio/</id>
+    <published>2017-08-22T13:58:25.000Z</published>
+    <updated>2017-08-23T13:39:14.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>本文是 Kafka 源码解析的第四篇，在写这篇文章之前，专门看了一下 Java NIO 相关的内容，只有理解了 Java NIO 模型才能更好地理解 NIO 在 Kafka 中是如何应用的以及 Producer 如何利用 Java NIO 构建其网络模型（不了解的，可以先看一下上一篇文章：<a href="http://matt33.com/2017/08/12/java-nio/">谈一谈 Java IO 模型</a>），同时，本文也是对 Producer 整个流程的一个总结，主要讲述以下两个问题：</p>
+<ol>
+<li>Producer 的大概网络模型，与 Java NIO 模型之间关系；</li>
+<li>Producer 整体流程及其整体流程详解。</li>
+</ol>
+<h1 id="Producer-的网络模型"><a href="#Producer-的网络模型" class="headerlink" title="Producer 的网络模型"></a>Producer 的网络模型</h1><p>KafkaProducer 通过 Sender 进行相应的 IO 操作，而 Sender 又调用 NetworkClient 来进行 IO 操作，NetworkClient 底层是对 Java NIO 进行相应的封装，其网络模型如下图所示（该图参考：<a href="http://blog.csdn.net/chunlongyu/article/details/52636762" target="_blank" rel="external">Kafka源码深度解析－序列3 －Producer －Java NIO</a>，在其基础上增加一个 KafkaProducer 成员变量的图形）。</p>
+<p><img src="/images/kafka/producer-network.png" alt="Prodcuer 网络模型"></p>
+<p>从图中可以看出，Sender 为最上层的接口，即调用层，Sender 调用 NetworkClient，NetworkClient 调用 Selector，而 Selector 底层封装了 Java NIO 的相关接口，从右边的图也可以看出它们之间的关系。</p>
+<h1 id="Producer-整体流程"><a href="#Producer-整体流程" class="headerlink" title="Producer 整体流程"></a>Producer 整体流程</h1><p>有了对 Producer 网络模型的大概框架认识之后，下面再深入进去，看一下它们之间的调用关系以及 Producer 是如何调用 Java NIO 的相关接口，Producer 端的整体流程如下图所示。</p>
+<p><img src="/images/kafka/producer-nio-flow.png" alt="Producer 整体流程"></p>
+<p>这里涉及到的主要方法是：</p>
+<ul>
+<li><code>KafkaProducer.dosend()</code>；</li>
+<li><code>Sender.run()</code>；</li>
+<li><code>NetworkClient.poll()</code>（<code>NetworkClient.dosend()</code>）；</li>
+<li><code>Selector.poll()</code>；</li>
+</ul>
+<p>下面会结合上图，对这几个方法做详细的讲解，本文下面的内容都是结合上图进行讲解。</p>
+<h2 id="KafkaProducer-dosend"><a href="#KafkaProducer-dosend" class="headerlink" title="KafkaProducer.dosend()"></a>KafkaProducer.dosend()</h2><p><code>dosend()</code> 方法是读懂 Producer 的入口，具体可以参考 <a href="http://matt33.com/2017/06/25/kafka-producer-send-module/#Producer-的-doSend-实现">dosend()</a>，<code>dosend()</code> 主要做了两个事情：</p>
+<ol>
+<li><code>waitOnMetadata()</code>：请求更新 tp（topic-partition） meta，中间会调用 <code>sender.wakeup()</code>；</li>
+<li><code>accumulator.append()</code>：将 msg 写入到其 tp 对应的 deque 中，如果该 tp 对应的 deque 新建了一个 Batch，最后也会调用 <code>sender.wakeup()</code>。</li>
+</ol>
+<p>这里主要关注的是 <code>sender.wakeup()</code> 方法，它的作用是将 Sender 线程从阻塞中唤醒。</p>
+<h3 id="sender-wakeup-方法"><a href="#sender-wakeup-方法" class="headerlink" title="sender.wakeup() 方法"></a><code>sender.wakeup()</code> 方法</h3><p>这里来看一下 <code>sender.wakeup()</code> 具体实现：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// org.apache.kafka.clients.producer.internals.Sender</span></div><div class="line"><span class="comment">/**</span></div><div class="line">* Wake up the selector associated with this send thread</div><div class="line">*/</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">wakeup</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">this</span>.client.wakeup();</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">// org.apache.kafka.clients.NetworkClient</span></div><div class="line"><span class="comment">/**</span></div><div class="line">* Interrupt the client if it is blocked waiting on I/O.</div><div class="line">*/</div><div class="line"><span class="meta">@Override</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">wakeup</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">this</span>.selector.wakeup();</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">// org.apache.kafka.common.network.Selector</span></div><div class="line"><span class="comment">/**</span></div><div class="line">* Interrupt the nioSelector if it is blocked waiting to do I/O.</div><div class="line">*/</div><div class="line"><span class="comment">//note: 如果 selector 是阻塞的话,就唤醒</span></div><div class="line"><span class="meta">@Override</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">wakeup</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">this</span>.nioSelector.wakeup();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这个方法很简单，但也很有意思，其调用过程是下面这个样子：</p>
+<ul>
+<li>Sender -&gt; NetworkClient -&gt; Selector(Kafka 封装的) -&gt; Selector(Java NIO)</li>
+</ul>
+<p>跟上面两张图中 KafkaProducer 的总体调用过程大概一致，它的作用就是将 Sender 线程从 <code>select()</code> 方法的阻塞中唤醒，<code>select()</code> 方法的作用是轮询注册在多路复用器上的 Channel，它会一直阻塞在这个方法上，除非满足下面条件中的一个：</p>
+<ul>
+<li>at least one channel is selected;</li>
+<li>this selector’s {@link #wakeup wakeup} method is invoked;</li>
+<li>the current thread is interrupted;</li>
+<li>the given timeout period expires.</li>
+</ul>
+<p>否则 <code>select()</code> 将会一直轮询，阻塞在这个地方，直到条件满足。</p>
+<p>分析到这里，KafkaProducer 中 <code>dosend()</code> 方法调用 <code>sender.wakeup()</code> 方法作用就很明显的，作用就是：当有新的 RecordBatch 创建后，旧的 RecordBatch 就可以发送了（或者此时有 Metadata 请求需要发送），如果线程阻塞在 <code>select()</code> 方法中，就将其唤醒，Sender 重新开始运行 <code>run()</code> 方法，在这个方法中，旧的 RecordBatch （或相应的 Metadata 请求）将会被选中，进而可以及时将这些请求发送出去。</p>
+<h2 id="Sender-run"><a href="#Sender-run" class="headerlink" title="Sender.run()"></a>Sender.run()</h2><p>每次循环都是从 Sender 的 <code>run()</code> 方法开始，具体代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: Sender 线程每次循环具体执行的地方</span></div><div class="line">    <span class="function"><span class="keyword">void</span> <span class="title">run</span><span class="params">(<span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">        Cluster cluster = metadata.fetch();</div><div class="line">        <span class="comment">//note: Step1 获取那些已经可以发送的 RecordBatch 对应的 nodes</span></div><div class="line">        RecordAccumulator.ReadyCheckResult result = <span class="keyword">this</span>.accumulator.ready(cluster, now);</div><div class="line"></div><div class="line">        <span class="comment">//note: Step2  如果有 topic-partition 的 leader 是未知的,就强制 metadata 更新</span></div><div class="line">        <span class="keyword">if</span> (!result.unknownLeaderTopics.isEmpty()) &#123;</div><div class="line">            <span class="keyword">for</span> (String topic : result.unknownLeaderTopics)</div><div class="line">                <span class="keyword">this</span>.metadata.add(topic);</div><div class="line">            <span class="keyword">this</span>.metadata.requestUpdate();</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="comment">//note: 如果与node 没有连接（如果可以连接,会初始化该连接）,暂时先移除该 node</span></div><div class="line">        Iterator&lt;Node&gt; iter = result.readyNodes.iterator();</div><div class="line">        <span class="keyword">long</span> notReadyTimeout = Long.MAX_VALUE;</div><div class="line">        <span class="keyword">while</span> (iter.hasNext()) &#123;</div><div class="line">            Node node = iter.next();</div><div class="line">            <span class="keyword">if</span> (!<span class="keyword">this</span>.client.ready(node, now)) &#123;<span class="comment">//note: 没有建立连接的 broker,这里会与其建立连接</span></div><div class="line">                iter.remove();</div><div class="line">                notReadyTimeout = Math.min(notReadyTimeout, <span class="keyword">this</span>.client.connectionDelay(node, now));</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="comment">//note: Step3  返回该 node 对应的所有可以发送的 RecordBatch 组成的 batches（key 是 node.id,这些 batches 将会在一个 request 中发送）</span></div><div class="line">        Map&lt;Integer, List&lt;RecordBatch&gt;&gt; batches = <span class="keyword">this</span>.accumulator.drain(cluster,</div><div class="line">                                                                         result.readyNodes,</div><div class="line">                                                                         <span class="keyword">this</span>.maxRequestSize,</div><div class="line">                                                                         now);</div><div class="line">        <span class="comment">//note: 保证一个 tp 只有一个 RecordBatch 在发送,保证有序性</span></div><div class="line">        <span class="comment">//note: max.in.flight.requests.per.connection 设置为1时会保证</span></div><div class="line">        <span class="keyword">if</span> (guaranteeMessageOrder) &#123;</div><div class="line">            <span class="comment">// Mute all the partitions draine</span></div><div class="line">            <span class="keyword">for</span> (List&lt;RecordBatch&gt; batchList : batches.values()) &#123;</div><div class="line">                <span class="keyword">for</span> (RecordBatch batch : batchList)</div><div class="line">                    <span class="keyword">this</span>.accumulator.mutePartition(batch.topicPartition);</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="comment">//note: 将由于元数据不可用而导致发送超时的 RecordBatch 移除</span></div><div class="line">        List&lt;RecordBatch&gt; expiredBatches = <span class="keyword">this</span>.accumulator.abortExpiredBatches(<span class="keyword">this</span>.requestTimeout, now);</div><div class="line">        <span class="keyword">for</span> (RecordBatch expiredBatch : expiredBatches)</div><div class="line">            <span class="keyword">this</span>.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);</div><div class="line"></div><div class="line">        sensors.updateProduceRequestMetrics(batches);</div><div class="line"></div><div class="line">        <span class="keyword">long</span> pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);</div><div class="line">        <span class="keyword">if</span> (!result.readyNodes.isEmpty()) &#123;</div><div class="line">            log.trace(<span class="string">"Nodes with data ready to send: &#123;&#125;"</span>, result.readyNodes);</div><div class="line">            pollTimeout = <span class="number">0</span>;</div><div class="line">        &#125;</div><div class="line">        <span class="comment">//note: Step4 发送 RecordBatch</span></div><div class="line">        sendProduceRequests(batches, now);</div><div class="line"></div><div class="line">        <span class="comment">//note: 如果有 partition 可以立马发送数据,那么 pollTimeout 为0.</span></div><div class="line">        <span class="comment">//note: Step5 关于 socket 的一些实际的读写操作</span></div><div class="line">        <span class="keyword">this</span>.client.poll(pollTimeout, now);</div><div class="line">    &#125;</div></pre></td></tr></table></figure>
+<p><code>Sender.run()</code> 的大概流程总共有以下五步：</p>
+<ol>
+<li><code>accumulator.ready()</code>：遍历所有的 tp（topic-partition），如果其对应的 RecordBatch 可以发送（大小达到 <code>batch.size</code> 大小或时间达到 <code>linger.ms</code>），就将其对应的 leader 选出来，最后会返回一个可以发送 Produce request 的 <code>Set&lt;Node&gt;</code>（实际返回的是 <code>ReadyCheckResult</code> 实例，不过 <code>Set&lt;Node&gt;</code> 是最主要的成员变量）；</li>
+<li>如果发现有 tp 没有 leader，那么这里就调用 <code>requestUpdate()</code> 方法更新 metadata，实际上还是在第一步对 tp 的遍历中，遇到没有 leader 的 tp 就将其加入到一个叫做  <code>unknownLeaderTopics</code> 的 set 中，然后会请求这个 tp 的 meta（meta 的更新策略可以参考之前的一篇博客 <a href="http://matt33.com/2017/07/08/kafka-producer-metadata/#Producer-Metadata-的更新策略">Producer Metadata 的更新策略</a>）；</li>
+<li><code>accumulator.drain()</code>：遍历每个 leader （第一步中选出）上的所有 tp，如果该 tp 对应的 RecordBatch 不在 backoff 期间（没有重试过，或者重试了但是间隔已经达到了 retryBackoffMs ），并且加上这个 RecordBatch 其大小不超过 maxSize（一个 request 的最大限制，默认为 1MB），那么就把这个 RecordBatch 添加 list 中，最终返回的类型为 <code>Map&lt;Integer, List&lt;RecordBatch&gt;&gt;</code>，key 为 leader.id，value 为要发送的 RecordBatch 的列表；</li>
+<li><code>sendProduceRequests()</code>：发送 Produce 请求，从图中，可以看出，这个方法会调用 <code>NetworkClient.send()</code> 来发送 clientRequest；</li>
+<li><code>NetworkClient.poll()</code>：关于 socket 的 IO 操作都是在这个方法进行的，它还是调用 Selector 进行的相应操作，而 Selector 底层则是封装的 Java NIO 的相关接口，这个下面会详细讲述。</li>
+</ol>
+<p>在第三步中，可以看到，如果要向一个 leader 发送 Produce 请求，那么这 leader 对应 tp，如果其 RecordBatch 没有达到要求（<code>batch.size</code> 或 <code>linger.ms</code> 都没达到）还是可能会发送，这样做的好处是：可以减少 request 的频率，有利于提供发送效率。</p>
+<h2 id="NetworkClient-poll"><a href="#NetworkClient-poll" class="headerlink" title="NetworkClient.poll()"></a>NetworkClient.poll()</h2><p>这个方法也是一个非常重要的方法，其作用简单来说有三点：</p>
+<ul>
+<li>如果需要更新 Metadata，那么就发送 Metadata 请求；</li>
+<li>调用 Selector 进行相应的 IO 操作；</li>
+<li>处理 Server 端的 response 及一些其他的操作。</li>
+</ul>
+<p>具体代码如下所示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> List&lt;ClientResponse&gt; <span class="title">poll</span><span class="params">(<span class="keyword">long</span> timeout, <span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">        <span class="comment">//note: Step1 判断是否需要更新 meta,如果需要就更新（请求更新 metadata 的地方）</span></div><div class="line">        <span class="keyword">long</span> metadataTimeout = metadataUpdater.maybeUpdate(now);</div><div class="line">        <span class="comment">//note: Step2 调用 Selector.poll() 进行 socket 相关的 IO 操作</span></div><div class="line">        <span class="keyword">try</span> &#123;</div><div class="line">            <span class="keyword">this</span>.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));</div><div class="line">        &#125; <span class="keyword">catch</span> (IOException e) &#123;</div><div class="line">            log.error(<span class="string">"Unexpected error during I/O"</span>, e);</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="comment">//note: Step3 处理完成后的操作</span></div><div class="line">        <span class="keyword">long</span> updatedNow = <span class="keyword">this</span>.time.milliseconds();</div><div class="line">        List&lt;ClientResponse&gt; responses = <span class="keyword">new</span> ArrayList&lt;&gt;();</div><div class="line">        handleAbortedSends(responses);</div><div class="line">        <span class="comment">//note: 处理已经完成的 send（不需要 response 的 request,如 send）</span></div><div class="line">        handleCompletedSends(responses, updatedNow);<span class="comment">//note: 通过 selector 中获取 Server 端的 response</span></div><div class="line">        <span class="comment">//note: 处理从 server 端接收到 Receive（如 Metadata 请求）</span></div><div class="line">        handleCompletedReceives(responses, updatedNow);<span class="comment">//note: 在返回的 handler 中，会处理 metadata 的更新</span></div><div class="line">        <span class="comment">//note: 处理连接失败那些连接,重新请求 meta</span></div><div class="line">        handleDisconnections(responses, updatedNow);</div><div class="line">        <span class="comment">//note: 处理新建立的那些连接（还不能发送请求,比如:还未认证）</span></div><div class="line">        handleConnections();</div><div class="line">        handleInitiateApiVersionRequests(updatedNow);</div><div class="line">        handleTimedOutRequests(responses, updatedNow);</div><div class="line"></div><div class="line">        <span class="comment">// invoke callbacks</span></div><div class="line">        <span class="keyword">for</span> (ClientResponse response : responses) &#123;</div><div class="line">            <span class="keyword">try</span> &#123;</div><div class="line">                response.onComplete();</div><div class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</div><div class="line">                log.error(<span class="string">"Uncaught error in request completion:"</span>, e);</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="keyword">return</span> responses;</div><div class="line">    &#125;</div></pre></td></tr></table></figure>
+<p>这个方法大致分为三步，这里详述讲述一下：</p>
+<ol>
+<li><code>metadataUpdater.maybeUpdate()</code>：如果 Metadata 需要更新，那么就选择连接数最小的 node，发送 Metadata 请求，详细流程可以参考之前那篇博客<a href="http://matt33.com/2017/07/08/kafka-producer-metadata/#Producer-的-Metadata-更新流程">Producer 的 Metadata 更新流程</a>；</li>
+<li><code>selector.poll()</code>：进行 socket IO 相关的操作，下面会详细讲述；</li>
+<li>process completed actions：在一个 <code>select()</code> 过程之后的相关处理。<ul>
+<li><code>handleAbortedSends(responses)</code>：处理那么在发送过程出现 <code>UnsupportedVersionException</code> 异常的 request；</li>
+<li><code>handleCompletedSends(responses, updatedNow)</code>：处理那些已经完成的 request，如果是那些不需要 response 的 request 的话，这里直接调用 <code>request.completed()</code>，标志着这个 request 发送处理完成；</li>
+<li><code>handleCompletedReceives(responses, updatedNow)</code>：处理那些从 Server 端接收的 Receive，metadata 更新就是在这里处理的（以及 <code>ApiVersionsResponse</code>）；</li>
+<li><code>handleDisconnections(responses, updatedNow)</code>：处理连接失败那些连接,重新请求 metadata；</li>
+<li><code>handleConnections()</code>：处理新建立的那些连接（还不能发送请求,比如:还未认证）；</li>
+<li><code>handleInitiateApiVersionRequests(updatedNow)</code>：对那些新建立的连接，发送 apiVersionRequest（默认情况：第一次建立连接时，需要向 Broker 发送 ApiVersionRequest 请求）；</li>
+<li><code>handleTimedOutRequests(responses, updatedNow)</code>：处理 timeout 的连接，关闭该连接，并刷新 Metadata。</li>
+</ul>
+</li>
+</ol>
+<h2 id="Selector-poll"><a href="#Selector-poll" class="headerlink" title="Selector.poll()"></a>Selector.poll()</h2><p> Selector 类是 Kafka 对 Java NIO 相关接口的封装，socket IO 相关的操作都是这个类中完成的，这里先看一下 <code>poll()</code> 方法，主要的操作都是这个方法中调用的，其代码实现如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">poll</span><span class="params">(<span class="keyword">long</span> timeout)</span> <span class="keyword">throws</span> IOException </span>&#123;</div><div class="line">        <span class="keyword">if</span> (timeout &lt; <span class="number">0</span>)</div><div class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"timeout should be &gt;= 0"</span>);</div><div class="line"></div><div class="line">        <span class="comment">//note: Step1 清除相关记录</span></div><div class="line">        clear();</div><div class="line"></div><div class="line">        <span class="keyword">if</span> (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty())</div><div class="line">            timeout = <span class="number">0</span>;</div><div class="line"></div><div class="line">        <span class="comment">/* check ready keys */</span></div><div class="line">        <span class="comment">//note: Step2 获取就绪事件的数</span></div><div class="line">        <span class="keyword">long</span> startSelect = time.nanoseconds();</div><div class="line">        <span class="keyword">int</span> readyKeys = select(timeout);</div><div class="line">        <span class="keyword">long</span> endSelect = time.nanoseconds();</div><div class="line">        <span class="keyword">this</span>.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());</div><div class="line"></div><div class="line">        <span class="comment">//note: Step3 处理 io 操作</span></div><div class="line">        <span class="keyword">if</span> (readyKeys &gt; <span class="number">0</span> || !immediatelyConnectedKeys.isEmpty()) &#123;</div><div class="line">            pollSelectionKeys(<span class="keyword">this</span>.nioSelector.selectedKeys(), <span class="keyword">false</span>, endSelect);</div><div class="line">            pollSelectionKeys(immediatelyConnectedKeys, <span class="keyword">true</span>, endSelect);</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="comment">//note: Step4 将处理得到的 stagedReceives 添加到 completedReceives 中</span></div><div class="line">        addToCompletedReceives();</div><div class="line"></div><div class="line">        <span class="keyword">long</span> endIo = time.nanoseconds();</div><div class="line">        <span class="keyword">this</span>.sensors.ioTime.record(endIo - endSelect, time.milliseconds());</div><div class="line"></div><div class="line">        <span class="comment">// we use the time at the end of select to ensure that we don't close any connections that</span></div><div class="line">        <span class="comment">// have just been processed in pollSelectionKeys</span></div><div class="line">        <span class="comment">//note: 每次 poll 之后会调用一次</span></div><div class="line">        <span class="comment">//<span class="doctag">TODO:</span> 连接虽然关闭了,但是 Client 端的缓存依然存在</span></div><div class="line">        maybeCloseOldestConnection(endSelect);</div><div class="line">    &#125;</div></pre></td></tr></table></figure>
+<p><code>Selector.poll()</code> 方法会进行四步操作，这里分别来介绍一些。</p>
+<h3 id="clear"><a href="#clear" class="headerlink" title="clear()"></a>clear()</h3><p><code>clear()</code> 方法是在每次 <code>poll()</code> 执行的第一步，它作用的就是清理上一次 poll 过程产生的部分缓存。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 每次 poll 调用前都会清除以下缓存</span></div><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">clear</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">this</span>.completedSends.clear();</div><div class="line">    <span class="keyword">this</span>.completedReceives.clear();</div><div class="line">    <span class="keyword">this</span>.connected.clear();</div><div class="line">    <span class="keyword">this</span>.disconnected.clear();</div><div class="line">    <span class="comment">// Remove closed channels after all their staged receives have been processed or if a send was requested</span></div><div class="line">    <span class="keyword">for</span> (Iterator&lt;Map.Entry&lt;String, KafkaChannel&gt;&gt; it = closingChannels.entrySet().iterator(); it.hasNext(); ) &#123;</div><div class="line">        KafkaChannel channel = it.next().getValue();</div><div class="line">        Deque&lt;NetworkReceive&gt; deque = <span class="keyword">this</span>.stagedReceives.get(channel);</div><div class="line">        <span class="keyword">boolean</span> sendFailed = failedSends.remove(channel.id());</div><div class="line">        <span class="keyword">if</span> (deque == <span class="keyword">null</span> || deque.isEmpty() || sendFailed) &#123;</div><div class="line">            doClose(channel, <span class="keyword">true</span>);</div><div class="line">            it.remove();</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">this</span>.disconnected.addAll(<span class="keyword">this</span>.failedSends);</div><div class="line">    <span class="keyword">this</span>.failedSends.clear();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="select"><a href="#select" class="headerlink" title="select()"></a>select()</h3><p>Selector 的 <code>select()</code> 方法在实现上底层还是调用 Java NIO 原生的接口，这里的 <code>nioSelector</code> 其实就是 <code>java.nio.channels.Selector</code> 的实例对象，这个方法最坏情况下，会阻塞 ms 的时间，如果在一次轮询，只要有一个 Channel 的事件就绪，它就会立马返回。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">select</span><span class="params">(<span class="keyword">long</span> ms)</span> <span class="keyword">throws</span> IOException </span>&#123;</div><div class="line">    <span class="keyword">if</span> (ms &lt; <span class="number">0L</span>)</div><div class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"timeout should be &gt;= 0"</span>);</div><div class="line"></div><div class="line">    <span class="keyword">if</span> (ms == <span class="number">0L</span>)</div><div class="line">        <span class="keyword">return</span> <span class="keyword">this</span>.nioSelector.selectNow();</div><div class="line">    <span class="keyword">else</span></div><div class="line">        <span class="keyword">return</span> <span class="keyword">this</span>.nioSelector.select(ms);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="pollSelectionKeys"><a href="#pollSelectionKeys" class="headerlink" title="pollSelectionKeys()"></a>pollSelectionKeys()</h3><p>这部分是 socket IO 的主要部分，发送 Send 及接收 Receive 都是在这里完成的，在 <code>poll()</code> 方法中，这个方法会调用两次：</p>
+<ol>
+<li>第一次调用的目的是：处理已经就绪的事件，进行相应的 IO 操作；</li>
+<li>第二次调用的目的是：处理新建立的那些连接，添加缓存及传输层（Kafka 又封装了一次，这里后续文章会讲述）的握手与认证。</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div><div class="line">61</div><div class="line">62</div><div class="line">63</div><div class="line">64</div><div class="line">65</div><div class="line">66</div><div class="line">67</div><div class="line">68</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">pollSelectionKeys</span><span class="params">(Iterable&lt;SelectionKey&gt; selectionKeys,</span></span></div><div class="line">                                   <span class="keyword">boolean</span> isImmediatelyConnected,</div><div class="line">                                   <span class="keyword">long</span> currentTimeNanos) &#123;</div><div class="line">        Iterator&lt;SelectionKey&gt; iterator = selectionKeys.iterator();</div><div class="line">        <span class="keyword">while</span> (iterator.hasNext()) &#123;</div><div class="line">            SelectionKey key = iterator.next();</div><div class="line">            iterator.remove();</div><div class="line">            KafkaChannel channel = channel(key);</div><div class="line"></div><div class="line">            <span class="comment">// register all per-connection metrics at once</span></div><div class="line">            sensors.maybeRegisterConnectionMetrics(channel.id());</div><div class="line">            <span class="keyword">if</span> (idleExpiryManager != <span class="keyword">null</span>)</div><div class="line">                idleExpiryManager.update(channel.id(), currentTimeNanos);</div><div class="line"></div><div class="line">            <span class="keyword">try</span> &#123;</div><div class="line"></div><div class="line">                <span class="comment">/* complete any connections that have finished their handshake (either normally or immediately) */</span></div><div class="line">                <span class="comment">//note: 处理一些刚建立 tcp 连接的 channel</span></div><div class="line">                <span class="keyword">if</span> (isImmediatelyConnected || key.isConnectable()) &#123;</div><div class="line">                    <span class="keyword">if</span> (channel.finishConnect()) &#123;<span class="comment">//note: 连接已经建立</span></div><div class="line">                        <span class="keyword">this</span>.connected.add(channel.id());</div><div class="line">                        <span class="keyword">this</span>.sensors.connectionCreated.record();</div><div class="line">                        SocketChannel socketChannel = (SocketChannel) key.channel();</div><div class="line">                        log.debug(<span class="string">"Created socket with SO_RCVBUF = &#123;&#125;, SO_SNDBUF = &#123;&#125;, SO_TIMEOUT = &#123;&#125; to node &#123;&#125;"</span>,</div><div class="line">                                socketChannel.socket().getReceiveBufferSize(),</div><div class="line">                                socketChannel.socket().getSendBufferSize(),</div><div class="line">                                socketChannel.socket().getSoTimeout(),</div><div class="line">                                channel.id());</div><div class="line">                    &#125; <span class="keyword">else</span></div><div class="line">                        <span class="keyword">continue</span>;</div><div class="line">                &#125;</div><div class="line"></div><div class="line">                <span class="comment">/* if channel is not ready finish prepare */</span></div><div class="line">                <span class="comment">//note: 处理 tcp 连接还未完成的连接,进行传输层的握手及认证</span></div><div class="line">                <span class="keyword">if</span> (channel.isConnected() &amp;&amp; !channel.ready())</div><div class="line">                    channel.prepare();</div><div class="line"></div><div class="line">                <span class="comment">/* if channel is ready read from any connections that have readable data */</span></div><div class="line">                <span class="keyword">if</span> (channel.ready() &amp;&amp; key.isReadable() &amp;&amp; !hasStagedReceive(channel)) &#123;</div><div class="line">                    NetworkReceive networkReceive;</div><div class="line">                    <span class="keyword">while</span> ((networkReceive = channel.read()) != <span class="keyword">null</span>)<span class="comment">//note: 知道读取一个完整的 Receive,才添加到集合中</span></div><div class="line">                        addToStagedReceives(channel, networkReceive);<span class="comment">//note: 读取数据</span></div><div class="line">                &#125;</div><div class="line"></div><div class="line">                <span class="comment">/* if channel is ready write to any sockets that have space in their buffer and for which we have data */</span></div><div class="line">                <span class="keyword">if</span> (channel.ready() &amp;&amp; key.isWritable()) &#123;</div><div class="line">                    Send send = channel.write();</div><div class="line">                    <span class="keyword">if</span> (send != <span class="keyword">null</span>) &#123;</div><div class="line">                        <span class="keyword">this</span>.completedSends.add(send);<span class="comment">//note: 将完成的 send 添加到 list 中</span></div><div class="line">                        <span class="keyword">this</span>.sensors.recordBytesSent(channel.id(), send.size());</div><div class="line">                    &#125;</div><div class="line">                &#125;</div><div class="line"></div><div class="line">                <span class="comment">/* cancel any defunct sockets */</span></div><div class="line">                <span class="comment">//note: 关闭断开的连接</span></div><div class="line">                <span class="keyword">if</span> (!key.isValid())</div><div class="line">                    close(channel, <span class="keyword">true</span>);</div><div class="line"></div><div class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</div><div class="line">                String desc = channel.socketDescription();</div><div class="line">                <span class="keyword">if</span> (e <span class="keyword">instanceof</span> IOException)</div><div class="line">                    log.debug(<span class="string">"Connection with &#123;&#125; disconnected"</span>, desc, e);</div><div class="line">                <span class="keyword">else</span></div><div class="line">                    log.warn(<span class="string">"Unexpected error from &#123;&#125;; closing connection"</span>, desc, e);</div><div class="line">                close(channel, <span class="keyword">true</span>);</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div></pre></td></tr></table></figure>
+<h3 id="addToCompletedReceives"><a href="#addToCompletedReceives" class="headerlink" title="addToCompletedReceives()"></a>addToCompletedReceives()</h3><p>这个方法的目的是处理接收到的 Receive，由于 Selector 这个类在 Client 和 Server 端都会调用，这里分两种情况讲述一下：</p>
+<ol>
+<li>应用在 Server 端时，后续文章会详细介绍，这里简单说一下，Server 为了保证消息的时序性，在 Selector 中提供了两个方法：<code>mute(String id)</code> 和 <code>unmute(String id)</code>，对该 KafkaChannel 做标记来保证同时只能处理这个 Channel 的一个 request（可以理解为排它锁）。当 Server 端接收到 request 后，先将其放入 <code>stagedReceives</code> 集合中，此时该 Channel 还未 mute，这个 Receive 会被放入 <code>completedReceives</code> 集合中。Server 在对 <code>completedReceives</code> 集合中的 request 进行处理时，会先对该 Channel mute，处理后的 response 发送完成后再对该 Channel unmute，然后才能处理该 Channel 其他的请求；</li>
+<li>应用在 Client 端时，Client 并不会调用 Selector 的 <code>mute()</code> 和 <code>unmute()</code> 方法，client 的时序性是通过 <code>InFlightRequests</code> 来保证（下篇文章会讲述），因此这里接收到的所有 Receive 都会被放入到 <code>completedReceives</code> 的集合中等待后续处理。</li>
+</ol>
+<p>这个方法只有配合 Server 端的调用才能看明白其作用，它统一 Client 和 Server 调用的 api，使得都可以使用 Selector 这个类。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/**</span></div><div class="line"> * checks if there are any staged receives and adds to completedReceives</div><div class="line"> */</div><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">addToCompletedReceives</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="keyword">if</span> (!<span class="keyword">this</span>.stagedReceives.isEmpty()) &#123;<span class="comment">//note: 处理 stagedReceives</span></div><div class="line">        Iterator&lt;Map.Entry&lt;KafkaChannel, Deque&lt;NetworkReceive&gt;&gt;&gt; iter = <span class="keyword">this</span>.stagedReceives.entrySet().iterator();</div><div class="line">        <span class="keyword">while</span> (iter.hasNext()) &#123;</div><div class="line">            Map.Entry&lt;KafkaChannel, Deque&lt;NetworkReceive&gt;&gt; entry = iter.next();</div><div class="line">            KafkaChannel channel = entry.getKey();</div><div class="line">            <span class="keyword">if</span> (!channel.isMute()) &#123;</div><div class="line">                Deque&lt;NetworkReceive&gt; deque = entry.getValue();</div><div class="line">                addToCompletedReceives(channel, deque);</div><div class="line">                <span class="keyword">if</span> (deque.isEmpty())</div><div class="line">                    iter.remove();</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">addToCompletedReceives</span><span class="params">(KafkaChannel channel, Deque&lt;NetworkReceive&gt; stagedDeque)</span> </span>&#123;</div><div class="line">    NetworkReceive networkReceive = stagedDeque.poll();</div><div class="line">    <span class="keyword">this</span>.completedReceives.add(networkReceive); <span class="comment">//note: 添加到 completedReceives 中</span></div><div class="line">    <span class="keyword">this</span>.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h2 id="Network-send-方法"><a href="#Network-send-方法" class="headerlink" title="Network.send() 方法"></a>Network.send() 方法</h2><p>至此，文章的主要内容已经讲述得差不多了，第二张图中最上面的那个调用关系已经讲述完，下面讲述一下另外一个小分支，也就是从 <code>Sender.run()</code> 调用 <code>NetworkClient.send()</code> 开始的那部分，其调用过程如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">Sender.run()</div><div class="line">Sender.sendProduceRequests()</div><div class="line">NetworkClient.send()</div><div class="line">NetworkClient.dosend()</div><div class="line">Selector.send()</div><div class="line">KafkaChannel.setSend()</div></pre></td></tr></table></figure>
+<h3 id="NetworkClient-dosend"><a href="#NetworkClient-dosend" class="headerlink" title="NetworkClient.dosend()"></a>NetworkClient.dosend()</h3><p>Producer 端的请求都是通过 <code>NetworkClient.dosend()</code> 来发送的，其作用就是：</p>
+<ul>
+<li>检查版本信息，并根据 <code>apiKey()</code> 构建 Request；</li>
+<li>创建 <code>NetworkSend</code> 实例；</li>
+<li>调用 <code>Selector.send</code> 发送该 Send。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div><div class="line">61</div><div class="line">62</div><div class="line">63</div><div class="line">64</div><div class="line">65</div><div class="line">66</div><div class="line">67</div><div class="line">68</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 发送请求</span></div><div class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">doSend</span><span class="params">(ClientRequest clientRequest, <span class="keyword">boolean</span> isInternalRequest, <span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">        String nodeId = clientRequest.destination();</div><div class="line">        <span class="keyword">if</span> (!isInternalRequest) &#123;</div><div class="line">            <span class="comment">// If this request came from outside the NetworkClient, validate</span></div><div class="line">            <span class="comment">// that we can send data.  If the request is internal, we trust</span></div><div class="line">            <span class="comment">// that that internal code has done this validation.  Validation</span></div><div class="line">            <span class="comment">// will be slightly different for some internal requests (for</span></div><div class="line">            <span class="comment">// example, ApiVersionsRequests can be sent prior to being in</span></div><div class="line">            <span class="comment">// READY state.)</span></div><div class="line">            <span class="keyword">if</span> (!canSendRequest(nodeId))</div><div class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Attempt to send a request to node "</span> + nodeId + <span class="string">" which is not ready."</span>);</div><div class="line">        &#125;</div><div class="line">        AbstractRequest request = <span class="keyword">null</span>;</div><div class="line">        AbstractRequest.Builder&lt;?&gt; builder = clientRequest.requestBuilder();</div><div class="line">        <span class="comment">//note: 构建 AbstractRequest, 检查其版本信息</span></div><div class="line">        <span class="keyword">try</span> &#123;</div><div class="line">            NodeApiVersions versionInfo = nodeApiVersions.get(nodeId);</div><div class="line">            <span class="comment">// Note: if versionInfo is null, we have no server version information. This would be</span></div><div class="line">            <span class="comment">// the case when sending the initial ApiVersionRequest which fetches the version</span></div><div class="line">            <span class="comment">// information itself.  It is also the case when discoverBrokerVersions is set to false.</span></div><div class="line">            <span class="keyword">if</span> (versionInfo == <span class="keyword">null</span>) &#123;</div><div class="line">                <span class="keyword">if</span> (discoverBrokerVersions &amp;&amp; log.isTraceEnabled())</div><div class="line">                    log.trace(<span class="string">"No version information found when sending message of type &#123;&#125; to node &#123;&#125;. "</span> +</div><div class="line">                            <span class="string">"Assuming version &#123;&#125;."</span>, clientRequest.apiKey(), nodeId, builder.version());</div><div class="line">            &#125; <span class="keyword">else</span> &#123;</div><div class="line">                <span class="keyword">short</span> version = versionInfo.usableVersion(clientRequest.apiKey());</div><div class="line">                builder.setVersion(version);</div><div class="line">            &#125;</div><div class="line">            <span class="comment">// The call to build may also throw UnsupportedVersionException, if there are essential</span></div><div class="line">            <span class="comment">// fields that cannot be represented in the chosen version.</span></div><div class="line">            request = builder.build();<span class="comment">//note: 当为 Produce 请求时,转化为 ProduceRequest,Metadata 请求时,转化为 Metadata 请求</span></div><div class="line">        &#125; <span class="keyword">catch</span> (UnsupportedVersionException e) &#123;</div><div class="line">            <span class="comment">// If the version is not supported, skip sending the request over the wire.</span></div><div class="line">            <span class="comment">// Instead, simply add it to the local queue of aborted requests.</span></div><div class="line">            log.debug(<span class="string">"Version mismatch when attempting to send &#123;&#125; to &#123;&#125;"</span>,</div><div class="line">                    clientRequest.toString(), clientRequest.destination(), e);</div><div class="line">            ClientResponse clientResponse = <span class="keyword">new</span> ClientResponse(clientRequest.makeHeader(),</div><div class="line">                    clientRequest.callback(), clientRequest.destination(), now, now,</div><div class="line">                    <span class="keyword">false</span>, e, <span class="keyword">null</span>);</div><div class="line">            abortedSends.add(clientResponse);</div><div class="line">            <span class="keyword">return</span>;</div><div class="line">        &#125;</div><div class="line">        RequestHeader header = clientRequest.makeHeader();</div><div class="line">        <span class="keyword">if</span> (log.isDebugEnabled()) &#123;</div><div class="line">            <span class="keyword">int</span> latestClientVersion = ProtoUtils.latestVersion(clientRequest.apiKey().id);</div><div class="line">            <span class="keyword">if</span> (header.apiVersion() == latestClientVersion) &#123;</div><div class="line">                log.trace(<span class="string">"Sending &#123;&#125; to node &#123;&#125;."</span>, request, nodeId);</div><div class="line">            &#125; <span class="keyword">else</span> &#123;</div><div class="line">                log.debug(<span class="string">"Using older server API v&#123;&#125; to send &#123;&#125; to node &#123;&#125;."</span>,</div><div class="line">                    header.apiVersion(), request, nodeId);</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">        <span class="comment">//note: Send是一个接口，这里返回的是 NetworkSend，而 NetworkSend 继承 ByteBufferSend</span></div><div class="line">        Send send = request.toSend(nodeId, header);</div><div class="line">        InFlightRequest inFlightRequest = <span class="keyword">new</span> InFlightRequest(</div><div class="line">                header,</div><div class="line">                clientRequest.createdTimeMs(),</div><div class="line">                clientRequest.destination(),</div><div class="line">                clientRequest.callback(),</div><div class="line">                clientRequest.expectResponse(),</div><div class="line">                isInternalRequest,</div><div class="line">                send,</div><div class="line">                now);</div><div class="line">        <span class="keyword">this</span>.inFlightRequests.add(inFlightRequest);</div><div class="line">        <span class="comment">//note: 将 send 和对应 kafkaChannel 绑定起来，并开启该 kafkaChannel 底层 socket 的写事件</span></div><div class="line">        selector.send(inFlightRequest.send);</div><div class="line">    &#125;</div></pre></td></tr></table></figure>
+<h3 id="Selector-send"><a href="#Selector-send" class="headerlink" title="Selector.send()"></a>Selector.send()</h3><p>这个方法就比较容易理解了，它的作用就是获取该 Send 对应的 KafkaChannel，调用 <code>setSend()</code> 向 KafkaChannel 注册一个 <code>Write</code> 事件。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 发送请求</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">send</span><span class="params">(Send send)</span> </span>&#123;</div><div class="line">    String connectionId = send.destination();</div><div class="line">    <span class="keyword">if</span> (closingChannels.containsKey(connectionId))</div><div class="line">        <span class="keyword">this</span>.failedSends.add(connectionId);</div><div class="line">    <span class="keyword">else</span> &#123;</div><div class="line">        KafkaChannel channel = channelOrFail(connectionId, <span class="keyword">false</span>);</div><div class="line">        <span class="keyword">try</span> &#123;</div><div class="line">            channel.setSend(send);</div><div class="line">        &#125; <span class="keyword">catch</span> (CancelledKeyException e) &#123;</div><div class="line">            <span class="keyword">this</span>.failedSends.add(connectionId);</div><div class="line">            close(channel, <span class="keyword">false</span>);</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="KafkaChannel-setSend"><a href="#KafkaChannel-setSend" class="headerlink" title="KafkaChannel.setSend()"></a>KafkaChannel.setSend()</h3><p><code>setSend()</code> 方法需要配合 <code>write()</code>（该方法是在 <code>Selector.poll()</code> 中调用的） 方法一起来看</p>
+<ul>
+<li><code>setSend()</code>：将当前 KafkaChannel 的 Send 赋值为要发送的 Send，并注册一个 <code>OP_WRITE</code> 事件；</li>
+<li><code>write()</code>：发送当前的 Send，发送完后删除注册的 <code>OP_WRITE</code> 事件。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 每次调用时都会注册一个 OP_WRITE 事件</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setSend</span><span class="params">(Send send)</span> </span>&#123;</div><div class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.send != <span class="keyword">null</span>)</div><div class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Attempt to begin a send operation with prior send operation still in progress."</span>);</div><div class="line">    <span class="keyword">this</span>.send = send;</div><div class="line">    <span class="keyword">this</span>.transportLayer.addInterestOps(SelectionKey.OP_WRITE);</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">//note: 调用 send() 发送 Send</span></div><div class="line"><span class="function"><span class="keyword">public</span> Send <span class="title">write</span><span class="params">()</span> <span class="keyword">throws</span> IOException </span>&#123;</div><div class="line">    Send result = <span class="keyword">null</span>;</div><div class="line">    <span class="keyword">if</span> (send != <span class="keyword">null</span> &amp;&amp; send(send)) &#123;</div><div class="line">        result = send;</div><div class="line">        send = <span class="keyword">null</span>;</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> result;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">//note: 发送完成后,就删除这个 WRITE 事件</span></div><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">boolean</span> <span class="title">send</span><span class="params">(Send send)</span> <span class="keyword">throws</span> IOException </span>&#123;</div><div class="line">    send.writeTo(transportLayer);</div><div class="line">    <span class="keyword">if</span> (send.completed())</div><div class="line">        transportLayer.removeInterestOps(SelectionKey.OP_WRITE);</div><div class="line"></div><div class="line">    <span class="keyword">return</span> send.completed();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>最后，简单总结一下，可以回过头再看一下第一张图，对于 KafkaProducer 而言，其直接调用是 Sender，而 Sender 底层调用的是 NetworkClient，NetworkClient 则是通过 Selector 实现，Selector 则是对 Java NIO 原生接口的封装。</p>
+<hr>
+<p>参考文献：</p>
+<ul>
+<li><a href="http://blog.csdn.net/chunlongyu/article/details/52636762" target="_blank" rel="external">Kafka源码深度解析－序列3 －Producer －Java NIO</a></li>
+<li><a href="http://blog.csdn.net/chunlongyu/article/details/52651960" target="_blank" rel="external"> Kafka源码深度解析－序列4 －Producer －network层核心原理</a></li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;本文是 Kafka 源码解析的第四篇，在写这篇文章之前，专门看了一下 Java NIO 相关的内容，只有理解了 Java NIO 模型才能更好地理解 NIO 在 Kafka 中是如何应用的以及 Producer 如何利用 Java NIO 构建其网络模型（不了解的，可以先看
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
+    
+  </entry>
   
   <entry>
     <title>谈一谈 Java IO 模型</title>
@@ -646,7 +785,7 @@
     <link href="http://matt33.com/2017/07/16/linux-system-cmd/"/>
     <id>http://matt33.com/2017/07/16/linux-system-cmd/</id>
     <published>2017-07-16T02:31:47.000Z</published>
-    <updated>2017-07-16T02:36:01.000Z</updated>
+    <updated>2017-08-21T07:36:16.000Z</updated>
     
     <content type="html"><![CDATA[<p>文章的内容，基本来自<a href="http://www.cnblogs.com/peida/tag/%E6%AF%8F%E6%97%A5%E4%B8%80linux%E5%91%BD%E4%BB%A4/" target="_blank" rel="external">每日一个 linux 命令</a>，选取了几个在工作常用的命令，有：top、iostat、netstat 、free 和 ps，本文的主要目的是在学习这几条命令的过程中，简单做一些记录，便于日后工作中更加熟练地使用这些命令。</p>
 <h1 id="top"><a href="#top" class="headerlink" title="top"></a>top</h1><p>top 命令是 Linux 下面实时展示系统运行情况的一个命令，它也可以显示当前每个任务的系统信息。在对系统的性能进行分析，它是一个最常用的命令。</p>
@@ -746,6 +885,7 @@
 <li><code>top -d 3</code>: 设置信息更新时间</li>
 <li><code>top -n 2</code>: 设置信息更新次数</li>
 <li><code>top -S</code>: 以累积模式显示程序信息</li>
+<li><code>top -Hp 2050</code>：显示该进程所有线程的详细信息</li>
 </ul>
 <h1 id="iostat"><a href="#iostat" class="headerlink" title="iostat"></a>iostat</h1><p>iostat 也即 I/O statistics（输入/输出统计），iostat 会对系统的磁盘操作活动进行监视。它的特点是汇报磁盘活动统计情况，同时也会汇报出 CPU 使用情况。但它不能对某个进程进行深入分析，仅对系统的整体情况进行分析。</p>
 <h2 id="命令常用参数-1"><a href="#命令常用参数-1" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><p>1．命令格式：</p>
@@ -3159,241 +3299,6 @@
     <summary type="html">
     
       &lt;p&gt;本文是关于&lt;a href=&quot;https://book.douban.com/subject/26874593/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;技巧&lt;/a&gt;这本书的读书笔记。这本书是作者根据自己的生活学习经历悟出的一些方法论，满满的正能力，但
-    
-    </summary>
-    
-      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
-    
-    
-      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>观念在变化、在成长</title>
-    <link href="http://matt33.com/2016/11/25/book/"/>
-    <id>http://matt33.com/2016/11/25/book/</id>
-    <published>2016-11-25T14:22:30.000Z</published>
-    <updated>2016-11-25T16:27:22.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>之前公司推送了一位大神的推荐书单，当中推荐了这本<a href="https://book.douban.com/subject/20463108/" target="_blank" rel="external">《观念的水位》</a>，那是第一次看到这本书，记得当时看到这本书的名字，瞬间就吸引了我的兴趣，然后就在豆瓣上搜索了一下，看到评价还不错，就加到了自己的书单里。再后来，回到学校就在网上找到这本书的电子版，下载到手机里就开始看了起来，中间大概花了半个月的时间把这本书看完，那段时间基本上每天在公司上下班的班车和地铁上都在看这本书。在看的过程中，根据每篇文章看后的感想，做了一部分的笔记，在文章的后面会列出来。</p>
-<p>在刚开始读的时候，就感觉这本书写得很深刻，披露得也很现实，甚至有点怀疑这本书是不是在大陆出版的。从书的整体上来看，感觉这本书，可以分为三大部分，第一部分是作者根据身边的实事写的一些思考和感悟，主要是以作者在英国的生活经历为主；第二部分，确切的是说应该是作者对于一些名著（或小说）的读后感；第三部分，是作者对电影的一些感悟。因为作者主要是研究历史、政治经济学（确切应该是政治学）这一块，当然其中也有关于人性和心理学的内容，作者根据身边的实事、电影以及小说，对宪政、人性进入了很多深入的分析，其中很多的地方都是我从来没想过的点（书读得少，没办法）。最令自己的敬佩的是，作者每读一本书，都会写一篇文章，看一些好电影也是这样，作者都会去深入地思考，这些都是自己应该去学习的地方。</p>
-<p>当然，这本书在豆瓣能达到8分以上，证明书的内容也不会差到哪去。在读这本书的过程中，有种当时读《野火集》的感觉，感觉我们国家相比于欧美发达国家而言，政治文明、法制文明、宪政制度真的相差很远，而且我们国家在发展的过程中，还出现了各种各样的问题，这些问题都影响着我们每一个人。我们都知道法制的重要性，可是一个没有独立司法环境的社会，如何保障法制社会的建立、如何保障公民权利，一个人既当球员又当裁判，该如何保障另一球队的公平性？</p>
-<p>但是，这本书给我带来的希望的地方是，随着我们国家经济的发展，当人们吃饱肚子、衣食住行得到保证之后，人们就会有一些其他更高的追求（精神上），随着这部分人的人数在增加，也推动了全民观念的水位在上升。当然由于最近一年房价的疯涨，一线城市及强二线城市基本上都已经翻倍了，这种情况的发生，突然将中国中产阶级迅速打压下去，也导致了中国中产阶级都成了名副其实的负翁。</p>
-<p>就在写的时候，突然想到一点，想到了宋朝，记得历史课上学过，在宋朝，由于经济非常发达（宋朝是一个并不是由于农民起义而灭掉的王朝），在当时诞生了资产阶级的萌芽，假设，如果历史可以假设，那么如果当时蒙古没有崛起，宋朝的经济肯定还会接着发展，宋朝当时的科技好像也在世界处于领先地位，如果能这样一直发展下去，中国会不会诞生现代文明？现在我们已经无法推断，我们知道的结果是，由于蒙古的崛起，宋朝灭亡了，中国资本主义的萌芽被消灭掉了，蒙古打到地中海，其实也是间接地促使欧洲的文艺复兴（这一点暂不讨论）。中国最初的资本主义萌芽被消灭掉之后，后来再也没有恢复起来，之后明朝也没有达到宋朝当时的经济水平，中国也就慢慢沦落为二流国家。在现代，西方人经常说一句话，一个国家的中产阶级是这个国家最宝贵的财富。反看我们国家，在房价暴涨之前，随着经济的发展，中国的中产阶级人数是在慢慢扩大的，但是后来由于房价暴涨，带动了生活成本的迅速上升，我们国家的中产阶级被房价压得喘不过气，不知道是不是与一千年前的宋朝有些相似之处。本来看到的希望，突然又被现实击破。</p>
-<p>当然，在历史的发展过程中，即使对于那些老牌发达国家来说，他们也是慢慢地一步一步走到现在的，而且也不能说他们现在的制度就是最好制度。尤其是近段欧洲的难民问题、美国当选的新总统特朗普感觉像是由于美国民粹主义被煽动而当选的。世界变化实在是太快，我们也不知道未来会怎样发展，我们国家是不是能走出中等收入国家陷进，尤其在出现：由于房价上涨导致制造业成本上涨，很多制造业开始外流，向东南亚发展这情况下，我们知道，制造业和服务业目前是最能解决就业的，我们国家如果在服务业还没有发展到一定程度时制造业就开始下滑，那么结果可想而知，有多少人会失业？这些问题应该怎么去解决，我现在其实是有一些悲观的，我并不知道出路在哪，感觉祖国任重道远。</p>
-<hr>
-<p>对书中一些小节的读后感</p>
-<blockquote>
-<p>认定自由、民主“只适合西方”的看法是一种变相的种族主义，而种族主义是一种过于懒惰的世界观。——自序：春天里</p>
-</blockquote>
-<p>近百年来，中华民族都在为了自由、民主而努力，虽然现在我们国家的经济、政治、法制相比与以前已经进步很多了，可依然跟马克思描述的社会主义有很大距离，甚至有些地方离西方发达国家也有很多的差距，而我们却总是各种借口去推卸责任。</p>
-<blockquote>
-<p>追求快乐的本性使每个人都成为潜在的革命者，而一个远离快乐的制度也许可以依靠信息控制维持很久，但在信息控制越来越不可能的世界，一条缝会渐渐变成一扇门。</p>
-</blockquote>
-<p>人性到底是善还是恶，不同的人、不同的宗教会有不同的理解，但是人追求幸福、快乐的本性是一样的，由此可见，有些人去追求财富、一些人选择移民，这都是在追求自己认为的那种快乐生活，有些人会感觉金钱会让自己有安全感、可以为自己的快乐提供基础，有些人认为移民到发达国家，享受更好的医疗制度、教育制度，会让自己更快乐。</p>
-<blockquote>
-<p>经济基础、社会结构和国际环境的变化已经为新的制度变迁创造基础，这种看法用学术语言来说叫“结构主义”</p>
-</blockquote>
-<p>说到经济，不得不让人想到邓小平，这里其他的不谈，小平提出的发展才是硬道理，对大陆确实带来了很大的贡献。经济的发展，首先会让人民生活条件提高，当大部分的人经济水平上去之后，人们才会有时间、有精力去思考、追逐自己的内心所求。一旦当有一些东西阻挡了大部分追求自己想要东西的时候，这些人都会成为一个潜在的革命者。</p>
-<blockquote>
-<p>我当然不相信制度的改革可以一夜之间改变文化，但是制度的变革至少可以打开一个公共生活的空间，而公民素养的培养首先需要一个公共空间，就象学会跑步需要首先解开脚镣。——素什么质</p>
-</blockquote>
-<p>罗马不是一天建成的，同样，欧美现在的政治、法制、精神等文明也不是突然就冒出来的，美国也曾经有过一段非常腐败的时期，美国也是这样一步步过来的。同样，中国要想崛起也需要时间，但中国崛起的前提是制度不能成为发展的绊脚石，改革需要深入、需要彻底、需要适应我们国家的发展。</p>
-<blockquote>
-<p>鉴定民意的真伪，标准不在于民众选择的那一刻是不是真诚，而在于他们在形成意见时讨论是否自由、观念可否多元、信息是否充分。——民意与伪民意</p>
-</blockquote>
-<p>如果人民一直被洗脑，没有独立思考精神，民主很多时候会成为被民粹主义利用的工具，这也是为什么一直说中产阶级是一个国家宝贵的财富的原因，当然这里中产阶级指的是有独立思考意识的中产阶级。</p>
-<blockquote>
-<p>制度也许可以一夜之间改写，但是企业家精神、商业头脑、市场意识，只有通过漫长的学习才能形成。——给理想一点时间</p>
-</blockquote>
-<p>再次证明了时间、过程的重要性，对于个人也是如此，没有人可以在一夜之间学会这学会那，只有持续不断的学习、不断地去积累才会达到自己想要的效果。</p>
-<blockquote>
-<p>一个人“看到”一个事物并不等于他能“看见”它，人们往往需要穿过重重意识形态才能看见自己所看到的东西。——不知道与宁可不知道</p>
-</blockquote>
-<p>看到不等于看见，对于大多数人，都会不自觉地选择性地过滤掉一些信息，因为不知道这些信息反而让他感觉到一切都很美好，而知道这些信息，会让他看到自己的无知。</p>
-<blockquote>
-<p>斯坦福大学心理学家津巴多曾经做过一个著名的“斯坦福监狱实验”。24名学生随机抽签，一半当“狱卒”，一半当“犯人”。结果在一周的角色扮演过程中，演狱卒的学生越来越残暴，演犯人的则越来越卑怯。短短一星期，哪怕是一个实验的环境，角色感就可以改造人性，这事想想真叫人不寒而栗：现实中，有多少人经年累月地藏身于各种制度化的角色中，而其人性又在角色不断内化的过程中被劫持到了哪一个星球？——恶之平庸</p>
-</blockquote>
-<p>环境对人的影响非常大，这个让我深有感触，就像这次香格里拉之行，以导游为例，他是一个藏族人，同时也是藏传佛教的信徒，按理说，应该是很虔诚的，待人应该以善为本，可是他入了导游这一行，这个行业有太多的潜规则，强制游客购物，甚至不惜用道德绑架、人身威胁来强迫购物，很明显这些东西他都会拿提成的，难道他不知道这是不对的吗？但是在那些藏民眼中，他却是带动当地经济发展的好人，这个导游还资助当地藏区的贫困学生，难道他是坏人吗？明显也不是，他甚至在家人、藏民眼中还是善良的佛教徒。那这是什么原因？我现在能想到的只能是环境因素，或许他会用这个行业就是这样、大家都这样来安慰自己，来减少或消除内心的不安。</p>
-<blockquote>
-<p>愤怒之所以令人上瘾，大约是因为愤怒是通向正义感的捷径。——迷人的愤怒</p>
-</blockquote>
-<p>愤怒并没有错，但是要理性愤怒，要独立思考，不能人云亦云。</p>
-<blockquote>
-<p>中国近当代知识分子里我最爱的还是胡适和顾准，因为在一个几千年陶醉于“意境美”的文化里，他俩一个讲实证精神，一个讲经验主义。——告别印象主义</p>
-</blockquote>
-<p>实证精神确实是中国人欠缺的一种精神，实事求是的口号我们也喊了几十年了，但是依然没有成为我们的民族精神，反而假大空依然横行，就比如学术这一领域，无论是教授还是学生都以这个东西能不能写成论文发表为目的，而不是这个东西能不能用或者能不能改进现有的一些技术环境。</p>
-<blockquote>
-<p>试图绕过程序正义，依靠“宣传”“维稳”来寻求民众合作，在一个民众理性能力和权利意识逐渐强大的时代，只会越来越捉襟见肘，甚至会陷入政府“怎么做都是错”的可悲境地。——怎样推销糖果</p>
-</blockquote>
-<p>依靠强权让别人去接受一些想法或事实的做法已经满足不了现在的实际情况，应该邀请对方一起商讨、共同做一个决定，包括对孩子的教育也是这样。</p>
-<blockquote>
-<p>在非黑即白之外还有很多思想的灰色地带，而这个地带往往最考验思想的精细，通过将他人的观点极端 化取消其意义，恰恰是公共讨论中的避重就轻。——标签战</p>
-</blockquote>
-<p>在与人争论中，应该用事实和逻辑分析说话，而不是简单的片面的理解，就给人贴一个标签。很多东西并不能简单地说对与错。</p>
-<blockquote>
-<p>除非你意识到中国不仅仅存在于都市的“五环”。在海水的深处，阳光未曾照耀之处，还有韩颖雷金模们，并且每一个已知的韩颖雷金模们，很可能还对应无数我们尚未知晓也无从知晓的韩颖雷金模们。在苍苍莽莽的雪地里，要保持对那个被遮蔽世界的知觉，你得不断提醒自己不要睡着不要睡着不要睡着。——没来的请举手</p>
-</blockquote>
-<p>作为国人，对这个问题比较痛心，这个社会中有太多无助的人，他们是为了大多数人利益而牺牲的少数人。尤其是近几年，房价的暴涨，导致大陆的贫富差距迅速扩大，贫富差距之大，令人咋舌，这实际上是对中下层人民财富的一次间接剥削，是一次很不公平的财富转移。</p>
-<blockquote>
-<p>社会跟政府讲道理，政府就跟社会耍流氓；社会跟政府耍流氓，政府就跟社会讲道理。——法治何以可能</p>
-</blockquote>
-<p>民主对于法制的维护着实重要，民主实际上就是对权利者权利的制衡，它可以在普通公民利益与权利者利息之间达到一个平衡。</p>
-<blockquote>
-<p>当然博爱的起点是自爱。自爱加上同理心，才成为博爱。——他也可以是我</p>
-</blockquote>
-<p>权利的重要与权力的可怕，大家都深有体会，把权力关进笼子，赋予公民应有的权利，这样这个社会才能健康的发展，这也是近百年来，国人一直的追求，虽然我们离这个理想还有很远的距离，但不能阻挡我们追求的脚步。</p>
-<blockquote>
-<p>西谚云：不要让“最好”成为“更好”的敌人。意思是80分不完美，60分也不完美，但不要因为80分不是100分而否认从60分进步到80分的意义。不过中谚却说：五十步怎么可以笑百步?要我说，五十步怎么不可以笑百步，九十九步都可以笑百步。人类文明的进步靠的就是点点滴滴的努力，大的进步值得大的肯定，小进步值得小肯定。——合同异</p>
-</blockquote>
-<p>一味的合同异就否认了变量之间的差异，也就否认了这些点滴的进步，而不急会不无以至千里，人类的进步就是靠着这些点滴实现的。</p>
-<blockquote>
-<p>纯洁固然美好，但是它对世界丰富性和复杂性的敌视，它天然的非黑即白世界观，本身就为专制提供了最好的精神土壤。——权力的道德捆绑</p>
-</blockquote>
-<p>这就好比人不能说是绝对的好与坏，而中国从古至今都是依靠人治，法制观念淡薄，依靠人治的最明显的就是民间对包青天和海瑞的推崇，人治对于国家来说是危险的，法制才是把权力关进笼子，这样公民的权利才有保障。</p>
-<blockquote>
-<p>我心中理想的社会变革应是一个“水涨船高”的过程：政治制度的变革源于公众政治观念的变化，而政治观念的变化又植根于人们生活观念的变化。——观念的水位</p>
-</blockquote>
-<p>社会观念确实在变化，尤其是当越来越多的中产阶级走出国门，看到欧美国家人民的生活时，公民的权利意识在觉醒，但是有一点要注意的是中国中产阶级毕竟是少数，中国还有基数很大的农民阶级，他们的经济条件和公民意识还需要慢慢提高，所以感觉这也是中国深度改革还需要一点火候的原因。</p>
-<blockquote>
-<p>英国的报销门事件得以解决，政府信息公开是一个关键因素，但是信息公开本身，又依赖媒体自由、政党角逐、权力制衡等机制。仅仅依靠领导人的“决心”，信息公开很可能流于形式，甚至成为政治作秀。一般来说，谁也不会搬起石头砸自己的脚，要想根治浪费公款，只有把“搬起石头”的权力交给别人。——倒霉的英国议员</p>
-</blockquote>
-<p>一个人既当裁判又当球员显然是不合理，这样只会导致很多政策流于形式。</p>
-<blockquote>
-<p>其实诚恳地反思过去，核心意义并不是“秋后算账”，而恰恰是在直面历史的基础上实现真正的和解与稳定。——过去的怎样让它过去</p>
-</blockquote>
-<p>人需要反思，需要思考，国家同样也一样，如果不反思，悲剧只会不断重演。</p>
-<blockquote>
-<p>政府作为公共服务机构，其不作为和胡作非为一样可怕。——沉默罪</p>
-</blockquote>
-<p>政府作为唯一的合法暴力机构，如果默认他人胡作非为跟自己胡作非为没什么区别。</p>
-<blockquote>
-<p>对具体清晰的逃避也就是对批评的封闭。——大家一起来算账</p>
-</blockquote>
-<p>讲述问题或辩论时应该实事求是，而不是一味地扣高帽子，说一些比较虚的事情，更多地应该讲述具体的实事，做人做事都该如此。</p>
-<blockquote>
-<p>俾斯麦说“政治是一种可能性的艺术”，那么我们能敲开人性中哪种可能性，说到底还是取决于我们在缔造什么样的政治。——敲开最好的可能</p>
-</blockquote>
-<p>人性都是一样，如果哪个国家人民的素质有高低，那也只是后天环境影响的。一个好的政治制度应该激发公民心中的善、保护公民心中的善。</p>
-<blockquote>
-<p>政府本质上不过是个公共服务机构，而不是什么高高在上的官府。——让政治变得家常</p>
-</blockquote>
-<p>一个国家的政治制度和政府性质，对于一个民族的影响很大，好的制度会估计民族向善的方向发展，不好的反之。</p>
-<blockquote>
-<p>在一定意义上，与其说浩浩荡荡的游行队伍体现了人们对经济危机的一团怒火，不如说体现了欧美高度发达公民社 会的组织资源。——绞死银行家</p>
-</blockquote>
-<p>公民有言论自由、有充分表达自己意愿的渠道，这种制度才会让一个国家更稳定、人民生活更幸福。</p>
-<blockquote>
-<p>在言论自由和政治平等之间，如何实现平衡？——民主的裤衩</p>
-</blockquote>
-<p>自由与平等是人类一直在追逐的东西，但两者在某些情况下也会有冲突，如何进行平衡，这种事情一般由最高法院来裁决，美国的司法充分保证了司法的裁决不受政治的影响，</p>
-<blockquote>
-<p>多元的观点带来充分的政策辩论，而充分的辩论不但给民众一个从不同角度理解这个法案的机会，也督促辩论两党给其主张提供坚实的论据基础。——吵吵更健康</p>
-</blockquote>
-<p>美帝的很多政策就是多方互相妥协的结果，美帝充斥各种利益集团，国家要想稳定要想发展，必须平衡各方利益，谈判妥协几乎可以说是美帝的基因所在。相反，我们民族，从古至今都是忍受，再忍受，直至没有活路，然后革命，接着再进入循环。我们民族一直都在想突破这个兴亡迭代的循环，能不能突破还要看我们这几代人的努力。</p>
-<blockquote>
-<p>分析各国改革速度和改革成效关系的话，反而发现改得快的未必发展慢，改得慢的发展未必快。结论很可能是，相比改革公正性、法治化、政策合理性，变革速度可能本来就不是个核心问题。——苏东巨变：20年之后</p>
-</blockquote>
-<p>这种感觉可以归结于具体的国情，估计作者又该说了应该拿出具体事实，而不是简单的国情了事，什么是国情，国情这种东西很模糊，天天说国情的人都不一定能搞明白啥是国情。我个人的理解是：政治、法制的改革如果能走在经济发展的前面，那么就能快速促进经济的发展，一旦落后于经济，就会抑制经济的发展。</p>
-<blockquote>
-<p>人类花了28年等待有形柏林墙的倒塌，无形柏林墙的消除，也许要更漫长地等待。——俄罗斯的徘徊</p>
-</blockquote>
-<p>自由、民主是需要时间、需要代价的。</p>
-<blockquote>
-<p>民主制度并不是选民投下一张选票然后翘起二郎腿等待政治家给我们端茶倒水的“懒人”体制，而需要民众对政治经年累月地“巡逻”促成点滴改良及至水滴石穿。——当“革命”成为家常便饭</p>
-</blockquote>
-<p>罗马不是一日建成的，一个自由、民主的社会也是如此。并不是说有了选举制度，就可以实现民主，俄罗斯可是不单单有选举制度，还是多党制，但我们并不认为俄罗斯是民主国家。自由、民主需要时间、需要代价，观念的上升才能更好地促使社会的变更。</p>
-<blockquote>
-<p>制度大于出身，这才是民主的要义。——“亚洲特色”的民主</p>
-</blockquote>
-<p>记得大陆官方当时发表声明嘲笑日本是政治世袭，国内当时可真是一片骂声，原因很清晰，日本还是世袭？那中国、朝鲜是什么？简直呵呵了。看一个社会、一个国家、一个民族，不去学习别人好的部分，老是揪住人家一些小污点不放，感觉很没有大国的胸襟。</p>
-<blockquote>
-<p>我认为，在经济政策上要允许试错，但藐视程序正义则是破坏现代政治的根基。——当民主缺失中产阶级</p>
-</blockquote>
-<p>最典型的例子就是美帝当面禁酒令，虽然执行禁酒令的时间只有13年，但确使美国经济倒退了不止20年，但是，这也丝毫没有成为阻挡美国后来崛起的绊脚石。美国现在的文明就是这样一点一点试错中成长的，什么东西都不是一蹴而就的。</p>
-<blockquote>
-<p>百万人涌现街头，其实并不突然。追求更多自由、更真实民主的暗流一直在伊朗“螺旋型”前进。——历史螺旋式终结</p>
-</blockquote>
-<p>自由民主可以说是这个世界的普世价值，每个国家和民族都在不余遗力地追求，正如前面所言，这并不是一触而就的，每个国家在走向这的过程都是曲折的，就像我们中华民族，虽然已经努力了一百多年，但与我们的理想还相差甚远。</p>
-<blockquote>
-<p>能够有制度性制衡来推动不同机构和利益集团之间的协商互动。一个只注重垂直呼应民意而忽视水平制衡的政府，也许合法性很高，但是合理性很低。——选举式独裁</p>
-</blockquote>
-<p>从美国的经验来看，权力之间的制衡以及利益集团间的相互妥协（在美国，各个协会组织或公会组织都是代表其协会成员的利息的利息集团）才是西方民主的真谛</p>
-<blockquote>
-<p>面对全球化，值得思考的不是它是否带来挑战，而是挑战与机遇是否对称。——我们在输出什么</p>
-</blockquote>
-<p>经济全球化确实带了很多问题，但是肯定是机遇与挑战并存的，问题当然很复杂，也不能一概而论。</p>
-<blockquote>
-<p>虽然美国收入差距在拉大，但社会仍具有相当的流动性。——有多少资本主义可以重来</p>
-</blockquote>
-<p>这也是美国价值观风靡全球的原因之一，一个相信个人奋斗的国家，是更容易吸引全球的人才，尤其是那些出身并不是很优秀的家庭。</p>
-<blockquote>
-<p>根据奥尔森集体行动的逻辑，当一个政策的受益或者受损对象比较集中，他们组织起来行动的可能性也更大。——从更人道的到更霸道的</p>
-</blockquote>
-<p>他们之间有明确的公共利息，不但利息明确，而且很少有分歧。</p>
-<blockquote>
-<p>量入为出本是最朴素的道理，但是将福利视为集体权利而不是个体责任的文化已使很多人失去了这种朴实。对于这些人来说，胖子的问题不是暴饮暴食，而是医生的减肥食谱。</p>
-</blockquote>
-<p>高额的福利必须会有高额的税收，福利不是从天上掉下来的，可惜的是我们国家欧洲的税收非洲的福利。</p>
-<blockquote>
-<p>一想到在那样无望的时代，曾国藩还奋发图强，对他的钦佩不禁如滔滔江水。转而又想到，即使是以他的奋发图强，也只能哀叹“天命”之不可违，却从未抬头观望天窗外的璀璨星空，又觉得个人面对历史，还真是胳膊拧不过大腿。——成圣又如何</p>
-</blockquote>
-<p>方向是错的，再努力又有何用？可是应该如何分辨自己的方向是否正确呢？曾国藩当时是没有这个条件去感受西方政治制度，自然也无法看到天窗外的星空。西方政治制度最大的特点就是不相信人性，他们用制度、用规则去管理，而不是人治、德治。</p>
-<blockquote>
-<p>这也是戈尔巴乔夫始料不及之处。他以为他可以放开管制同时强化专政，但多元社会和权力垄断不相容。他必须做出选择，是继续支撑这个空心帝国，还是捅破那层纸。最后他说，如果不是我们，是谁？如果不在此刻，又待何时？——那个搬起石头砸自己脚的人</p>
-</blockquote>
-<p>戈尔巴乔夫在来临的这个时刻做出了他应该做的决定，他选择戳破这个纸老虎，选择放弃专制，但历史并没有按照他预期的想象发展，现在俄罗斯也并不是自由民主的代表，改革的道路一片艰辛。</p>
-<blockquote>
-<p>摘下有色眼镜观察他国并不容易，因为我们脑子里充满了各种“想当然”。也许问题的关键并不在于我们怎么看待他国，而是怎么看待自己。——超越那些“想当然”</p>
-</blockquote>
-<p>在改革时，当然不能完全照抄某种经济改革，但也不能因为某些经济政策导致了一些不好后果，就把把它全盘否定。突然感觉我对这本书的一些见解好像都是在某些课上学到了，看来有些课有些书至少理论上还是很不错的，只是执行的过程中出了一些偏差。</p>
-<blockquote>
-<p>正是这种矛盾使其从一开始就不可能是一个逻辑上自洽的帝国：你不可能一边宣扬天赋人权，一边心安理得地铐住黑人送到加勒比海的甘蔗地。——当自由遭遇一丝微风</p>
-<p>获得民众的信任并非一劳永逸之事。如果最高法院在其判决中背叛了美国宪法的最基本价值观，没有对这些价值观进行与时俱进的适应性诠释，或者在宪法所追求的不同价值观之间没有实现微妙的平衡，民众的信任和服从很可能随风而去。这大约是美国法官们工作的艰难之处：他们永远在如履薄冰，永远在风口浪尖。——法治的“秘密”</p>
-</blockquote>
-<p>美国法院的主要是目的就是维护宪法赋予公民的个人权利神圣不可侵犯，在历次判决中，都是以这个作为原则，这也是高等法院受公民信任的原因。</p>
-<blockquote>
-<p>从这个意义上来说，王彩玲这个角色比Howard更有意义：如果对个体意志的赞叹并不依赖于它是否引向“成功”，那么兰德分配给Howard的最后成功命运就是个多余的情节。不但多余，甚至是误导性的，它给人造成“功夫不负有心人”的错觉：不，功夫常常是会负有心人的；功夫负不负有心人本该没有那么重要的；“有心”的价值是不能用“负与不负”来衡量的。——你比你想象得更自由</p>
-</blockquote>
-<p>如果坚持初心，坚持个人的信念，成不成功又有什么不同，都只是外界的看法而已。</p>
-<blockquote>
-<p>犹豫不是为了逃避选择，但是它令选择之后的制度设计更加审慎和包容。——诸善之间</p>
-</blockquote>
-<p>当面临选择时，每一种选择都有其合理性，其实都是一种对哲学的思考，人类更多的时候是在多种选择中达成一种妥协。</p>
-<blockquote>
-<p>今天，权力的巩固仍然借助于对历史的改写与屏蔽。历史一层层被擦掉，或者被涂抹，失忆的人群也因此成为价值的木偶。——像一滴水一样</p>
-</blockquote>
-<p>正如驴得水中所说，过去的如果就让它过去，未来只会更糟。东亚民族自古以来都有改写历史的习惯，直到今天也是这样，花了那么多代价、交了那么多学费，就这样为了“政治正确”而被改写，我们可能又不得不重新去探索，这只会让未来变得更糟糕。</p>
-<blockquote>
-<p>所以我现在读书并不指望醍醐灌顶，更不觉得书架上会有什么“神明”，仅仅希望每一本书能推进一小点知识或者带来一个小启发。正如政治上不存在什么“救世主”，智识上也不存在什么“救世主”。真正的好书，都向证伪敞开，而不是给你一个一劳永逸的启示录让你枕着它睡大觉。振聋发聩的东西，我一向觉得可疑。——从经典到经验</p>
-</blockquote>
-<p>读书并不一定要去读那些深奥的经典之作，更多的应该根据自己的问题，这本书能给自己一些启发、带来一些思考、解决一些困惑，更能体现这本书的价值。</p>
-<blockquote>
-<p>真的，他们是怎么说服自己的？这事首先令人困惑，其次才令人沮丧。他们怎么能够在窃听骚扰跟踪袭击迫害诚实正直的人之后，一转身，对自己的孩子说：孩子，你要做一个好人。——没有你们就没有他们</p>
-</blockquote>
-<p>这种事情就像我们对一个幼女强奸犯说，你怎么能这样对待这个小姑娘，这个小姑娘也是别人的女儿，如果别人这样对待你的女儿你会怎么样？有时候我也搞不懂他们是怎么说服自己的，这个可能需要对人性进行更深层次的深挖。</p>
-<blockquote>
-<p>一切专制者都试图控制人的思想，但警察无法进驻人的大脑，于是只能控制思想的表达。语言因此必须被消毒、被驯化。一些词被妖魔化，另一些词被扎上蝴蝶结，一些词被灌入硫酸，另一些词则被喷上了香水。多年的教育之后，一提起“农民起义”，我就想起了“可歌可泣”，一说到“国民党”，就想起“三座大山”……成年以后我知道历史并非如此非黑即白，但这些被“加工”过的词汇在意识深处留下的情绪反射却经久不去。以条件反射代替思考，使每一个词语在展开其内容之前散发出某种“气味”，正是此类教育的成功之处。——语言的贫困</p>
-</blockquote>
-<p>这是多么的真实啊，记得小时候不知从何时开始，脑海里一出现欧美资本主义国家，就会想到万恶的资本主义、剥削压迫无产阶级，可是长大之后，我慢慢知道这个世界实际上很复杂，好与坏都是相伴而生的，而我们因为意识形态的问题边只看到某些国家好的地方或者坏的地方，又因为媒体是被完全限制的，所以我们接受的只是他们想让我们接受的，不过互联网确实是在慢慢打破这种限制，让我知道了做一个人是应该独立思考的，而不是等着别人去喂食，这也是我现在对外面的世界充满很大的好奇心，也是现在努力的原因，因为我想要自己去探索一些东西，而不是被强行灌输。作者后面这十几篇文章都是通过电影慢慢感受的，而自己在看电影时只是简单地看一下剧情，并没有深入思考，这也是我应该向作者学习的地方之一。</p>
-<blockquote>
-<p>影片最后，中年迈克问老年汉娜是否会想起那些犹太人，汉娜冷冷地答：“我怎么想无关紧要，反正死的人都死了。”“我以为你学到了更多的东西。”“我学到了，我学会了阅读。”汉娜学会了阅读，也仅仅是阅读而已。——爱是</p>
-</blockquote>
-<p>感觉已经超出了我理解范围，我也很难明白为什么人会这么复杂，有那么多面，即使这很多面实际上是有矛盾的。</p>
-<blockquote>
-<p>说到底，谁都终将被扔回时间的海底，在那里与其它鱼虾贝壳一同聆听无边寂静，而在这之前，我们能指望的，大约只是心灵成长，祈祷生的优雅可以抚慰它的渺小。——记得当年草上飞</p>
-</blockquote>
-<p>成长的道路各有不同，个人的环境、遭遇各有不同，最后每个人的最后每个人的结果当然也并不会按照自己所想的那样发展。但在命运的手上也有漏网之鱼，虽然并不多，但还是有的，这也是这个世界的美妙之处。</p>
-<blockquote>
-<p>抑与解放，但是刘天昭不。她写一个小女孩擦玻璃的神情，写帆布椅子上坐着的一个无所事事的老太太，写窗外三三两两的人群，写前任房客掉到床底下的储蓄本，写一只灰喜鹊在天空中划过的轨迹，写夜半大街的光线……总之她写一切貌似轻微、无关和混沌的时刻和人物。她简直是故意通过描写这些“无关紧要”的事物来暗暗颠覆这个世界的权力结构和等级秩序。谁说政治局委员的命运就比远亲里某个“破鞋”的命运更惊心动魄？又或者，凭什么一个“破鞋”的命运一定比窗前一只乌鸦起落的声音更值得书写？在被时间击败、被时间席卷、被时间吞噬方面，万物皆平等，因而都值得在颤抖中被文字拥抱。——诗的世界在每一个角落等待</p>
-</blockquote>
-<p>她那本书的厉害在于与别人切入点的不同吧。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;之前公司推送了一位大神的推荐书单，当中推荐了这本&lt;a href=&quot;https://book.douban.com/subject/20463108/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;《观念的水位》&lt;/a&gt;，那是第一次看到这本书，记得当时看到这
     
     </summary>
     
