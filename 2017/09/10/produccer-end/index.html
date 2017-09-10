@@ -1,0 +1,238 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>Kafka 源码解析之 Producer 单 Partition 顺序性实现及配置说明（五） | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">Kafka 源码解析之 Producer 单 Partition 顺序性实现及配置说明（五）</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">wangzzu</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">Kafka 源码解析之 Producer 单 Partition 顺序性实现及配置说明（五）</h1><div class="post-meta">Sep 10, 2017<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">2,810</span><span> 字</span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2017/09/10/produccer-end/" href="/2017/09/10/produccer-end/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#RecordAccumulator"><span class="toc-number">1.</span> <span class="toc-text">RecordAccumulator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#mutePartition-与-unmutePartition"><span class="toc-number">1.1.</span> <span class="toc-text">mutePartition() 与 unmutePartition()</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ready"><span class="toc-number">1.2.</span> <span class="toc-text">ready()</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#drain"><span class="toc-number">1.3.</span> <span class="toc-text">drain()</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#顺序性如何保证？"><span class="toc-number">1.4.</span> <span class="toc-text">顺序性如何保证？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Producer-Configs"><span class="toc-number">2.</span> <span class="toc-text">Producer Configs</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#high-importance"><span class="toc-number">2.1.</span> <span class="toc-text">high importance</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#medium-importance"><span class="toc-number">2.2.</span> <span class="toc-text">medium importance</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#low-importance"><span class="toc-number">2.3.</span> <span class="toc-text">low importance</span></a></li></ol></li></ol></div></div><div class="post-content"><p>今天把 Kafka Producer 最后一部分给讲述一下，Producer 大部分内容都已经在前面几篇文章介绍过了，这里简单做个收尾，但并不是对前面的总结，本文从两块来讲述：RecordAccumulator 类的实现、Kafka Producer 如何保证其顺序性以及 Kafka Producer 的配置说明，每个 Producer 线程都会有一个 RecordAccumulator 对象，它负责缓存要发送 RecordBatch、记录发送的状态并且进行相应的处理，这里会详细讲述 Kafka Producer 如何保证单 Partition 的有序性。最后，简单介绍一下 Producer 的参数配置说明，只有正确地理解 Producer 相关的配置参数，才能更好地使用 Producer，发挥其相应的作用。</p>
+<h2 id="RecordAccumulator"><a href="#RecordAccumulator" class="headerlink" title="RecordAccumulator"></a>RecordAccumulator</h2><p>这里再看一下 RecordAccumulator 的数据结构，如下图所示，每个 topic-partition 都有一个对应的 deque，deque 中存储的是 RecordBatch，它是发送的基本单位，只有这个 topic-partition 的 RecordBatch 达到大小或时间要求才会触发发送操作（但并不是只有达到这两个条件之一才会被发送，这点要理解清楚）。</p>
+<p><img src="/images/kafka/recordbatch.png" alt="RecordAccumulator 模型"></p>
+<p>再看一下 RecordAccumulator 类的主要方法介绍，如下图所示。</p>
+<p><img src="/images/kafka/RecordAccumulator.png" alt="RecordAccumulator 主要方法及其说明"></p>
+<p>这张图基本上涵盖了 RecordAccumulator 的主要方法，下面会选择其中几个方法详细讲述，会围绕着 Kafka Producer 如何实现单 Partition 顺序性这个主题来讲述。</p>
+<h3 id="mutePartition-与-unmutePartition"><a href="#mutePartition-与-unmutePartition" class="headerlink" title="mutePartition() 与 unmutePartition()"></a>mutePartition() 与 unmutePartition()</h3><p>先看下 <code>mutePartition()</code> 与 <code>unmutePartition()</code> 这两个方法，它们是保证有序性关键之一，其主要做用就是将指定的 topic-partition 从 muted 集合中加入或删除，后面会看到它们的作用。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">private</span> <span class="keyword">final</span> Set&lt;TopicPartition&gt; muted;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">mutePartition</span><span class="params">(TopicPartition tp)</span> </span>&#123;</div><div class="line">    muted.add(tp);</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unmutePartition</span><span class="params">(TopicPartition tp)</span> </span>&#123;</div><div class="line">    muted.remove(tp);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这里先说一下这两个方法调用的条件，这样的话，下面在介绍其他方法时才会更容易理解：</p>
+<ul>
+<li><code>mutePartition()</code>：如果要求保证顺序性，那么这个 tp 对应的 RecordBatch 如果要开始发送，就将这个 tp 加入到 <code>muted</code> 集合中；</li>
+<li><code>unmutePartition()</code>：如果 tp 对应的 RecordBatch 发送完成，tp 将会从 <code>muted</code> 集合中移除。</li>
+</ul>
+<p>也就是说，<code>muted</code> 是用来记录这个 tp 是否有还有未完成的 RecordBatch。</p>
+<h3 id="ready"><a href="#ready" class="headerlink" title="ready()"></a>ready()</h3><p><code>ready()</code> 是在 Sender 线程中调用的，其作用选择那些可以发送的 node，也就是说，如果这个 tp 对应的 batch 可以发送（达到时间或大小要求），就把 tp 对应的 leader 选出来。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> ReadyCheckResult <span class="title">ready</span><span class="params">(Cluster cluster, <span class="keyword">long</span> nowMs)</span> </span>&#123;</div><div class="line">    Set&lt;Node&gt; readyNodes = <span class="keyword">new</span> HashSet&lt;&gt;();</div><div class="line">    <span class="keyword">long</span> nextReadyCheckDelayMs = Long.MAX_VALUE;</div><div class="line">    Set&lt;String&gt; unknownLeaderTopics = <span class="keyword">new</span> HashSet&lt;&gt;();</div><div class="line"></div><div class="line">    <span class="keyword">boolean</span> exhausted = <span class="keyword">this</span>.free.queued() &gt; <span class="number">0</span>;</div><div class="line">    <span class="keyword">for</span> (Map.Entry&lt;TopicPartition, Deque&lt;RecordBatch&gt;&gt; entry : <span class="keyword">this</span>.batches.entrySet()) &#123;</div><div class="line">        TopicPartition part = entry.getKey();</div><div class="line">        Deque&lt;RecordBatch&gt; deque = entry.getValue();</div><div class="line"></div><div class="line">        Node leader = cluster.leaderFor(part);</div><div class="line">        <span class="keyword">synchronized</span> (deque) &#123;</div><div class="line">            <span class="keyword">if</span> (leader == <span class="keyword">null</span> &amp;&amp; !deque.isEmpty()) &#123;</div><div class="line">                <span class="comment">// This is a partition for which leader is not known, but messages are available to send.</span></div><div class="line">                <span class="comment">// Note that entries are currently not removed from batches when deque is empty.</span></div><div class="line">                unknownLeaderTopics.add(part.topic());</div><div class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!readyNodes.contains(leader) &amp;&amp; !muted.contains(part)) &#123;<span class="comment">//note: part 如果 mute 就不会遍历</span></div><div class="line">                RecordBatch batch = deque.peekFirst();</div><div class="line">                <span class="keyword">if</span> (batch != <span class="keyword">null</span>) &#123;</div><div class="line">                    <span class="keyword">boolean</span> backingOff = batch.attempts &gt; <span class="number">0</span> &amp;&amp; batch.lastAttemptMs + retryBackoffMs &gt; nowMs;</div><div class="line">                    <span class="comment">//note: 是否是在重试</span></div><div class="line">                    <span class="keyword">long</span> waitedTimeMs = nowMs - batch.lastAttemptMs;</div><div class="line">                    <span class="keyword">long</span> timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;</div><div class="line">                    <span class="keyword">long</span> timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, <span class="number">0</span>);</div><div class="line">                    <span class="keyword">boolean</span> full = deque.size() &gt; <span class="number">1</span> || batch.isFull(); <span class="comment">//note: batch 满了</span></div><div class="line">                    <span class="keyword">boolean</span> expired = waitedTimeMs &gt;= timeToWaitMs; <span class="comment">//note: batch 超时</span></div><div class="line">                    <span class="keyword">boolean</span> sendable = full || expired || exhausted || closed || flushInProgress();</div><div class="line">                    <span class="keyword">if</span> (sendable &amp;&amp; !backingOff) &#123;</div><div class="line">                        readyNodes.add(leader);<span class="comment">// note: 将可以发送的 leader 添加到集合中</span></div><div class="line">                    &#125; <span class="keyword">else</span> &#123;</div><div class="line">                        <span class="comment">// Note that this results in a conservative estimate since an un-sendable partition may have</span></div><div class="line">                        <span class="comment">// a leader that will later be found to have sendable data. However, this is good enough</span></div><div class="line">                        <span class="comment">// since we'll just wake up and then sleep again for the remaining time.</span></div><div class="line">                        nextReadyCheckDelayMs = Math.min(timeLeftMs, nextReadyCheckDelayMs);</div><div class="line">                    &#125;</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="keyword">return</span> <span class="keyword">new</span> ReadyCheckResult(readyNodes, nextReadyCheckDelayMs, unknownLeaderTopics);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>可以看到这一行 <code>(!readyNodes.contains(leader) &amp;&amp; !muted.contains(part))</code>，如果 <code>muted</code> 集合包含这个 tp，那么在遍历时将不会处理它对应的 deque，也就是说，如果一个 tp 加入了 <code>muted</code> 集合中，即使它对应的 RecordBatch 可以发送了，也不会触发引起其对应的 leader 被选择出来。</p>
+<h3 id="drain"><a href="#drain" class="headerlink" title="drain()"></a>drain()</h3><p><code>drain()</code> 是用来遍历可发送请求的 node，然后再遍历在这个 node 上所有 tp，如果 tp 对应的 deque 有数据，将会被选择出来直到超过一个请求的最大长度（<code>max.request.size</code>）为止，也就说说即使 RecordBatch 没有达到条件，但为了保证每个 request 尽快多地发送数据提高发送效率，这个 RecordBatch 依然会被提前选出来并进行发送。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 返回该 node 对应的可以发送的 RecordBatch 的 batches,并从 queue 中移除（最大的大小为maxSize,超过的话,下次再发送）</span></div><div class="line"><span class="keyword">public</span> Map&lt;Integer, List&lt;RecordBatch&gt;&gt; drain(Cluster cluster,</div><div class="line">                                             Set&lt;Node&gt; nodes,</div><div class="line">                                             <span class="keyword">int</span> maxSize,</div><div class="line">                                             <span class="keyword">long</span> now) &#123;</div><div class="line">    <span class="keyword">if</span> (nodes.isEmpty())</div><div class="line">        <span class="keyword">return</span> Collections.emptyMap();</div><div class="line"></div><div class="line">    Map&lt;Integer, List&lt;RecordBatch&gt;&gt; batches = <span class="keyword">new</span> HashMap&lt;&gt;();</div><div class="line">    <span class="keyword">for</span> (Node node : nodes) &#123;</div><div class="line">        <span class="keyword">int</span> size = <span class="number">0</span>;</div><div class="line">        List&lt;PartitionInfo&gt; parts = cluster.partitionsForNode(node.id());</div><div class="line">        List&lt;RecordBatch&gt; ready = <span class="keyword">new</span> ArrayList&lt;&gt;();</div><div class="line">        <span class="comment">/* to make starvation less likely this loop doesn't start at 0 */</span></div><div class="line">        <span class="keyword">int</span> start = drainIndex = drainIndex % parts.size();</div><div class="line">        <span class="keyword">do</span> &#123;</div><div class="line">            PartitionInfo part = parts.get(drainIndex);</div><div class="line">            TopicPartition tp = <span class="keyword">new</span> TopicPartition(part.topic(), part.partition());</div><div class="line">            <span class="comment">// Only proceed if the partition has no in-flight batches.</span></div><div class="line">            <span class="keyword">if</span> (!muted.contains(tp)) &#123;<span class="comment">//note: 被 mute 的 tp 依然不会被遍历</span></div><div class="line">                Deque&lt;RecordBatch&gt; deque = getDeque(<span class="keyword">new</span> TopicPartition(part.topic(), part.partition()));</div><div class="line">                <span class="keyword">if</span> (deque != <span class="keyword">null</span>) &#123;</div><div class="line">                    <span class="keyword">synchronized</span> (deque) &#123;</div><div class="line">                        RecordBatch first = deque.peekFirst();</div><div class="line">                        <span class="keyword">if</span> (first != <span class="keyword">null</span>) &#123;</div><div class="line">                            <span class="keyword">boolean</span> backoff = first.attempts &gt; <span class="number">0</span> &amp;&amp; first.lastAttemptMs + retryBackoffMs &gt; now;</div><div class="line">                            <span class="comment">// Only drain the batch if it is not during backoff period.</span></div><div class="line">                            <span class="keyword">if</span> (!backoff) &#123;</div><div class="line">                                <span class="keyword">if</span> (size + first.sizeInBytes() &gt; maxSize &amp;&amp; !ready.isEmpty()) &#123;</div><div class="line">                                    <span class="comment">// there is a rare case that a single batch size is larger than the request size due</span></div><div class="line">                                    <span class="comment">// to compression; in this case we will still eventually send this batch in a single</span></div><div class="line">                                    <span class="comment">// request</span></div><div class="line">                                    <span class="keyword">break</span>;</div><div class="line">                                &#125; <span class="keyword">else</span> &#123;</div><div class="line">                                    RecordBatch batch = deque.pollFirst();</div><div class="line">                                    batch.close();</div><div class="line">                                    size += batch.sizeInBytes();</div><div class="line">                                    ready.add(batch);</div><div class="line">                                    batch.drainedMs = now;</div><div class="line">                                &#125;</div><div class="line">                            &#125;</div><div class="line">                        &#125;</div><div class="line">                    &#125;</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">            <span class="keyword">this</span>.drainIndex = (<span class="keyword">this</span>.drainIndex + <span class="number">1</span>) % parts.size();</div><div class="line">        &#125; <span class="keyword">while</span> (start != drainIndex);</div><div class="line">        batches.put(node.id(), ready);</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> batches;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>在遍历 node 的所有 tp 时，可以看到是有条件的 —— <code>!muted.contains(tp)</code>，如果这个 tp 被添加到 <code>muted</code> 集合中，那么它将不会被遍历，也就不会作为 request 一部分被发送出去，这也就保证了 tp 如果还有未完成的 RecordBatch，那么其对应 deque 中其他 RecordBatch 即使达到条件也不会被发送，就保证了 tp 在任何时刻只有一个 RecordBatch 在发送。</p>
+<h3 id="顺序性如何保证？"><a href="#顺序性如何保证？" class="headerlink" title="顺序性如何保证？"></a>顺序性如何保证？</h3><p>是否保证顺序性，还是在 Sender 线程中实现的，<code>mutePartition()</code> 与 <code>unmutePartition()</code> 也都是在 Sender 中调用的，这里看一下 KafkaProducer 是如何初始化一个 Sender 对象的。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// from KafkaProducer</span></div><div class="line"><span class="keyword">this</span>.sender = <span class="keyword">new</span> Sender(client,</div><div class="line">                         <span class="keyword">this</span>.metadata,</div><div class="line">                         his.accumulator,</div><div class="line">                         config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) == <span class="number">1</span>,</div><div class="line">                         config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),</div><div class="line">                         (<span class="keyword">short</span>) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),</div><div class="line">                         config.getInt(ProducerConfig.RETRIES_CONFIG),</div><div class="line">                         <span class="keyword">this</span>.metrics,</div><div class="line">                         Time.SYSTEM,</div><div class="line">                         <span class="keyword">this</span>.requestTimeoutMs);<span class="comment">//<span class="doctag">NOTE:</span> Sender 实例,发送请求的后台线程</span></div><div class="line"></div><div class="line"><span class="comment">// from Sender</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="title">Sender</span><span class="params">(KafkaClient client,</span></span></div><div class="line">              Metadata metadata,</div><div class="line">              RecordAccumulator accumulator,</div><div class="line">              <span class="keyword">boolean</span> guaranteeMessageOrder,</div><div class="line">              <span class="keyword">int</span> maxRequestSize,</div><div class="line">              <span class="keyword">short</span> acks,</div><div class="line">              <span class="keyword">int</span> retries,</div><div class="line">              Metrics metrics,</div><div class="line">              Time time,</div><div class="line">              <span class="keyword">int</span> requestTimeout) &#123;</div><div class="line">        <span class="keyword">this</span>.client = client;</div><div class="line">        <span class="keyword">this</span>.accumulator = accumulator;</div><div class="line">        <span class="keyword">this</span>.metadata = metadata;</div><div class="line">        <span class="keyword">this</span>.guaranteeMessageOrder = guaranteeMessageOrder;</div><div class="line">        <span class="keyword">this</span>.maxRequestSize = maxRequestSize;</div><div class="line">        <span class="keyword">this</span>.running = <span class="keyword">true</span>; <span class="comment">//note: 默认为 true</span></div><div class="line">        <span class="keyword">this</span>.acks = acks;</div><div class="line">        <span class="keyword">this</span>.retries = retries;</div><div class="line">        <span class="keyword">this</span>.time = time;</div><div class="line">        <span class="keyword">this</span>.sensors = <span class="keyword">new</span> SenderMetrics(metrics);</div><div class="line">        <span class="keyword">this</span>.requestTimeout = requestTimeout;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>对于上述过程可以这样进行解读</p>
+<p><code>this.guaranteeMessageOrder = (config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) == 1)</code></p>
+<p>如果 KafkaProducer 的 <code>max.in.flight.requests.per.connection</code> 设置为1，那么就可以保证其顺序性，否则的话，就不保证顺序性，从下面这段代码也可以看出。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//from Sender</span></div><div class="line"><span class="comment">//note: max.in.flight.requests.per.connection 设置为1时会保证</span></div><div class="line"><span class="keyword">if</span> (guaranteeMessageOrder) &#123;</div><div class="line">    <span class="comment">// Mute all the partitions draine</span></div><div class="line">    <span class="keyword">for</span> (List&lt;RecordBatch&gt; batchList : batches.values()) &#123;</div><div class="line">         <span class="keyword">for</span> (RecordBatch batch : batchList)</div><div class="line">             <span class="keyword">this</span>.accumulator.mutePartition(batch.topicPartition);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>也就是说，如果要保证单 Partition 的顺序性，需要在 Producer 中配置 <code>max.in.flight.requests.per.connection=1</code>，而其实现机制则是在 RecordAccumulator 中实现的。</p>
+<h2 id="Producer-Configs"><a href="#Producer-Configs" class="headerlink" title="Producer Configs"></a>Producer Configs</h2><p>这里是关于 Kafka Producer 一些配置的说明，内容来自官方文档<a href="http://kafka.apache.org/0102/documentation.html#producerconfigs" target="_blank" rel="external">Producer Configs</a>以及自己的一些个人理解，这里以官方文档保持一致，按其重要性分为三个级别进行讲述（涉及到权限方面的参数，这里先不介绍）。</p>
+<h3 id="high-importance"><a href="#high-importance" class="headerlink" title="high importance"></a>high importance</h3><table>
+<thead>
+<tr>
+<th>参数名</th>
+<th>说明</th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bootstrap.servers</td>
+<td>Kafka Broker 的一个列表，不用包含所有的 Broker，它用于初始化连接时，通过这几个 broker 来获取集群的信息，比如：<code>127.0.0.1：9092,127.0.0.2：9092,127.0.0.3：9092</code></td>
+<td>-</td>
+</tr>
+<tr>
+<td>key.serializer</td>
+<td>对 key 进行序列化的 class，一般使用<code>StringSerializer</code></td>
+<td>-</td>
+</tr>
+<tr>
+<td>value.serializer</td>
+<td>对 value 进行序列化的 class，一般使用 <code>StringDeserializer</code></td>
+<td>-</td>
+</tr>
+<tr>
+<td>acks</td>
+<td>用于设置在什么情况一条才被认为已经发送成功了。acks=0：msg 只要被 producer 发送出去就认为已经发送完成了；acks=1：如果 leader 接收到消息并发送 ack （不会等会该 msg 是否同步到其他副本）就认为 msg 发送成功了； acks=all或者-1：leader 接收到 msg 并从所有 isr 接收到 ack 后再向 producer 发送 ack，这样才认为 msg 发送成功了，这是最高级别的可靠性保证。</td>
+<td>1</td>
+</tr>
+<tr>
+<td>buffer.memory</td>
+<td>producer 可以使用的最大内存，如果超过这个值，producer 将会 block <code>max.block.ms</code> 之后抛出异常。</td>
+<td>33554432（32MB）</td>
+</tr>
+<tr>
+<td>compression.type</td>
+<td>Producer 数据的压缩格式，可以选择 none、gzip、snappy、lz4</td>
+<td>none</td>
+</tr>
+<tr>
+<td>retries</td>
+<td>msg 发送失败后重试的次数，允许重试，如果 <code>max.in.flight.requests.per.connection</code> 设置不为1，可能会导致乱序</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="medium-importance"><a href="#medium-importance" class="headerlink" title="medium importance"></a>medium importance</h3><p>下面的这些参数虽然被描述为 medium，但实际上对 Producer 的吞吐量等影响也同样很大，在实践中跟 high 参数的重要性基本一样。</p>
+<table>
+<thead>
+<tr>
+<th>参数名</th>
+<th>说明</th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>batch.size</td>
+<td>producer 向 partition 发送数据时，是以 batch 形式的发送数据，当 batch 的大小超过 <code>batch.size</code> 或者时间达到 <code>linger.ms</code> 就会发送 batch，根据经验，设置为1MB 吞吐会更高，太小的话吞吐小，太大的话导致内存浪费进而影响吞吐量</td>
+<td>16384（16KB）</td>
+</tr>
+<tr>
+<td>linger.ms</td>
+<td>在一个 batch 达不到 <code>batch.size</code> 时，这个 batch 最多将会等待 <code>linger.ms</code> 时间，超过这个时间这个 batch 就会被发送，但也会带来相应的延迟，可以根据具体的场景进行设置</td>
+<td>0</td>
+</tr>
+<tr>
+<td>client.id</td>
+<td>client 的 id，主要用于追踪 request 的来源</td>
+<td>null</td>
+</tr>
+<tr>
+<td>connections.max.idle.ms</td>
+<td>如果 connection 连续空闲时间超过了这个值，将会被关闭，主要使用 Selector 的 <code>maybeCloseOldestConnection</code> 方法</td>
+<td>540000（9min）</td>
+</tr>
+<tr>
+<td>max.block.ms</td>
+<td>控制 <code>KafkaProducer.send()</code> 和 <code>KafkaProducer.partitionsFor()</code> block 的最大时间，block 的原因是 buffer 满了或者 metadata 不可用导致。</td>
+<td>60000</td>
+</tr>
+<tr>
+<td>max.request.size</td>
+<td>一个请求的最大长度</td>
+<td>1048576（1MB）</td>
+</tr>
+<tr>
+<td>partitioner.class</td>
+<td>获取 topic 分区的 class</td>
+<td>org.apache.kafka.clients.producer.internals.DefaultPartitioner</td>
+</tr>
+<tr>
+<td>receive.buffer.bytes</td>
+<td>在读取数据时 TCP receive buffer （SO_RCVBUF）的大小</td>
+<td>32768（32KB）</td>
+</tr>
+<tr>
+<td>request.timeout.ms</td>
+<td>如果 producer 超过这么长时间没有收到 response，将会再次发送请求</td>
+<td>30000</td>
+</tr>
+<tr>
+<td>timeout.ms</td>
+<td>用于配置 leader 等待 isr 返回 ack 的最大时间，如果超过了这个时间，将会返回给 producer 一个错误。</td>
+<td>30000</td>
+</tr>
+</tbody>
+</table>
+<h3 id="low-importance"><a href="#low-importance" class="headerlink" title="low importance"></a>low importance</h3><table>
+<thead>
+<tr>
+<th>参数名</th>
+<th>说明</th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>block.on.buffer.full</td>
+<td>当 Producer 使用 buffer 达到最大设置时，如果设置为 false，将会 block <code>max.block.ms</code> 后然后抛出 <code>TimeoutException</code> 异常，如果设置为 true，将会把 <code>max.block.ms</code> 设置为 <code>Long.MAX_VALUE</code>。</td>
+<td>false</td>
+</tr>
+<tr>
+<td>interceptor.classes</td>
+<td>使用拦截器，实现这个 <code>ProducerInterceptor</code> 接口，可以对 topic 进行简单的处理。</td>
+<td>null</td>
+</tr>
+<tr>
+<td>max.in.flight.requests.per.connection</td>
+<td>对一个 connection，同时发送最大请求数，不为1时，不能保证顺序性。</td>
+<td>5</td>
+</tr>
+<tr>
+<td>metadata.fetch.timeout.ms</td>
+<td>获取 metadata 时的超时时间</td>
+<td>60000</td>
+</tr>
+<tr>
+<td>metadata.max.age.ms</td>
+<td>强制 metadata 定时刷新的间隔</td>
+<td>300000（5min）</td>
+</tr>
+<tr>
+<td>metric.reporters</td>
+<td>A list of classes to use as metrics reporters. Implementing the MetricReporter interface，JmxReporter 是默认被添加的。</td>
+<td>“”</td>
+</tr>
+<tr>
+<td>metrics.num.samples</td>
+<td>统计 metrics 时采样的次数</td>
+<td>2</td>
+</tr>
+<tr>
+<td>metrics.sample.window.ms</td>
+<td>metrics 采样计算的时间窗口</td>
+<td>30000</td>
+</tr>
+<tr>
+<td>reconnect.backoff.ms</td>
+<td>重新建立建立连接的间隔</td>
+<td>50</td>
+</tr>
+<tr>
+<td>retry.backoff.ms</td>
+<td>发送重试的间隔</td>
+<td>100</td>
+</tr>
+</tbody>
+</table>
+<p>对于不同的场景，合理配置相应的 Kafka Producer 参数。</p>
+<p>至此，Kafka Producer 部分的源码分析已经结束，从下周开始将开始对 Kafka Consumer 部分进行分析。</p>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2017/09/10/produccer-end/" data-id="cj7ewo3ip006oznagxo21b8is" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/kafka/">kafka</a></div><div class="post-nav"><a href="/2017/09/04/kafka-best-pratice/" class="next">Kafka 最佳实践【译】</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2017/09/10/produccer-end/';
+var disqus_title = 'Kafka 源码解析之 Producer 单 Partition 顺序性实现及配置说明（五）';
+var disqus_url = 'http://matt33.com/2017/09/10/produccer-end/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-weibo"> 微博</i></div><iframe width="100%" height="90" class="share_self"  frameborder="0" scrolling="no" src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=100&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=0&isFans=0&uid=2650396571&verifier=f2f0e397&colors=D8D8D8,ffffff,666666,0082cb,ecfbfd&dpc=1"></iframe></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2017/09/10/produccer-end/">Kafka 源码解析之 Producer 单 Partition 顺序性实现及配置说明（五）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/09/04/kafka-best-pratice/">Kafka 最佳实践【译】</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/08/22/producer-nio/">Kafka 源码分析之 Producer NIO 网络模型（四）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/08/12/java-nio/">谈一谈 Java IO 模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/08/06/unix-io/">Unix 网络 IO 模型及 Linux 的 IO 多路复用模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/07/21/kafka-topic-create/">Kafka 源码分析之 topic 创建过程（三）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/07/16/linux-system-cmd/">Linux 常用的一些系统命令</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/07/08/kafka-producer-metadata/">Kafka 源码分析之 Producer Metadata 更新机制（二）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/07/02/buy-little-room/">买房感想</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/06/25/kafka-producer-send-module/">Kafka 源码分析之 Producer 发送模型（一）</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
