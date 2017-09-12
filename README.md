@@ -1,4 +1,4 @@
-Matt Blog
+Matt's Blog
 ======
 
 该博客使用 Hexo 搭建。
