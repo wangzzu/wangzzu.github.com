@@ -10057,39 +10057,9 @@
 </ul>
 <h1 id="工作实习经历"><a href="#工作实习经历" class="headerlink" title="工作实习经历"></a>工作实习经历</h1><h2 id="美团点评-（-2016年7月-至今-）"><a href="#美团点评-（-2016年7月-至今-）" class="headerlink" title="美团点评 （ 2016年7月 ~ 至今 ）"></a>美团点评 （ 2016年7月 ~ 至今 ）</h2><p>技术工程部-数据平台组  后台开发工程师</p>
 <ul>
-<li>负责数据收集。</li>
+<li>专注但不限于 Kafka 平台及数据通道建设。</li>
 </ul>
-<h2 id="北邮网络体系构建与融合实验室-（2014年9月-2016年6月）"><a href="#北邮网络体系构建与融合实验室-（2014年9月-2016年6月）" class="headerlink" title="北邮网络体系构建与融合实验室 （2014年9月 ~ 2016年6月）"></a>北邮网络体系构建与融合实验室 （2014年9月 ~ 2016年6月）</h2><p>研究生期间主要在做实验室的项目。</p>
-<h3 id="日志快速查询系统"><a href="#日志快速查询系统" class="headerlink" title="日志快速查询系统"></a>日志快速查询系统</h3><p>2015.08 - 2016.01</p>
-<ul>
-<li>项目描述：基于 HBase 开发常用字段的快速查询系统</li>
-<li>工作内容<ol>
-<li>改写 InputFormat，改进后 MR 作业读取 csv 文件的平均 Map 时间节省了<strong>60.6%</strong>，读取 lzo 压缩 文件的平均 Map 时间节省了<strong>69.1%</strong>；</li>
-<li>开发 Kafka 客户端，代替运营商省网项目中 importer，将数据传入到 hdfs 和 HBase，该运营商每天的数据量大约是1.2TB；</li>
-<li>利用 HBase 基于 RowKey 的快速查询为 hdfs 上的文件话单建立常用字段索引表。</li>
-</ol>
-</li>
-</ul>
-<h3 id="网络流量流向分析系统"><a href="#网络流量流向分析系统" class="headerlink" title="网络流量流向分析系统"></a>网络流量流向分析系统</h3><p>2015.02 - 2015.07</p>
-<ul>
-<li>项目描述：将实验室的实时网络访问信息以地图的形式进行展示。</li>
-<li>工作内容<ol>
-<li>设计和搭建实验室数据实时处理平台，使用 Flume 和 Kafka 实时监控实验室话单；</li>
-<li>完成基于 Storm 的<strong>流处理模块开发</strong>；</li>
-<li>在流处理模块中设计了数据聚合算法。</li>
-</ol>
-</li>
-</ul>
-<h3 id="Kafka-性能测试与优化"><a href="#Kafka-性能测试与优化" class="headerlink" title="Kafka 性能测试与优化"></a>Kafka 性能测试与优化</h3><p>2014.09 - 2015.05</p>
-<ul>
-<li>项目描述：测试和优化 Kafka 性能，设计并实现流处理系统。</li>
-<li>工作内容<ol>
-<li>测试和优化 producer、consumer 性能，优化后 producer 速度提高<strong>14%</strong>，consumer 速度提高<strong>21%</strong>；</li>
-<li>研究 Kafka 与 Storm、Spark Streaming 的集成，分别实现一个流量实时统计系统;</li>
-<li>在 <strong>IHMSC2016</strong> 会议上以第一作者的身份发表一篇关于 Kafka 性能优化的<strong>论文</strong>。</li>
-</ol>
-</li>
-</ul>
+<h2 id="北邮网络体系构建与融合实验室-（2014年9月-2016年6月）"><a href="#北邮网络体系构建与融合实验室-（2014年9月-2016年6月）" class="headerlink" title="北邮网络体系构建与融合实验室 （2014年9月 ~ 2016年6月）"></a>北邮网络体系构建与融合实验室 （2014年9月 ~ 2016年6月）</h2><p>流式数据平台建设。</p>
 <hr>
 <h1 id="开源项目和作品"><a href="#开源项目和作品" class="headerlink" title="开源项目和作品"></a>开源项目和作品</h1><h2 id="开源项目"><a href="#开源项目" class="headerlink" title="开源项目"></a>开源项目</h2><h3 id="Apache-Kafka"><a href="#Apache-Kafka" class="headerlink" title="Apache Kafka"></a>Apache Kafka</h3><p> 为开源社区做的贡献：</p>
 <ul>
@@ -10105,12 +10075,6 @@
 <li><a href="http://www.jianshu.com/p/778513f9ce4c" target="_blank" rel="external">Travel to Haituo | 2016河北海坨山露营</a>：第一次去海坨，人生第一次重装爬山露营；</li>
 <li><a href="http://www.jianshu.com/p/afffa111edd0" target="_blank" rel="external">Travel to Kubuqi | 2016端午库布其穿越</a>：这一次穿越遇到了很多臭味相投的朋友；</li>
 <li><a href="http://www.jianshu.com/p/183cb4b10ed5" target="_blank" rel="external">Travel to Qinghai Lake | 2015暑假环骑青海湖</a>：从最开始的在学校论坛上发帖征集队友，到最后带领着七人的校友小分队完成环骑旅行；</li>
-</ul>
-<h1 id="技能清单"><a href="#技能清单" class="headerlink" title="技能清单"></a>技能清单</h1><ul>
-<li>熟悉 <strong>Kafka</strong>，了解 Flume，对 Kafka 框架有较深入理解；</li>
-<li>熟悉 <strong>MapReduce</strong> 框架，熟悉 <strong>Storm</strong>，了解 Spark 和 Flink；</li>
-<li>熟悉 <strong>Java</strong> 和 <strong>Linux</strong>，了解 SQL、Shell、Scala 和 Python，有两年 Java 开发经验;</li>
-<li>CET-6，良好的英语文档的阅读能力和写作能力。</li>
 </ul>
 <hr>
 <h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p>简历模板参考<a href="https://github.com/geekcompany/ResumeSample/blob/master/java.md" target="_blank" rel="external">jobdeer java</a></p>
