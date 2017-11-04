@@ -1225,7 +1225,7 @@
     <link href="http://matt33.com/2017/07/21/kafka-topic-create/"/>
     <id>http://matt33.com/2017/07/21/kafka-topic-create/</id>
     <published>2017-07-21T15:49:03.000Z</published>
-    <updated>2017-07-21T15:42:07.000Z</updated>
+    <updated>2017-11-04T04:41:13.000Z</updated>
     
     <content type="html"><![CDATA[<p>本文是 Kafka 源码解析的第三篇，主要讲述一个 topic 的创建过程，从 topic 是如何创建到 topic 真正创建成功的中间详细过程，文章主要内容可以分为以下几个部分：</p>
 <ol>
@@ -1283,8 +1283,8 @@
 <ul>
 <li>partition 为0时，那第一副本在 <code>(0+0)%5=0</code>，第二个副本在 <code>(0+(1+(0+0)%5)))%5=1</code>，第三副本在 <code>(0+(1+(0+1)%5)))%5=2</code>；</li>
 <li>partition 为2时，那第一副本在 <code>(0+2)%5=2</code>，第二个副本在 <code>(2+(1+(0+0)%5)))%5=3</code>，第三副本在 <code>(2+(1+(0+1)%5)))%5=4</code>；</li>
-<li>partition 为5时，那第一副本在 <code>(0+5)%5=0</code>，第二个副本在 <code>(0+(2+(0+0)%5)))%5=2</code>，第三副本在 <code>(0+(2+(0+1)%5)))%5=3</code>（partition 数是 Broker 数一倍时，<code>nextReplicaShift</code> 值会增加1）；</li>
-<li>partition 为8时，那第一副本在 <code>(0+8)%5=3</code>，第二个副本在 <code>(3+(2+(0+0)%5)))%5=0</code>，第三副本在 <code>(3+(2+(0+1)%5)))%5=1</code>。</li>
+<li>partition 为5时，那第一副本在 <code>(0+5)%5=0</code>，第二个副本在 <code>(0+(1+(1+0)%5)))%5=2</code>，第三副本在 <code>(0+(1+(1+1)%5)))%5=3</code>（partition 数是 Broker 数一倍时，<code>nextReplicaShift</code> 值会增加1）；</li>
+<li>partition 为8时，那第一副本在 <code>(0+8)%5=3</code>，第二个副本在 <code>(3+(1+(1+0)%5)))%5=0</code>，第三副本在 <code>(3+(1+(1+1)%5)))%5=1</code>。</li>
 </ul>
 <p>分配如下表所示：</p>
 <table>

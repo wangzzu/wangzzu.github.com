@@ -54,8 +54,8 @@
 <ul>
 <li>partition 为0时，那第一副本在 <code>(0+0)%5=0</code>，第二个副本在 <code>(0+(1+(0+0)%5)))%5=1</code>，第三副本在 <code>(0+(1+(0+1)%5)))%5=2</code>；</li>
 <li>partition 为2时，那第一副本在 <code>(0+2)%5=2</code>，第二个副本在 <code>(2+(1+(0+0)%5)))%5=3</code>，第三副本在 <code>(2+(1+(0+1)%5)))%5=4</code>；</li>
-<li>partition 为5时，那第一副本在 <code>(0+5)%5=0</code>，第二个副本在 <code>(0+(2+(0+0)%5)))%5=2</code>，第三副本在 <code>(0+(2+(0+1)%5)))%5=3</code>（partition 数是 Broker 数一倍时，<code>nextReplicaShift</code> 值会增加1）；</li>
-<li>partition 为8时，那第一副本在 <code>(0+8)%5=3</code>，第二个副本在 <code>(3+(2+(0+0)%5)))%5=0</code>，第三副本在 <code>(3+(2+(0+1)%5)))%5=1</code>。</li>
+<li>partition 为5时，那第一副本在 <code>(0+5)%5=0</code>，第二个副本在 <code>(0+(1+(1+0)%5)))%5=2</code>，第三副本在 <code>(0+(1+(1+1)%5)))%5=3</code>（partition 数是 Broker 数一倍时，<code>nextReplicaShift</code> 值会增加1）；</li>
+<li>partition 为8时，那第一副本在 <code>(0+8)%5=3</code>，第二个副本在 <code>(3+(1+(1+0)%5)))%5=0</code>，第三副本在 <code>(3+(1+(1+1)%5)))%5=1</code>。</li>
 </ul>
 <p>分配如下表所示：</p>
 <table>
