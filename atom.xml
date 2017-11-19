@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2017-11-11T03:04:33.000Z</updated>
+  <updated>2017-11-19T07:02:44.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -16,11 +16,110 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
+    <title>Kafka 源码解析之 Consumer 两种订阅模式（八.1）</title>
+    <link href="http://matt33.com/2017/11/19/consumer-subscribe/"/>
+    <id>http://matt33.com/2017/11/19/consumer-subscribe/</id>
+    <published>2017-11-19T06:43:50.000Z</published>
+    <updated>2017-11-19T07:02:44.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这类的第三篇，主要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 Kafka Consumer 中都提供了两个不同的解决方案，但具体怎么去使用是需要用户根据自己的业务场景去配置，这里会讲述其底层的具体实现。</p>
+<p>本篇文章讲述的这三点内容分别是：</p>
+<ol>
+<li>consumer 的两种订阅模式， <code>subscribe()</code>和<code>assign()</code> 模式，一种是 topic 粒度（使用 group 管理），一种是 topic-partition 粒度（用户自己去管理）；</li>
+<li>consumer 的两种 commit 实现，<code>commitAsync()</code>和<code>commitSync()</code>，即同步 commit 和异步 commit；</li>
+<li>consumer 提供的两种不同 <code>partition.assignment.strategy</code>，这是关于一个 group 订阅一些 topic 后，group 内各个 consumer 实例的 partition 分配策略。</li>
+</ol>
+<blockquote>
+<p>注：为了阅读得更为方便，这篇文章拆分为两篇来展示，第一篇讲述上面的第一点，后面两点放在一起讲述。</p>
+</blockquote>
+<p>0.9.X 之前 Kafka Consumer 是支持两个不同的订阅模型 —— high level 和 simple level，这两种模型的最大区别是：第一个其 offset 管理是由 Kafka 来做，包括 rebalance 操作，第二个则是由使用者自己去做，自己去管理相关的 offset，以及自己去进行 rebalance。</p>
+<p>在新版的 consumer 中对 high level 和 simple level 的接口实现了统一，简化了相应的相应的编程模型。</p>
+<h2 id="订阅模式"><a href="#订阅模式" class="headerlink" title="订阅模式"></a>订阅模式</h2><p>在新版的 Consumer 中，high level 模型现在叫做订阅模式，KafkaConsumer 提供了三种 API，如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 订阅指定的 topic 列表,并且会自动进行动态 partition 订阅</span></div><div class="line"><span class="comment">// 当发生以下情况时,会进行 rebalance: 1.订阅的 topic 列表改变; 2.topic 被创建或删除; 3.consumer 线程 die; 4. 加一个新的 consumer 线程</span></div><div class="line"><span class="comment">// 当发生 rebalance 时，会唤醒 ConsumerRebalanceListener 线程</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">subscribe</span><span class="params">(Collection&lt;String&gt; topics, ConsumerRebalanceListener listener)</span></span>&#123;&#125;</div><div class="line"><span class="comment">// 同上，但是这里没有设置 listener</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">subscribe</span><span class="params">(Collection&lt;String&gt; topics)</span> </span>&#123;&#125;</div><div class="line"><span class="comment">//note: 订阅那些满足一定规则(pattern)的 topic</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">subscribe</span><span class="params">(Pattern pattern, ConsumerRebalanceListener listener)</span></span>&#123;&#125;</div></pre></td></tr></table></figure>
+<p>以上三种 API 都是按照 topic 级别去订阅，可以动态地获取其分配的 topic-partition，这是使用 <strong>Group 动态管理</strong>，它不能与手动 partition 管理一起使用。当监控到发生下面的事件时，Group 将会触发 rebalance 操作：</p>
+<ol>
+<li>订阅的 topic 列表变化；</li>
+<li>topic 被创建或删除；</li>
+<li>consumer group 的某个 consumer 实例挂掉；</li>
+<li>一个新的 consumer 实例通过 <code>join</code> 方法加入到一个 group 中。</li>
+</ol>
+<p>在这种模式下，当 KafkaConsumer 调用 pollOnce 方法时，第一步会首先加入到一个 group 中，并获取其分配的 topic-partition 列表（见<a href="http://matt33.com/2017/10/22/consumer-join-group/">Kafka 源码解析之 Consumer 如何加入一个 Group（六）</a>），前面两篇文章都是以这种情况来讲述的。</p>
+<p>这里介绍一下当调用 <code>subscribe()</code> 方法之后，Consumer 所做的事情，分两种情况介绍，一种按 topic 列表订阅，一种是按 pattern 模式订阅：</p>
+<ol>
+<li>topic 列表订阅<ol>
+<li>更新 SubscriptionState 中记录的 <code>subscription</code>（记录的是订阅的 topic 列表），将 SubscriptionType 类型设置为 <strong>AUTO_TOPICS</strong>；</li>
+<li>更新 metadata 中的 topic 列表（<code>topics</code> 变量），并请求更新 metadata；</li>
+</ol>
+</li>
+<li>pattern 模式订阅<ol>
+<li>更新 SubscriptionState 中记录的 <code>subscribedPattern</code>，设置为 pattern，将 SubscriptionType 类型设置为 <strong>AUTO_PATTERN</strong>；</li>
+<li>设置 Metadata 的 needMetadataForAllTopics 为 true，即在请求 metadata 时，需要更新所有 topic 的 metadata 信息，设置后再请求更新 metadata；</li>
+<li>调用 <code>coordinator.updatePatternSubscription()</code> 方法，遍历所有 topic 的 metadata，找到所有满足 pattern 的 topic 列表，更新到 SubscriptionState 的 <code>subscriptions</code> 和 Metadata 的 <code>topics</code> 中；</li>
+<li>通过在 ConsumerCoordinator 中调用 <code>addMetadataListener()</code> 方法在 Metadata 中添加 listener 当每次 metadata update 时就调用第三步的方法更新，但是只有当本地缓存的 topic 列表与现在要订阅的 topic 列表不同时，才会触发 rebalance 操作。</li>
+</ol>
+</li>
+</ol>
+<p>其他部分，两者基本一样，只是 pattern 模型在每次更新 topic-metadata 时，获取全局的 topic 列表，如果发现有新加入的符合条件的 topic，就立马去订阅，其他的地方，包括 Group 管理、topic-partition 的分配都是一样的。</p>
+<h2 id="分配模式"><a href="#分配模式" class="headerlink" title="分配模式"></a>分配模式</h2><p>下面来看一下 Consumer 提供的分配模式，熟悉 0.8.X 版本的人，可能会把这种方法称为 simple consumer 的接口，当调用 <code>assign()</code> 方法手动分配 topic-partition 列表时，是不会使用 consumer 的 Group 管理机制，也即是当 consumer group member 变化或 topic 的 metadata 信息变化时是不会触发 rebalance 操作的。比如：当 topic 的 partition 增加时，这里是无法感知，需要用户进行相应的处理，Apache Flink 就是使用的这种方式，后续我会写篇文章介绍 Flink 是如何实现这种机制的。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 手动向 consumer 分配一些 topic-partition 列表，并且这个接口不允许增加分配的 topic-partition 列表，将会覆盖之前分配的 topic-partition 列表，如果给定的 topic-partition 列表为空，它的作用将会与 unsubscribe() 方法一样。</span></div><div class="line"><span class="comment">//note: 这种手动 topic 分配是不会使用 consumer 的 group 管理，当 group 的 member 变化或 topic 的 metadata 变化也不会触发 rebalance 操作。</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">assign</span><span class="params">(Collection&lt;TopicPartition&gt; partitions)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
+<p>这里来看一下 Kafka 提供的 Group 管理到底是什么？</p>
+<p>如果有印象的话，在<a href="http://matt33.com/2017/10/22/consumer-join-group/">Kafka 源码解析之 Consumer 如何加入一个 Group（六）</a>中介绍 Poll 模型的第一步中，详细介绍了 <code>ConsumerCoordinator.poll()</code> 方法，我们再来看一下这个方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// note: 它确保了这个 group 的 coordinator 是已知的,并且这个 consumer 是已经加入到了 group 中,也用于 offset 周期性的 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">poll</span><span class="params">(<span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">    invokeCompletedOffsetCommitCallbacks();<span class="comment">// note: 用于测试</span></div><div class="line"></div><div class="line">    <span class="comment">// note: Step1 通过 subscribe() 方法订阅 topic,并且 coordinator 未知,初始化 Consumer Coordinator</span></div><div class="line">    <span class="keyword">if</span> (subscriptions.partitionsAutoAssigned() &amp;&amp; coordinatorUnknown()) &#123;</div><div class="line">        <span class="comment">// note: 获取 GroupCoordinator 地址,并且建立连接</span></div><div class="line">        ensureCoordinatorReady();</div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="comment">// note: Step2 判断是否需要重新加入 group,如果订阅的 partition 变化或则分配的 partition 变化时,需要 rejoin</span></div><div class="line">    <span class="comment">// note: 如果订阅模式不是 AUTO_TOPICS 或 AUTO_PATTERN,直接跳过</span></div><div class="line">    <span class="keyword">if</span> (needRejoin()) &#123;</div><div class="line">        <span class="comment">// note: rejoin group 之前先刷新一下 metadata（对于 AUTO_PATTERN 而言）</span></div><div class="line">        <span class="keyword">if</span> (subscriptions.hasPatternSubscription())</div><div class="line">            client.ensureFreshMetadata();</div><div class="line"></div><div class="line">        <span class="comment">// note: 确保 group 是 active; 加入 group; 分配订阅的 partition</span></div><div class="line">        ensureActiveGroup();</div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="comment">// note: Step3 检查心跳线程运行是否正常,如果心跳线程失败,则抛出异常,反之更新 poll 调用的时间</span></div><div class="line">    <span class="comment">// note: 发送心跳请求是在 ensureCoordinatorReady() 中调用的</span></div><div class="line">    pollHeartbeat(now);</div><div class="line">    <span class="comment">// note: Step4 自动 commit 时,当定时达到时,进行自动 commit</span></div><div class="line">    maybeAutoCommitOffsetsAsync(now);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>如果使用的是 assign 模式，也即是非 AUTO_TOPICS 或 AUTO_PATTERN 模式时，Consumer 实例在调用 poll 方法时，是不会向 GroupCoordinator 发送 join-group/sync-group/heartbeat 请求的，也就是说 GroupCoordinator 是拿不到这个 Consumer 实例的相关信息，也会去维护这个 member 是否存活，这种情况下就需要用户自己管理自己的处理程序。但是在这种模式是可以进行 offset commit的。</p>
+<h3 id="commit-offset-请求处理"><a href="#commit-offset-请求处理" class="headerlink" title="commit offset 请求处理"></a>commit offset 请求处理</h3><p>当 Kafka Serve 端受到来自 client 端的 Offset Commit 请求时，其处理逻辑如下所示，是在 <code>kafka.coordinator.GroupCoordinator</code> 中实现的。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div><div class="line">61</div><div class="line">62</div><div class="line">63</div><div class="line">64</div><div class="line">65</div><div class="line">66</div><div class="line">67</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// kafka.coordinator.GroupCoordinator</span></div><div class="line"><span class="comment">//note: GroupCoordinator 处理 Offset Commit 请求</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">handleCommitOffsets</span></span>(groupId: <span class="type">String</span>,</div><div class="line">                        memberId: <span class="type">String</span>,</div><div class="line">                        generationId: <span class="type">Int</span>,</div><div class="line">                        offsetMetadata: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">OffsetAndMetadata</span>],</div><div class="line">                        responseCallback: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">Short</span>] =&gt; <span class="type">Unit</span>) &#123;</div><div class="line">  <span class="keyword">if</span> (!isActive.get) &#123;</div><div class="line">    responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">GROUP_COORDINATOR_NOT_AVAILABLE</span>.code))</div><div class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!isCoordinatorForGroup(groupId)) &#123;</div><div class="line">    responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">NOT_COORDINATOR_FOR_GROUP</span>.code))</div><div class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isCoordinatorLoadingInProgress(groupId)) &#123;</div><div class="line">    responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">GROUP_LOAD_IN_PROGRESS</span>.code))</div><div class="line">  &#125; <span class="keyword">else</span> &#123;</div><div class="line">    groupManager.getGroup(groupId) <span class="keyword">match</span> &#123;</div><div class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt;</div><div class="line">        <span class="keyword">if</span> (generationId &lt; <span class="number">0</span>) &#123;</div><div class="line">          <span class="comment">// the group is not relying on Kafka for group management, so allow the commit</span></div><div class="line">          <span class="comment">//note: 不使用 group-coordinator 管理的情况</span></div><div class="line">          <span class="comment">//note: 如果 groupID不存在,就新建一个 GroupMetadata, 其group 状态为 Empty,否则就返回已有的 groupid</span></div><div class="line">          <span class="comment">//note: 如果 simple 的 groupId 与一个 active 的 group 重复了,这里就有可能被覆盖掉了</span></div><div class="line">          <span class="keyword">val</span> group = groupManager.addGroup(<span class="keyword">new</span> <span class="type">GroupMetadata</span>(groupId))</div><div class="line">          doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)</div><div class="line">        &#125; <span class="keyword">else</span> &#123;</div><div class="line">          <span class="comment">// or this is a request coming from an older generation. either way, reject the commit</span></div><div class="line">          <span class="comment">//note: 过期的 offset-commit</span></div><div class="line">          responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">ILLEGAL_GENERATION</span>.code))</div><div class="line">        &#125;</div><div class="line"></div><div class="line">      <span class="keyword">case</span> <span class="type">Some</span>(group) =&gt;</div><div class="line">        doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">//note: 真正的处理逻辑</span></div><div class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">doCommitOffsets</span></span>(group: <span class="type">GroupMetadata</span>,</div><div class="line">                    memberId: <span class="type">String</span>,</div><div class="line">                    generationId: <span class="type">Int</span>,</div><div class="line">                    offsetMetadata: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">OffsetAndMetadata</span>],</div><div class="line">                    responseCallback: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">Short</span>] =&gt; <span class="type">Unit</span>) &#123;</div><div class="line">  <span class="keyword">var</span> delayedOffsetStore: <span class="type">Option</span>[<span class="type">DelayedStore</span>] = <span class="type">None</span></div><div class="line"></div><div class="line">  group synchronized &#123;</div><div class="line">    <span class="keyword">if</span> (group.is(<span class="type">Dead</span>)) &#123;</div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">UNKNOWN_MEMBER_ID</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (generationId &lt; <span class="number">0</span> &amp;&amp; group.is(<span class="type">Empty</span>)) &#123;<span class="comment">//note: 来自 assign 的情况</span></div><div class="line">      <span class="comment">// the group is only using Kafka to store offsets</span></div><div class="line">      delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,</div><div class="line">        offsetMetadata, responseCallback)</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (group.is(<span class="type">AwaitingSync</span>)) &#123;</div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">REBALANCE_IN_PROGRESS</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!group.has(memberId)) &#123;<span class="comment">//note: 有可能 simple 与 high level 的冲突了,这里就直接拒绝相应的请求</span></div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">UNKNOWN_MEMBER_ID</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (generationId != group.generationId) &#123;</div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">ILLEGAL_GENERATION</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">      <span class="keyword">val</span> member = group.get(memberId)</div><div class="line">      completeAndScheduleNextHeartbeatExpiration(group, member)<span class="comment">//note: 更新下次需要的心跳时间</span></div><div class="line">      delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,</div><div class="line">        offsetMetadata, responseCallback)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  <span class="comment">// store the offsets without holding the group lock</span></div><div class="line">  delayedOffsetStore.foreach(groupManager.store)</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>处理过程如下：</p>
+<ol>
+<li>如果这个 group 还不存在（groupManager没有这个 group 信息），并且 generation 为 -1（一般情况下应该都是这样），就新建一个 GroupMetadata, 其 Group 状态为 Empty；</li>
+<li>现在 group 已经存在，就调用 <code>doCommitOffsets()</code> 提交 offset；</li>
+<li>如果是来自 assign 模式的请求，并且其对应的 group 的状态为 Empty（generationId &lt; 0 &amp;&amp; group.is(Empty)），那么就记录这个 offset；</li>
+<li>如果是来自 assign 模式的请求，但这个 group 的状态不为 Empty（!group.has(memberId)），也就是说，这个 group 已经处在活跃状态，assign 模式下的 group 是不会处于的活跃状态的，可以认为是 assign 模式使用的 group.id 与 subscribe 模式下使用的 group 相同，这种情况下就会拒绝 assign 模式下的这个 offset commit 请求。</li>
+</ol>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>根据上面的讲述，这里做一下小节，如下图所示：</p>
+<p><img src="/images/kafka/two-subscribe.png" alt="两种订阅模式小节"></p>
+<p>简单做一下总结：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>不同之处</th>
+<th>相同之处</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>subscribe()</td>
+<td>使用 Kafka Group 管理，自动进行 rebalance 操作</td>
+<td>可以在 Kafka 保存 offset</td>
+</tr>
+<tr>
+<td>assign()</td>
+<td>用户自己进行相关的处理</td>
+<td>也可以进行 offset commit，但是尽量保证 group.id 唯一性，如果使用一个与上面模式一样的 group，offset commit 请求将会被拒绝</td>
+</tr>
+</tbody>
+</table>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这类的第三篇，主要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 Kafka
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Kafka 源码解析之 Consumer Poll 模型（七）</title>
     <link href="http://matt33.com/2017/11/11/consumer-pollonce/"/>
     <id>http://matt33.com/2017/11/11/consumer-pollonce/</id>
-    <published>2017-11-11T03:04:45.000Z</published>
-    <updated>2017-11-11T03:04:33.000Z</updated>
+    <published>2017-11-11T03:00:45.000Z</published>
+    <updated>2017-11-19T06:51:52.000Z</updated>
     
     <content type="html"><![CDATA[<p>在上一篇问文章中已经介绍一个 Consumer 实例如何加入到一个 group 中，它是 Consumer Poll 模型第一步要做的事件，本文会完整讲述一个 Consumer 实例在 poll 模型过程中会做哪些事情，只有理解了 poll 模型才能更好地理解 Consumer 端的处理逻辑。</p>
 <h2 id="Consumer-示例"><a href="#Consumer-示例" class="headerlink" title="Consumer 示例"></a>Consumer 示例</h2><p>这里以一个 Consumer 的实例代码作为开始，一个比较常见的 Consumer 示例代码如下所示，其主要包含一下几个步骤：</p>
@@ -2660,7 +2759,7 @@
 <p>通过表格来设计一个网页如下图所示。</p>
 <p><img src="/images/web/html_lianxi.png" alt="示例"></p>
 <p>上面的示例使用表格来进行表示的一个网页，如果使用 <code>div</code> 元素应该怎么做，下面使用 <code>div</code> 元素来重新设计一下上面的网页。</p>
-<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="undefined"></span></div><div class="line">            div#container&#123;width:1000px&#125;</div><div class="line">            div#header &#123;background-color: royalblue ;height: 100px;text-align:center;font-size: 20px&#125;</div><div class="line">            div#sidebar&#123;background-color: darkorange;height:400px;width:300px;float:left;&#125;</div><div class="line">            div#mainbody &#123;background-color: forestgreen;height:400px;width:700px;float:left;&#125;</div><div class="line">            div#footer &#123;background-color: powderblue;height: 100px;clear:both;text-align:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="css"></span></div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#container</span>&#123;<span class="attribute">width</span>:<span class="number">1000px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#header</span> &#123;<span class="attribute">background-color</span>: royalblue ;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">text-align</span>:center;<span class="attribute">font-size</span>: <span class="number">20px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#sidebar</span>&#123;<span class="attribute">background-color</span>: darkorange;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">300px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#mainbody</span> &#123;<span class="attribute">background-color</span>: forestgreen;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">700px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#footer</span> &#123;<span class="attribute">background-color</span>: powderblue;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">clear</span>:both;<span class="attribute">text-align</span>:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
 <h2 id="HTML-表单"><a href="#HTML-表单" class="headerlink" title="HTML 表单"></a>HTML 表单</h2><p>表单标签是什么呢？这个是在网页是很常见的，表单标签就是用于网页中的数据提交，比如我们注册网页，在留言板中留言、评论等可以填写数据，提交处理地方都需要表单标签，<code>form</code> 表单标签内有输入框 input、单选、多选、<code>select</code> 下拉列表菜单与跳转菜单、提交按钮等标签内容。</p>
 <figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    user：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"text"</span> <span class="attr">name</span>=<span class="string">"user"</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    password：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"password"</span> <span class="attr">name</span>=<span class="string">"password"</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"male"</span> /&gt;</span> Male</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"female"</span> /&gt;</span> Female</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"married"</span> /&gt;</span></div><div class="line">    married</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"have a job"</span> /&gt;</span></div><div class="line">    have a job</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"chinese"</span> /&gt;</span></div><div class="line">    chinese</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div></pre></td></tr></table></figure>
 <p>其中，name 是明文显示，password 是隐藏的，<code>radio</code> 属性是单选，<code>checkbox</code> 属性是双选，上面展示的效果如下图所示。</p>
@@ -3192,150 +3291,6 @@
     
     
       <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>别人向上，我们却在向下</title>
-    <link href="http://matt33.com/2017/01/08/book/"/>
-    <id>http://matt33.com/2017/01/08/book/</id>
-    <published>2017-01-08T08:11:14.000Z</published>
-    <updated>2017-01-08T15:18:53.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>花了两周多的时间把钱穆老先生这部神作读完了，读完之后的感觉是，书中有太多的观点让我有醍醐灌顶之感，钱老读史思考的深度远非常人所及，这本书非常值得拜读，豆瓣上也同样给出了9分以上评价，真的名不虚传（<a href="https://book.douban.com/subject/11229072/" target="_blank" rel="external">《中国历代政治得失》</a>）。因为这本书并不是一气看完，大部分是在上下班的班车上看的，每天看一部分，持续半个月之后才看完，所以书中一些感觉很不错的观点到现在可能已经忘了一部分，现在回忆起整本书，大概有三点让我印象非常深刻，下面也会就这三点讲述一下。</p>
-<p>第一点印象最深的地方当然是<strong>制度</strong>这一部分了，全文几乎都是在围绕着历代的政治制度而讲述。好的制度可以让这个国家更简单、更高效地运转，中国自古有句俗话，叫做”打天下容易，坐天下难”，在打天下的时候，少则几年、多则十几年就能打下天下。但随着队伍、领地的扩大，很多问题会暴露出来，由于之前是战时，这些问题可以暂时不管，而一旦国家归于统一、社会稳定下来之后，这些问题就不能不管了，如何为政府选取人才、如何指定合理的徒土地政策、赋役政策以及军队政策等，这些问题哪一个处理不好，都可能会导致功亏一篑，所以说坐天下难。但是难也得干下去，正所谓在其位谋其政，历代政府都使出自己的浑身解数，制定了一套政策，让这个庞大的国家开始缓慢地运转，而有些政策因其非常重要可能会以明文记载作为制度来保证政策高效地运行，制度一旦形成，甚至就如信仰一般，无人敢违逆。每个朝代在开始时期，都会指定一套保证政府运转的制度（而有的朝代却攻于权术，想着各种手段维护自己的统治，而不是尽一个政府的职责），而这些制度一旦形成，随着发展，到后期可能会变得漏洞百出而成为一些利息集团的保护伞，正所谓此一时彼一时，时代在发展，历史上也没有一套制度可以高效地运作几千年或者几百年而不离其初心。而且一旦利息集团形成，后世的知识分子又如何去改变呢？有的知识分子虽然看到这些弊端，如王安石，他同样也身居高危开始变法，也有了皇帝的支持，可是最后依然没有成功，中国人老是讲一句”祖宗之法不能改”。这种观念反而束缚了后世，如果制度不用变，后世还要政治家干什么？这也导致一个朝代兴起之后，后来因慌于人事而逐渐走向下坡路。朝代初兴之时，一般会出现很多人才，也会有圣明的皇帝，这种情况下，一些制度是可以按照其初心正常运作，而几十年或者百年之后，如果人事不给力，谁来保证？多少朝代由于这而毁，这也就突出一个好制度的重要性。制度，名义上一种规章制度，是大家共同遵守的信仰，也是约束大家的法则，但制度又不能一成不变，中国有时候就非常认死理，制度竟然可以原封不动运行几百年，这到后面怎么可能不出问题？这时候如果说中国没有法制观念反而不合适，我们反观一下西方人，他们的制度或法律其实是不在不断变化的、或者是进入了一个不断完善的轨道，西方的一些政府人员是是由人民选举出来，所以必然会代表多数人的利益，要不然下次肯定会被选下去，所以他们的制度或者法律也是会必然代表多数人的利益，而多数人的利益在发展的过程中是在不断变化的、而不是一成不变的，这也是它们制度能够自我完善的一个原因。而历史中的我们，就很难做到这一点，如果皇帝大臣是圣人君子还好，如果不是，受苦的只能是老百姓，这就说明，我们虽然有制度，但是并没有好的制度来保证这个国家的长久运转。</p>
-<p>第二点说一下利益集团，或者是权力集团，钱老提出的这点观点还是很令我感到新奇的。西方社会刚开始的权力是把握在教会手中，后来又到了贵族手中，从来没有开放给全社会，这也是西方民众对主权、对权力的非常看重的原因，而我们则不一样，可以说从秦朝开始权力就已经开放给全社会或者很大一部分开放给全社会了，除了皇室，其他的职位到后来已经没有世袭，只要你有能力有才华而且又能证明自己，即使你出身低贱也能走向巅峰，如商鞅、韩信等。后来到了唐朝之后，就开始形成了科举制度，读书人科举成功即可入朝为官，可以说从此之后，中国社会的权力集团就是这些知识分子，他们才是保证这个国家运转的核心。虽说中国是皇权社会，但是皇帝只是一个人，不可能管理整个国家，皇帝的背后必然会有一群体支持着皇帝，帮着皇帝去管理整个国家。有了科举制度之后，整个国家的运转就靠着这些选举出来的人才来管理，而那些朝廷大员又非世袭，很多丞相或者内个大学士都出身贫苦，国家靠着这些读书人管理着整个国家，所以可以说中国是一个”仕人社会”，只不过到了元朝和清朝就变成了”部族社会”，这就另说了。</p>
-<p>第三点读完之后的感受就是在两千年的历史（从汉到清）中，能明确感受到以下几点：1.中央政府在不断地集权、而地方政府的权力在衰落，地方政府的地位也在降低，尤其是那些真正管理百姓的县长，到后来职位是越来越低，甚至与中央通话都要隔着三四级，他们上要讨好上级，下要管理百姓，其实也是着实为难；2.政府为了防止百姓造反采取了很多的政策，比如在内部分裂知识分子以及普通民众，这也导致国人越发得不团结，不团结也就没有力量，甚至国人开始慢慢变得异常窝里斗，我们民族的这些糟粕都是有其缘由的；3.中国官本位也是有其原因的，自古以来优秀人才都被引入到了仕途，读书人心中也形成了一种观点——“学而优则仕”，而且政府到后来反而在不断地抑商，一是人才不断涌向政府，政府又用不了这么人，造成政府人事不断臃肿，二是其他行业需要人才反而又得不到人才，导致发展缓慢；4.民众的自由程度在不断压缩，甚至到了清朝为了防止汉人反清还实行了一些政策，取消了言论自由、结社自由和出版自由，这些在清朝之前都是很正常的东西，后来就慢慢给禁止了，而随后大家竟然慢慢习惯了，这也是因为个人力量非常薄弱，而大家又很难团结一起。这些不断形成的东西，站在民族长远的角度来看，对我们中华民族是非常有害的、不利的。</p>
-<p>读完之后，尤其是与西方的历史对比，心中总是少不了些许疼痛，曾经引领世界的、有着全世界最优秀制度的民族，到最后竟然轮到没有自由的部族政治，清朝之害，远重于崖山。</p>
-<hr>
-<blockquote>
-<p>汉光武自身是一好皇帝，明帝，章帝都好，然而只是人事好，没有立下好制度。因此皇帝好，事情也做得好。皇帝坏了，而政治上并不曾有管束皇帝的制度，这是东汉政治制度上的一个大问题。也是将来中国政治制度史上一个大问题。——钱穆, 中国历代政治得失, loc. 414-416</p>
-</blockquote>
-<p>Notes: 1) 缺少一种好的制度来防止其他情况的出现。</p>
-<blockquote>
-<p>但日子久了，那制度就变坏了。这不只是汉代选举制度如是，我们可以说，古今中外一切制度，都必如是。否则一项好制度，若能永远好下去，便将使政治窒息，再不需后代人来努力政治了。——钱穆, 中国历代政治得失, loc. 448-450</p>
-</blockquote>
-<p>Notes: 1) 任何政策都有其漏洞,时间越久,漏洞也就越多</p>
-<blockquote>
-<p>《唐六典》的，仍不应仅当它是一部历史书，为记载唐代现实制度的书，而应同时当它是一部理论和思想的书看。因唐代人对政治上的种种理论和思想，都已在此书中大部具体化制度化了。制度的背后，都应有理论和思想。一切制度，决不会凭空无端地产生。若我们忽略了中国以往现实的政治制度，而来空谈中国人以往的政治思想，也决无是处。——钱穆, 中国历代政治得失, loc. 568-571</p>
-</blockquote>
-<p>Notes: 1) 唐代的巨大进步</p>
-<blockquote>
-<p>总之中国是一个广土众民的大国家，必需得统一，而实不宜于过分的中央集权。这在中国的政治课题上，是一道值得谨慎应付的大题目。现在专说唐代，似乎其中央行政比汉进步，而地方行政则不如汉。中央的监察官变成了地方行政官，这是一大缺点。而由军队首领来充地方行政首长，则更是大毛病。唐室之崩溃，也可说即崩溃在此一制度上。——钱穆, 中国历代政治得失, loc. 609-612</p>
-</blockquote>
-<p>Notes: 1) 节度使既掌握军事又掌管地方事务,很危险</p>
-<blockquote>
-<p>从此可知，政治制度是现实的，每一制度，必须针对现实，时时刻刻求其能变动适应。任何制度，断无二三十年而不变的，更无二三百年而不变的。但无论如何变，一项制度背后的本原精神所在，即此制度之用意的主要处则仍可不变。于是每一项制度，便可循其正常轨道而发展。此即是此一项制度之自然生长。——钱穆, 中国历代政治得失, loc. 639-642</p>
-</blockquote>
-<p>Notes: 1) 制度因时因地而异.</p>
-<blockquote>
-<p>理论是此制度之精神生命，现实是此制度之血液营养，二者缺一不可。——钱穆, 中国历代政治得失, loc. 643-644</p>
-</blockquote>
-<p>Notes: 1) 理论是理想的,现实是不断完善理论,两则相辅相成。</p>
-<blockquote>
-<p>其实革命的本质，应该是推翻制度来迁就现实的，绝非是推翻现实来迁就制度的。我们此刻，一面既否定了传统制度背后的一切理论根据，一面又忽略了现实环境里面的一切真实要求。——钱穆, 中国历代政治得失, loc. 646-648</p>
-</blockquote>
-<p>Notes: 1) 制度为解决现实问题而生。</p>
-<blockquote>
-<p>当知任何一种制度之建立，傥是仅由一二人之私意便能实现了，这便无制度可讲。若谓此乃皇帝欺骗民众，而且凭此欺骗，便能专制几百年，古今中外，绝无此理。若民众如此易欺易骗，我们也无理由再来提倡民主政治。凭事实讲，科举制度显然在开放政权，这始是科举制度之内在意义与精神生命。汉代的选举，是由封建贵族中开放政权的一条路。唐代的公开竞选，是由门第特殊阶级中开放政权的一条路。——钱穆, 中国历代政治得失, loc. 673-677</p>
-</blockquote>
-<p>Notes: 1) 制度产生之历史背景,有其合理的地方,不能一言以蔽之。</p>
-<blockquote>
-<p>而中国则自唐以下，便已犯了政权开放之流毒。以水救水，以火救火，不仅是药不对病，而且会症上加症。若要解决中国社会之积弊，则当使知识分子不再集中到政治一途，便该奖励工商业，使聪明才智转趋此道。然结果又很易变成资本主义。在西方是先有了中产社会，先有了新兴工商资本，然后再来打开仕途，预闻政治。而中国则不然，可说自两汉以来，早已把政权开放给全国各地，不断奖励知识分子加入仕途，而同时又压抑工商资本。只鼓舞人为大学者，当大官，却不奖励人为大商人，发大财。节制资本，平均地权，大体上是中国历史上的传统政策。政治措施，存心在引导民间聪明才智，不许其为私家财力打算无限制的发展。——钱穆, 中国历代政治得失, loc. 683-689</p>
-</blockquote>
-<p>Notes: 1) 知识分子都涌入政治,造成官员庸肿不堪,直到今天依然如此,一个局长会有近十个副局长。 政治无法消化所有的优秀人才,应该将人才引入其他该需要的地方,以发挥最大的价值。</p>
-<blockquote>
-<p>即就账籍制度言，可见每一项制度之推行与继续，也必待有一种与之相当的道德意志与服务忠诚之贯注。否则徒法不能以自行，纵然法良意美，终是徒然。而且任何一制度，也必与其他制度发生交互影响。故凡一制度之成立，也绝非此制度可以单独成立的。——钱穆, 中国历代政治得失, loc. 717-720</p>
-</blockquote>
-<p>Notes: 1) 并不完全依靠法治,对道德水准有一定要求。</p>
-<blockquote>
-<p>好像汉代是在社会上层节制资本，而下层则没有力量管；唐代注意社会下层，由国家来计划分配，而让上层的富民能自由发展。这一情形，似乎唐代人更要高明些。他可以许你过富，却不让你过穷。——钱穆, 中国历代政治得失, loc. 774-776</p>
-</blockquote>
-<p>Notes: 1) 汉唐经济思想之精髓</p>
-<blockquote>
-<p>不过事情隔久了，这事情演变之本原意义忘失了，后人便只见得皇帝之尊严与宰相之卑微了。——钱穆, 中国历代政治得失, loc. 893-893</p>
-</blockquote>
-<p>Notes: 1) 一个制度的确立有其原因,但随着时间其原意慢慢被抛到脑后,久而久之也就为人所不知了。</p>
-<blockquote>
-<p>宋代制度之缺点，在散，在弱，不在专与暴。直到南宋宁宗时，已快亡国，皇帝时时下手条，当时称为御札，还激起朝臣愤慨，说事不出中书，是为乱政。可见宋代相权，还有它传统客观的地位。我们此刻只根据历史来说宋不如唐，所谓宋代宰相失职，一切仍是制度问题。并不是只有皇帝专制，更不要制度。——钱穆, 中国历代政治得失, loc. 916-919</p>
-</blockquote>
-<p>Notes: 1) 制度中的问题看似只是一条命令,实则影响巨大,制度要有自我完善机制</p>
-<blockquote>
-<p>无制度的政府，哪能有好施为，哪能有好结——钱穆, 中国历代政治得失, loc. 964-964</p>
-</blockquote>
-<p>Notes: 1) 制度的确立是有其缘由的,要明白背后的原因才能更好地让制度用在正途。</p>
-<blockquote>
-<p>宋代则把财富兵力都集中到中央，不留一点在地方上，所以中央一失败，全国土崩瓦解，再也没办法。——钱穆, 中国历代政治得失, loc. 985-986</p>
-</blockquote>
-<p>Notes: 1) 越往后,君权越大,中央集权越严重。</p>
-<blockquote>
-<p>任何一省都如此。给你这一半，割去你那一半。好使全国各省，都成支离破碎。既不能统一反抗，而任何一区域也很难单独反抗。这是行省制的内在精神。——钱穆, 中国历代政治得失, loc. 1321-1322</p>
-</blockquote>
-<p>Notes: 1) 背后的原因</p>
-<blockquote>
-<p>举人以下就没有做大官的份，如是则科举场中也分了流品。进士及第是清流，浮在上面直向前，秀才举人则变成了浊流，沉淀在下面，永远不超升。鼎——钱穆, 中国历代政治得失, loc. 1428-1430</p>
-</blockquote>
-<p>Notes: 1) 此思想毒害后代</p>
-<blockquote>
-<p>而且纵使存心公正善良的人，其所创制度，也可有偏弊，有流害。我们必如是想，才能对政治制度有深一层之研讨与警惕。——钱穆, 中国历代政治得失, loc. 1459-1460</p>
-</blockquote>
-<p>Notes: 1) 制度逐渐演化,已经在慢慢背离初衷。</p>
-<blockquote>
-<p>制度指政而言，法术只是些事情或手段；不好说是政治。大抵制度是出之于公的，在公的用心下形成的一些度量分寸是制度。而法术则出之于私，因此没有一定恰好的节限。所谓方法与权术，二者之间，当然又不能仔细分。——钱穆, 中国历代政治得失, loc. 1548-1550</p>
-</blockquote>
-<p>Notes: 1) 一个有度,一个没有</p>
-<blockquote>
-<p>论汉代，西汉可说是制度，东汉则多半出于光武的私心。论唐代，确实可说在建立制度，而宋代则有许多只算是一种法术。明代，有许多只能说它是一些事，不能说它是一些制。尤其是清代，可说全没有制度。它所有的制度，都是根据着明代，而在明代的制度里，再加上他们许多的私心。这种私心，可说是一种“部族政权”的私心。一切有满洲部族的私心处罚，所以全只有法术，更不见制度。——钱穆, 中国历代政治得失, loc. 1553-1557</p>
-</blockquote>
-<p>Notes: 1) 崖山之后无中国。并不准确。</p>
-<blockquote>
-<p>可是我们中国历史从汉代起，就不能叫皇权，因皇帝一个人不可能掌握一个国家的大权。也不能说它是贵族政权，因自汉代起，已没有显然的贵族。说是军人政权吗？我们也看不出汉政府以下，是由军人掌握的。说是资产阶级的政权吗？中国一向没有资产阶级。所以若说政权，则中国应该是一种士人政权，政府大权都掌握在士——读书人手里，从汉到明都如此。——钱穆, 中国历代政治得失, loc. 1569-1573</p>
-</blockquote>
-<p>Notes: 1) 这点分析得很好,利益总是被这些少数群体把握着。</p>
-<blockquote>
-<p>美国人尽管看重东方的商业，但他只可想旁的方法，不能派一总督来管理菲律宾，而把他们开国以来全部历史精神推翻了。所以今天苏维埃说美国帝国主义，其实是名实不相符。但若说英国对香港是一种帝国主义，这是百辩难逃的。因他把全国家分成了两部分，一部是本国，一部是征服地。这才始得叫帝国。清代有所谓本部十八省，外边又有藩属，故说它像西方的帝国，但细辩又不同。因清人待蒙古，比待中国本部的人还要好，蒙古人得封亲王，中国人是没有的。英国人断不能待香港人比待他本国的人好，可见就算清代也是帝国，还是东西巧妙不同的。——钱穆, 中国历代政治得失, loc. 1765-1770</p>
-</blockquote>
-<p>Notes: 1) 如果这样来看,确实如此,清朝也可以认为与英国一样。</p>
-<blockquote>
-<p>我们现在的毛病，就在喜欢随便使用别人家的现成名词，而这些名词的确实解释，我们又多不了解。——钱穆, 中国历代政治得失, loc. 1770-1771</p>
-</blockquote>
-<p>Notes: 1) 不明缘由</p>
-<blockquote>
-<p>当时的洪杨，并不是推不翻满清，但他们同时又要推翻中国全部历史，所以他们只可有失败。——钱穆, 中国历代政治得失, loc. 1811-1811</p>
-</blockquote>
-<p>Notes: 1) 缺少刘伯闻这样的谋士,这种谋士要上通天文,下知地理,也就是熟悉中国历史。</p>
-<blockquote>
-<p>但康有为只知道皇帝无害于立宪，却不知道满清皇帝的后面是一个部族政权在撑腰。部族政权是决不容有所谓立宪的。孙中山先生主张革命，一定要推翻皇帝，康有为的变法就变成了保皇，似乎又像非要皇帝不可了。康有为实在没有看清楚，他以为只要光绪皇帝听他话，变法就变得成，这是他的大错误。这个错误也就是错误在他没有像西洋人般懂得政治上的所谓主权的观念。他不懂得当时的中国政治，是满洲部族主权的政治。掌握主权的是满洲人，哪里是像他所谓的皇帝专制呢？他误认为中国传统政治只是皇帝专制，故而以为只要皇帝听我话，便可由皇帝专制一变而为皇帝立宪。——钱穆, 中国历代政治得失, loc. 1817-1822</p>
-</blockquote>
-<p>Notes: 1) 争论到最后变成了是否要保皇,已经失其初心。而且清帝国并非只是皇帝一人专制,后面利益何其复杂。</p>
-<blockquote>
-<p>至于中国历史上的传统政权，无论汉、唐、宋、明，却并无私权力，私立场，私背景，它的立场背景便是全国人民，便是全社会。所以遇到政治腐败，只要换一批人，把制度腐败了的略略修改，就仍可继续下。——钱穆, 中国历代政治得失, loc. 1828-1830</p>
-</blockquote>
-<p>Notes: 1) 两千年历史没有革命。 2) 两千年历史没有革命,变得很少。</p>
-<blockquote>
-<p>中国政治，实在一向是偏重于法治的，即制度化的，而西方近代政治，则比较偏重在人治在事实化。何以呢？因为他们一切政制，均决定于选举，选举出来的多数党，就可决定一切了。法制随多数意见而决定，而变动，故说它重人、重事实。我们的传统政治，往往一个制度经历几百年老不变，这当然只说是法治，是制度化。法治之下，人才就受束缚了。所以明末的黄梨洲要慨然说：“有治人，无治法。”这因一向制度太繁密，故使他太不看重法，太看重人，而要提出此主张。——钱穆, 中国历代政治得失, loc. 1905-1909</p>
-</blockquote>
-<p>Notes: 1) 这样的解释醍醐灌顶之感,我们一般认为中国缺少法治基因,而实际并非如此。</p>
-<blockquote>
-<p>孙先生不是读死书的人，他这几句话，并不由任何西方抄袭来，他真是深识远虑，确有他所见。政府是该属于民众的，但不是，也不能，定要全体民众直接来掌握此政权。理论上，国家政权当然在民众，该以民众大家的意见为意见。但民众意见，终是句空话。如何来表达出此民众的意见呢？今天中国多数民众，尚依赖政府来注意教和领导，他们哪有办法来过问政治？然而一个国家总要有一个不可动摇的中心，即如目前的日本，他们把历史上的传统中心皇帝尊严摇动了，急切间社会也会发生摇动的，他们拿什么东西来填补，来维系？这在他们也将成为一问题。中国也会碰到这问题的，而且早已碰到了。——钱穆, 中国历代政治得失, loc. 1924-1929</p>
-</blockquote>
-<p>Notes: 1) 孙中山先生有其擅长的地方,也有其不擅长的地方。</p>
-<blockquote>
-<p>历史终是客观事实，历史没有不对的，不对的是在我们不注重历史，不把历史作参考。至少我们讲人文科学方面的一切，是不该不懂历史的。政治也是人文科学中一门，我们回头把以前历史经过，再看一道，总还不是要不得。——钱穆, 中国历代政治得失, loc. 1948-1950</p>
-</blockquote>
-<p>Notes: 1) 历史是宝贵的财富,也是文化传统,焉能一笔抹杀</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;花了两周多的时间把钱穆老先生这部神作读完了，读完之后的感觉是，书中有太多的观点让我有醍醐灌顶之感，钱老读史思考的深度远非常人所及，这本书非常值得拜读，豆瓣上也同样给出了9分以上评价，真的名不虚传（&lt;a href=&quot;https://book.douban.com/subjec
-    
-    </summary>
-    
-      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
-    
-    
-      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
     
   </entry>
   
