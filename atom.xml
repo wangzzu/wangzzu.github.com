@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2017-11-19T07:07:56.000Z</updated>
+  <updated>2017-11-19T11:44:18.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -16,22 +16,179 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
-    <title>Kafka 源码解析之 Consumer 两种订阅模式（八.1）</title>
+    <title>Kafka 源码解析之 Consumer 两种 commit 机制和 partition 分配机制（九）</title>
+    <link href="http://matt33.com/2017/11/19/consumer-two-summary/"/>
+    <id>http://matt33.com/2017/11/19/consumer-two-summary/</id>
+    <published>2017-11-19T07:15:32.000Z</published>
+    <updated>2017-11-19T11:44:18.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>紧接着上篇文章，这篇文章讲述 Consumer 提供的两种 commit 机制和两种 partition 分配机制，具体如何使用是需要用户结合具体的场景进行选择，本文讲述一下其底层实现。</p>
+<h2 id="两种-commit-机制"><a href="#两种-commit-机制" class="headerlink" title="两种 commit 机制"></a>两种 commit 机制</h2><p>先看下两种不同的 commit 机制，一种是同步 commit，一种是异步 commit，既然其作用都是 offset commit，应该不难猜到它们底层使用接口都是一样的，其调用流程如下图所示：</p>
+<p><img src="/images/kafka/two-commit.png" alt="两种 commit 机制"></p>
+<h3 id="同步-commit"><a href="#同步-commit" class="headerlink" title="同步 commit"></a>同步 commit</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 对 poll() 中返回的所有 topics 和 partition 列表进行 commit</span></div><div class="line"><span class="comment">// 这个方法只能将 offset 提交 Kafka 中，Kafka 将会在每次 rebalance 之后的第一次拉取或启动时使用同步 commit</span></div><div class="line"><span class="comment">// 这是同步 commit，它将会阻塞进程，直到 commit 成功或者遇到一些错误</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitSync</span><span class="params">()</span> </span>&#123;&#125;</div><div class="line"><span class="comment">// 只对指定的 topic-partition 列表进行 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitSync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
+<p>其实，从上图中，就已经可以看出，同步 commit 的实现方式，<code>client.poll()</code> 方法会阻塞直到这个request 完成或超时才会返回。</p>
+<h3 id="异步-commit"><a href="#异步-commit" class="headerlink" title="异步 commit"></a>异步 commit</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 异步 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">()</span> </span>&#123;&#125;</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">(OffsetCommitCallback callback)</span> </span>&#123;&#125;</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets, OffsetCommitCallback callback)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
+<p>而对于异步的 commit，最后调用的都是 <code>doCommitOffsetsAsync</code> 方法，其具体实现如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//org.apache.kafka.clients.consumer.internals.ConsumerCoordinator</span></div><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">doCommitOffsetsAsync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets, <span class="keyword">final</span> OffsetCommitCallback callback)</span> </span>&#123;</div><div class="line">    <span class="keyword">this</span>.subscriptions.needRefreshCommits();</div><div class="line">    RequestFuture&lt;Void&gt; future = sendOffsetCommitRequest(offsets);<span class="comment">//note: 发送 offset-commit 请求</span></div><div class="line">    <span class="keyword">final</span> OffsetCommitCallback cb = callback == <span class="keyword">null</span> ? defaultOffsetCommitCallback : callback;</div><div class="line">    future.addListener(<span class="keyword">new</span> RequestFutureListener&lt;Void&gt;() &#123;</div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onSuccess</span><span class="params">(Void value)</span> </span>&#123;</div><div class="line">            <span class="keyword">if</span> (interceptors != <span class="keyword">null</span>)</div><div class="line">                interceptors.onCommit(offsets);</div><div class="line"></div><div class="line">            <span class="comment">//note: 添加成功的请求,以唤醒相应的回调函数</span></div><div class="line">            completedOffsetCommits.add(<span class="keyword">new</span> OffsetCommitCompletion(cb, offsets, <span class="keyword">null</span>));</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onFailure</span><span class="params">(RuntimeException e)</span> </span>&#123;</div><div class="line">            Exception commitException = e;</div><div class="line"></div><div class="line">            <span class="keyword">if</span> (e <span class="keyword">instanceof</span> RetriableException)</div><div class="line">                commitException = <span class="keyword">new</span> RetriableCommitFailedException(e);</div><div class="line"></div><div class="line">            <span class="comment">//note: 添加失败的请求,以唤醒相应的回调函数</span></div><div class="line">            completedOffsetCommits.add(<span class="keyword">new</span> OffsetCommitCompletion(cb, offsets, commitException));</div><div class="line">        &#125;</div><div class="line">    &#125;);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>在异步 commit 中，可以添加相应的回调函数，如果 request 处理成功或处理失败，ConsumerCoordinator 会通过 <code>invokeCompletedOffsetCommitCallbacks()</code> 方法唤醒相应的回调函数。</p>
+<p>关于 offset commit 请求的处理见上一篇文章中的<a href="http://matt33.com/2017/11/18/consumer-subscribe/#commit-offset-请求处理">Offset Commit 请求处理</a>，对于提交的 offset，GroupCoordinator 会记录在 GroupMetadata 对象中。</p>
+<h2 id="两种-partition-分配机制"><a href="#两种-partition-分配机制" class="headerlink" title="两种 partition 分配机制"></a>两种 partition 分配机制</h2><p>consumer 提供的两种不同 partition 分配策略，可以通过 <code>partition.assignment.strategy</code> 参数进行配置，默认情况下使用的是 <code>org.apache.kafka.clients.consumer.RangeAssignor</code>，Kafka 中提供另一种 partition 的分配策略 <code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>，它们关系如下图所示：</p>
+<p><img src="/images/kafka/PartitionAssignor.png" alt="Kafka 系统内置的两种 partition 分配机制"></p>
+<p>通过上图可以看出，用户可以自定义相应的 partition 分配机制，只需要继承这个 <code>AbstractPartitionAssignor</code> 抽象类即可。</p>
+<h3 id="AbstractPartitionAssignor"><a href="#AbstractPartitionAssignor" class="headerlink" title="AbstractPartitionAssignor"></a>AbstractPartitionAssignor</h3><p>AbstractPartitionAssignor 有一个抽象方法，如下所示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/**</span></div><div class="line"> * Perform the group assignment given the partition counts and member subscriptions</div><div class="line"> * <span class="doctag">@param</span> partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded</div><div class="line"> *                           from this map.</div><div class="line"> * <span class="doctag">@param</span> subscriptions Map from the memberId to their respective topic subscription</div><div class="line"> * <span class="doctag">@return</span> Map from each member to the list of partitions assigned to them.</div><div class="line"> */</div><div class="line"><span class="comment">//<span class="doctag">NOTE:</span> 根据 partitionsPerTopic 和 subscriptions 进行分配,具体的实现会在子类中实现（不同的子类的实现各异）</span></div><div class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,Map&lt;String, List&lt;String&gt;&gt; subscriptions);</div></pre></td></tr></table></figure>
+<p><code>assign()</code> 这个方法，有两个参数：</p>
+<ul>
+<li><code>partitionsPerTopic</code>：所订阅的每个 topic 与其 partition 数的对应关系，metadata 没有的 topic 将会被移除；</li>
+<li><code>subscriptions</code>：每个 consumerId 与其所订阅的 topic 列表的关系。</li>
+</ul>
+<p><code>RangeAssignor</code> 和 <code>RoundRobinAssignor</code> 通过这个方法 <code>assign()</code> 的实现，来进行相应的 partition 分配。</p>
+<h3 id="RangeAssignor-分配模式"><a href="#RangeAssignor-分配模式" class="headerlink" title="RangeAssignor 分配模式"></a>RangeAssignor 分配模式</h3><p>直接看一下这个方法的实现：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">public</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,</div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    Map&lt;String, List&lt;String&gt;&gt; consumersPerTopic = consumersPerTopic(subscriptions);<span class="comment">//note: (topic, List&lt;consumerId&gt;)</span></div><div class="line">    Map&lt;String, List&lt;TopicPartition&gt;&gt; assignment = <span class="keyword">new</span> HashMap&lt;&gt;();</div><div class="line">    <span class="keyword">for</span> (String memberId : subscriptions.keySet())</div><div class="line">        assignment.put(memberId, <span class="keyword">new</span> ArrayList&lt;TopicPartition&gt;());<span class="comment">//note: 初始化</span></div><div class="line"></div><div class="line">    <span class="keyword">for</span> (Map.Entry&lt;String, List&lt;String&gt;&gt; topicEntry : consumersPerTopic.entrySet()) &#123;</div><div class="line">        String topic = topicEntry.getKey();</div><div class="line">        List&lt;String&gt; consumersForTopic = topicEntry.getValue();</div><div class="line"></div><div class="line">        Integer numPartitionsForTopic = partitionsPerTopic.get(topic);</div><div class="line">        <span class="keyword">if</span> (numPartitionsForTopic == <span class="keyword">null</span>)</div><div class="line">            <span class="keyword">continue</span>;</div><div class="line"></div><div class="line">        Collections.sort(consumersForTopic);</div><div class="line"></div><div class="line">        <span class="comment">//note: 假设 partition 有 7个,consumer 有5个</span></div><div class="line">        <span class="keyword">int</span> numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();<span class="comment">//note: 1</span></div><div class="line">        <span class="keyword">int</span> consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();<span class="comment">//note: 2</span></div><div class="line"></div><div class="line">        List&lt;TopicPartition&gt; partitions = AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic);</div><div class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>, n = consumersForTopic.size(); i &lt; n; i++) &#123;</div><div class="line">            <span class="comment">//note: i=0, start: 0, length: 2, topic-partition: p0,p1</span></div><div class="line">            <span class="comment">//note: i=1, start: 2, length: 2, topic-partition: p2,p3</span></div><div class="line">            <span class="comment">//note: i=2, start: 4, length: 1, topic-partition: p4</span></div><div class="line">            <span class="comment">//note: i=3, start: 5, length: 1, topic-partition: p5</span></div><div class="line">            <span class="comment">//note: i=4, start: 6, length: 1, topic-partition: p6</span></div><div class="line">            <span class="keyword">int</span> start = numPartitionsPerConsumer * i + Math.min(i, consumersWithExtraPartition);</div><div class="line">            <span class="keyword">int</span> length = numPartitionsPerConsumer + (i + <span class="number">1</span> &gt; consumersWithExtraPartition ? <span class="number">0</span> : <span class="number">1</span>);</div><div class="line">            assignment.get(consumersForTopic.get(i)).addAll(partitions.subList(start, start + length));</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> assignment;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>假设 topic 的 partition 数为 numPartitionsForTopic，group 中订阅这个 topic 的 member 数为 <code>consumersForTopic.size()</code>，首先需要算出两个值：</p>
+<ul>
+<li><code>numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size()</code>：表示平均每个 consumer 会分配到几个 partition；    </li>
+<li><code>consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size()</code>：表示平均分配后还剩下多少个 partition 未分配。</li>
+</ul>
+<p>分配的规则是：对于剩下的那些 partition 分配到前 consumersWithExtraPartition 个 consumer 上，也就是前 consumersWithExtraPartition 个 consumer 获得 topic-partition 列表会比后面多一个。</p>
+<p>在上述的程序中，举了一个例子，假设有一个 topic 有 7 个 partition，group 有5个 consumer，这个5个 consumer 都订阅这个 topic，那么 range 的分配方式如下：</p>
+<ul>
+<li>consumer 0：start: 0, length: 2, topic-partition: p0,p1；</li>
+<li>consumer 1：start: 2, length: 2, topic-partition: p2,p3；</li>
+<li>consumer 2：start: 4, length: 1, topic-partition: p4；</li>
+<li>consumer 3：start: 5, length: 1, topic-partition: p5；</li>
+<li>consumer 4：start: 6, length: 1, topic-partition: p6</li>
+</ul>
+<p>而如果 group 中有 consumer 没有订阅这个 topic，那么这个 consumer 将不会参与分配。下面再举个例子，将有两个 topic，一个 partition 有5个，一个 partition 有7个，group 有5个 consumer，但是只有前3个订阅第一个 topic，而另一个 topic 是所有 consumer 都订阅了，那么其分配结果如下：</p>
+<table>
+<thead>
+<tr>
+<th>consumer</th>
+<th>订阅的 topic1 的列表</th>
+<th>订阅的 topic2 的列表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>consumer 0</td>
+<td>t1p0, t1p1</td>
+<td>t2p0, t2p1</td>
+</tr>
+<tr>
+<td>consumer 1</td>
+<td>t1p2, t1p3</td>
+<td>t2p2, t2p3</td>
+</tr>
+<tr>
+<td>consumer 2</td>
+<td>t1p4</td>
+<td>t2p4</td>
+</tr>
+<tr>
+<td>consumer 3</td>
+<td></td>
+<td>t2p5</td>
+</tr>
+<tr>
+<td>consumer 4</td>
+<td></td>
+<td>t2p6</td>
+</tr>
+</tbody>
+</table>
+<h3 id="RoundRobinAssignor"><a href="#RoundRobinAssignor" class="headerlink" title="RoundRobinAssignor"></a>RoundRobinAssignor</h3><p>这个是 roundrobin 的实现，其实现方法如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div></pre></td><td class="code"><pre><div class="line"><span class="meta">@Override</span></div><div class="line"><span class="keyword">public</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,</div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    Map&lt;String, List&lt;TopicPartition&gt;&gt; assignment = <span class="keyword">new</span> HashMap&lt;&gt;();</div><div class="line">    <span class="keyword">for</span> (String memberId : subscriptions.keySet())</div><div class="line">        assignment.put(memberId, <span class="keyword">new</span> ArrayList&lt;TopicPartition&gt;());</div><div class="line"></div><div class="line">    CircularIterator&lt;String&gt; assigner = <span class="keyword">new</span> CircularIterator&lt;&gt;(Utils.sorted(subscriptions.keySet()));<span class="comment">//note: 环行迭代</span></div><div class="line">    <span class="keyword">for</span> (TopicPartition partition : allPartitionsSorted(partitionsPerTopic, subscriptions)) &#123;</div><div class="line">        <span class="keyword">final</span> String topic = partition.topic();</div><div class="line">        <span class="keyword">while</span> (!subscriptions.get(assigner.peek()).contains(topic))<span class="comment">//note: 遍历直到找到订阅这个 topic 的 partition</span></div><div class="line">            assigner.next();</div><div class="line">        assignment.get(assigner.next()).add(partition);</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> assignment;</div><div class="line">&#125;</div><div class="line"></div><div class="line"></div><div class="line"><span class="function"><span class="keyword">public</span> List&lt;TopicPartition&gt; <span class="title">allPartitionsSorted</span><span class="params">(Map&lt;String, Integer&gt; partitionsPerTopic,</span></span></div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    SortedSet&lt;String&gt; topics = <span class="keyword">new</span> TreeSet&lt;&gt;();<span class="comment">//<span class="doctag">NOTE:</span> 所有的 topics（有序）</span></div><div class="line">    <span class="keyword">for</span> (List&lt;String&gt; subscription : subscriptions.values())</div><div class="line">        topics.addAll(subscription);</div><div class="line"></div><div class="line">    List&lt;TopicPartition&gt; allPartitions = <span class="keyword">new</span> ArrayList&lt;&gt;();<span class="comment">//<span class="doctag">NOTE:</span> 订阅的 Topic的所有的 TopicPartition 集合</span></div><div class="line">    <span class="keyword">for</span> (String topic : topics) &#123;</div><div class="line">        Integer numPartitionsForTopic = partitionsPerTopic.get(topic);</div><div class="line">        <span class="keyword">if</span> (numPartitionsForTopic != <span class="keyword">null</span>)</div><div class="line">            <span class="comment">//note: topic 的所有 partition 都添加进去</span></div><div class="line">            allPartitions.addAll(AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic));</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> allPartitions;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>roundrobin 的实现原则，简单来说就是：列出所有 topic-partition 和列出所有的 consumer member，然后开始分配，一轮之后继续下一轮，假设有有一个 topic，它有7个 partition，group 有3个 consumer 都订阅了这个 topic，那么其分配方式为：</p>
+<table>
+<thead>
+<tr>
+<th>consumer</th>
+<th>分配列表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>consumer 0</td>
+<td>tp0, tp3, tp6</td>
+</tr>
+<tr>
+<td>consumer 1</td>
+<td>tp1, tp4</td>
+</tr>
+<tr>
+<td>consumer 2</td>
+<td>tp2, tp5</td>
+</tr>
+</tbody>
+</table>
+<p>对于多个 topic 的订阅，将有两个 topic，一个 partition 有5个，一个 partition 有7个，group 有5个 consumer，但是只有前3个订阅第一个 topic，而另一个 topic 是所有 consumer 都订阅了，那么其分配结果如下：</p>
+<table>
+<thead>
+<tr>
+<th>consumer</th>
+<th>订阅的 topic1 的列表</th>
+<th>订阅的 topic2 的列表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>consumer 0</td>
+<td>t1p0, t1p3</td>
+<td>t2p0, t2p5</td>
+</tr>
+<tr>
+<td>consumer 1</td>
+<td>t1p1, t1p4</td>
+<td>t2p1, t2p6</td>
+</tr>
+<tr>
+<td>consumer 2</td>
+<td>t1p2</td>
+<td>t2p2</td>
+</tr>
+<tr>
+<td>consumer 3</td>
+<td></td>
+<td>t2p3</td>
+</tr>
+<tr>
+<td>consumer 4</td>
+<td></td>
+<td>t2p4</td>
+</tr>
+</tbody>
+</table>
+<p>roundrobin 分配方式与 range 的分配方式还是略有不同。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;紧接着上篇文章，这篇文章讲述 Consumer 提供的两种 commit 机制和两种 partition 分配机制，具体如何使用是需要用户结合具体的场景进行选择，本文讲述一下其底层实现。&lt;/p&gt;
+&lt;h2 id=&quot;两种-commit-机制&quot;&gt;&lt;a href=&quot;#两种-comm
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Kafka 源码解析之 Consumer 两种订阅模式（八）</title>
     <link href="http://matt33.com/2017/11/18/consumer-subscribe/"/>
     <id>http://matt33.com/2017/11/18/consumer-subscribe/</id>
     <published>2017-11-18T06:43:50.000Z</published>
-    <updated>2017-11-19T07:07:56.000Z</updated>
+    <updated>2017-11-19T11:40:03.000Z</updated>
     
-    <content type="html"><![CDATA[<p>在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这类的第三篇，主要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 Kafka Consumer 中都提供了两个不同的解决方案，但具体怎么去使用是需要用户根据自己的业务场景去配置，这里会讲述其底层的具体实现。</p>
+    <content type="html"><![CDATA[<p>在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这块的第三篇，本来计划是要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 Kafka Consumer 中都提供了两个不同的解决方案，但具体怎么去使用是需要用户根据自己的业务场景去配置，这里会讲述其底层的具体实现（但为了阅读得更为方便，本来计划的这篇文章将拆分为两篇来，第一篇先讲述第一点，后面两点放在一起讲述）。</p>
 <p>本篇文章讲述的这三点内容分别是：</p>
 <ol>
 <li>consumer 的两种订阅模式， <code>subscribe()</code>和<code>assign()</code> 模式，一种是 topic 粒度（使用 group 管理），一种是 topic-partition 粒度（用户自己去管理）；</li>
 <li>consumer 的两种 commit 实现，<code>commitAsync()</code>和<code>commitSync()</code>，即同步 commit 和异步 commit；</li>
 <li>consumer 提供的两种不同 <code>partition.assignment.strategy</code>，这是关于一个 group 订阅一些 topic 后，group 内各个 consumer 实例的 partition 分配策略。</li>
 </ol>
-<blockquote>
-<p>注：为了阅读得更为方便，这篇文章拆分为两篇来展示，第一篇讲述上面的第一点，后面两点放在一起讲述。</p>
-</blockquote>
 <p>0.9.X 之前 Kafka Consumer 是支持两个不同的订阅模型 —— high level 和 simple level，这两种模型的最大区别是：第一个其 offset 管理是由 Kafka 来做，包括 rebalance 操作，第二个则是由使用者自己去做，自己去管理相关的 offset，以及自己去进行 rebalance。</p>
 <p>在新版的 consumer 中对 high level 和 simple level 的接口实现了统一，简化了相应的相应的编程模型。</p>
 <h2 id="订阅模式"><a href="#订阅模式" class="headerlink" title="订阅模式"></a>订阅模式</h2><p>在新版的 Consumer 中，high level 模型现在叫做订阅模式，KafkaConsumer 提供了三种 API，如下：</p>
@@ -76,7 +233,7 @@
 <li>如果是来自 assign 模式的请求，但这个 group 的状态不为 Empty（!group.has(memberId)），也就是说，这个 group 已经处在活跃状态，assign 模式下的 group 是不会处于的活跃状态的，可以认为是 assign 模式使用的 group.id 与 subscribe 模式下使用的 group 相同，这种情况下就会拒绝 assign 模式下的这个 offset commit 请求。</li>
 </ol>
 <h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>根据上面的讲述，这里做一下小节，如下图所示：</p>
-<p><img src="/images/kafka/two-subscribe.png" alt="两种订阅模式小节"></p>
+<p><img src="/images/kafka/two-subscribe.png" alt="两种订阅模式"></p>
 <p>简单做一下总结：</p>
 <table>
 <thead>
@@ -103,7 +260,7 @@
     
     <summary type="html">
     
-      &lt;p&gt;在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这类的第三篇，主要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 Kafka
+      &lt;p&gt;在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这块的第三篇，本来计划是要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 K
     
     </summary>
     
@@ -2759,7 +2916,7 @@
 <p>通过表格来设计一个网页如下图所示。</p>
 <p><img src="/images/web/html_lianxi.png" alt="示例"></p>
 <p>上面的示例使用表格来进行表示的一个网页，如果使用 <code>div</code> 元素应该怎么做，下面使用 <code>div</code> 元素来重新设计一下上面的网页。</p>
-<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="undefined"></span></div><div class="line">            div#container&#123;width:1000px&#125;</div><div class="line">            div#header &#123;background-color: royalblue ;height: 100px;text-align:center;font-size: 20px&#125;</div><div class="line">            div#sidebar&#123;background-color: darkorange;height:400px;width:300px;float:left;&#125;</div><div class="line">            div#mainbody &#123;background-color: forestgreen;height:400px;width:700px;float:left;&#125;</div><div class="line">            div#footer &#123;background-color: powderblue;height: 100px;clear:both;text-align:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="css"></span></div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#container</span>&#123;<span class="attribute">width</span>:<span class="number">1000px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#header</span> &#123;<span class="attribute">background-color</span>: royalblue ;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">text-align</span>:center;<span class="attribute">font-size</span>: <span class="number">20px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#sidebar</span>&#123;<span class="attribute">background-color</span>: darkorange;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">300px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#mainbody</span> &#123;<span class="attribute">background-color</span>: forestgreen;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">700px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#footer</span> &#123;<span class="attribute">background-color</span>: powderblue;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">clear</span>:both;<span class="attribute">text-align</span>:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
 <h2 id="HTML-表单"><a href="#HTML-表单" class="headerlink" title="HTML 表单"></a>HTML 表单</h2><p>表单标签是什么呢？这个是在网页是很常见的，表单标签就是用于网页中的数据提交，比如我们注册网页，在留言板中留言、评论等可以填写数据，提交处理地方都需要表单标签，<code>form</code> 表单标签内有输入框 input、单选、多选、<code>select</code> 下拉列表菜单与跳转菜单、提交按钮等标签内容。</p>
 <figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    user：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"text"</span> <span class="attr">name</span>=<span class="string">"user"</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    password：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"password"</span> <span class="attr">name</span>=<span class="string">"password"</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"male"</span> /&gt;</span> Male</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"female"</span> /&gt;</span> Female</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"married"</span> /&gt;</span></div><div class="line">    married</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"have a job"</span> /&gt;</span></div><div class="line">    have a job</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"chinese"</span> /&gt;</span></div><div class="line">    chinese</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div></pre></td></tr></table></figure>
 <p>其中，name 是明文显示，password 是隐藏的，<code>radio</code> 属性是单选，<code>checkbox</code> 属性是双选，上面展示的效果如下图所示。</p>
@@ -3226,71 +3383,9 @@
       <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
     
     
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
+    
       <category term="storm" scheme="http://matt33.com/tags/storm/"/>
-    
-      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Kafka 之 Group 状态变化分析及 Rebalance 过程</title>
-    <link href="http://matt33.com/2017/01/16/kafka-group/"/>
-    <id>http://matt33.com/2017/01/16/kafka-group/</id>
-    <published>2017-01-16T11:07:32.000Z</published>
-    <updated>2017-07-23T07:01:02.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>前段时间看一下 Kafka 的部分源码（0.10.1.0 版），对一些地方做了一些相应的总结。本文主要就 Kafka Group 方面的内容做一下详细的讲述，重点讲述 Consumer Client 如何进行初始化、Server 端对应的 Consumer Group 状态如何进行变化以及对一些 Kafka 的新设计（与旧版不同之处）简单介绍一下。</p>
-<h1 id="Group-状态机"><a href="#Group-状态机" class="headerlink" title="Group 状态机"></a>Group 状态机</h1><p>在 0.9.0.0 之后的 Kafka，出现了几个新变动，一个是在 Server 端增加了 GroupCoordinator 这个角色，另一个较大的变动是将 topic 的 offset 信息由之前存储在 zookeeper 上改为存储到一个特殊的 topic 中（<code>__consumer_offsets</code>）。</p>
-<h2 id="offset-那些事"><a href="#offset-那些事" class="headerlink" title="offset 那些事"></a>offset 那些事</h2><p>在 Kafka 中，无论是写入 topic，还是从 topic 读取数据，都免不了与 offset 打交道，关于 Kafka 的 offset 主要有以下几个概念，如下图。</p>
-<p><img src="/images/kafka/consumer-figure2.png" alt="consumer offset"></p>
-<p>其中，Last Committed Offset 和 Current Position 是与 Consumer Client 有关，High Watermark 和 Log End Offset 与 Producer Client 数据写入和 replica 之间的数据同步有关。</p>
-<ul>
-<li>Last Committed Offset：这是 group 最新一次 commit 的 offset，表示这个 group 已经把 Last Committed Offset 之前的数据都消费成功了；</li>
-<li>Current Position：group 当前消费数据的 offset，也就是说，Last Committed Offset 到 Current Position 之间的数据已经拉取成功，可能正在处理，但是还未 commit；</li>
-<li>Log End Offset：Producer 写入到 Kafka 中的最新一条数据的 offset；</li>
-<li>High Watermark：已经成功备份到其他 replicas 中的最新一条数据的 offset，也就是说 Log End Offset 与 High Watermark 之间的数据已经写入到该 partition 的 leader 中，但是还未成功备份到其他的 replicas 中，这部分数据被认为是不安全的，是不允许 Consumer 消费的。</li>
-</ul>
-<h2 id="Topic-consumer-offsets"><a href="#Topic-consumer-offsets" class="headerlink" title="Topic __consumer_offsets"></a>Topic <code>__consumer_offsets</code></h2><p><code>__consumer_offsets</code> 是 Kafka 内部使用的一个 topic，专门用来存储 group 消费的情况，默认情况下有50个 partition，每个 partition 三副本，而具体 group 的消费情况要存储到哪一个 partition 上，是根据 <code>abs(GroupId.hashCode()) % NumPartitions</code> 来计算（其中，<code>NumPartitions</code> 是<code>__consumer_offsets</code> 的 partition 数，默认是50个）的。</p>
-<h2 id="GroupCoordinator"><a href="#GroupCoordinator" class="headerlink" title="GroupCoordinator"></a>GroupCoordinator</h2><p>根据上面所述，一个具体的 group，是根据其 group 名进行 hash 并计算得到其具对应的 partition 值，该 partition leader 所在 Broker 即为该 Group 所对应的 GroupCoordinator，GroupCoordinator 会存储与该 group 相关的所有的 Meta 信息。</p>
-<p>在 Broker 启动时，每个 Broker 都会启动一个 GroupCoordinator 服务，但只有 <code>__consumer_offsets</code> 的 partition 的 leader 才会直接与 Consumer Client 进行交互，也就是其 group 的 GroupCoordinator，其他的 GroupCoordinator 只是作为备份，一旦作为 leader 的 Broker 挂掉之后及时进行替代。</p>
-<h2 id="状态转移图"><a href="#状态转移图" class="headerlink" title="状态转移图"></a>状态转移图</h2><p>Server 端，Consumer 的 Group 共定义了五个状态</p>
-<ul>
-<li>Empty：Group 没有任何成员，如果所有的 offsets 都过期的话就会变成 Dead，一般当 Group 新创建时是这个状态，也有可能这个 Group 仅仅用于 offset commits 并没有任何成员（Group has no more members, but lingers until all offsets have expired. This state also represents groups which use Kafka only for offset commits and have no members.）；</li>
-<li>PreparingRebalance：Group 正在准备进行 Rebalance（Group is preparing to rebalance）；</li>
-<li>AwaitingSync：Group 正在等待来 group leader 的 assignment（Group is awaiting state assignment from the leader）；</li>
-<li>Stable：稳定的状态（Group is stable）；</li>
-<li>Dead：Group 内已经没有成员，并且它的 Meta 已经被移除（Group has no more members and its metadata is being removed）。</li>
-</ul>
-<p>其各个状态的定义及转换都在 <a href="https://github.com/apache/kafka/blob/0.10.1/core/src/main/scala/kafka/coordinator/GroupMetadata.scala" target="_blank" rel="external">GroupMetadata</a> 中定义，根据状态转移的条件和转移的结果做一个状态转移图如下所示</p>
-<p><img src="/images/kafka/group.png" alt="group-state"></p>
-<p>各个状态转化的情况，只有有对应箭头才能进行转移，比如 Empty 到 PreparingRebalance 是可以转移的，而 Dead 到 PreparingRebalance 是不可以的。后面会根据一个 Consumer Client 启动的过程，讲述一下其 Group 状态变化情况。</p>
-<h1 id="Consumer-初始化"><a href="#Consumer-初始化" class="headerlink" title="Consumer 初始化"></a>Consumer 初始化</h1><p>Server 端 Group 状态的变化，其实更多的时候是由 Client 端触发的，一个 group 在最初初始化的过程总其实就是该 Group 第一个 Consumer Client 初始化的过程。</p>
-<h2 id="Consumer-poll-过程解析"><a href="#Consumer-poll-过程解析" class="headerlink" title="Consumer poll 过程解析"></a>Consumer poll 过程解析</h2><p>对 Consumer 的初始化，正如 <a href="http://matt33.com/2016/07/21/kafka-new-consumer/">Apache Kafka 0.9 Consumer Client 介绍</a> 这篇文章所述，Consumer 的核心逻辑部分主要在其 poll 模型。而其源码的实现上，主要的逻辑实现也是在 <code>pollOnce</code> 方法，如下所示。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//<span class="doctag">NOTE:</span> 一次 poll 过程</span></div><div class="line"><span class="keyword">private</span> Map&lt;TopicPartition, List&lt;ConsumerRecord&lt;K, V&gt;&gt;&gt; pollOnce(<span class="keyword">long</span> timeout) &#123;</div><div class="line">    coordinator.poll(time.milliseconds());<span class="comment">//NOTE： 获取 GroupCoordinator 并连接、加入 Group、Group 进行 rebalance 并获取 assignment</span></div><div class="line"></div><div class="line">    <span class="comment">// fetch positions if we have partitions we're subscribed to that we</span></div><div class="line">    <span class="comment">// don't know the offset for</span></div><div class="line">    <span class="keyword">if</span> (!subscriptions.hasAllFetchPositions())<span class="comment">//<span class="doctag">NOTE:</span> 更新 offset</span></div><div class="line">        updateFetchPositions(<span class="keyword">this</span>.subscriptions.missingFetchPositions());</div><div class="line"></div><div class="line">    <span class="comment">// if data is available already, return it immediately</span></div><div class="line">    Map&lt;TopicPartition, List&lt;ConsumerRecord&lt;K, V&gt;&gt;&gt; records = fetcher.fetchedRecords();</div><div class="line">    <span class="comment">//NOTE： 根据最大限制拉取数据（按 partition 拉取,这个 partition 数据拉取完之后,拉取下一个 partition）</span></div><div class="line">    <span class="keyword">if</span> (!records.isEmpty())</div><div class="line">        <span class="keyword">return</span> records;</div><div class="line">    <span class="comment">//<span class="doctag">NOTE:</span> 说明上次 fetch 到是的数据已经全部拉取了,需要再次发送 fetch 请求,从 broker 拉取数据</span></div><div class="line"></div><div class="line">    <span class="comment">// send any new fetches (won't resend pending fetches)</span></div><div class="line">    fetcher.sendFetches();<span class="comment">//<span class="doctag">NOTE:</span> 向订阅的所有 partition 发送 fetch 请求,会从多个 partition 拉取数据</span></div><div class="line"></div><div class="line">    <span class="keyword">long</span> now = time.milliseconds();</div><div class="line">    <span class="keyword">long</span> pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);</div><div class="line"></div><div class="line">    client.poll(pollTimeout, now, <span class="keyword">new</span> PollCondition() &#123;</div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">shouldBlock</span><span class="params">()</span> </span>&#123;</div><div class="line">            <span class="comment">// since a fetch might be completed by the background thread, we need this poll condition</span></div><div class="line">            <span class="comment">// to ensure that we do not block unnecessarily in poll()</span></div><div class="line">            <span class="keyword">return</span> !fetcher.hasCompletedFetches();</div><div class="line">        &#125;</div><div class="line">    &#125;);</div><div class="line"></div><div class="line">    <span class="comment">// after the long poll, we should check whether the group needs to rebalance</span></div><div class="line">    <span class="comment">// prior to returning data so that the group can stabilize faster</span></div><div class="line">    <span class="keyword">if</span> (coordinator.needRejoin())</div><div class="line">        <span class="keyword">return</span> Collections.emptyMap();</div><div class="line"></div><div class="line">    <span class="keyword">return</span> fetcher.fetchedRecords();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>与 Server 进行交互，尤其初始化 Group 这一部分，主要是在 <code>coordinator.poll()</code> 方法，源码如下</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">poll</span><span class="params">(<span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">    invokeCompletedOffsetCommitCallbacks();<span class="comment">//<span class="doctag">NOTE:</span> 触发回调函数</span></div><div class="line"></div><div class="line">    <span class="keyword">if</span> (subscriptions.partitionsAutoAssigned() &amp;&amp; coordinatorUnknown()) &#123;</div><div class="line">        <span class="comment">//<span class="doctag">NOTE:</span> 通过 subscribe() 方法订阅 topic,并且 coordinator 未知</span></div><div class="line">        ensureCoordinatorReady();<span class="comment">//<span class="doctag">NOTE:</span> 获取 GroupCoordinator 地址,并且建立连接</span></div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="keyword">if</span> (needRejoin()) &#123;<span class="comment">//<span class="doctag">NOTE:</span> 判断是否需要重新加入 group,如果订阅的 partition 变化或则分配的 partition 变化时,需要 rejoin</span></div><div class="line">        <span class="comment">// due to a race condition between the initial metadata fetch and the initial rebalance,</span></div><div class="line">        <span class="comment">// we need to ensure that the metadata is fresh before joining initially. This ensures</span></div><div class="line">        <span class="comment">// that we have matched the pattern against the cluster's topics at least once before joining.</span></div><div class="line">        <span class="keyword">if</span> (subscriptions.hasPatternSubscription())</div><div class="line">            client.ensureFreshMetadata();</div><div class="line"></div><div class="line">        ensureActiveGroup();</div><div class="line">        <span class="comment">//<span class="doctag">NOTE:</span> 确保 group 是 active;加入 group;分配订阅的 partition</span></div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    pollHeartbeat(now);<span class="comment">//<span class="doctag">NOTE:</span> 检查心跳线程运行是否正常,如果心跳线程失败,则抛出异常,反之更新 poll 调用的时间</span></div><div class="line">    maybeAutoCommitOffsetsAsync(now);<span class="comment">//<span class="doctag">NOTE:</span> 自动 commit 时,当定时达到时,进行自动 commit</span></div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p><code>ensureCoordinatorReady()</code> 方法是获取该 group 对应的 GroupCoordinator 地址，并建立连接，然后再进行判断，如果当前的这个 Consumer Client 需要加入一个 group，将进行以下操作（向 Server 端发送 join-group 请求以加入 group，然后再发送 sync-group 请求，获取 client 的 assignment）</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//<span class="doctag">NOTE:</span> 确保 Group 是 active,并且加入该 group</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">ensureActiveGroup</span><span class="params">()</span> </span>&#123;</div><div class="line">    <span class="comment">// always ensure that the coordinator is ready because we may have been disconnected</span></div><div class="line">    <span class="comment">// when sending heartbeats and does not necessarily require us to rejoin the group.</span></div><div class="line">    ensureCoordinatorReady();<span class="comment">//<span class="doctag">NOTE:</span> 确保 GroupCoordinator 已经连接</span></div><div class="line">    startHeartbeatThreadIfNeeded();<span class="comment">//<span class="doctag">NOTE:</span> 启动心跳发送线程（并不一定发送心跳,满足条件后才会发送心跳）</span></div><div class="line">    joinGroupIfNeeded();<span class="comment">//<span class="doctag">NOTE:</span> 发送 JoinGroup 请求,并对返回的信息进行处理，还包括了发送 sync-group 请求并进行相应处理</span></div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<h2 id="Consumer-初始化时-group-状态变化"><a href="#Consumer-初始化时-group-状态变化" class="headerlink" title="Consumer 初始化时 group 状态变化"></a>Consumer 初始化时 group 状态变化</h2><p>这里详述一下 Client 进行以上操作时，Server 端 Group 状态的变化情况。当 Consumer Client 首次进行拉取数据，如果该其所属 Group 并不存在时，Group 的状态变化过程如下：</p>
-<ol>
-<li>Consumer Client 发送 join-group 请求，如果 Group 不存在，创建该 Group，Group 的状态为 <strong>Empty</strong>；</li>
-<li>由于 Group 的 member 为空，将该 member 加入到 Group 中，并将当前 member （client）设置为 Group 的 leader，进行 rebalance 操作，Group 的状态变为 <strong>preparingRebalance</strong>，等待 <code>rebalance.timeout.ms</code> 之后（为了等待其他 member 重新发送 join-group，如果 Group 的状态变为 <code>preparingRebalance</code>，Consumer Client 在进行 poll 操作时，<code>needRejoin()</code> 方法结果就会返回 true，也就意味着当前 Consumer Client 需要重新加入 Group），Group 的 member 更新已经完成，此时 Group 的状态变为 <strong>AwaitingSync</strong>，并向 Group 的所有 member 返回 join-group 响应；</li>
-<li>client 在收到 join-group 结果之后，如果发现自己的角色是 Group 的 leader，就进行 assignment，该 leader 将 assignment 的结果通过 sync-group 请求发送给 GroupCoordinator，而 follower 也会向 GroupCoordinator 发送一个 sync-group 请求（只不过对应的字段为空）；</li>
-<li>当 GroupCoordinator 收到这个 Group leader 的请求之后，获取 assignment 的结果，将各个 member 对应的 assignment 发送给各个 member，而如果该 Client 是 follower 的话就不做任何处理，此时 group 的状态变为 <strong>Stable</strong>（也就是说，只有当收到的 Leader 的请求之后，才会向所有 member 返回 sync-group 的结果，这个是只发送一次的，由 leader 请求来触发）。</li>
-</ol>
-<h2 id="Consumer-Rebalance"><a href="#Consumer-Rebalance" class="headerlink" title="Consumer Rebalance"></a>Consumer Rebalance</h2><p>根据上图，当 group 在 Empty、AwaitSync 或 Stable 状态时，group 可能会进行 rebalance；<br>rebalance 的过程就是：等待所有 member 发送 join-group（上述过程的第2步），然后设置 Group 的 leader，进行 reassignment，各个 client 发送 sync-group 来同步 server 的 assignment 结果。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;前段时间看一下 Kafka 的部分源码（0.10.1.0 版），对一些地方做了一些相应的总结。本文主要就 Kafka Group 方面的内容做一下详细的讲述，重点讲述 Consumer Client 如何进行初始化、Server 端对应的 Consumer Group 状态
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
     
   </entry>
   

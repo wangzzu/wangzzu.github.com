@@ -1,0 +1,176 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>Kafka 源码解析之 Consumer 两种 commit 机制和 partition 分配机制（九） | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">Kafka 源码解析之 Consumer 两种 commit 机制和 partition 分配机制（九）</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">wangzzu</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">Kafka 源码解析之 Consumer 两种 commit 机制和 partition 分配机制（九）</h1><div class="post-meta">Nov 19, 2017<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">1,751</span><span> 字</span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2017/11/19/consumer-two-summary/" href="/2017/11/19/consumer-two-summary/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#两种-commit-机制"><span class="toc-number">1.</span> <span class="toc-text">两种 commit 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#同步-commit"><span class="toc-number">1.1.</span> <span class="toc-text">同步 commit</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#异步-commit"><span class="toc-number">1.2.</span> <span class="toc-text">异步 commit</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#两种-partition-分配机制"><span class="toc-number">2.</span> <span class="toc-text">两种 partition 分配机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#AbstractPartitionAssignor"><span class="toc-number">2.1.</span> <span class="toc-text">AbstractPartitionAssignor</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RangeAssignor-分配模式"><span class="toc-number">2.2.</span> <span class="toc-text">RangeAssignor 分配模式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RoundRobinAssignor"><span class="toc-number">2.3.</span> <span class="toc-text">RoundRobinAssignor</span></a></li></ol></li></ol></div></div><div class="post-content"><p>紧接着上篇文章，这篇文章讲述 Consumer 提供的两种 commit 机制和两种 partition 分配机制，具体如何使用是需要用户结合具体的场景进行选择，本文讲述一下其底层实现。</p>
+<h2 id="两种-commit-机制"><a href="#两种-commit-机制" class="headerlink" title="两种 commit 机制"></a>两种 commit 机制</h2><p>先看下两种不同的 commit 机制，一种是同步 commit，一种是异步 commit，既然其作用都是 offset commit，应该不难猜到它们底层使用接口都是一样的，其调用流程如下图所示：</p>
+<p><img src="/images/kafka/two-commit.png" alt="两种 commit 机制"></p>
+<h3 id="同步-commit"><a href="#同步-commit" class="headerlink" title="同步 commit"></a>同步 commit</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 对 poll() 中返回的所有 topics 和 partition 列表进行 commit</span></div><div class="line"><span class="comment">// 这个方法只能将 offset 提交 Kafka 中，Kafka 将会在每次 rebalance 之后的第一次拉取或启动时使用同步 commit</span></div><div class="line"><span class="comment">// 这是同步 commit，它将会阻塞进程，直到 commit 成功或者遇到一些错误</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitSync</span><span class="params">()</span> </span>&#123;&#125;</div><div class="line"><span class="comment">// 只对指定的 topic-partition 列表进行 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitSync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
+<p>其实，从上图中，就已经可以看出，同步 commit 的实现方式，<code>client.poll()</code> 方法会阻塞直到这个request 完成或超时才会返回。</p>
+<h3 id="异步-commit"><a href="#异步-commit" class="headerlink" title="异步 commit"></a>异步 commit</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 异步 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">()</span> </span>&#123;&#125;</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">(OffsetCommitCallback callback)</span> </span>&#123;&#125;</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets, OffsetCommitCallback callback)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
+<p>而对于异步的 commit，最后调用的都是 <code>doCommitOffsetsAsync</code> 方法，其具体实现如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//org.apache.kafka.clients.consumer.internals.ConsumerCoordinator</span></div><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">doCommitOffsetsAsync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets, <span class="keyword">final</span> OffsetCommitCallback callback)</span> </span>&#123;</div><div class="line">    <span class="keyword">this</span>.subscriptions.needRefreshCommits();</div><div class="line">    RequestFuture&lt;Void&gt; future = sendOffsetCommitRequest(offsets);<span class="comment">//note: 发送 offset-commit 请求</span></div><div class="line">    <span class="keyword">final</span> OffsetCommitCallback cb = callback == <span class="keyword">null</span> ? defaultOffsetCommitCallback : callback;</div><div class="line">    future.addListener(<span class="keyword">new</span> RequestFutureListener&lt;Void&gt;() &#123;</div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onSuccess</span><span class="params">(Void value)</span> </span>&#123;</div><div class="line">            <span class="keyword">if</span> (interceptors != <span class="keyword">null</span>)</div><div class="line">                interceptors.onCommit(offsets);</div><div class="line"></div><div class="line">            <span class="comment">//note: 添加成功的请求,以唤醒相应的回调函数</span></div><div class="line">            completedOffsetCommits.add(<span class="keyword">new</span> OffsetCommitCompletion(cb, offsets, <span class="keyword">null</span>));</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onFailure</span><span class="params">(RuntimeException e)</span> </span>&#123;</div><div class="line">            Exception commitException = e;</div><div class="line"></div><div class="line">            <span class="keyword">if</span> (e <span class="keyword">instanceof</span> RetriableException)</div><div class="line">                commitException = <span class="keyword">new</span> RetriableCommitFailedException(e);</div><div class="line"></div><div class="line">            <span class="comment">//note: 添加失败的请求,以唤醒相应的回调函数</span></div><div class="line">            completedOffsetCommits.add(<span class="keyword">new</span> OffsetCommitCompletion(cb, offsets, commitException));</div><div class="line">        &#125;</div><div class="line">    &#125;);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>在异步 commit 中，可以添加相应的回调函数，如果 request 处理成功或处理失败，ConsumerCoordinator 会通过 <code>invokeCompletedOffsetCommitCallbacks()</code> 方法唤醒相应的回调函数。</p>
+<p>关于 offset commit 请求的处理见上一篇文章中的<a href="http://matt33.com/2017/11/18/consumer-subscribe/#commit-offset-请求处理">Offset Commit 请求处理</a>，对于提交的 offset，GroupCoordinator 会记录在 GroupMetadata 对象中。</p>
+<h2 id="两种-partition-分配机制"><a href="#两种-partition-分配机制" class="headerlink" title="两种 partition 分配机制"></a>两种 partition 分配机制</h2><p>consumer 提供的两种不同 partition 分配策略，可以通过 <code>partition.assignment.strategy</code> 参数进行配置，默认情况下使用的是 <code>org.apache.kafka.clients.consumer.RangeAssignor</code>，Kafka 中提供另一种 partition 的分配策略 <code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>，它们关系如下图所示：</p>
+<p><img src="/images/kafka/PartitionAssignor.png" alt="Kafka 系统内置的两种 partition 分配机制"></p>
+<p>通过上图可以看出，用户可以自定义相应的 partition 分配机制，只需要继承这个 <code>AbstractPartitionAssignor</code> 抽象类即可。</p>
+<h3 id="AbstractPartitionAssignor"><a href="#AbstractPartitionAssignor" class="headerlink" title="AbstractPartitionAssignor"></a>AbstractPartitionAssignor</h3><p>AbstractPartitionAssignor 有一个抽象方法，如下所示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/**</span></div><div class="line"> * Perform the group assignment given the partition counts and member subscriptions</div><div class="line"> * <span class="doctag">@param</span> partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded</div><div class="line"> *                           from this map.</div><div class="line"> * <span class="doctag">@param</span> subscriptions Map from the memberId to their respective topic subscription</div><div class="line"> * <span class="doctag">@return</span> Map from each member to the list of partitions assigned to them.</div><div class="line"> */</div><div class="line"><span class="comment">//<span class="doctag">NOTE:</span> 根据 partitionsPerTopic 和 subscriptions 进行分配,具体的实现会在子类中实现（不同的子类的实现各异）</span></div><div class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,Map&lt;String, List&lt;String&gt;&gt; subscriptions);</div></pre></td></tr></table></figure>
+<p><code>assign()</code> 这个方法，有两个参数：</p>
+<ul>
+<li><code>partitionsPerTopic</code>：所订阅的每个 topic 与其 partition 数的对应关系，metadata 没有的 topic 将会被移除；</li>
+<li><code>subscriptions</code>：每个 consumerId 与其所订阅的 topic 列表的关系。</li>
+</ul>
+<p><code>RangeAssignor</code> 和 <code>RoundRobinAssignor</code> 通过这个方法 <code>assign()</code> 的实现，来进行相应的 partition 分配。</p>
+<h3 id="RangeAssignor-分配模式"><a href="#RangeAssignor-分配模式" class="headerlink" title="RangeAssignor 分配模式"></a>RangeAssignor 分配模式</h3><p>直接看一下这个方法的实现：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">public</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,</div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    Map&lt;String, List&lt;String&gt;&gt; consumersPerTopic = consumersPerTopic(subscriptions);<span class="comment">//note: (topic, List&lt;consumerId&gt;)</span></div><div class="line">    Map&lt;String, List&lt;TopicPartition&gt;&gt; assignment = <span class="keyword">new</span> HashMap&lt;&gt;();</div><div class="line">    <span class="keyword">for</span> (String memberId : subscriptions.keySet())</div><div class="line">        assignment.put(memberId, <span class="keyword">new</span> ArrayList&lt;TopicPartition&gt;());<span class="comment">//note: 初始化</span></div><div class="line"></div><div class="line">    <span class="keyword">for</span> (Map.Entry&lt;String, List&lt;String&gt;&gt; topicEntry : consumersPerTopic.entrySet()) &#123;</div><div class="line">        String topic = topicEntry.getKey();</div><div class="line">        List&lt;String&gt; consumersForTopic = topicEntry.getValue();</div><div class="line"></div><div class="line">        Integer numPartitionsForTopic = partitionsPerTopic.get(topic);</div><div class="line">        <span class="keyword">if</span> (numPartitionsForTopic == <span class="keyword">null</span>)</div><div class="line">            <span class="keyword">continue</span>;</div><div class="line"></div><div class="line">        Collections.sort(consumersForTopic);</div><div class="line"></div><div class="line">        <span class="comment">//note: 假设 partition 有 7个,consumer 有5个</span></div><div class="line">        <span class="keyword">int</span> numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();<span class="comment">//note: 1</span></div><div class="line">        <span class="keyword">int</span> consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();<span class="comment">//note: 2</span></div><div class="line"></div><div class="line">        List&lt;TopicPartition&gt; partitions = AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic);</div><div class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>, n = consumersForTopic.size(); i &lt; n; i++) &#123;</div><div class="line">            <span class="comment">//note: i=0, start: 0, length: 2, topic-partition: p0,p1</span></div><div class="line">            <span class="comment">//note: i=1, start: 2, length: 2, topic-partition: p2,p3</span></div><div class="line">            <span class="comment">//note: i=2, start: 4, length: 1, topic-partition: p4</span></div><div class="line">            <span class="comment">//note: i=3, start: 5, length: 1, topic-partition: p5</span></div><div class="line">            <span class="comment">//note: i=4, start: 6, length: 1, topic-partition: p6</span></div><div class="line">            <span class="keyword">int</span> start = numPartitionsPerConsumer * i + Math.min(i, consumersWithExtraPartition);</div><div class="line">            <span class="keyword">int</span> length = numPartitionsPerConsumer + (i + <span class="number">1</span> &gt; consumersWithExtraPartition ? <span class="number">0</span> : <span class="number">1</span>);</div><div class="line">            assignment.get(consumersForTopic.get(i)).addAll(partitions.subList(start, start + length));</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> assignment;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>假设 topic 的 partition 数为 numPartitionsForTopic，group 中订阅这个 topic 的 member 数为 <code>consumersForTopic.size()</code>，首先需要算出两个值：</p>
+<ul>
+<li><code>numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size()</code>：表示平均每个 consumer 会分配到几个 partition；    </li>
+<li><code>consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size()</code>：表示平均分配后还剩下多少个 partition 未分配。</li>
+</ul>
+<p>分配的规则是：对于剩下的那些 partition 分配到前 consumersWithExtraPartition 个 consumer 上，也就是前 consumersWithExtraPartition 个 consumer 获得 topic-partition 列表会比后面多一个。</p>
+<p>在上述的程序中，举了一个例子，假设有一个 topic 有 7 个 partition，group 有5个 consumer，这个5个 consumer 都订阅这个 topic，那么 range 的分配方式如下：</p>
+<ul>
+<li>consumer 0：start: 0, length: 2, topic-partition: p0,p1；</li>
+<li>consumer 1：start: 2, length: 2, topic-partition: p2,p3；</li>
+<li>consumer 2：start: 4, length: 1, topic-partition: p4；</li>
+<li>consumer 3：start: 5, length: 1, topic-partition: p5；</li>
+<li>consumer 4：start: 6, length: 1, topic-partition: p6</li>
+</ul>
+<p>而如果 group 中有 consumer 没有订阅这个 topic，那么这个 consumer 将不会参与分配。下面再举个例子，将有两个 topic，一个 partition 有5个，一个 partition 有7个，group 有5个 consumer，但是只有前3个订阅第一个 topic，而另一个 topic 是所有 consumer 都订阅了，那么其分配结果如下：</p>
+<table>
+<thead>
+<tr>
+<th>consumer</th>
+<th>订阅的 topic1 的列表</th>
+<th>订阅的 topic2 的列表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>consumer 0</td>
+<td>t1p0, t1p1</td>
+<td>t2p0, t2p1</td>
+</tr>
+<tr>
+<td>consumer 1</td>
+<td>t1p2, t1p3</td>
+<td>t2p2, t2p3</td>
+</tr>
+<tr>
+<td>consumer 2</td>
+<td>t1p4</td>
+<td>t2p4</td>
+</tr>
+<tr>
+<td>consumer 3</td>
+<td></td>
+<td>t2p5</td>
+</tr>
+<tr>
+<td>consumer 4</td>
+<td></td>
+<td>t2p6</td>
+</tr>
+</tbody>
+</table>
+<h3 id="RoundRobinAssignor"><a href="#RoundRobinAssignor" class="headerlink" title="RoundRobinAssignor"></a>RoundRobinAssignor</h3><p>这个是 roundrobin 的实现，其实现方法如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div></pre></td><td class="code"><pre><div class="line"><span class="meta">@Override</span></div><div class="line"><span class="keyword">public</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,</div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    Map&lt;String, List&lt;TopicPartition&gt;&gt; assignment = <span class="keyword">new</span> HashMap&lt;&gt;();</div><div class="line">    <span class="keyword">for</span> (String memberId : subscriptions.keySet())</div><div class="line">        assignment.put(memberId, <span class="keyword">new</span> ArrayList&lt;TopicPartition&gt;());</div><div class="line"></div><div class="line">    CircularIterator&lt;String&gt; assigner = <span class="keyword">new</span> CircularIterator&lt;&gt;(Utils.sorted(subscriptions.keySet()));<span class="comment">//note: 环行迭代</span></div><div class="line">    <span class="keyword">for</span> (TopicPartition partition : allPartitionsSorted(partitionsPerTopic, subscriptions)) &#123;</div><div class="line">        <span class="keyword">final</span> String topic = partition.topic();</div><div class="line">        <span class="keyword">while</span> (!subscriptions.get(assigner.peek()).contains(topic))<span class="comment">//note: 遍历直到找到订阅这个 topic 的 partition</span></div><div class="line">            assigner.next();</div><div class="line">        assignment.get(assigner.next()).add(partition);</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> assignment;</div><div class="line">&#125;</div><div class="line"></div><div class="line"></div><div class="line"><span class="function"><span class="keyword">public</span> List&lt;TopicPartition&gt; <span class="title">allPartitionsSorted</span><span class="params">(Map&lt;String, Integer&gt; partitionsPerTopic,</span></span></div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    SortedSet&lt;String&gt; topics = <span class="keyword">new</span> TreeSet&lt;&gt;();<span class="comment">//<span class="doctag">NOTE:</span> 所有的 topics（有序）</span></div><div class="line">    <span class="keyword">for</span> (List&lt;String&gt; subscription : subscriptions.values())</div><div class="line">        topics.addAll(subscription);</div><div class="line"></div><div class="line">    List&lt;TopicPartition&gt; allPartitions = <span class="keyword">new</span> ArrayList&lt;&gt;();<span class="comment">//<span class="doctag">NOTE:</span> 订阅的 Topic的所有的 TopicPartition 集合</span></div><div class="line">    <span class="keyword">for</span> (String topic : topics) &#123;</div><div class="line">        Integer numPartitionsForTopic = partitionsPerTopic.get(topic);</div><div class="line">        <span class="keyword">if</span> (numPartitionsForTopic != <span class="keyword">null</span>)</div><div class="line">            <span class="comment">//note: topic 的所有 partition 都添加进去</span></div><div class="line">            allPartitions.addAll(AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic));</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> allPartitions;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>roundrobin 的实现原则，简单来说就是：列出所有 topic-partition 和列出所有的 consumer member，然后开始分配，一轮之后继续下一轮，假设有有一个 topic，它有7个 partition，group 有3个 consumer 都订阅了这个 topic，那么其分配方式为：</p>
+<table>
+<thead>
+<tr>
+<th>consumer</th>
+<th>分配列表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>consumer 0</td>
+<td>tp0, tp3, tp6</td>
+</tr>
+<tr>
+<td>consumer 1</td>
+<td>tp1, tp4</td>
+</tr>
+<tr>
+<td>consumer 2</td>
+<td>tp2, tp5</td>
+</tr>
+</tbody>
+</table>
+<p>对于多个 topic 的订阅，将有两个 topic，一个 partition 有5个，一个 partition 有7个，group 有5个 consumer，但是只有前3个订阅第一个 topic，而另一个 topic 是所有 consumer 都订阅了，那么其分配结果如下：</p>
+<table>
+<thead>
+<tr>
+<th>consumer</th>
+<th>订阅的 topic1 的列表</th>
+<th>订阅的 topic2 的列表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>consumer 0</td>
+<td>t1p0, t1p3</td>
+<td>t2p0, t2p5</td>
+</tr>
+<tr>
+<td>consumer 1</td>
+<td>t1p1, t1p4</td>
+<td>t2p1, t2p6</td>
+</tr>
+<tr>
+<td>consumer 2</td>
+<td>t1p2</td>
+<td>t2p2</td>
+</tr>
+<tr>
+<td>consumer 3</td>
+<td></td>
+<td>t2p3</td>
+</tr>
+<tr>
+<td>consumer 4</td>
+<td></td>
+<td>t2p4</td>
+</tr>
+</tbody>
+</table>
+<p>roundrobin 分配方式与 range 的分配方式还是略有不同。</p>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2017/11/19/consumer-two-summary/" data-id="cja6fip5f00719iagzgyh6t76" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/kafka/">kafka</a></div><div class="post-nav"><a href="/2017/11/18/consumer-subscribe/" class="next">Kafka 源码解析之 Consumer 两种订阅模式（八）</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2017/11/19/consumer-two-summary/';
+var disqus_title = 'Kafka 源码解析之 Consumer 两种 commit 机制和 partition 分配机制（九）';
+var disqus_url = 'http://matt33.com/2017/11/19/consumer-two-summary/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-weibo"> 微博</i></div><iframe width="100%" height="90" class="share_self"  frameborder="0" scrolling="no" src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=100&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=0&isFans=0&uid=2650396571&verifier=f2f0e397&colors=D8D8D8,ffffff,666666,0082cb,ecfbfd&dpc=1"></iframe></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2017/11/19/consumer-two-summary/">Kafka 源码解析之 Consumer 两种 commit 机制和 partition 分配机制（九）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/11/18/consumer-subscribe/">Kafka 源码解析之 Consumer 两种订阅模式（八）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/11/11/consumer-pollonce/">Kafka 源码解析之 Consumer Poll 模型（七）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/10/22/consumer-join-group/">Kafka 源码解析之 Consumer 如何加入一个 Group（六）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/09/10/produccer-end/">Kafka 源码解析之 Producer 单 Partition 顺序性实现及配置说明（五）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/09/04/kafka-best-pratice/">Kafka 最佳实践【译】</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/08/22/producer-nio/">Kafka 源码分析之 Producer NIO 网络模型（四）</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/08/12/java-nio/">谈一谈 Java IO 模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/08/06/unix-io/">Unix 网络 IO 模型及 Linux 的 IO 多路复用模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/07/21/kafka-topic-create/">Kafka 源码分析之 topic 创建过程（三）</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
