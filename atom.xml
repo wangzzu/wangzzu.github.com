@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-02-04T16:14:35.000Z</updated>
+  <updated>2018-02-04T16:19:06.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -16,11 +16,11 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
-    <title>操作系统之共享对象学习总结</title>
+    <title>操作系统之共享对象学习</title>
     <link href="http://matt33.com/2018/02/04/linux-mmap/"/>
     <id>http://matt33.com/2018/02/04/linux-mmap/</id>
     <published>2018-02-04T15:59:16.000Z</published>
-    <updated>2018-02-04T16:14:35.000Z</updated>
+    <updated>2018-02-04T16:19:06.000Z</updated>
     
     <content type="html"><![CDATA[<p>在 Kafka 的存储层这部分代码时，看到了很多地方使用操作系统的共享内存机制，Kafka 中所有日志文件的索引都是使用了 <code>mmap</code> 做内存映射，<code>mmap</code> 这块刚好也是一个值得深入学习的知识点，于是就就深入地看了一下、做了一下总结，本文的内容主要来自《深入理解操作系统》第三版 9.8 存储器映射部分。</p>
 <h2 id="存储器映射"><a href="#存储器映射" class="headerlink" title="存储器映射"></a>存储器映射</h2><p>Linux 通过将一个虚拟存储器区域与一个磁盘上的对象关联起来，以初始化这个虚拟存储器区域的内容，这个过程就被称为 <strong>存储器映射(memory mapping)</strong>，虚拟存储器区域可以映射到下面两种类型的对象中的一种：</p>
