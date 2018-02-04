@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-01-29T04:56:22.000Z</updated>
+  <updated>2018-02-04T16:14:35.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,89 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>操作系统之共享对象学习总结</title>
+    <link href="http://matt33.com/2018/02/04/linux-mmap/"/>
+    <id>http://matt33.com/2018/02/04/linux-mmap/</id>
+    <published>2018-02-04T15:59:16.000Z</published>
+    <updated>2018-02-04T16:14:35.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>在 Kafka 的存储层这部分代码时，看到了很多地方使用操作系统的共享内存机制，Kafka 中所有日志文件的索引都是使用了 <code>mmap</code> 做内存映射，<code>mmap</code> 这块刚好也是一个值得深入学习的知识点，于是就就深入地看了一下、做了一下总结，本文的内容主要来自《深入理解操作系统》第三版 9.8 存储器映射部分。</p>
+<h2 id="存储器映射"><a href="#存储器映射" class="headerlink" title="存储器映射"></a>存储器映射</h2><p>Linux 通过将一个虚拟存储器区域与一个磁盘上的对象关联起来，以初始化这个虚拟存储器区域的内容，这个过程就被称为 <strong>存储器映射(memory mapping)</strong>，虚拟存储器区域可以映射到下面两种类型的对象中的一种：</p>
+<ul>
+<li>Unix 文件系统的普通文件：一个区域可以映射到一个普通磁盘文件的连续部分，例如一个可执行的目标文件。文件区会被分成了页大小的片，每一片包含一个虚拟页面的初始内容。因为按需进行页面调度，所以这些虚拟页面没有实际交换进入物理存储器，直到 CPU 第一次引用页面（如果区域比文件区要大，那么就用零来填充这个区域的余下部分）；</li>
+<li>匿名文件：一个区域也可以映射到一个匿名文件，匿名文件是由内核创建的，包含的是二进制零。CPU 第一次引用这样一区域内的虚拟页面时，内核就在物理存储器中找到一个合适的牺牲页面，如果该页面被修改过，就将这个页面换出来，用二进制零覆盖牺牲页面并更新页表，将这个页面标记为是驻留在存储器中的，但是要注意的是在磁盘和存储器之间并没有实际的数据传输，因为这个原因，映射到匿名文件区域中的页面有时也叫做 <strong>请求二进制零的页（demand-zero page）</strong>。</li>
+</ul>
+<p>上面这个是存储器映射的基础内容，理解完这部分之后，我们再来看共享对象（共享内存）和 mmap。</p>
+<h2 id="共享对象"><a href="#共享对象" class="headerlink" title="共享对象"></a>共享对象</h2><p>存储器映射的出现，它是为了要解决是什么问题呢？先看一下对于操作系统来说，没有存储器映射的话面临的情况：</p>
+<p>在操作系统中，进程这一抽象能够为每个进程提供自己私有的虚拟地址空间，可以免受其他进程的错误读写，但是，对于操作系统的每一个进程，它们都有同样的只读文本区域，如：每个 C 程序都需要调用一些标准的 C 库函数、需要程序需要访问只读运行时库代码的相同拷贝等等。那么如果每个进行都在物理存储器中保持这些常用代码的复制拷贝，那就是极端的浪费了。</p>
+<p>而存储器映射机制的出现，就给我们提供了一种清晰的机制，用来 <strong>控制多个进程如何共享对象</strong>。</p>
+<p>一个对象可以被映射到虚拟存储器的一个区域，要么作为共享对象，要么作为私有对象：</p>
+<ul>
+<li>如果是作为共享对象，那么这个进程对这个区域的任何写操作，对于那些也会把这个共享对象映射到它们虚拟存储器的其他进程而言也是可见的，而且这些变化，也会反映在磁盘上的原始对象中；</li>
+<li>如果是作为私有对象，这样的改变，对于其他进程来说是不可变的，并且进程对这个区域所做的任何写操作都不会反映在磁盘上的对象中。</li>
+</ul>
+<p>关于共享对象，举一个例子，如下图所示：</p>
+<p><img src="/images/linux/mmap1.png" alt="一个共享对象"></p>
+<p>假设进程1将一个共享对象映射到它的虚拟地址存储器的一个区域中，如上图左边所示，现在假设进程2将同一个共享对象映射到它的地址空间（与进程1虚拟地址空间并不一定一样），如右边所示。因为每个对象都有一个唯一的文件名，内核可以迅速地判断进程1已经映射了这个对象，而且可以使进程2中的页表条目指向相应的物理页面。关键点在于即使对象被映射到了多个共享区域，物理存储器中也只需要存放共享对象的一个拷贝。</p>
+<h3 id="私有对象的-copy-on-write"><a href="#私有对象的-copy-on-write" class="headerlink" title="私有对象的 copy-on-write"></a>私有对象的 copy-on-write</h3><p>在私有对象中，操作系统是使用了一种叫做 <strong>写时拷贝（copy-on-write）</strong> 的巧妙技术将其映射到虚拟存储器中的。一个私有对象开始生命周期的方式基本上与共享对象一样，在物理存储器中只保存有私有对象的一份拷贝。</p>
+<ul>
+<li>如下图的左边部分所示，其中两个进程将一个私有对象映射到它们虚拟存储器的不同区域，但是却共享这个对象同一个物理拷贝。这时，对于每个映射私有对象的进程，相应私有区域的页表条目都被标记为只读，并且区域结构被标记为私有的写时拷贝，只要没有进程试图写它自己的私有区域，它们就可以继续共享物理存储器中对象的一个单独拷贝；</li>
+<li>如果只有有一个进程试图写私有区域的某个页面，那么这个写操作就会触发一个保护故障：如下图右边所示，该故障处理程序触发的原因是由于进程试图写私有的写时拷贝区域的一个页面引起的，它就会在物理存储器中创建这个页面的一个新拷贝，更新页表条目指向这个新拷贝，然后恢复这个页面的写权限，当故障处理程序返回时，CPU 重新执行这个写操作，现在在新创建的页面上这个写操作就可以正常执行了。</li>
+</ul>
+<p><img src="/images/linux/mmap2.png" alt="一个写时拷贝对象"></p>
+<p>copy-on-write 最充分地使用了稀有的物理存储器。</p>
+<h3 id="再看-fork-函数"><a href="#再看-fork-函数" class="headerlink" title="再看 fork 函数"></a>再看 fork 函数</h3><p>学习了虚拟存储器映射进制后，回头再看 Linux 中的 fork 函数，就会明白 fork 函数是如何创建一个带有自己独立虚拟地址控制的新进程。</p>
+<ol>
+<li>当 fork 函数被当前进程调用时，内核为新进程创建各种数据结构，并分配给它一个唯一的 PID；</li>
+<li>为了给新进程创建虚拟存储器，它创建了当前进程的 <code>mm_struct</code>、区域结构和页表的原样拷贝，它将两个进程的每个页面都标记为只读，并将两个进程中的每个区域结构都标记为私有的写时拷贝；</li>
+<li>当 fork 函数在新进程中返回时，新进程现在的虚拟存储器刚好和调用 fork 时存在的虚拟存储器相同；</li>
+<li>当两个进程中的任一个进行写操作时，写时拷贝机制就会创建新页面，因此，也就为每个进程保持了私有地址空间的抽象概念。</li>
+</ol>
+<h2 id="mmap-函数"><a href="#mmap-函数" class="headerlink" title="mmap 函数"></a>mmap 函数</h2><p>经过前面的介绍，既然在操作系统中有了存储器映射的机制，那么我们应该怎么使用呢？这就需要引入 UNIX 中另一个重要的函数 —— <code>mmap</code>，它是用来创建新的虚拟存储器区域，并将对象映射到这些区域中。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">void</span> *<span class="title">mmap</span><span class="params">(<span class="keyword">void</span> *start, <span class="keyword">size_t</span> length, <span class="keyword">int</span> prot, <span class="keyword">int</span> flags, <span class="keyword">int</span> fd, <span class="keyword">off_t</span> offset)</span></span>;</div></pre></td></tr></table></figure>
+<p>成功执行时，<code>mmap()</code> 返回指向映射区的指针，失败时，<code>mmap()</code> 返回 <code>MAP_FAILED</code>(-1)， error被设为以下的某个值：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">EACCES：访问出错</div><div class="line">EAGAIN：文件已被锁定，或者太多的内存已被锁定</div><div class="line">EBADF：fd不是有效的文件描述词</div><div class="line">EINVAL：一个或者多个参数无效</div><div class="line">ENFILE：已达到系统对打开文件的限制</div><div class="line">ENODEV：指定文件所在的文件系统不支持内存映射</div><div class="line">ENOMEM：内存不足，或者进程已超出最大内存映射数量</div><div class="line">EPERM：权能不足，操作不允许</div><div class="line">ETXTBSY：已写的方式打开文件，同时指定MAP_DENYWRITE标志</div><div class="line">SIGSEGV：试着向只读区写入</div><div class="line">SIGBUS：试着访问不属于进程的内存区</div></pre></td></tr></table></figure>
+<p>mmap 要求内核创建一个新的虚拟存储器区域，最好是从地址 <code>start</code> 开始的一个区域，并将文件描述符 fd 指定的对象的一个连续的片（chunk）映射到这个新的区域，连续的对象片大小为 <code>length</code> 字节，从距文件开始偏移量为 <code>offset</code> 字节的地方开始，<code>start</code> 地址仅仅是一个暗示，通常设置为 NULL，如下图所示。</p>
+<p><img src="/images/linux/mmap3.png" alt="mmap 函数解释"></p>
+<p>参数 port 包含描述新映射的虚拟存储器区域的访问权限（在相应区域结构中的 <code>vm_port</code> 位）：</p>
+<ul>
+<li>PORT_EXEC：这个区域内的页面由可以被 CPU 执行的指令组成；</li>
+<li>PORT_READ：这个区域内的页面可读；</li>
+<li>PORT_WRITE：这个区域内的页面可写；</li>
+<li>PORT_NONE：这个区域内的页面不能被访问。</li>
+</ul>
+<p>参数 <code>flags</code> 指定映射对象的类型，映射选项和映射页是否可以共享（下面列出的只是其中一部分）</p>
+<ul>
+<li>MAP_ANON：表示被映射的对象就是一个匿名对象，而相应的虚拟页面是请求二进制零的；</li>
+<li>MAP_PRIVATE：表示被映射的对象是一个私有的、写时拷贝的对象；</li>
+<li>MAP_SHARED：表示是一个共享对象。</li>
+</ul>
+<p>示例如：<code>bufp = Mmap(-1, size, PORT_READ, MAP_PRIVATE|MAP_ANON, 0, 0);</code>，让内核创建一个新的包含 size 字节的只读、私有、请求二进制零的虚拟存储器区域。</p>
+<p>删除虚拟存储器区域，使用 <code>int munmap(void *start, size_t length);</code>，若成功返回0，若出错返回 -1.</p>
+<p>下面看一个示例：使用 mmap 实现一个功能：将一个任意大小的磁盘文件拷贝到 stdout，输入文件的名字必须作为一个命令行参数来传递。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#<span class="meta-keyword">include</span><span class="meta-string">"csapp.h"</span></span></div><div class="line"><span class="function"><span class="keyword">void</span> <span class="title">mmapcopy</span><span class="params">(<span class="keyword">int</span> fd,<span class="keyword">int</span> size)</span></span>&#123;</div><div class="line">    <span class="keyword">char</span> *bufp;</div><div class="line">    bufp =(<span class="keyword">char</span> *)mmap(<span class="literal">NULL</span>,size,PROT_READ,MAP_PRIVATE,fd,<span class="number">0</span>);<span class="comment">//在进程空间中创建一个新的虚拟存储器区域，将磁盘文件映射到这个区域中</span></div><div class="line">    write(<span class="number">1</span>,bufp,size);<span class="comment">//将信息写入标准输出</span></div><div class="line">    <span class="comment">//POSIX 定义了 STDIN_FILENO、STDOUT_FILENO 和 STDERR_FILENO 来代替 0、1、2。这三个符号常量的定义位于头文件 unistd.h。</span></div><div class="line">        munmap(bufp,size);<span class="comment">//删除虚拟存储器区域</span></div><div class="line">    <span class="keyword">return</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc,<span class="keyword">char</span> **argv)</span></span>&#123;</div><div class="line">    <span class="keyword">struct</span> stat _stat;  <span class="comment">//文末附上关于这个结构体详细内容的链接</span></div><div class="line">    <span class="keyword">int</span> fd;</div><div class="line">    <span class="keyword">if</span>(argc != <span class="number">2</span>)&#123;</div><div class="line">        <span class="built_in">printf</span>(<span class="string">"usage :%s &lt;filename&gt;"</span>,argv[<span class="number">0</span>]);</div><div class="line">        <span class="built_in">exit</span>(<span class="number">0</span>);</div><div class="line">    &#125;</div><div class="line">    fd = open(argv[<span class="number">1</span>],O_RDONLY,<span class="number">0</span>);</div><div class="line">    <span class="comment">//fd1 = open(argv[2],O_RDWR|O_APPEND,0);  以“读写+追加”模式打开一个额外的文件，将在函数里尝试向它追加信息。</span></div><div class="line"></div><div class="line">    fstat(fd,&amp;_stat);  <span class="comment">//fstat将文件标识符fd所标识的文件状态，复制到结构体stat中</span></div><div class="line">    mmapcopy(fd,_stat.st_size);</div><div class="line"></div><div class="line">    <span class="keyword">return</span> <span class="number">0</span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>参考文献：</p>
+<ul>
+<li>《深入理解操作系统 第三版》；</li>
+<li><a href="http://www.cnblogs.com/huxiao-tee/p/4660352.html" target="_blank" rel="external">认真分析mmap：是什么 为什么 怎么用</a>；</li>
+<li><a href="http://blog.csdn.net/qq973177663/article/details/51246267" target="_blank" rel="external">使用mmap实现一个文件输出函数</a>.</li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;在 Kafka 的存储层这部分代码时，看到了很多地方使用操作系统的共享内存机制，Kafka 中所有日志文件的索引都是使用了 &lt;code&gt;mmap&lt;/code&gt; 做内存映射，&lt;code&gt;mmap&lt;/code&gt; 这块刚好也是一个值得深入学习的知识点，于是就就深入地看了一下、做了
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="linux" scheme="http://matt33.com/tags/linux/"/>
+    
+  </entry>
   
   <entry>
     <title>Kafka 源码解析之 GroupCoordinator 详解（十）</title>
@@ -3434,98 +3517,6 @@
     <summary type="html">
     
       &lt;p&gt;这两周把&lt;a href=&quot;https://book.douban.com/subject/26929955/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;《腾讯传》&lt;/a&gt;看完了，这本书去年出版的时候就想去看，但是一拖就拖到了现在，直到上周出去玩，回来的
-    
-    </summary>
-    
-      <category term="书屋" scheme="http://matt33.com/categories/%E4%B9%A6%E5%B1%8B/"/>
-    
-    
-      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>欧洲简史</title>
-    <link href="http://matt33.com/2017/04/04/read/"/>
-    <id>http://matt33.com/2017/04/04/read/</id>
-    <published>2017-04-04T08:11:14.000Z</published>
-    <updated>2017-08-19T00:42:53.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>最近几周把这本<a href="https://book.douban.com/subject/5366248/" target="_blank" rel="external">你一定爱读的极简欧洲史</a>读完了，在阅读的过程中，感觉真的是很爽，不愧是豆瓣的8+分图书。读完本书，可以对欧洲的历史有一个大概的了解，即便是最后很多的细节记不清楚，但是整个历史过程还是会有一定的印象，能建立一个大概的时间线。读完本书，如果再有人问你<code>为什么现代科学、政治制度会诞生在西方，而不是一直领先的中国？</code>你应该也能说几个理由的。</p>
-<p>全本主要分为两个部分，第一部分整体介绍了一下欧洲的大概历史进程，第二部分选取了其中的六个比较重要的方面进行介绍。纵观欧洲整个历史，大题可分为三个时代：古典时期、中世纪和近代，如下图所示。古典时期主要是古希腊和古罗马时代，而中世纪又称黑暗的中世纪，直到公元十五世纪开始文艺复兴之后，欧洲才逐渐从中世纪中走出来，进入到近代。</p>
-<p><img src="http://upload-images.jianshu.io/upload_images/573840-8f214b350ec6cd08.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="欧洲历史年表"></p>
-<p><img src="http://upload-images.jianshu.io/upload_images/573840-07a2b5d47fe3f014.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="宗教与西方"></p>
-<p>从最开始看这本书，到这本书看完，大概花了三周时间，看书的时间依然在上下班的途中，都是利用一些零碎的时间去看的，到了现在书中能记住的东西已经不是很多，这里根据脑海中残留的大概印象对以上三个时代做一下总结：</p>
-<ul>
-<li>古典时期：那是个百花齐放的时代，科技、文化、政治都能达到了很大的高度，在西方人民的心中（特别是中世纪人民），那个时代简直可望而不可即，所以那个时期被称为古典时期。那个时代出现了苏格拉底、柏拉图、亚里士多德（古希腊三贤）等人，在天文上也提出了“地心说”的理论，古希腊在几何的贡献也是我们现代数学的基础，当年雅典也出现了很多的民主制度，后来的古罗马基本继承了古希腊的制度，进一步发扬了古希腊文化。在古罗马时代，出现了很多的宗教，可以说百家争鸣，后来的基督教在当时还是很小众的一个教派，直到后来古罗马帝国的君士坦丁堡大帝开始信奉基督教，导致了基督教开始走进古罗马的权力中心，开始影响欧洲历史之路。</li>
-<li>中世纪：中世纪之所以被称为<strong>黑暗中世纪</strong>，完全是因为在那个时代，人们没有宗教信仰自由，只能信奉基督教，也就是天主教，其他的教派（新教、伊斯兰教等）都被称为异教；也没有读书自由（暂且这样说吧），很多古罗马时代书都被教皇保留下来，但教皇是为了通过这些著作也印证基督教的真实正确；也没有民主等等。当年人们为了死后进入天堂也是煞费苦心，教皇发放救赎劵，教众们就会去买，也不管教皇拿着这些钱作何用途（事实上是为了十字军东征）。说起这个时代的开始，就离不开日耳曼民族，当然现在的日尔曼民族已经不是当年的日尔曼民族，现在欧洲大部分的人应该都是当年日尔曼民族的后代，那个时代的日尔曼民族又叫做<strong>日尔曼蛮族</strong>，它们类似于现在的非洲部落，虽说都是日尔曼蛮族，但是却有多方的势力，并没有形成一个统一的组织，但就是这样一批人，把当年不可一世的古罗马帝国灭掉了（确切说应该是西罗马帝国），西罗马帝国被灭掉当然也有其自身衰落的原因。日尔曼蛮族虽然灭掉了西罗马帝国，但他们只是来抢东西，并没有统治这片土地的意思，而且他们最后居然保留了基督教，甚至很多人都开始慢慢信奉基督教。当时的西方虽然被很多封主、国王统治，但基督教却是一个非常统一的组织。可以说在当时君权和教皇各是一个权力终端，它们相互制约、相互牵制、相互斗争，有时候甚至是相互利用。有句话叫做有压迫就由反抗，后来马丁路德建立起新教学说就是对现任教皇的一个反抗，新教从个人的自由出发，很快就吸引了很多的民众，新教和天主教只是对《圣经》的不同解读。</li>
-<li>近代：近代应该是从文艺复兴开始，文艺复兴实际上就是对古希腊罗马学术的发现和再发现，他们不希望一直接受一个被教会阉割的古典。在以前，教会虽然保留了很多古希腊罗马的学术，但是都是为了用来印证《圣经》、为教会而服务，但是现在，大家突然发现原来古希腊罗马的学术不是这样的，原来古典时期的学术、制度是那么发达，令当代人敬仰。不过随着文艺复兴的影响进一步加深，当代的思想得到很大的解放，一批如哥白尼、伽利略、牛顿等人的出现，让当时的人民觉得原来我们一点也不比古希腊罗马人笨、甚至还比他们更聪明，他们也发现原来古希腊罗马的学术并不一定全是正确的，于是各种科学开始迅速发展，为现代文明奠定基础。</li>
-</ul>
-<p>在本书的第二部分，重点从以下六个小的方面开始讲述欧洲历史的发展，这六个方面可以说是欧洲文明的重点组成，甚至可以说是现代欧洲文明的基石：</p>
-<ol>
-<li>争战一千年。从最开始的日尔曼蛮族入侵，欧洲在之后的一千年里，几乎是纷争不断，后来的穆斯林入侵、维京人入侵、十字军东征，不过这也激发了欧洲人爱冒险的血性，对后来的大航海时代也有一定的作用。</li>
-<li>民主意识，这样开始的。欧洲文明给人类带来的一个重大财富就是——民主，民主最开始是诞生在古希腊，后来随着中世纪的到来，欧洲人民并没有实质意义上的民主，但也因为欧洲在罗马帝国之后就再也没有出现过一个统一的帝国，这才幸运地阻止了欧洲陷入东亚帝王专制的世界里。</li>
-<li>有国王的民主，没国王的极权。这部分主要是指英国与欧洲大陆，英帝国有国王，但是因为新教（崇尚个人自由）和国会（对国王的选择起很大的作用）的缘故，使得英帝国率先走向君主立宪制，建立了民主的英帝国。反观欧洲大陆，有的地方却很极权，比如法国，最后导致了法国大革命，不过民主终究胜于极权。</li>
-<li>皇帝和教皇到底谁大？欧洲有一个很特殊的现象，那就是它有两个很强大的权力系统，一个是教会，一个是政府，这两个冤家相互争斗、相互利用，都是为了各自的利益。只要皇帝并没有建立一个统一的帝国，皇帝终究是摆脱了教会的束缚，而教会也会为了自己的利益利用手中的权力来约束皇帝的权利，反而给民主提供了很好的土壤。</li>
-<li>语言：从两种变几十种。欧洲的主要语言体系应该是两种：日尔曼语系和罗曼语系（拉丁语系）。</li>
-<li>平民百姓的生活面貌。在工业革命之前，一千多年，欧洲85%以上的人口就是从事农业相关，这也是西方人见面经常会问天气的原因，因为天气会影响到大部分人的生活。</li>
-</ol>
-<p>读完本书，确实会对欧洲大概的历史有一个认识，但毕竟是欧洲简史，如果想了解欧洲历史的细节，这本书是远远不够的，但这本书会给你打开一个欧洲文明史的大门，非常推荐。</p>
-<hr>
-<p>下面是在读书过程中对一些自认为比较重要的内容，做的一些笔记。</p>
-<blockquote>
-<p>第二次的大侵略来自穆斯林，时为7世纪到8世纪，距离日耳曼蛮族入侵仅仅两百年。伊斯兰教始祖穆罕默德原为阿拉伯商人，得到神的天启后创立该教。他这支借由神助发展出来的宗教，与犹太教和基督教有紧密联系；穆斯林也承认耶稣和耶稣之前的先知们确实是先知，但深信穆罕默德是世上最后一位先知，能指引大家走向唯一真神安拉的怀抱。伊斯兰教比起基督教来说简单许多。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 800-804</p>
-</blockquote>
-<p>Notes: 1) 伊斯兰教发源</p>
-<blockquote>
-<p>国王，也就是先前的日耳曼战士首领，他将土地分发给自己的子弟兵，而这些下属必须提供国王打仗所需的战力作为回报，一个国家就建基于这样的关系上。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1112-1113</p>
-</blockquote>
-<p>Notes: 1) 君主处于弱势的开始,君主对于土地、税收不再直接掌控,而这些权力尽数被封主拿去。</p>
-<blockquote>
-<p>由于立足点薄弱，封建制度的君主必须征询国内权势人士的建言。他们没有一支自己能够全权控制的军队，也没有常态的征税制度或行政部门，因此，在做决定之前，他们会邀集重要人士，听取这些人的意见并征得同意才能拍板定案。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1143-1145</p>
-</blockquote>
-<p>Notes: 1) 间接地限制了国王的权力,这也是西方没有形成封建专制的原因。</p>
-<blockquote>
-<p>英国国会让自己成了宪政体制的一个常设单位。整个过程没有流一滴血，史称“光荣革命”。—— 约翰•赫斯特, 你一定爱读的极简欧洲史， loc. 1265-1266</p>
-</blockquote>
-<p>Notes: 1) 欧洲大陆在走向专制的过程中,英国并没有步入后尘,宗教在这过程中起到了很大的作用,英国此时已是新教的天下,国王想通过天主教达到自己的目的反而适得其反。</p>
-<blockquote>
-<p>新教教义从一开始便是以保障个人自由为出发点，因为它干犯教皇和主教的权威，提升了个人的意识和地位。在英国，它与自由的关系更是密不可分，因为英国的敌人——法国和西班牙的专制君主都是天主教徒，而那些试图架空议会的英国国王不是信奉天主教就是对天主教手软之辈。保存国会与保存新教信仰合而为一，成了殊途同归的新教志业。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1281-1285</p>
-</blockquote>
-<p>Notes: 1) 在西方,自从罗马帝国之后,宗教与政治就变得密不可分,而天主教更侧重于上层人的利益,甚至是专制,新教则是从个人出发,更侧重于个人的自由,限制了君主的权力,比较符合国会的利益,因此,英国甚至把新教写进权力法案,以保护国会的权力。(当然国会最开始代表的并不是普通民众的利益)。</p>
-<blockquote>
-<p>查理大帝建立的帝国消失了，教皇也失去了保护他的强人。有一段时间教皇得过且过，哪个地方王侯支持他，他就把谁加冕为王。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1435-1436</p>
-</blockquote>
-<p>Notes: 1) 教皇也逐渐成了政治的一部分,教皇也只是为了寻找一个保护伞。</p>
-<blockquote>
-<p>双方（皇帝和教皇）都承认对方的存在有其必要，争的只是彼此的相对权力。这是西罗马帝国一个非常重要的特色，也是它和东罗马帝国的分野所在。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1495-1496</p>
-</blockquote>
-<p>Notes: 1) 东罗马帝国的教皇则完全由皇帝指定。</p>
-<blockquote>
-<p>拉丁语，跟罗马帝国的概念一样，已经气若游丝很久了。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1748-1749</p>
-</blockquote>
-<p>Notes: 1) 拉丁语跟罗马帝国一样,可以说是一直存在着,对后世影响深远。</p>
-<blockquote>
-<p>所有的人都老是为收成担心害怕。谈天气不是为了没话找话说，而是一群人在忧心自己的命运。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1810-1811</p>
-</blockquote>
-<p>Notes: 1) 西方见面聊天气原来是这个原因,有很多的历史背景,在工业革命之前西方基本上85%以上从事农业相关,所以大部分人都对天气非常重视。</p>
-<blockquote>
-<p>在欧洲，当国王的总是强敌环伺，而中国皇帝的君权无人能比，这是他们拥有的优势——或者说是陷阱。欧洲国家之间相互为敌，是它们向海外扩张的一股推动力量。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1949-1950</p>
-</blockquote>
-<p>Notes: 1) 中国皇帝权力过大,而西方的国王从未有如此之强权。</p>
-<blockquote>
-<p>欧洲的历史演进泰半从奠基的这一刻起便已注定。政府对人民毫无掌控能力，它们必须殚思竭虑，才可能争取到人民的服从。它们若想扩张势力，就得提供良好的政府——也就是维护治安作为回报，它们不能像亚洲和中东不计其数的帝国及王国那样，光靠收税机制和进贡就能运转。 数百年来，这些国王最大的威胁是他们最有权势的下属——土地贵族阶级。这些权臣最后终于俯首，但因为已在自己的领土上雄霸够久，早就为自己也为他们土地上的人民争取到私有财产的保障。“不是所有的东西都属于国王”，这是欧洲自由和繁荣的基石。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1956-1962</p>
-</blockquote>
-<p>Notes: 1) 这是西方与东方政府的主要区别,没有东方这种“普天之下,莫非王臣,普天之地,莫非王土”思想,政府对人民并没有绝对的控制力,人民有自己的私有财产,这也是公民限制政府权力的基础。</p>
-<blockquote>
-<p>在中国，权力是极其明确地集中在皇帝手里，以儒家为尊的精英文化对君权统治也支持有加。无论是个人修为或待人处世，中国人莫不以儒家思想为圭臬，它已深深扎根于整个社会和国家。统治者不管有没有合法性都得熟读四书五经，而你得通过儒家经典考试才能当上国家官员。 反观欧洲，权力不但分散，精英文化也是个大拼盘，与君权统治之间的系带并不牢固。中国人非常聪明，可是他们的聪明从来不会脱轨失控，纵有奇思异想，基本上都不曾造成纷扰。欧洲社会的开放则是源远流长。<br>近代欧洲在经济上爆发力十足，智识生活百家争鸣，皆是基于一个事实：不管是好是坏，从来没有一个单一强权掌控过它、形塑过它。它多元的历史遗产因此能被充分发掘、延伸；希腊的数学观念在科学革命时期得到实现，从而建立起科技创新的一个新基础。—— 约翰•赫斯特, 你一定爱读的极简欧洲史, loc. 1991-1997</p>
-</blockquote>
-<p>Notes: 1) 分析了欧洲与中国的一个巨大区别</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;最近几周把这本&lt;a href=&quot;https://book.douban.com/subject/5366248/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;你一定爱读的极简欧洲史&lt;/a&gt;读完了，在阅读的过程中，感觉真的是很爽，不愧是豆瓣的8+分图书。读
     
     </summary>
     
