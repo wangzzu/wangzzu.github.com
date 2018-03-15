@@ -1697,7 +1697,7 @@
     </entry>
     
     <entry>
-      <title><![CDATA[Kafka 源码分析之 topic 创建过程（三）]]></title>
+      <title><![CDATA[Kafka 源码解析之 topic 创建过程（三）]]></title>
       <url>http://matt33.com/2017/07/21/kafka-topic-create/</url>
       <content type="html"><![CDATA[<p>本文是 Kafka 源码解析的第三篇，主要讲述一个 topic 的创建过程，从 topic 是如何创建到 topic 真正创建成功的中间详细过程，文章主要内容可以分为以下几个部分：</p>
 <ol>
@@ -2292,7 +2292,7 @@
     </entry>
     
     <entry>
-      <title><![CDATA[Kafka 源码分析之 Producer Metadata 更新机制（二）]]></title>
+      <title><![CDATA[Kafka 源码解析之 Producer Metadata 更新机制（二）]]></title>
       <url>http://matt33.com/2017/07/08/kafka-producer-metadata/</url>
       <content type="html"><![CDATA[<p>在上一篇文章中，已经介绍了 Producer 的发送模型，Producer <code>dosend()</code> 方法中的第一步，就是获取相关的 topic 的 metadata，但在上篇中并没有深入展开，因为这部分的内容比较多，所以本文单独一篇文章进行介绍，本文主要来讲述以下三个问题：</p>
 <ol>
@@ -2463,7 +2463,7 @@
     </entry>
     
     <entry>
-      <title><![CDATA[Kafka 源码分析之 Producer 发送模型（一）]]></title>
+      <title><![CDATA[Kafka 源码解析之 Producer 发送模型（一）]]></title>
       <url>http://matt33.com/2017/06/25/kafka-producer-send-module/</url>
       <content type="html"><![CDATA[<p>早就开始计划写 Kafka 源码分析的文章，但却一直迟迟没有动手，直到看到一位同事的博客 <a href="http://blog.bcmeng.com/" target="_blank" rel="external">编程小梦</a>，彻底受到了打击，这位同事是去年本科毕业，年龄算起来应该比我小两岁，但是非常厉害，在刚工作半年的时候就成为了 Apache Kylin 的 commiter，看到身边同事这么优秀，而且还这么努力 （<a href="http://blog.bcmeng.com/post/booklist.html" target="_blank" rel="external">编程小梦-我的书单</a>），自己实在没有理由不努力了，因此，在 github 上给自己提了一个 issue <a href="https://github.com/wangzzu/awesome/issues/7" target="_blank" rel="external">Kafka 源码分析系列</a>，希望自己能够在未来半年里，至少每两周输出一篇 Kafka 源码分析的文章，本文是这个系列的第一篇 —— Producer 的发送模型（以 <strong>Kafka 0.10.2</strong> 为例）。</p>
 <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>Kafka，作为目前在大数据领域应用最为广泛的消息队列，其内部实现和设计有很多值得深入研究和分析的地方。</p>
