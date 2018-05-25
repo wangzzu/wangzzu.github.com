@@ -1667,7 +1667,7 @@
     </entry>
     
     <entry>
-      <title><![CDATA[Kafka 源码分析之 Producer NIO 网络模型（四）]]></title>
+      <title><![CDATA[Kafka 源码解析之 Producer NIO 网络模型（四）]]></title>
       <url>http://matt33.com/2017/08/22/producer-nio/</url>
       <content type="html"><![CDATA[<p>本文是 Kafka 源码解析的第四篇，在写这篇文章之前，专门看了一下 Java NIO 相关的内容，只有理解了 Java NIO 模型才能更好地理解 NIO 在 Kafka 中是如何应用的以及 Producer 如何利用 Java NIO 构建其网络模型（不了解的，可以先看一下上一篇文章：<a href="http://matt33.com/2017/08/12/java-nio/">谈一谈 Java IO 模型</a>），同时，本文也是对 Producer 整个流程的一个总结，主要讲述以下两个问题：</p>
 <ol>
