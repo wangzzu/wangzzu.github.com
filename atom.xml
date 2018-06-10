@@ -2449,7 +2449,7 @@
     <link href="http://matt33.com/2017/07/21/kafka-topic-create/"/>
     <id>http://matt33.com/2017/07/21/kafka-topic-create/</id>
     <published>2017-07-21T15:49:03.000Z</published>
-    <updated>2018-03-15T06:46:34.000Z</updated>
+    <updated>2018-06-10T15:29:20.000Z</updated>
     
     <content type="html"><![CDATA[<p>本文是 Kafka 源码解析的第三篇，主要讲述一个 topic 的创建过程，从 topic 是如何创建到 topic 真正创建成功的中间详细过程，文章主要内容可以分为以下几个部分：</p>
 <ol>
@@ -2585,7 +2585,7 @@
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 当 partition state machine 监控到有新 topic 或 partition 时,这个方法将会被调用</span></div><div class="line"> <span class="comment">/**</span></div><div class="line">   * 1. 注册 partition change listener;</div><div class="line">   * 2. 触发 the new partition callback,也即是 onNewPartitionCreation()</div><div class="line">   * 3. 发送 metadata 请求给所有的 Broker</div><div class="line">   * @param topics</div><div class="line">   * @param newPartitions</div><div class="line">   */</div><div class="line"> <span class="function"><span class="keyword">def</span> <span class="title">onNewTopicCreation</span></span>(topics: <span class="type">Set</span>[<span class="type">String</span>], newPartitions: <span class="type">Set</span>[<span class="type">TopicAndPartition</span>]) &#123;</div><div class="line">   info(<span class="string">"New topic creation callback for %s"</span>.format(newPartitions.mkString(<span class="string">","</span>)))</div><div class="line">   <span class="comment">// subscribe to partition changes</span></div><div class="line">   topics.foreach(topic =&gt; partitionStateMachine.registerPartitionChangeListener(topic))</div><div class="line">   onNewPartitionCreation(newPartitions)</div><div class="line"> &#125;</div><div class="line"></div><div class="line"> <span class="comment">//note: topic 变化时,这个方法将会被调用</span></div><div class="line"> <span class="comment">//note: 1. 将新创建的 partition 置为 NewPartition 状态; 2.从 NewPartition 改为 OnlinePartition 状态</span></div><div class="line"> <span class="comment">//note: 1. 将新创建的 Replica 置为 NewReplica 状态; 2.从 NewReplica 改为 OnlineReplica 状态</span></div><div class="line"> <span class="function"><span class="keyword">def</span> <span class="title">onNewPartitionCreation</span></span>(newPartitions: <span class="type">Set</span>[<span class="type">TopicAndPartition</span>]) &#123;</div><div class="line">   info(<span class="string">"New partition creation callback for %s"</span>.format(newPartitions.mkString(<span class="string">","</span>)))</div><div class="line">   partitionStateMachine.handleStateChanges(newPartitions, <span class="type">NewPartition</span>)</div><div class="line">   replicaStateMachine.handleStateChanges(controllerContext.replicasForPartition(newPartitions), <span class="type">NewReplica</span>)</div><div class="line">   partitionStateMachine.handleStateChanges(newPartitions, <span class="type">OnlinePartition</span>, offlinePartitionSelector)</div><div class="line">   replicaStateMachine.handleStateChanges(controllerContext.replicasForPartition(newPartitions), <span class="type">OnlineReplica</span>)</div><div class="line"> &#125;</div></pre></td></tr></table></figure>
 <p>在详细介绍这四个方法的调用之前，先简单详述一下 Partition 和 Replica 状态机的变化。</p>
 <h3 id="Partition-状态机"><a href="#Partition-状态机" class="headerlink" title="Partition 状态机"></a>Partition 状态机</h3><p>关于 Partition 状态的变化可以参考 Kafka 中的这个方法 <a href="https://github.com/apache/kafka/blob/0.10.2/core/src/main/scala/kafka/controller/PartitionStateMachine.scala" target="_blank" rel="external">PartitionStateMachine</a>，状态机的具体转换情况如下图所示</p>
-<p><img src="/images/kafka/partition_stat.png" alt="Partition 状态机"></p>
+<p><img src="/images/kafka/partition_state.png" alt="Partition 状态机"></p>
 <p>一个 Partition 对象有四种状态：</p>
 <ol>
 <li><code>NonExistentPartition</code>：这个 partition 不存在；</li>
@@ -2595,7 +2595,7 @@
 </ol>
 <p>partition 只有在 <code>OnlinePartition</code> 这个状态时，才是可用状态。</p>
 <h3 id="Replica-状态机"><a href="#Replica-状态机" class="headerlink" title="Replica 状态机"></a>Replica 状态机</h3><p>关于 Replica 状态的变化可以参考 Kafka 中的这个方法 <a href="https://github.com/apache/kafka/blob/0.10.2/core/src/main/scala/kafka/controller/ReplicaStateMachine.scala" target="_blank" rel="external">ReplicaStateMachine</a>，，状态机的具体转换情况如下图所示</p>
-<p><img src="/images/kafka/replica_stat.png" alt="Replica 状态机"></p>
+<p><img src="/images/kafka/replica_state.png" alt="Replica 状态机"></p>
 <p>Replica 对象有七种状态，中文解释的比较难以理解，直接上原文对这几种状态的解释。</p>
 <ol>
 <li><code>NewReplica</code>：The controller can create new replicas during partition reassignment. In this state, a replica can only get become follower state change request.</li>
