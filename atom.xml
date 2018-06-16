@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-06-16T03:16:14.000Z</updated>
+  <updated>2018-06-16T16:04:25.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,104 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Kafka 源码解析之 Partition 副本迁移实现（十八）</title>
+    <link href="http://matt33.com/2018/06/16/partition-reassignment/"/>
+    <id>http://matt33.com/2018/06/16/partition-reassignment/</id>
+    <published>2018-06-16T15:40:00.000Z</published>
+    <updated>2018-06-16T16:04:25.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>前面两篇关于 Controller 的内容分别讲述了 Controller 选举和启动，以及副本状态机和分区状态机的内容，从本文开始会详细讲述 Controller 的一些其他功能，主要是 Controller 的对不同类型监听器的处理，这部分预计分三篇左右的文章讲述。Controller 在初始化时，会利用 ZK 的 watch 机制注册很多不同类型的监听器，当监听的事件被触发时，Controller 就会触发相应的操作。</p>
+<p>Controller 在初始化时，会注册多种类型的监听器，主要有以下6种：</p>
+<ol>
+<li>监听 <code>/admin/reassign_partitions</code> 节点，用于分区副本迁移的监听；</li>
+<li>监听 <code>/isr_change_notification</code> 节点，用于 Partition Isr 变动的监听，；</li>
+<li>监听 <code>/admin/preferred_replica_election</code> 节点，用于需要进行 Partition 最优 leader 选举的监听；</li>
+<li>监听 <code>/brokers/topics</code> 节点，用于 Topic 新建的监听；</li>
+<li>监听 <code>/admin/delete_topics</code> 节点，用于 Topic 删除的监听；</li>
+<li>监听 <code>/brokers/ids</code> 节点，用于 Broker 上下线的监听。</li>
+</ol>
+<p>本文主要讲解第一部分，也就是 Controller 对 Partition 副本迁移的处理，后续会单独一篇文章讲述 Topic 的新建、扩容和删除，再单独一篇文章讲述 Broker 的上下线，另外两部分将会在对 LeaderAndIsr 请求处理的文章中讲述。</p>
+<h2 id="Partition-副本迁移整体流程"><a href="#Partition-副本迁移整体流程" class="headerlink" title="Partition 副本迁移整体流程"></a>Partition 副本迁移整体流程</h2><p>Partition 的副本迁移实际上就是将分区的副本重新分配到不同的代理节点上，如果 zk 中新副本的集合与 Partition 原来的副本集合相同，那么这个副本就不需要重新分配了。</p>
+<p>Partition 的副本迁移是通过监听 zk 的 <code>/admin/reassign_partitions</code> 节点触发的，Kafka 也向用户提供相应的脚本工具进行副本迁移，副本迁移的脚本使用方法如下所示：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">./bin/kafka-reassign-partitions.sh --zookeeper XXX --reassignment-json-file XXX.json --execute</div></pre></td></tr></table></figure>
+<p>其中 XXX.json 为要进行 Partition 副本迁移的 json 文件，json 文件的格式如下所示：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    <span class="attr">"version"</span>:<span class="number">1</span>,</div><div class="line">    <span class="attr">"partitions"</span>:[</div><div class="line">        &#123;</div><div class="line">            <span class="attr">"topic"</span>:<span class="string">"__consumer_offsets"</span>,</div><div class="line">            <span class="attr">"partition"</span>:<span class="number">19</span>,</div><div class="line">            <span class="attr">"replicas"</span>:[</div><div class="line">                <span class="number">3</span>,</div><div class="line">                <span class="number">9</span>,</div><div class="line">                <span class="number">2</span></div><div class="line">            ]</div><div class="line">        &#125;,</div><div class="line">        &#123;</div><div class="line">            <span class="attr">"topic"</span>:<span class="string">"__consumer_offsets"</span>,</div><div class="line">            <span class="attr">"partition"</span>:<span class="number">26</span>,</div><div class="line">            <span class="attr">"replicas"</span>:[</div><div class="line">                <span class="number">2</span>,</div><div class="line">                <span class="number">6</span>,</div><div class="line">                <span class="number">4</span></div><div class="line">            ]</div><div class="line">        &#125;,</div><div class="line">        &#123;</div><div class="line">            <span class="attr">"topic"</span>:<span class="string">"__consumer_offsets"</span>,</div><div class="line">            <span class="attr">"partition"</span>:<span class="number">27</span>,</div><div class="line">            <span class="attr">"replicas"</span>:[</div><div class="line">                <span class="number">5</span>,</div><div class="line">                <span class="number">3</span>,</div><div class="line">                <span class="number">8</span></div><div class="line">            ]</div><div class="line">        &#125;</div><div class="line">    ]</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这个 json 文件的意思是将 Topic <code>__consumer_offsets</code> Partition 19 的副本迁移到 {3, 2, 9} 上，Partition 26 的副本迁移到 {6, 2, 4} 上，Partition 27 的副本迁移到 {5, 3, 8} 上。</p>
+<p>在调用脚本向 zk 提交 Partition 的迁移计划时，迁移计划更新到 zk 前需要进行一步判断，如果该节点（写入迁移计划的节点）已经存在，即副本迁移还在进行，那么本次副本迁移计划是无法提交的，实现的逻辑如下所示：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">executeAssignment</span></span>(zkUtils: <span class="type">ZkUtils</span>, reassignmentJsonString: <span class="type">String</span>, throttle: <span class="type">Long</span> = <span class="number">-1</span>) &#123;</div><div class="line">  <span class="keyword">val</span> partitionsToBeReassigned = parseAndValidate(zkUtils, reassignmentJsonString)</div><div class="line">  <span class="keyword">val</span> reassignPartitionsCommand = <span class="keyword">new</span> <span class="type">ReassignPartitionsCommand</span>(zkUtils, partitionsToBeReassigned.toMap)</div><div class="line"></div><div class="line">  <span class="comment">// If there is an existing rebalance running, attempt to change its throttle</span></div><div class="line">  <span class="comment">//note: 如果副本迁移正在进行,那么这次的副本迁移计划是无法提交的</span></div><div class="line">  <span class="keyword">if</span> (zkUtils.pathExists(<span class="type">ZkUtils</span>.<span class="type">ReassignPartitionsPath</span>)) &#123;</div><div class="line">    println(<span class="string">"There is an existing assignment running."</span>)</div><div class="line">    reassignPartitionsCommand.maybeLimit(throttle)</div><div class="line">  &#125;</div><div class="line">  <span class="keyword">else</span> &#123;</div><div class="line">    printCurrentAssignment(zkUtils, partitionsToBeReassigned)</div><div class="line">    <span class="keyword">if</span> (throttle &gt;= <span class="number">0</span>)</div><div class="line">      println(<span class="type">String</span>.format(<span class="string">"Warning: You must run Verify periodically, until the reassignment completes, to ensure the throttle is removed. You can also alter the throttle by rerunning the Execute command passing a new value."</span>))</div><div class="line">    <span class="comment">//note: 将迁移计划更新到 zk 上</span></div><div class="line">    <span class="keyword">if</span> (reassignPartitionsCommand.reassignPartitions(throttle)) &#123;</div><div class="line">      println(<span class="string">"Successfully started reassignment of partitions."</span>)</div><div class="line">    &#125; <span class="keyword">else</span></div><div class="line">      println(<span class="string">"Failed to reassign partitions %s"</span>.format(partitionsToBeReassigned))</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>在迁移计划提交到 zk 之后，Controller 的 PartitionsReassignedListener 就会被触发，Controller 开始 Partition 的副本迁移，触发之后 Controller 的处理流程大体如下图所示：</p>
+<p><img src="/images/kafka/partition_reassignment.png" alt="Partition 迁移过程"></p>
+<h2 id="PartitionsReassignedListener-副本迁移处理"><a href="#PartitionsReassignedListener-副本迁移处理" class="headerlink" title="PartitionsReassignedListener 副本迁移处理"></a>PartitionsReassignedListener 副本迁移处理</h2><p>在 zk 的 <code>/admin/reassign_partitions</code> 节点数据有变化时，就会触发 PartitionsReassignedListener 的 <code>doHandleDataChange()</code> 方法，实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 开始进行 partition reassignment 除非这三种情况发生:</span></div><div class="line"><span class="comment">//note: 1. 这个 partition 的 reassignment 之前已经存在, 即正在迁移中;</span></div><div class="line"><span class="comment">//note: 2. new replica 与已经存在的 replicas 相同;</span></div><div class="line"><span class="comment">//note: 3. Partition 所有新分配 replica 都已经 dead;</span></div><div class="line"><span class="comment">//note: 这种情况发生时,会输出一条日志,并从 zk 移除该 Partition 的迁移计划。</span></div><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">PartitionsReassignedListener</span>(<span class="params">protected val controller: <span class="type">KafkaController</span></span>) <span class="keyword">extends</span> <span class="title">ControllerZkDataListener</span> </span>&#123;</div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> controllerContext = controller.controllerContext</div><div class="line"></div><div class="line">  <span class="keyword">protected</span> <span class="function"><span class="keyword">def</span> <span class="title">logName</span> </span>= <span class="string">"PartitionsReassignedListener"</span></div><div class="line"></div><div class="line">  <span class="comment">/**</span></div><div class="line">   * Invoked when some partitions are reassigned by the admin command</div><div class="line">   *</div><div class="line">   * @throws Exception On any error.</div><div class="line">   */</div><div class="line">  <span class="comment">//note: 当一些分区需要进行迁移时</span></div><div class="line">  <span class="meta">@throws</span>[<span class="type">Exception</span>]</div><div class="line">  <span class="function"><span class="keyword">def</span> <span class="title">doHandleDataChange</span></span>(dataPath: <span class="type">String</span>, data: <span class="type">AnyRef</span>) &#123;</div><div class="line">    debug(<span class="string">"Partitions reassigned listener fired for path %s. Record partitions to be reassigned %s"</span></div><div class="line">      .format(dataPath, data))</div><div class="line">    <span class="keyword">val</span> partitionsReassignmentData = <span class="type">ZkUtils</span>.parsePartitionReassignmentData(data.toString)</div><div class="line">    <span class="keyword">val</span> partitionsToBeReassigned = inLock(controllerContext.controllerLock) &#123; <span class="comment">//note: 需要迁移的新副本</span></div><div class="line">      <span class="comment">//note: 过滤掉正在迁移的副本,如果 Partition 正在迁移,这一波迁移完之前不允许再次迁移</span></div><div class="line">      partitionsReassignmentData.filterNot(p =&gt; controllerContext.partitionsBeingReassigned.contains(p._1))</div><div class="line">    &#125;</div><div class="line">    partitionsToBeReassigned.foreach &#123; partitionToBeReassigned =&gt;</div><div class="line">      inLock(controllerContext.controllerLock) &#123;</div><div class="line">        <span class="keyword">if</span>(controller.deleteTopicManager.isTopicQueuedUpForDeletion(partitionToBeReassigned._1.topic)) &#123;</div><div class="line">          <span class="comment">//note: 如果这个 topic 已经设置了删除，那么就不会进行迁移了（从需要副本迁移的集合中移除）</span></div><div class="line">          error(<span class="string">"Skipping reassignment of partition %s for topic %s since it is currently being deleted"</span></div><div class="line">            .format(partitionToBeReassigned._1, partitionToBeReassigned._1.topic))</div><div class="line">          controller.removePartitionFromReassignedPartitions(partitionToBeReassigned._1)</div><div class="line">        &#125; <span class="keyword">else</span> &#123; <span class="comment">//note: 添加到需要迁移的副本集合中</span></div><div class="line">          <span class="keyword">val</span> context = <span class="keyword">new</span> <span class="type">ReassignedPartitionsContext</span>(partitionToBeReassigned._2)</div><div class="line">          controller.initiateReassignReplicasForTopicPartition(partitionToBeReassigned._1, context)</div><div class="line">        &#125;</div><div class="line">      &#125;</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  <span class="function"><span class="keyword">def</span> <span class="title">doHandleDataDeleted</span></span>(dataPath: <span class="type">String</span>) &#123;&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>如果 Partition 出现下面的情况，将不会进行副本迁移，直接将 Partition 的迁移计划从 ZK 移除：</p>
+<ol>
+<li>这个 Partition 的 reassignment 之前已经存在, 即正在迁移中;</li>
+<li>这个 Partition 新分配的 replica 与之前的 replicas 相同;</li>
+<li>这个 Partition 所有新分配 replica 都已经 dead;</li>
+<li>这个 Partition 已经被设置了删除标志。</li>
+</ol>
+<p>对于可以进行副本迁移的 Partition 集合，这里将会调用 Kafka Controller 的 <code>initiateReassignReplicasForTopicPartition()</code> 方法对每个 Partition 进行处理。</p>
+<h2 id="副本迁移初始化"><a href="#副本迁移初始化" class="headerlink" title="副本迁移初始化"></a>副本迁移初始化</h2><p>进行了前面的判断后，这个 Partition 满足了可以迁移的条件，Controller 会首先初始化副本迁移的流程，实现如下所示：</p>
+<blockquote>
+<p>如果 Partition 新分配的 replica 与之前的 replicas 相同，那么不会进行副本迁移，这部分的判断实际上是在这里实现的，前面只是为了更好地讲述。</p>
+</blockquote>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 初始化 Topic-Partition 的副本迁移</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">initiateReassignReplicasForTopicPartition</span></span>(topicAndPartition: <span class="type">TopicAndPartition</span>,</div><div class="line">                                      reassignedPartitionContext: <span class="type">ReassignedPartitionsContext</span>) &#123;</div><div class="line">  <span class="comment">//note: 要迁移的 topic-partition，及新的副本</span></div><div class="line">  <span class="keyword">val</span> newReplicas = reassignedPartitionContext.newReplicas</div><div class="line">  <span class="keyword">val</span> topic = topicAndPartition.topic</div><div class="line">  <span class="keyword">val</span> partition = topicAndPartition.partition</div><div class="line">  <span class="keyword">try</span> &#123;</div><div class="line">    <span class="keyword">val</span> assignedReplicasOpt = controllerContext.partitionReplicaAssignment.get(topicAndPartition) <span class="comment">//note: partition 的 AR</span></div><div class="line">    assignedReplicasOpt <span class="keyword">match</span> &#123;</div><div class="line">      <span class="keyword">case</span> <span class="type">Some</span>(assignedReplicas) =&gt;</div><div class="line">        <span class="keyword">if</span> (assignedReplicas == newReplicas) &#123; <span class="comment">//note: 不需要迁移</span></div><div class="line">          <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">KafkaException</span>(<span class="string">"Partition %s to be reassigned is already assigned to replicas"</span>.format(topicAndPartition) +</div><div class="line">            <span class="string">" %s. Ignoring request for partition reassignment"</span>.format(newReplicas.mkString(<span class="string">","</span>)))</div><div class="line">        &#125; <span class="keyword">else</span> &#123;</div><div class="line">          info(<span class="string">"Handling reassignment of partition %s to new replicas %s"</span>.format(topicAndPartition, newReplicas.mkString(<span class="string">","</span>)))</div><div class="line">          <span class="comment">// first register ISR change listener</span></div><div class="line">          <span class="comment">//note: 首先注册 ISR 监听的变化</span></div><div class="line">          watchIsrChangesForReassignedPartition(topic, partition, reassignedPartitionContext)</div><div class="line">          <span class="comment">//note: 正在迁移 Partition 添加到缓存中</span></div><div class="line">          controllerContext.partitionsBeingReassigned.put(topicAndPartition, reassignedPartitionContext)</div><div class="line">          <span class="comment">// mark topic ineligible for deletion for the partitions being reassigned</span></div><div class="line">          <span class="comment">//note: 设置正在迁移的副本为不能删除</span></div><div class="line">          deleteTopicManager.markTopicIneligibleForDeletion(<span class="type">Set</span>(topic))</div><div class="line">          <span class="comment">//note: 进行副本迁移</span></div><div class="line">          onPartitionReassignment(topicAndPartition, reassignedPartitionContext)</div><div class="line">        &#125;</div><div class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">KafkaException</span>(<span class="string">"Attempt to reassign partition %s that doesn't exist"</span></div><div class="line">        .format(topicAndPartition))</div><div class="line">    &#125;</div><div class="line">  &#125; <span class="keyword">catch</span> &#123;</div><div class="line">    <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">"Error completing reassignment of partition %s"</span>.format(topicAndPartition), e)</div><div class="line">    <span class="comment">// remove the partition from the admin path to unblock the admin client</span></div><div class="line">    removePartitionFromReassignedPartitions(topicAndPartition)</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>对于副本迁移流程初始化如下：</p>
+<ol>
+<li>通过 <code>watchIsrChangesForReassignedPartition()</code> 方法监控这个 Partition 的 LeaderAndIsr 变化，如果有新的副本数据同步完成，那么 leader 会将其加到 isr 中更新到 zk 中，这时候 Controller 是可以接收到相关的信息通知的；</li>
+<li>将正在迁移的 Partition 添加到 partitionsBeingReassigned 中，它会记录当前正在迁移的 Partition 列表；</li>
+<li>将要迁移的 Topic 设置为非法删除删除状态，在这个状态的 Topic 是无法进行删除的；</li>
+<li>调用 <code>onPartitionReassignment()</code>，进行副本迁移。</li>
+</ol>
+<p>在第一步中，会向这个 Partition 注册一个额外的监听器，监听其 LeaderAndIsr 信息变化，如下所示：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: ISR 变动的监听器（这个不是由 leader 主动触发的，而是 controller 自己触发的，主要用于 partition 迁移时，isr 变动的监听处理）</span></div><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">ReassignedPartitionsIsrChangeListener</span>(<span class="params">protected val controller: <span class="type">KafkaController</span>, topic: <span class="type">String</span>, partition: <span class="type">Int</span>,</span></span></div><div class="line">                                            reassignedReplicas: <span class="type">Set</span>[<span class="type">Int</span>]) <span class="keyword">extends</span> <span class="title">ControllerZkDataListener</span> &#123;</div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> zkUtils = controller.controllerContext.zkUtils</div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> controllerContext = controller.controllerContext</div><div class="line"></div><div class="line">  <span class="keyword">protected</span> <span class="function"><span class="keyword">def</span> <span class="title">logName</span> </span>= <span class="string">"ReassignedPartitionsIsrChangeListener"</span></div><div class="line"></div><div class="line">  <span class="comment">/**</span></div><div class="line">   * Invoked when some partitions need to move leader to preferred replica</div><div class="line">   */</div><div class="line">  <span class="function"><span class="keyword">def</span> <span class="title">doHandleDataChange</span></span>(dataPath: <span class="type">String</span>, data: <span class="type">AnyRef</span>) &#123;</div><div class="line">    inLock(controllerContext.controllerLock) &#123;</div><div class="line">      debug(<span class="string">"Reassigned partitions isr change listener fired for path %s with children %s"</span>.format(dataPath, data))</div><div class="line">      <span class="keyword">val</span> topicAndPartition = <span class="type">TopicAndPartition</span>(topic, partition)</div><div class="line">      <span class="keyword">try</span> &#123;</div><div class="line">        <span class="comment">// check if this partition is still being reassigned or not</span></div><div class="line">        <span class="comment">//note: 检查这个副本是不是还在迁移中（这个方法只用于副本迁移中）</span></div><div class="line">        controllerContext.partitionsBeingReassigned.get(topicAndPartition) <span class="keyword">match</span> &#123;</div><div class="line">          <span class="keyword">case</span> <span class="type">Some</span>(reassignedPartitionContext) =&gt;</div><div class="line">            <span class="comment">// need to re-read leader and isr from zookeeper since the zkclient callback doesn't return the Stat object</span></div><div class="line">            <span class="comment">//note: 从 zk 获取最新的 leader 和 isr 信息</span></div><div class="line">            <span class="keyword">val</span> newLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topic, partition)</div><div class="line">            newLeaderAndIsrOpt <span class="keyword">match</span> &#123;</div><div class="line">              <span class="keyword">case</span> <span class="type">Some</span>(leaderAndIsr) =&gt; <span class="comment">// check if new replicas have joined ISR</span></div><div class="line">                <span class="keyword">val</span> caughtUpReplicas = reassignedReplicas &amp; leaderAndIsr.isr.toSet</div><div class="line">                <span class="keyword">if</span>(caughtUpReplicas == reassignedReplicas) &#123; <span class="comment">//note: 新分配的副本已经全部在 isr 中了</span></div><div class="line">                  <span class="comment">// resume the partition reassignment process</span></div><div class="line">                  info(<span class="string">"%d/%d replicas have caught up with the leader for partition %s being reassigned."</span></div><div class="line">                    .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +</div><div class="line">                    <span class="string">"Resuming partition reassignment"</span>)</div><div class="line">                  <span class="comment">//note: 再次触发 onPartitionReassignment 方法,副本已经迁移完成</span></div><div class="line">                  controller.onPartitionReassignment(topicAndPartition, reassignedPartitionContext)</div><div class="line">                &#125;</div><div class="line">                <span class="keyword">else</span> &#123;  <span class="comment">//note: 否则不进行任何处理</span></div><div class="line">                  info(<span class="string">"%d/%d replicas have caught up with the leader for partition %s being reassigned."</span></div><div class="line">                    .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +</div><div class="line">                    <span class="string">"Replica(s) %s still need to catch up"</span>.format((reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(<span class="string">","</span>)))</div><div class="line">                &#125;</div><div class="line">              <span class="keyword">case</span> <span class="type">None</span> =&gt; error(<span class="string">"Error handling reassignment of partition %s to replicas %s as it was never created"</span></div><div class="line">                .format(topicAndPartition, reassignedReplicas.mkString(<span class="string">","</span>)))</div><div class="line">            &#125;</div><div class="line">          <span class="keyword">case</span> <span class="type">None</span> =&gt;</div><div class="line">        &#125;</div><div class="line">      &#125; <span class="keyword">catch</span> &#123;</div><div class="line">        <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">"Error while handling partition reassignment"</span>, e)</div><div class="line">      &#125;</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  <span class="function"><span class="keyword">def</span> <span class="title">doHandleDataDeleted</span></span>(dataPath: <span class="type">String</span>) &#123;&#125;</div><div class="line"></div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>如果该 Partition 的 LeaderAndIsr 信息有变动，那么就会触发这个 listener 的 <code>doHandleDataChange()</code> 方法：</p>
+<ol>
+<li>首先检查这个 Partition 是否在还在迁移中，不在的话直接结束流程，因为这个监听器本来就是为了 Partition 副本迁移而服务的；</li>
+<li>从 zk 获取最新的 leader 和 isr 信息，如果新分配的副本全部都在 isr 中，那么就再次触发 controller 的 <code>onPartitionReassignment()</code> 方法，再次调用时实际上已经证明了这个 Partition 的副本迁移已经完成，否则的话就会不进行任何处理，等待新分配的所有副本迁移完成。</li>
+</ol>
+<h2 id="副本迁移"><a href="#副本迁移" class="headerlink" title="副本迁移"></a>副本迁移</h2><p>Partition 副本迁移真正实际处理是在 Controller 的 <code>onPartitionReassignment()</code> 方法完成的，在看这个方法之前，先介绍几个基本的概念（假设一个 Partition 原来的 replica 是 {1、2、3}，新分配的副本列表是：{2、3、4}）：</p>
+<ul>
+<li>RAR = Reassigned replicas，即新分配的副本列表，也就是 {2、3、4}；</li>
+<li>OAR = Original list of replicas for partition，即这个 Partition 原来的副本列表，也就是 {1、2、3}；</li>
+<li>AR = current assigned replicas，该 Partition 当前的副本列表，这个会随着阶段的不同而变化；</li>
+<li>RAR-OAR：需要创建、数据同步的新副本，也就是 {4}；</li>
+<li>OAR-RAR：不需要创建、数据同步的副本，也就是{2、3}</li>
+</ul>
+<p>这个方法的实现如下所示：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 这个回调方法被 reassigned partitions listener 触发,当需要进行分区副本迁移时,会在【/admin/reassign_partitions】下创建一个节点来触发操作</span></div><div class="line"><span class="comment">//note: RAR: 重新分配的副本, OAR: 这个分区原来的副本列表, AR: 当前的分配的副本</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">onPartitionReassignment</span></span>(topicAndPartition: <span class="type">TopicAndPartition</span>, reassignedPartitionContext: <span class="type">ReassignedPartitionsContext</span>) &#123;</div><div class="line">  <span class="keyword">val</span> reassignedReplicas = reassignedPartitionContext.newReplicas</div><div class="line">  <span class="keyword">if</span> (!areReplicasInIsr(topicAndPartition.topic, topicAndPartition.partition, reassignedReplicas)) &#123;</div><div class="line">    <span class="comment">//note: 新分配的并没有权限在 isr 中</span></div><div class="line">    info(<span class="string">"New replicas %s for partition %s being "</span>.format(reassignedReplicas.mkString(<span class="string">","</span>), topicAndPartition) +</div><div class="line">      <span class="string">"reassigned not yet caught up with the leader"</span>)</div><div class="line">    <span class="comment">//note: RAR-OAR</span></div><div class="line">    <span class="keyword">val</span> newReplicasNotInOldReplicaList = reassignedReplicas.toSet -- controllerContext.partitionReplicaAssignment(topicAndPartition).toSet</div><div class="line">    <span class="comment">//note: RAR+OAR</span></div><div class="line">    <span class="keyword">val</span> newAndOldReplicas = (reassignedPartitionContext.newReplicas ++ controllerContext.partitionReplicaAssignment(topicAndPartition)).toSet</div><div class="line">    <span class="comment">//1. Update AR in ZK with OAR + RAR.</span></div><div class="line">    updateAssignedReplicasForPartition(topicAndPartition, newAndOldReplicas.toSeq)</div><div class="line">    <span class="comment">//2. Send LeaderAndIsr request to every replica in OAR + RAR (with AR as OAR + RAR).</span></div><div class="line">    updateLeaderEpochAndSendRequest(topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition),</div><div class="line">      newAndOldReplicas.toSeq)</div><div class="line">    <span class="comment">//3. replicas in RAR - OAR -&gt; NewReplica</span></div><div class="line">    <span class="comment">//note: 新分配的副本状态更新为 NewReplica（在第二步中发送 LeaderAndIsr 请求时,新的副本会开始创建并且同步数据）</span></div><div class="line">    startNewReplicasForReassignedPartition(topicAndPartition, reassignedPartitionContext, newReplicasNotInOldReplicaList)</div><div class="line">    info(<span class="string">"Waiting for new replicas %s for partition %s being "</span>.format(reassignedReplicas.mkString(<span class="string">","</span>), topicAndPartition) +</div><div class="line">      <span class="string">"reassigned to catch up with the leader"</span>)</div><div class="line">  &#125; <span class="keyword">else</span> &#123; <span class="comment">//note: 新副本全在 isr 中了</span></div><div class="line">    <span class="comment">//4. Wait until all replicas in RAR are in sync with the leader.</span></div><div class="line">   <span class="comment">//note: 【OAR-RAR】</span></div><div class="line">    <span class="keyword">val</span> oldReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).toSet -- reassignedReplicas.toSet</div><div class="line">    <span class="comment">//5. replicas in RAR -&gt; OnlineReplica</span></div><div class="line">    <span class="comment">//note: RAR 中的副本都在 isr 中了,将副本状态设置为 OnlineReplica</span></div><div class="line">    reassignedReplicas.foreach &#123; replica =&gt;</div><div class="line">      replicaStateMachine.handleStateChanges(<span class="type">Set</span>(<span class="keyword">new</span> <span class="type">PartitionAndReplica</span>(topicAndPartition.topic, topicAndPartition.partition,</div><div class="line">        replica)), <span class="type">OnlineReplica</span>)</div><div class="line">    &#125;</div><div class="line">    <span class="comment">//6. Set AR to RAR in memory.</span></div><div class="line">    <span class="comment">//7. Send LeaderAndIsr request with a potential new leader (if current leader not in RAR) and</span></div><div class="line">    <span class="comment">//   a new AR (using RAR) and same isr to every broker in RAR</span></div><div class="line">    <span class="comment">//note: 到这一步,新加入的 replica 已经同步完成,leader和isr都更新到最新的结果</span></div><div class="line">    moveReassignedPartitionLeaderIfRequired(topicAndPartition, reassignedPartitionContext)</div><div class="line">    <span class="comment">//8. replicas in OAR - RAR -&gt; Offline (force those replicas out of isr)</span></div><div class="line">    <span class="comment">//9. replicas in OAR - RAR -&gt; NonExistentReplica (force those replicas to be deleted)</span></div><div class="line">    <span class="comment">//note: 下线旧的副本</span></div><div class="line">    stopOldReplicasOfReassignedPartition(topicAndPartition, reassignedPartitionContext, oldReplicas)</div><div class="line">    <span class="comment">//10. Update AR in ZK with RAR.</span></div><div class="line">    updateAssignedReplicasForPartition(topicAndPartition, reassignedReplicas)</div><div class="line">    <span class="comment">//11. Update the /admin/reassign_partitions path in ZK to remove this partition.</span></div><div class="line">    <span class="comment">//note: partition 迁移完成,从待迁移的集合中移除该 Partition</span></div><div class="line">    removePartitionFromReassignedPartitions(topicAndPartition)</div><div class="line">    info(<span class="string">"Removed partition %s from the list of reassigned partitions in zookeeper"</span>.format(topicAndPartition))</div><div class="line">    controllerContext.partitionsBeingReassigned.remove(topicAndPartition)</div><div class="line">    <span class="comment">//12. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker</span></div><div class="line">    <span class="comment">//note: 发送 metadata 更新请求给所有存活的 broker</span></div><div class="line">    sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, <span class="type">Set</span>(topicAndPartition))</div><div class="line">    <span class="comment">// signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed</span></div><div class="line">    <span class="comment">//note: topic 删除恢复（如果当前 topic 设置了删除,之前由于无法删除）</span></div><div class="line">    deleteTopicManager.resumeDeletionForTopics(<span class="type">Set</span>(topicAndPartition.topic))</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这个方法整体分为以下12个步骤：</p>
+<ol>
+<li>把 AR = OAR+RAR （{1、2、3、4}）更新到 zk 及本地 Controller 缓存中;</li>
+<li>发送 LeaderAndIsr 给 AR 中每一个副本,并且会强制更新 zk 中 leader 的 epoch;</li>
+<li>创建需要新建的副本（【RAR-OAR】，即 {4}）,将其状态设置为 NewReplica；</li>
+<li>等待直到 RAR（{2、3、4}） 中的所有副本都在 ISR 中;</li>
+<li>把 RAR（{2、3、4}） 中的所有副本设置为 OnReplica 状态;</li>
+<li>将缓存中 AR 更新为 RAR（重新分配的副本列表，即 {2、3、4}）;</li>
+<li>如果 leader 不在 RAR 中, 就从 RAR 选择对应的 leader, 然后发送 LeaderAndIsr 请求；如果不需要，那么只会更新 leader epoch，然后发送 LeaderAndIsr 请求; 在发送 LeaderAndIsr 请求前设置了 AR=RAR, 这将确保了 leader 在 isr 中不会添加任何 【RAR-OAR】中的副本（old replica，即 {1}）；</li>
+<li>将【OAR-RAR】（{1}）中的副本设置为 OfflineReplica 状态，OfflineReplica 状态的变化，将会从 ISR 中删除【OAR-RAR】的副本，更新到 zk 中并发送 LeaderAndIsr 请求给 leader，通知 leader isr 变动。之后再发送 StopReplica 请求（delete=false）给【OAR-RAR】中的副本；</li>
+<li>将【OAR-RAR】中的副本设置为 NonExistentReplica 状态。这将发送 StopReplica 请求（delete=true）给【OAR-RAR】中的副本，这些副本将会从本地上删除数据；</li>
+<li>在 zk 中更新 AR 为 RAR；</li>
+<li>更新 zk 中路径 【/admin/reassign_partitions】信息，移除已经成功迁移的 Partition；</li>
+<li>leader 选举之后，这个 replica 和 isr 信息将会变动，发送 metadata 更新给所有的 broker。</li>
+</ol>
+<p>上面的流程简单来说，就是先创建新的 replica，开始同步数据，等待所有新的分配都加入到了 isr 中后，开始进行 leader 选举（需要的情况下），下线不需要的副本（OAR-RAR），下线完成后将 Partition 的最新 AR （即 RAR）信息更新到 zk 中，最后发送相应的请求给 broker，到这里一个 Partition 的副本迁移算是完成了。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;前面两篇关于 Controller 的内容分别讲述了 Controller 选举和启动，以及副本状态机和分区状态机的内容，从本文开始会详细讲述 Controller 的一些其他功能，主要是 Controller 的对不同类型监听器的处理，这部分预计分三篇左右的文章讲述。Co
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
+    
+  </entry>
   
   <entry>
     <title>Kafka 源码解析之副本状态机与分区状态机（十七）</title>
@@ -3203,428 +3301,6 @@
     
     
       <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Linux 常用的一些系统命令</title>
-    <link href="http://matt33.com/2017/07/16/linux-system-cmd/"/>
-    <id>http://matt33.com/2017/07/16/linux-system-cmd/</id>
-    <published>2017-07-16T02:31:47.000Z</published>
-    <updated>2017-12-05T14:17:01.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>文章的内容，基本来自<a href="http://www.cnblogs.com/peida/tag/%E6%AF%8F%E6%97%A5%E4%B8%80linux%E5%91%BD%E4%BB%A4/" target="_blank" rel="external">每日一个 linux 命令</a>，选取了几个在工作常用的命令，有：top、iostat、netstat 、free 和 ps，本文的主要目的是在学习这几条命令的过程中，简单做一些记录，便于日后工作中更加熟练地使用这些命令。</p>
-<h1 id="top"><a href="#top" class="headerlink" title="top"></a>top</h1><p>top 命令是 Linux 下面实时展示系统运行情况的一个命令，它也可以显示当前每个任务的系统信息。在对系统的性能进行分析，它是一个最常用的命令。</p>
-<h2 id="命令常用参数"><a href="#命令常用参数" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><ol>
-<li>命令格式：<ul>
-<li>top [参数]</li>
-</ul>
-</li>
-<li>命令功能：<ul>
-<li>显示当前系统正在执行的进程的相关信息，包括进程ID、内存占用率、CPU占用率等</li>
-</ul>
-</li>
-<li>命令参数：<ul>
-<li><code>-b</code>: 批处理</li>
-<li><code>-c</code>: 显示完整的治命令</li>
-<li><code>-I</code>: 忽略失效过程</li>
-<li><code>-s</code>: 保密模式</li>
-<li><code>-S</code>: 累积模式</li>
-<li><code>-i&lt;时间&gt;</code>: 设置间隔时间</li>
-<li><code>-u&lt;用户名&gt;</code>: 指定用户名</li>
-<li><code>-p&lt;进程号&gt;</code>: 指定进程</li>
-<li><code>-n&lt;次数&gt;</code>: 循环显示的次数</li>
-</ul>
-</li>
-</ol>
-<h2 id="显示说明"><a href="#显示说明" class="headerlink" title="显示说明"></a>显示说明</h2><p>在命令行输入 <code>top</code> 命令，终端会展示当前系统的信息，如下所示</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ top</div><div class="line">top - 21:04:19 up 129 days, 20:31,  1 user,  load average: 58.32, 57.85, 57.50</div><div class="line">Tasks: 589 total,   1 running, 584 sleeping,   0 stopped,   4 zombie</div><div class="line">Cpu(s): 22.3%us, 11.8%sy,  0.0%ni, 63.2%id,  0.2%wa,  0.0%hi,  2.5%si,  0.0%st</div><div class="line">Mem:  132103752k total, 122070628k used, 10033124k free,    42940k buffers</div><div class="line">Swap:        0k total,        0k used,        0k free, 58734284k cached</div><div class="line"></div><div class="line">   PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND</div><div class="line"> 51179	matt   20   0 70.6g  24g  80m S 704.9 19.2  39244,38 java</div><div class="line">     1 root      20   0 1155m 1.1g  592 S  0.0  0.9   4020:57 init</div><div class="line">     2 root      20   0     0    0    0 S  0.0  0.0   0:00.01 kthreadd</div></pre></td></tr></table></figure>
-<p>上面只是截取了部分的信息，这里介绍以下上面的一些信息的说明。上面的前五行是当前系统情况整体的统计信息区。</p>
-<ol>
-<li>任务的队列信息，同 uptime 命令的执行结果<ul>
-<li><code>21:04:19</code>: 当前系统时间；</li>
-<li><code>up 129 days, 20:31</code>: 系统已经运行了129天20小时31分钟（这期间系统没有重启）；</li>
-<li><code>1 users</code>: 当前有1个用户登录系统；</li>
-<li><code>load average: 58.32, 57.85, 57.50</code>: load average 后面的三个数分别是1分钟、5分钟、15分钟的负载情况（<strong>这个数除以逻辑 CPU 的数量，结果高于5的时候就表明系统在超负荷运转</strong>）</li>
-</ul>
-</li>
-<li>Tasks — 任务（进程）的统计信息<ul>
-<li>系统现在共有589个进程，其中处于运行中的有1个，584个在休眠（sleep），stoped 状态的有0个，zombie 状态（僵尸）的有4个；</li>
-</ul>
-</li>
-<li>cpu 的状态信息<ul>
-<li><code>22.3%us</code>: 用户空间占用 CPU 的百分比</li>
-<li><code>11.8% sy</code>: 内核空间占用 CPU 的百分比</li>
-<li><code>0.0% ni</code>: 改变过优先级的进程占用 CPU 的百分比</li>
-<li><code>63.2% id</code>: 空闲 CPU 百分比</li>
-<li><code>0.2% wa</code>: IO 等待占用 CPU 的百分比</li>
-<li><code>0.0% hi</code>: 硬中断（Hardware IRQ）占用 CPU 的百分比</li>
-<li><code>2.5% si</code>: 软中断（Software Interrupts）占用 CPU 的百分比</li>
-<li><code>0.0% st</code>: 虚拟机占用的百分比</li>
-</ul>
-</li>
-<li>内存的状态信息<ul>
-<li><code>132103752k total</code>： 物理内存总量（128GB）</li>
-<li><code>122070628k used</code>： 使用中的内存总量（118GB）</li>
-<li><code>10033124k free</code>： 空闲内存总量（10GB）</li>
-<li><code>42940k buffers</code>： 缓存的内存量 （42M）</li>
-</ul>
-</li>
-<li>swap交换分区信息<ul>
-<li><code>0k total</code>: 交换区总量（0K）</li>
-<li><code>0k used</code>: 使用的交换区总量（0K）</li>
-<li><code>0k free</code>: 空闲交换区总量（0K）</li>
-<li><code>58734284k cached</code>: 缓冲的交换区总量（56GB）</li>
-</ul>
-</li>
-<li>空行，作为系统信息与进程信息的分界线</li>
-<li>各进程（任务）的状态监控<ul>
-<li><code>PID</code>: 进程id</li>
-<li><code>USER</code>: 进程所有者</li>
-<li><code>PR</code>: 进程优先级</li>
-<li><code>NI</code>: nice 值，负值表示高优先级，正值表示低优先级</li>
-<li><code>VIRT</code>: 进程使用的虚拟内存总量，单位 kb。VIRT=SWAP+RES</li>
-<li><code>RES</code>: 进程使用的、未被换出的物理内存大小，单位 kb。RES=CODE+DATA</li>
-<li><code>SHR</code>: 共享内存大小，单位 kb</li>
-<li><code>S</code>: 进程状态。D= 不可中断的睡眠状态 R= 运行 S= 睡眠 T= 跟踪/停止 Z= 僵尸进程</li>
-<li><code>%CPU</code>: 上次更新到现在的CPU时间占用百分比</li>
-<li><code>%MEM</code>: 进程使用的物理内存百分比</li>
-<li><code>TIME+</code>: 进程使用的CPU时间总计，单位1/100秒</li>
-<li><code>COMMAND</code>: 进程名称</li>
-</ul>
-</li>
-</ol>
-<p>其中，第四行中使用中的内存总量（used）指的是现在系统内核控制的内存数，空闲内存总量（free）是内核还未纳入其管控范围的数量。纳入内核管理的内存不见得都在使用中，还包括过去使用过的现在可以被重复利用的内存，内核并不把这些可被重新使用的内存交还到 free 中去，因此在 linux 上 free 内存会越来越少，但不用为此担心。</p>
-<h2 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h2><p>在工作中，常用的几个命令在 <a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a> 都已经介绍得比较全面了，这里，再简单重复一下。</p>
-<h3 id="多-CPU-监控"><a href="#多-CPU-监控" class="headerlink" title="多 CPU 监控"></a>多 CPU 监控</h3><p>在 top 的基本视图中，按键盘数字<strong>1</strong>，可监控每个逻辑CPU的状况：</p>
-<p><img src="/images/linux/top1.png" alt="TOP 多 CPU 监控"></p>
-<h3 id="高亮显示当前进程"><a href="#高亮显示当前进程" class="headerlink" title="高亮显示当前进程"></a>高亮显示当前进程</h3><p>敲击键盘<strong>b</strong>（打开/关闭加亮效果），top 的视图变化如下（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
-<p><img src="/images/linux/top2.png" alt="TOP 高亮"></p>
-<h3 id="进程字段排序"><a href="#进程字段排序" class="headerlink" title="进程字段排序"></a>进程字段排序</h3><p>默认进入 top 时，各进程是按照 CPU 的占用量来排序的，敲击键盘<strong>x</strong>（打开/关闭排序列的加亮效果），top 的视图变化如下所示，会将 CPU 占用量这行高亮（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
-<p><img src="/images/linux/top4.png" alt="TOP 按 CPU 占用量排序"></p>
-<p>通过 <code>shift + &gt;</code>或<code>shift + &lt;</code>可以向右或左改变排序列，下图是按一次<code>shift + &gt;</code>的效果图，视图现在已经按照 <code>%MEM</code> 来排序（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
-<p><img src="/images/linux/top5.png" alt="TOP 按内存排序"></p>
-<h3 id="显示进程完成命令"><a href="#显示进程完成命令" class="headerlink" title="显示进程完成命令"></a>显示进程完成命令</h3><p>敲击键盘<strong>c</strong>（打开/关闭进程完成命令），top 的视图变化如下（图来自<a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a>）。</p>
-<p><img src="/images/linux/top6.png" alt="TOP 显示完整命令"></p>
-<h3 id="其他命令"><a href="#其他命令" class="headerlink" title="其他命令"></a>其他命令</h3><ul>
-<li><code>top -p 574</code>: 显示指定的进程信息</li>
-<li><code>top -d 3</code>: 设置信息更新时间</li>
-<li><code>top -n 2</code>: 设置信息更新次数</li>
-<li><code>top -S</code>: 以累积模式显示程序信息</li>
-<li><code>top -Hp 2050</code>：显示该进程所有线程的详细信息</li>
-</ul>
-<h1 id="iostat"><a href="#iostat" class="headerlink" title="iostat"></a>iostat</h1><p>iostat 也即 I/O statistics（输入/输出统计），iostat 会对系统的磁盘操作活动进行监视。它的特点是汇报磁盘活动统计情况，同时也会汇报出 CPU 使用情况。但它不能对某个进程进行深入分析，仅对系统的整体情况进行分析。</p>
-<h2 id="命令常用参数-1"><a href="#命令常用参数-1" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><p>1．命令格式：</p>
-<ul>
-<li>iostat [参数][时间][次数]<br>2．命令功能：</li>
-<li>通过 iostat 方便查看 CPU、网卡、tty设备、磁盘、CD-ROM 等等设备的活动情况，负载信息。<br>3．命令参数：</li>
-<li><code>-C</code>: 显示CPU使用情况</li>
-<li><code>-d</code>: 显示磁盘使用情况</li>
-<li><code>-k</code>: 以 KB 为单位显示</li>
-<li><code>-m</code>: 以 M 为单位显示</li>
-<li><code>-N</code>: 显示磁盘阵列(LVM) 信息</li>
-<li><code>-n</code>: 显示NFS 使用情况</li>
-<li><code>-p[磁盘]</code>: 显示磁盘和分区的情况</li>
-<li><code>-t</code>: 显示终端和CPU的信息</li>
-<li><code>-x</code>: 显示详细信息</li>
-<li><code>-V</code>: 显示版本信息</li>
-</ul>
-<h2 id="显示说明-1"><a href="#显示说明-1" class="headerlink" title="显示说明"></a>显示说明</h2><p>使用 iostat 命令时，终端会显示很多很多的信息，这里介绍一下这些信息的含义。</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ iostat</div><div class="line">Linux 2.6.32-431.20.3.el6.mt20150216.x86_64 (XXX) 	2017年07月16日 	_x86_64_	(32 CPU)</div><div class="line"></div><div class="line">avg-cpu:  %user   %nice %system %iowait  %steal   %idle</div><div class="line">          22.28    0.00   14.26    0.25    0.00   63.22</div><div class="line"></div><div class="line">Device:            tps   Blk_read/s   Blk_wrtn/s   Blk_read   Blk_wrtn</div><div class="line">sda              20.65       205.78       452.71 9429827972 20744862776</div></pre></td></tr></table></figure>
-<ol>
-<li>CPU 属性值说明：<ul>
-<li><code>%user</code>：CPU 处在用户模式下的时间百分比</li>
-<li><code>%nice</code>：CPU 处在带 NICE 值的用户模式下的时间百分比</li>
-<li><code>%system</code>：CPU 处在系统模式下的时间百分比</li>
-<li><code>%iowait</code>：CPU 等待输入输出完成时间的百分比</li>
-<li><code>%steal</code>：管理程序维护另一个虚拟处理器时，虚拟 CPU 的无意识等待时间百分比</li>
-<li><code>%idle</code>：CPU 空闲时间百分比</li>
-</ul>
-</li>
-<li>disk 属性<ul>
-<li><code>tps</code>：该设备每秒的传输次数（Indicate the number of transfers per second that were issued to the device.）。</li>
-<li><code>kB_read/s</code>：每秒从设备（drive expressed）读取的数据量；</li>
-<li><code>kB_wrtn/s</code>：每秒向设备（drive expressed）写入的数据量；</li>
-<li><code>kB_read</code>：读取的总数据量；</li>
-<li><code>kB_wrtn</code>：写入的总数量数据量，这些单位都为Kilobytes。</li>
-</ul>
-</li>
-</ol>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ iostat -xm 3</div><div class="line">Linux 2.6.32-431.20.3.el6.mt20150216.x86_64 (XXX) 	2017年07月16日 	_x86_64_	(32 CPU)</div><div class="line"></div><div class="line">avg-cpu:  %user   %nice %system %iowait  %steal   %idle</div><div class="line">          22.28    0.00   14.26    0.25    0.00   63.21</div><div class="line"></div><div class="line">Device:         rrqm/s   wrqm/s     r/s     w/s    rMB/s    wMB/s avgrq-sz avgqu-sz   await  svctm  %util</div><div class="line">sda               0.50    42.34    6.47   14.18     0.10     0.22    31.90     0.02    1.20   0.44   0.90</div></pre></td></tr></table></figure>
-<p>这里 disk 属性与上面的不太相同</p>
-<ul>
-<li><code>rrqm/s</code>: 每秒进行 merge 的读操作数目。即 rmerge/s</li>
-<li><code>wrqm/s</code>: 每秒进行 merge 的写操作数目。即 wmerge/s</li>
-<li><code>r/s</code>: 每秒完成的读 I/O 设备次数。即 rio/s</li>
-<li><code>w/s</code>: 每秒完成的写 I/O 设备次数。即 wio/s</li>
-<li><code>rsec/s</code>: 每秒读扇区数。即 rsect/s</li>
-<li><code>wsec/s</code>: 每秒写扇区数。即 wsect/s</li>
-<li><code>rkB/s</code>: 每秒读K字节数。是 rsect/s 的一半，因为每扇区大小为512字节。</li>
-<li><code>wkB/s</code>: 每秒写K字节数。是 wsect/s 的一半。</li>
-<li><code>avgrq-sz</code>: 平均每次设备 I/O 操作的数据大小 (扇区)。</li>
-<li><code>avgqu-sz</code>: 平均 I/O 队列长度。</li>
-<li><code>await</code>: 平均每次设备 I/O 操作的等待时间 (毫秒)。</li>
-<li><code>svctm</code>: 平均每次设备 I/O 操作的服务时间 (毫秒)。</li>
-<li><code>%util</code>: 一秒中有百分之多少的时间用于 I/O 操作，即被 IO 消耗的 CPU 百分比。</li>
-</ul>
-<p>其中，下面是在实践中积累的一些经验</p>
-<ol>
-<li>如果 <code>%iowait</code> 的值过高，表示硬盘存在 I/O 瓶颈；</li>
-<li><code>%idle</code> 值高，表示 CPU 较空闲，如果 <code>%idle</code> 值高但系统响应慢时，有可能是 CPU 等待分配内存，此时应加大内存容量。<code>%idle</code> 值如果持续低于 10，那么系统的 CPU 处理能力相对较低，表明系统中最需要解决的资源是 CPU；</li>
-<li>如果 <code>%util</code> 接近 100%，说明产生的I/O请求太多，I/O 系统已经满负荷，该磁盘可能存在瓶颈，其值大于 70% 时，磁盘的压力就很大了；</li>
-<li>如果 <code>svctm</code> 比较接近 <code>await</code>，说明 I/O 几乎没有等待时间；如果 <code>await</code> 远大于 <code>svctm</code>，说明 I/O 队列太长，IO 响应太慢，则需要进行必要优化；</li>
-<li>如果 <code>avgqu-sz</code> 比较大，也表示有当量 IO 在等待，它是 IO 调优时需要注意的地方，它是直接每次操作的数据的大小，如果次数多，但数据拿的小的话，其实 IO 也会很小；</li>
-<li>await 的大小一般取决于服务时间(svctm) 以及 I/O 队列的长度和 I/O 请求的发出模式。如果 svctm 比较接近 await，说明 I/O 几乎没有等待时间；如果 await 远大于 svctm，说明 I/O 队列太长，应用得到的响应时间变慢，如果响应时间超过了用户可以容许的范围，这时可以考虑更换更快的磁盘，调整内核 elevator 算法，优化应用，或者升级 CPU。</li>
-</ol>
-<h2 id="常用示例"><a href="#常用示例" class="headerlink" title="常用示例"></a>常用示例</h2><ul>
-<li><code>iostat 2 3</code>: 每隔 2 秒刷新显示，且显示 3 次；</li>
-<li><code>iostat -d sda</code>: 显示指定磁盘信息；</li>
-<li><code>iostat -t</code>: 显示 tty 和 CPU 信息；</li>
-<li><code>iostat -m</code>: 以M为单位显示所有信息；</li>
-<li><code>iostat -d -k 1 1</code>: 查看TPS和吞吐量信息；</li>
-<li><code>iostat -c 1 3</code>: 查看cpu状态；</li>
-</ul>
-<h1 id="ps"><a href="#ps" class="headerlink" title="ps"></a>ps</h1><p>ps —— 是 process status 的简称，它列出的是当前时刻那些进程的快照，如果想要动态的显示进程信息内容，可以使用 top 命令。</p>
-<p>使用 ps 可以做以下事情：</p>
-<ul>
-<li>确定有哪些进程正在运行、查看运行的状态；</li>
-<li>进程是否结束；</li>
-<li>进程有没有僵死；</li>
-<li>哪些进程占用了过多的资源等等。</li>
-</ul>
-<h2 id="Linux-进程的五种状态"><a href="#Linux-进程的五种状态" class="headerlink" title="Linux 进程的五种状态"></a>Linux 进程的五种状态</h2><p>在 Linux 上进程有5种状态，每种状态对应着不同的标识，如下表所示：</p>
-<table>
-<thead>
-<tr>
-<th>Linux 上状态</th>
-<th>ps 的状态码</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>运行（正在运行或在运行队列中等待）</td>
-<td>R（running or on run queue）</td>
-</tr>
-<tr>
-<td>中断（休眠中、受阻、在等待某个条件的形成和接收到信号）</td>
-<td>S（sleeping）</td>
-</tr>
-<tr>
-<td>不可中断（收到信号不唤醒和不可运行, 进程必须等待直到有中断发生）</td>
-<td>D（uninterruptible sleep）</td>
-</tr>
-<tr>
-<td>僵死（进程已终止，但进程描述符存在，直到父进程调用wait4()后才会释放）</td>
-<td>Z（a defunct zombie process）</td>
-</tr>
-<tr>
-<td>停止（进程收到SIGSTOP, SIGSTP, SIGTIN, SIGTOU信号后停止运行运行）</td>
-<td>T（traced or stopped）</td>
-</tr>
-</tbody>
-</table>
-<h2 id="命令常用参数-2"><a href="#命令常用参数-2" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><ol>
-<li>命令格式<ul>
-<li>ps [参数]</li>
-</ul>
-</li>
-<li>命令参数<ul>
-<li><code>a</code>：显示所有进程</li>
-<li><code>-a</code>：显示同一终端下的所有程序</li>
-<li><code>-A</code>：显示所有进程</li>
-<li><code>c</code>：显示进程的真实名称</li>
-<li><code>-N</code>：反向选择</li>
-<li><code>e</code>：显示环境变量</li>
-<li><code>f</code>：显示程序间的关系</li>
-<li><code>-H</code>：显示树状结构</li>
-<li><code>r</code>：显示当前终端的进程</li>
-<li><code>T</code>：显示当前终端的所有程序</li>
-<li><code>u</code>：指定用户的所有进程</li>
-<li><code>-au</code>：显示较详细的资讯</li>
-<li><code>-aux</code>：显示所有包含其他使用者的行程</li>
-<li><code>-C&lt;命令&gt;</code>：列出指定命令的状况</li>
-<li><code>--lines&lt;行数&gt;</code>：每页显示的行数</li>
-<li><code>--width&lt;字符数&gt;</code>：每页显示的字符数</li>
-<li><code>--help</code>：显示帮助信息</li>
-<li><code>--version</code>：显示版本显示</li>
-</ul>
-</li>
-</ol>
-<h2 id="显示说明-2"><a href="#显示说明-2" class="headerlink" title="显示说明"></a>显示说明</h2><h3 id="将当前这次登入的-PID-与相关信息列示出来"><a href="#将当前这次登入的-PID-与相关信息列示出来" class="headerlink" title="将当前这次登入的 PID 与相关信息列示出来"></a>将当前这次登入的 PID 与相关信息列示出来</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ ps <span class="_">-l</span></div><div class="line">F S   UID    PID   PPID  C PRI  NI ADDR SZ WCHAN  TTY          TIME CMD</div><div class="line">0 S   10 120177 120176  0  80   0 - 27078 <span class="built_in">wait</span>   pts/0    00:00:00 bash</div><div class="line">0 R   10 137912 120177  0  80   0 - 27031 -      pts/0    00:00:00 ps</div></pre></td></tr></table></figure>
-<p>上面各个参数的含义：</p>
-<ul>
-<li><code>F</code>: 代表这个程序的旗标 (flag)， 4 代表使用者为 super user</li>
-<li><code>S</code>: 代表这个程序的状态 (STAT)，关于各 STAT 的意义将在内文介绍</li>
-<li><code>UID</code>: 程序被该 UID 所拥有</li>
-<li><code>PID</code>: 就是这个程序的 ID</li>
-<li><code>PPID</code>: 则是其上级父程序的ID</li>
-<li><code>C</code>: CPU 使用的资源百分比</li>
-<li><code>PRI</code>: 这个是 Priority (优先执行序) 的缩写</li>
-<li><code>NI</code>: 这个是 Nice 值</li>
-<li><code>ADDR</code>: 这个是 kernel function，指出该程序在内存的那个部分。如果是个 running的程序，一般就是 “-“</li>
-<li><code>SZ</code>: 使用掉的内存大小</li>
-<li><code>WCHAN</code>: 目前这个程序是否正在运作当中，若为 - 表示正在运作</li>
-<li><code>TTY</code>: 登入者的终端机位置</li>
-<li><code>TIME</code>: 使用掉的 CPU 时间。</li>
-<li><code>CMD</code>: 所下达的指令为何</li>
-</ul>
-<h3 id="ps-aux"><a href="#ps-aux" class="headerlink" title="ps aux"></a>ps aux</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">[matt@XXX ~]$ ps aux</div><div class="line">USER        PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND</div><div class="line">root          1  0.5  0.8 1184632 1166268 ?     Ss    2016 4029:48 /sbin/init</div><div class="line">root          2  0.0  0.0      0     0 ?        S     2016   0:00 [kthreadd]</div><div class="line">root          3  0.0  0.0      0     0 ?        S     2016  36:36 [migration/0]</div></pre></td></tr></table></figure>
-<p>上面各个参数的含义：</p>
-<ul>
-<li><code>USER</code>：该 process 属于那个使用者账号的</li>
-<li><code>PID</code>：该 process 的号码</li>
-<li><code>%CPU</code>：该 process 使用掉的 CPU 资源百分比</li>
-<li><code>%MEM</code>：该 process 所占用的物理内存百分比</li>
-<li><code>VSZ</code>：该 process 使用掉的虚拟内存量 (Kbytes)</li>
-<li><code>RSS</code>：该 process 占用的固定的内存量 (Kbytes)</li>
-<li><code>TTY</code>：该 process 是在那个终端机上面运作，若与终端机无关，则显示 <code>?</code>，若为 <code>pts/0</code> 等等的，则表示为由网络连接进主机的程序。</li>
-<li><code>STAT</code>：该程序目前的状态</li>
-<li><code>START</code>：该 process 被触发启动的时间</li>
-<li><code>TIME</code>：该 process 实际使用 CPU 运作的时间</li>
-<li><code>COMMAND</code>：该程序的实际指令</li>
-</ul>
-<h2 id="使用示例"><a href="#使用示例" class="headerlink" title="使用示例"></a>使用示例</h2><p>ps 的常用命令主要有以下几种用法：</p>
-<ul>
-<li><code>ps -A</code>: 显示所有进程信息</li>
-<li><code>ps -u root</code>: 显示指定用户信息</li>
-<li><code>ps -ef</code>: 显示所有进程信息，连同命令行</li>
-<li>与 <code>grep</code> 一起，来查看指定的进程。</li>
-</ul>
-<h1 id="netstat"><a href="#netstat" class="headerlink" title="netstat"></a>netstat</h1><p>Netstat 是一款命令行工具，可用于列出系统上所有的网络套接字连接情况，包括 tcp, udp 以及 unix 套接字。</p>
-<h2 id="命令常用参数-3"><a href="#命令常用参数-3" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><ul>
-<li>命令格式：<br>netstat [-acCeFghilMnNoprstuvVwx][-A&lt;网络类型&gt;][–ip]</li>
-<li>命令参数：<ol>
-<li>-a 或 –all 显示所有连线中的Socket。</li>
-<li>-A &lt;网络类型&gt;或–&lt;网络类型&gt; 列出该网络类型连线中的相关地址。</li>
-<li>-c 或 –continuous 持续列出网络状态。</li>
-<li>-C 或 –cache 显示路由器配置的快取信息。</li>
-<li>-e 或 –extend 显示网络其他相关信息。</li>
-<li>-F 或 –fib 显示FIB。</li>
-<li>-g 或 –groups 显示多重广播功能群组组员名单。</li>
-<li>-h 或 –help 在线帮助。</li>
-<li>-i 或 –interfaces 显示网络界面信息表单。</li>
-<li>-l 或 –listening 显示监控中的服务器的Socket。</li>
-<li>-M 或 –masquerade 显示伪装的网络连线。</li>
-<li>-n 或 –numeric 直接使用IP地址，而不通过域名服务器。</li>
-<li>-N 或 –netlink 或 –symbolic 显示网络硬件外围设备的符号连接名称。</li>
-<li>-o 或 –timers 显示计时器。</li>
-<li>-p 或 –programs 显示正在使用Socket的程序识别码和程序名称。</li>
-<li>-r 或 –route 显示Routing Table。</li>
-<li>-s 或 –statistice 显示网络工作信息统计表。</li>
-<li>-t 或 –tcp 显示TCP传输协议的连线状况。</li>
-<li>-u 或 –udp 显示UDP传输协议的连线状况。</li>
-<li>-v 或 –verbose 显示指令执行过程。</li>
-<li>-V 或 –version 显示版本信息。</li>
-<li>-w 或 –raw 显示RAW传输协议的连线状况。</li>
-<li>-x 或 –unix 此参数的效果和指定”-A unix”参数相同。</li>
-<li>–ip 或 –inet 此参数的效果和指定”-A inet”参数相同。</li>
-</ol>
-</li>
-</ul>
-<h2 id="显示说明-3"><a href="#显示说明-3" class="headerlink" title="显示说明"></a>显示说明</h2><p>这里看下在命令行下输入 <code>netstat</code> 显示内容的含义：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">[matt@XXXX ~]$ netstat</div><div class="line">Active Internet connections (w/o servers)</div><div class="line">Proto Recv-Q Send-Q Local Address               Foreign Address             State</div><div class="line">tcp        0      0 0.0.0.0:55030 0.0.0.0:XmlIpcRegSvc ESTABLISHED</div><div class="line">tcp        0      0 localhost:18103             localhost:tr-rsrb-p2        TIME_WAIT</div><div class="line">tcp        0      0 localhost:18137             localhost:tr-rsrb-p2        TIME_WAIT</div><div class="line">tcp        0      0 0.0.0.0:5266 0.0.0.0:16011 ESTABLISHED</div><div class="line"></div><div class="line">Active UNIX domain sockets (w/o servers)</div><div class="line">Proto RefCnt Flags       Type       State         I-Node Path</div><div class="line">unix  11     [ ]         DGRAM                    72685074 /dev/<span class="built_in">log</span></div><div class="line">unix  2      [ ]         DGRAM                    8702   /var/run/portreserve/socket</div><div class="line">unix  2      [ ]         DGRAM                    7565   @/org/kernel/udev/udevd</div><div class="line">unix  2      [ ]         DGRAM                    339609275</div><div class="line">unix  2      [ ]         DGRAM                    339608880</div><div class="line">unix  3      [ ]         STREAM     CONNECTED     339608854 /var/run/nss-cache.sock</div></pre></td></tr></table></figure>
-<p>netstat 的输出结果可分为两部分：</p>
-<ol>
-<li>是 Active Internet connections，称为有源 TCP 连接，其中 <code>Recv-Q</code> 和 <code>Send-Q</code> 指的是接收队列和发送队列，这些数字一般都应该是0，如果不是则表示软件包正在队列中堆积，这种情况只能在非常少的情况见到；</li>
-<li>另一个是 Active UNIX domain sockets，称为有源 Unix 域套接口(和网络套接字一样，但是只能用于本机通信，性能可以提高一倍。</li>
-</ol>
-<p>其中：</p>
-<ul>
-<li>Proto 显示连接使用的协议；</li>
-<li>RefCnt 表示连接到本套接口上的进程号；</li>
-<li>Types 显示套接口的类型；</li>
-<li>State 显示套接口当前的状态；</li>
-<li>Path 表示连接到套接口的其它进程使用的路径名。</li>
-</ul>
-<p>套接口类型：</p>
-<ul>
-<li>-t ：TCP</li>
-<li>-u ：UDP</li>
-<li>-raw ：RAW类型</li>
-<li>–unix ：UNIX域类型</li>
-<li>–ax25 ：AX25类型</li>
-<li>–ipx ：ipx类型</li>
-<li>–netrom ：netrom类型</li>
-</ul>
-<p>状态说明：</p>
-<ul>
-<li>LISTEN：侦听来自远方的TCP端口的连接请求</li>
-<li>SYN-SENT：再发送连接请求后等待匹配的连接请求（如果有大量这样的状态包，检查是否中招了）</li>
-<li>SYN-RECEIVED：再收到和发送一个连接请求后等待对方对连接请求的确认（如有大量此状态，估计被flood攻击了）</li>
-<li>ESTABLISHED：代表一个打开的连接</li>
-<li>FIN-WAIT-1：等待远程TCP连接中断请求，或先前的连接中断请求的确认</li>
-<li>FIN-WAIT-2：从远程TCP等待连接中断请求</li>
-<li>CLOSE-WAIT：等待从本地用户发来的连接中断请求</li>
-<li>CLOSING：等待远程TCP对连接中断的确认</li>
-<li>LAST-ACK：等待原来的发向远程TCP的连接中断请求的确认（不是什么好东西，此项出现，检查是否被攻击）</li>
-<li>TIME-WAIT：等待足够的时间以确保远程TCP接收到连接中断请求的确认</li>
-<li>CLOSED：没有任何连接状态</li>
-</ul>
-<h2 id="常用命令-1"><a href="#常用命令-1" class="headerlink" title="常用命令"></a>常用命令</h2><h3 id="列出所有的符合某些条件的连接"><a href="#列出所有的符合某些条件的连接" class="headerlink" title="列出所有的符合某些条件的连接"></a>列出所有的符合某些条件的连接</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 累出所有连接</span></div><div class="line">netstat <span class="_">-a</span></div><div class="line"></div><div class="line"><span class="comment"># 只列出 tcp</span></div><div class="line">netstat -at</div><div class="line"></div><div class="line"><span class="comment"># 只列出 udp</span></div><div class="line">netstat -au</div><div class="line"></div><div class="line"><span class="comment"># 只列出 tcp，加-n 禁止域名解析，之查看 ip 地址</span></div><div class="line">netstat -ant</div><div class="line"></div><div class="line"><span class="comment"># 只列出监听中的连接，-l：只列出监听的套接字</span></div><div class="line">netstat -tnl</div><div class="line"></div><div class="line"><span class="comment"># netstat 的 -c 选项持续输出信息</span></div><div class="line">netstat -ct</div><div class="line"></div><div class="line"><span class="comment"># 显示 pid</span></div><div class="line">netstat -pt</div></pre></td></tr></table></figure>
-<h3 id="统计数据"><a href="#统计数据" class="headerlink" title="统计数据"></a>统计数据</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">netstat <span class="_">-s</span></div></pre></td></tr></table></figure>
-<h3 id="显示路由信息"><a href="#显示路由信息" class="headerlink" title="显示路由信息"></a>显示路由信息</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">netstat -rn</div></pre></td></tr></table></figure>
-<h3 id="显示UDP端口号的使用情况"><a href="#显示UDP端口号的使用情况" class="headerlink" title="显示UDP端口号的使用情况"></a>显示UDP端口号的使用情况</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">netstat -apu</div></pre></td></tr></table></figure>
-<h3 id="统计机器中网络连接各个状态个数"><a href="#统计机器中网络连接各个状态个数" class="headerlink" title="统计机器中网络连接各个状态个数"></a>统计机器中网络连接各个状态个数</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">netstat <span class="_">-a</span> | awk <span class="string">'/^tcp/ &#123;++S[$NF]&#125; END &#123;for(a in S) print a, S[a]&#125;'</span></div></pre></td></tr></table></figure>
-<h3 id="找出运行在指定端口的进程"><a href="#找出运行在指定端口的进程" class="headerlink" title="找出运行在指定端口的进程"></a>找出运行在指定端口的进程</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">netstat -anpt | grep <span class="string">':16064'</span></div></pre></td></tr></table></figure>
-<h1 id="kill"><a href="#kill" class="headerlink" title="kill"></a>kill</h1><p>kill 主要使用结束 linux 后台进程的命令，kill命令是通过向进程发送指定的信号来结束相应进程的。</p>
-<h2 id="命令常用参数-4"><a href="#命令常用参数-4" class="headerlink" title="命令常用参数"></a>命令常用参数</h2><ul>
-<li>命令格式<ul>
-<li>kill[参数][进程号]</li>
-</ul>
-</li>
-<li>命令功能<ul>
-<li>发送指定的信号到相应进程。不指定信号时将发送 <code>SIGTERM</code>（15）终止指定进程。如果任无法终止该程序，可使用发送的信号为 <code>SIGKILL</code>(9) ，将强制结束进程，使用 ps 命令或者 jbs 命令可以查看进程号。</li>
-</ul>
-</li>
-<li>命令参数：<ol>
-<li>-l  信号，若果不加信号的编号参数，则使用 <code>-l</code> 参数会列出全部的信号名称;</li>
-<li>-a  当处理当前进程时，不限制命令名和进程号的对应关系</li>
-<li>-p  指定 kill 命令只打印相关进程的进程号，而不发送任何信号</li>
-<li>-s  指定发送信号</li>
-<li>-u  指定用户</li>
-</ol>
-</li>
-</ul>
-<p>注意：</p>
-<ol>
-<li>kill 命令可以带信号号码选项，也可以不带。如果没有信号，kill 命令就会发出终止信号(15)，这个信号可以被进程捕获，使得进程在退出之前可以清理并释放资源。也可以用 kill 向进程发送特定的信号。</li>
-<li>kill 可以带有进程 PID 号作为参数。当用 kill 向这些进程发送信号时，必须是这些进程的主人。</li>
-<li>可以向多个进程发信号或终止它们。</li>
-<li>应注意，信号使进程强行终止，这常会带来一些副作用，如数据丢失或者终端无法恢复到正常状态。发送信号时必须小心，只有在万不得已时，才用 kill 信号(9)，因为进程不能首先捕获它。要撤销所有的后台作业，可以输入kill 0。</li>
-</ol>
-<h2 id="常用方法"><a href="#常用方法" class="headerlink" title="常用方法"></a>常用方法</h2><h3 id="所有的信号名称"><a href="#所有的信号名称" class="headerlink" title="所有的信号名称"></a>所有的信号名称</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line">[XXX@XXX ~]$ <span class="built_in">kill</span> <span class="_">-l</span></div><div class="line"> 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP</div><div class="line"> 6) SIGABRT	 7) SIGBUS	 8) SIGFPE	 9) SIGKILL	10) SIGUSR1</div><div class="line">11) SIGSEGV	12) SIGUSR2	13) SIGPIPE	14) SIGALRM	15) SIGTERM</div><div class="line">16) SIGSTKFLT	17) SIGCHLD	18) SIGCONT	19) SIGSTOP	20) SIGTSTP</div><div class="line">21) SIGTTIN	22) SIGTTOU	23) SIGURG	24) SIGXCPU	25) SIGXFSZ</div><div class="line">26) SIGVTALRM	27) SIGPROF	28) SIGWINCH	29) SIGIO	30) SIGPWR</div><div class="line">31) SIGSYS	34) SIGRTMIN	35) SIGRTMIN+1	36) SIGRTMIN+2	37) SIGRTMIN+3</div><div class="line">38) SIGRTMIN+4	39) SIGRTMIN+5	40) SIGRTMIN+6	41) SIGRTMIN+7	42) SIGRTMIN+8</div><div class="line">43) SIGRTMIN+9	44) SIGRTMIN+10	45) SIGRTMIN+11	46) SIGRTMIN+12	47) SIGRTMIN+13</div><div class="line">48) SIGRTMIN+14	49) SIGRTMIN+15	50) SIGRTMAX-14	51) SIGRTMAX-13	52) SIGRTMAX-12</div><div class="line">53) SIGRTMAX-11	54) SIGRTMAX-10	55) SIGRTMAX-9	56) SIGRTMAX-8	57) SIGRTMAX-7</div><div class="line">58) SIGRTMAX-6	59) SIGRTMAX-5	60) SIGRTMAX-4	61) SIGRTMAX-3	62) SIGRTMAX-2</div><div class="line">63) SIGRTMAX-1	64) SIGRTMAX</div><div class="line"></div><div class="line"><span class="comment"># 列出指定的信号的值</span></div><div class="line">[XXX@XXX ~]$ <span class="built_in">kill</span> <span class="_">-l</span> TERM</div><div class="line">15</div></pre></td></tr></table></figure>
-<p>其中，只有第 <strong>9</strong> 种信号( <code>SIGKILL</code> )才可以无条件终止进程，其他信号进程都有权利忽略。    下面是常用的信号：</p>
-<ul>
-<li>HUP 1 终端断线</li>
-<li>INT 2 中断（同 Ctrl + C）</li>
-<li>QUIT 3 退出（同 Ctrl + \）</li>
-<li>TERM 15 终止</li>
-<li>KILL 9 强制终止</li>
-<li>CONT 18 继续（与STOP相反， fg/bg命令）</li>
-<li>STOP 19 暂停（同 Ctrl + Z）</li>
-</ul>
-<h3 id="彻底杀死进程"><a href="#彻底杀死进程" class="headerlink" title="彻底杀死进程"></a>彻底杀死进程</h3><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="built_in">kill</span> –9 3268</div></pre></td></tr></table></figure>
-<hr>
-<p>参考：</p>
-<ul>
-<li><a href="http://www.cnblogs.com/peida/archive/2012/12/24/2831353.html" target="_blank" rel="external">每天一个linux命令（44）：top命令</a></li>
-<li><a href="http://www.cnblogs.com/peida/archive/2013/03/08/2949194.html" target="_blank" rel="external">每天一个linux命令（56）：netstat命令</a></li>
-<li><a href="http://www.cnblogs.com/peida/archive/2012/12/28/2837345.html" target="_blank" rel="external">每天一个linux命令（47）：iostat命令</a></li>
-<li><a href="http://www.cnblogs.com/peida/archive/2012/12/19/2824418.html" target="_blank" rel="external">每天一个linux命令（41）：ps命令</a></li>
-<li><a href="http://www.cnblogs.com/peida/archive/2012/12/25/2831814.html" target="_blank" rel="external">每天一个linux命令（45）：free 命令</a></li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;文章的内容，基本来自&lt;a href=&quot;http://www.cnblogs.com/peida/tag/%E6%AF%8F%E6%97%A5%E4%B8%80linux%E5%91%BD%E4%BB%A4/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;每
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="linux" scheme="http://matt33.com/tags/linux/"/>
     
   </entry>
   
