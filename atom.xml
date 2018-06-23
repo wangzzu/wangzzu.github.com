@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-06-18T09:30:59.000Z</updated>
+  <updated>2018-06-23T05:42:54.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,87 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Kafka 源码解析之 Controller 发送模型（二十一）</title>
+    <link href="http://matt33.com/2018/06/23/controller-request-model/"/>
+    <id>http://matt33.com/2018/06/23/controller-request-model/</id>
+    <published>2018-06-23T05:26:38.000Z</published>
+    <updated>2018-06-23T05:42:54.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>本篇主要讲述 Controller 向各个 Broker 发送请求的模型，算是对 <a href="http://matt33.com/2018/06/15/kafka-controller-start/#Controller-Channel-Manager">Controller Channel Manager</a> 部分的一个补充，在这篇文章中，将会看到 Controller 在处理 leader 切换、ShutDown 请求时如何向 Broker 发送相应的请求。</p>
+<p>Kafka Controller 向 Broker 发送的请求类型主要分为三种：LeaderAndIsr、UpdateMetadata、StopReplica 请求，正如  <a href="http://matt33.com/2018/06/15/kafka-controller-start/#Controller-Channel-Manager">Controller Channel Manager</a> 这里介绍的，Controller 会为每台 Broker 初始化为一个 ControllerBrokerStateInfo 对象，该对象主要包含以下四个内容：</p>
+<ol>
+<li>NetworkClient：与 Broker 的网络连接对象；</li>
+<li>Node：Broker 的节点信息；</li>
+<li>MessageQueue：每个 Broker 对应的请求队列，Controller 向 Broker 发送的请求会想放在这个队列里；</li>
+<li>RequestSendThread：每台 Broker 对应的请求发送线程。</li>
+</ol>
+<h2 id="Controller-的请求发送模型"><a href="#Controller-的请求发送模型" class="headerlink" title="Controller 的请求发送模型"></a>Controller 的请求发送模型</h2><p>在讲述 Controller 发送模型之前，先看下 Controller 是如何向 Broker 发送请求的，这里以发送 metadata 更新请求为例，简略的代码如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 创建新的批量请求</span></div><div class="line">brokerRequestBatch.newBatch()</div><div class="line"><span class="comment">//note: 为目标 Broker 添加相应的请求</span></div><div class="line">brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers, partitions)</div><div class="line"><span class="comment">//note: 发送请求，实际上只是把请求添加发送线程的 request queue 中</span></div><div class="line">brokerRequestBatch.sendRequestsToBrokers(epoch)</div></pre></td></tr></table></figure>
+<p>这里有一个比较重要的对象，就是 ControllerBrokerRequestBatch 对象，可以认为它是一个专门用于批量请求发送的对象，在这个对象中有几个重要成员变量：</p>
+<ol>
+<li>leaderAndIsrRequestMap：记录每个 broker 与要发送的 LeaderAndIsr 请求集合的 map；</li>
+<li>stopReplicaRequestMap：记录每个 broker 与要发送的 StopReplica 集合的 map；</li>
+<li>updateMetadataRequestBrokerSet：记录要发送的 update-metadata 请求的 broker 集合；</li>
+<li>updateMetadataRequestPartitionInfoMap：记录 update-metadata 请求要更新的 Topic Partition 集合。</li>
+</ol>
+<p>Controller 可以通过下面这三方法向这些集合添加相应的请求：</p>
+<ol>
+<li><code>addLeaderAndIsrRequestForBrokers()</code>：向给定的 Broker 发送某个 Topic Partition 的 LeaderAndIsr 请求；</li>
+<li><code>addStopReplicaRequestForBrokers()</code>：向给定的 Broker 发送某个 Topic Partition 的 StopReplica 请求；</li>
+<li><code>addUpdateMetadataRequestForBrokers()</code>：向给定的 Broker 发送某一批 Partitions 的 UpdateMetadata 请求。</li>
+</ol>
+<p>Controller 整体的请求模型概况如下图所示：</p>
+<p><img src="/images/kafka/controller-request-model.png" alt="Controller 的请求发送模型"></p>
+<p>上述三个方法将相应的请求添加到对应的集合中后，然后通过 <code>sendRequestsToBrokers()</code> 方法将该请求添加到该 Broker 对应的请求队列中，接着再由该 Broker 对应的 RequestSendThread 去发送相应的请求。</p>
+<h2 id="ControllerBrokerRequestBatch"><a href="#ControllerBrokerRequestBatch" class="headerlink" title="ControllerBrokerRequestBatch"></a>ControllerBrokerRequestBatch</h2><p>这节详细讲述一下关于 ControllerBrokerRequestBatch 的一些方法实现。</p>
+<h3 id="newBatch-方法"><a href="#newBatch-方法" class="headerlink" title="newBatch 方法"></a>newBatch 方法</h3><p>Controller 在添加请求前，都会先调用 <code>newBatch()</code> 方法，该方法的实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 创建新的请求前,确保前一批请求全部发送完毕</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">newBatch</span></span>() &#123;</div><div class="line">  <span class="comment">// raise error if the previous batch is not empty</span></div><div class="line">  <span class="keyword">if</span> (leaderAndIsrRequestMap.nonEmpty)</div><div class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">"Controller to broker state change requests batch is not empty while creating "</span> +</div><div class="line">      <span class="string">"a new one. Some LeaderAndIsr state changes %s might be lost "</span>.format(leaderAndIsrRequestMap.toString()))</div><div class="line">  <span class="keyword">if</span> (stopReplicaRequestMap.nonEmpty)</div><div class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">"Controller to broker state change requests batch is not empty while creating a "</span> +</div><div class="line">      <span class="string">"new one. Some StopReplica state changes %s might be lost "</span>.format(stopReplicaRequestMap.toString()))</div><div class="line">  <span class="keyword">if</span> (updateMetadataRequestBrokerSet.nonEmpty)</div><div class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">"Controller to broker state change requests batch is not empty while creating a "</span> +</div><div class="line">      <span class="string">"new one. Some UpdateMetadata state changes to brokers %s with partition info %s might be lost "</span>.format(</div><div class="line">        updateMetadataRequestBrokerSet.toString(), updateMetadataRequestPartitionInfoMap.toString()))</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这个方法的主要作用是检查上一波的 LeaderAndIsr、UpdateMetadata、StopReplica 请求是否已经发送，正常情况下，Controller 在调用 <code>sendRequestsToBrokers()</code> 方法之后，这些集合中的请求都会被发送，发送之后，会将相应的请求集合清空，当然在异常情况可能会导致部分集合没有被清空，导致无法 <code>newBatch()</code>，这种情况下，通常策略是重启 controller，因为现在 Controller 的设计还是有些复杂，在某些情况下还是可能会导致异常发生，并且有些异常还是无法恢复的。</p>
+<h3 id="添加-LeaderAndIsr-请求"><a href="#添加-LeaderAndIsr-请求" class="headerlink" title="添加 LeaderAndIsr 请求"></a>添加 LeaderAndIsr 请求</h3><p>Controller 可以通过 <code>addLeaderAndIsrRequestForBrokers()</code> 向指定 Broker 列表添加某个 Topic Partition 的 LeaderAndIsr 请求，其具体实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 将 LeaderAndIsr 添加到对应的 broker 中,还未开始发送数据</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">addLeaderAndIsrRequestForBrokers</span></span>(brokerIds: <span class="type">Seq</span>[<span class="type">Int</span>], topic: <span class="type">String</span>, partition: <span class="type">Int</span>,</div><div class="line">                                     leaderIsrAndControllerEpoch: <span class="type">LeaderIsrAndControllerEpoch</span>,</div><div class="line">                                     replicas: <span class="type">Seq</span>[<span class="type">Int</span>], callback: <span class="type">AbstractResponse</span> =&gt; <span class="type">Unit</span> = <span class="literal">null</span>) &#123;</div><div class="line">  <span class="keyword">val</span> topicPartition = <span class="keyword">new</span> <span class="type">TopicPartition</span>(topic, partition)</div><div class="line"></div><div class="line">  <span class="comment">//note: 将请求添加到对应的 broker 上</span></div><div class="line">  brokerIds.filter(_ &gt;= <span class="number">0</span>).foreach &#123; brokerId =&gt;</div><div class="line">    <span class="keyword">val</span> result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.<span class="type">Map</span>.empty)</div><div class="line">    result.put(topicPartition, <span class="type">PartitionStateInfo</span>(leaderIsrAndControllerEpoch, replicas.toSet))</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  <span class="comment">//note: 在更新 LeaderAndIsr 信息时,主题的 metadata 相当于也进行了更新,需要发送这个 topic 的 metadata 给所有存活的 broker</span></div><div class="line">  addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq,</div><div class="line">                                     <span class="type">Set</span>(<span class="type">TopicAndPartition</span>(topic, partition)))</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这个方法的处理流程如下：</p>
+<ol>
+<li>向对应的 Broker 添加 LeaderAndIsr 请求，请求会被添加到 leaderAndIsrRequestMap 集合中；</li>
+<li>并通过 <code>addUpdateMetadataRequestForBrokers()</code> 方法向所有的 Broker 添加这个 Topic-Partition 的 UpdateMatedata 请求，leader 或 isr 变动时，会向所有 broker 同步这个 Partition 的 metadata 信息，这样可以保证每台 Broker 上都有最新的 metadata 信息。</li>
+</ol>
+<h3 id="添加-UpdateMetadata-请求"><a href="#添加-UpdateMetadata-请求" class="headerlink" title="添加 UpdateMetadata 请求"></a>添加 UpdateMetadata 请求</h3><p>Controller 可以通过 <code>addUpdateMetadataRequestForBrokers()</code> 向指定 Broker 列表添加某批 Partitions 的 UpdateMetadata 请求，其具体实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 向给行的 Broker 发送 UpdateMetadataRequest 请求</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">addUpdateMetadataRequestForBrokers</span></span>(brokerIds: <span class="type">Seq</span>[<span class="type">Int</span>],</div><div class="line">                                       partitions: collection.<span class="type">Set</span>[<span class="type">TopicAndPartition</span>] = <span class="type">Set</span>.empty[<span class="type">TopicAndPartition</span>],</div><div class="line">                                       callback: <span class="type">AbstractResponse</span> =&gt; <span class="type">Unit</span> = <span class="literal">null</span>) &#123;</div><div class="line">  <span class="comment">//note: 将 Topic-Partition 添加到对应的 map 中</span></div><div class="line">  <span class="function"><span class="keyword">def</span> <span class="title">updateMetadataRequestPartitionInfo</span></span>(partition: <span class="type">TopicAndPartition</span>, beingDeleted: <span class="type">Boolean</span>) &#123;</div><div class="line">    <span class="keyword">val</span> leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)</div><div class="line">    leaderIsrAndControllerEpochOpt <span class="keyword">match</span> &#123;</div><div class="line">      <span class="keyword">case</span> <span class="type">Some</span>(leaderIsrAndControllerEpoch) =&gt;</div><div class="line">        <span class="keyword">val</span> replicas = controllerContext.partitionReplicaAssignment(partition).toSet</div><div class="line">        <span class="keyword">val</span> partitionStateInfo = <span class="keyword">if</span> (beingDeleted) &#123; <span class="comment">//note: 正在删除的 Partition,设置 leader 为-2</span></div><div class="line">          <span class="keyword">val</span> leaderAndIsr = <span class="keyword">new</span> <span class="type">LeaderAndIsr</span>(<span class="type">LeaderAndIsr</span>.<span class="type">LeaderDuringDelete</span>, leaderIsrAndControllerEpoch.leaderAndIsr.isr)</div><div class="line">          <span class="type">PartitionStateInfo</span>(<span class="type">LeaderIsrAndControllerEpoch</span>(leaderAndIsr, leaderIsrAndControllerEpoch.controllerEpoch), replicas)</div><div class="line">        &#125; <span class="keyword">else</span> &#123;</div><div class="line">          <span class="type">PartitionStateInfo</span>(leaderIsrAndControllerEpoch, replicas)</div><div class="line">        &#125;</div><div class="line">        <span class="comment">//note: 添加到对应的 request map 中</span></div><div class="line">        updateMetadataRequestPartitionInfoMap.put(<span class="keyword">new</span> <span class="type">TopicPartition</span>(partition.topic, partition.partition), partitionStateInfo)</div><div class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt;</div><div class="line">        info(<span class="string">"Leader not yet assigned for partition %s. Skip sending UpdateMetadataRequest."</span>.format(partition))</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  <span class="comment">//note:过滤出要发送的 partition</span></div><div class="line">  <span class="keyword">val</span> filteredPartitions = &#123;</div><div class="line">    <span class="keyword">val</span> givenPartitions = <span class="keyword">if</span> (partitions.isEmpty)</div><div class="line">      controllerContext.partitionLeadershipInfo.keySet <span class="comment">//note: Partitions 为空时，就过滤出所有的 topic</span></div><div class="line">    <span class="keyword">else</span></div><div class="line">      partitions</div><div class="line">    <span class="keyword">if</span> (controller.deleteTopicManager.partitionsToBeDeleted.isEmpty)</div><div class="line">      givenPartitions</div><div class="line">    <span class="keyword">else</span></div><div class="line">      givenPartitions -- controller.deleteTopicManager.partitionsToBeDeleted <span class="comment">//note: 将要删除的 topic 过滤掉</span></div><div class="line">  &#125;</div><div class="line"></div><div class="line">  updateMetadataRequestBrokerSet ++= brokerIds.filter(_ &gt;= <span class="number">0</span>) <span class="comment">//note: 将 broker 列表更新到要发送的集合中</span></div><div class="line">  <span class="comment">//note: 对于要更新 metadata 的 Partition,设置 beingDeleted 为 False</span></div><div class="line">  filteredPartitions.foreach(partition =&gt; updateMetadataRequestPartitionInfo(partition, beingDeleted = <span class="literal">false</span>))</div><div class="line">  <span class="comment">//note: 要删除的 Partition 设置 BeingDeleted 为 True</span></div><div class="line">  controller.deleteTopicManager.partitionsToBeDeleted.foreach(partition =&gt; updateMetadataRequestPartitionInfo(partition, beingDeleted = <span class="literal">true</span>))</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这个方法的实现逻辑如下：</p>
+<ol>
+<li>首先过滤出要发送的 Partition 列表，如果没有指定要发送 partitions 列表，那么默认就是发送全局的 metadata 信息；</li>
+<li>接着将已经标记为删除的 Partition 从上面的列表中移除；</li>
+<li>将要发送的 Broker 列表添加到 updateMetadataRequestBrokerSet 集合中；</li>
+<li>将前面过滤的 Partition 列表对应的 metadata 信息添加到对应的 updateMetadataRequestPartitionInfoMap 集合中;</li>
+<li>将当前设置为删除的所有 Partition 的 metadata 信息也添加到 updateMetadataRequestPartitionInfoMap 集合中，添加前会把其 leader 设置为-2，这样 Broker 收到这个 Partition 的 metadata 信息之后就会知道这个 Partition 是设置删除标志。</li>
+</ol>
+<h3 id="添加-StopReplica-请求"><a href="#添加-StopReplica-请求" class="headerlink" title="添加 StopReplica 请求"></a>添加 StopReplica 请求</h3><p>Controller 可以通过 <code>addStopReplicaRequestForBrokers()</code> 向指定 Broker 列表添加某个 Topic Partition 的 StopReplica 请求，其具体实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 将 StopReplica 添加到对应的 Broker 中,还未开始发送数据</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">addStopReplicaRequestForBrokers</span></span>(brokerIds: <span class="type">Seq</span>[<span class="type">Int</span>], topic: <span class="type">String</span>, partition: <span class="type">Int</span>, deletePartition: <span class="type">Boolean</span>,</div><div class="line">                                    callback: (<span class="type">AbstractResponse</span>, <span class="type">Int</span>) =&gt; <span class="type">Unit</span> = <span class="literal">null</span>) &#123;</div><div class="line">  brokerIds.filter(b =&gt; b &gt;= <span class="number">0</span>).foreach &#123; brokerId =&gt;</div><div class="line">    stopReplicaRequestMap.getOrElseUpdate(brokerId, <span class="type">Seq</span>.empty[<span class="type">StopReplicaRequestInfo</span>])</div><div class="line">    <span class="keyword">val</span> v = stopReplicaRequestMap(brokerId)</div><div class="line">    <span class="keyword">if</span>(callback != <span class="literal">null</span>)</div><div class="line">      stopReplicaRequestMap(brokerId) = v :+ <span class="type">StopReplicaRequestInfo</span>(<span class="type">PartitionAndReplica</span>(topic, partition, brokerId),</div><div class="line">        deletePartition, (r: <span class="type">AbstractResponse</span>) =&gt; callback(r, brokerId))</div><div class="line">    <span class="keyword">else</span></div><div class="line">      stopReplicaRequestMap(brokerId) = v :+ <span class="type">StopReplicaRequestInfo</span>(<span class="type">PartitionAndReplica</span>(topic, partition, brokerId),</div><div class="line">        deletePartition)</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这个方法的实现逻辑比较简单，直接将 StopReplica 添加到 stopReplicaRequestMap 中。</p>
+<h3 id="向-Broker-发送请求"><a href="#向-Broker-发送请求" class="headerlink" title="向 Broker 发送请求"></a>向 Broker 发送请求</h3><p>Controller 在添加完相应的请求后，最后一步都会去调用 <code>sendRequestsToBrokers()</code> 方法构造相应的请求，并把请求添加到 Broker 对应的 RequestQueue 中。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div><div class="line">61</div><div class="line">62</div><div class="line">63</div><div class="line">64</div><div class="line">65</div><div class="line">66</div><div class="line">67</div><div class="line">68</div><div class="line">69</div><div class="line">70</div><div class="line">71</div><div class="line">72</div><div class="line">73</div><div class="line">74</div><div class="line">75</div><div class="line">76</div><div class="line">77</div><div class="line">78</div><div class="line">79</div><div class="line">80</div><div class="line">81</div><div class="line">82</div><div class="line">83</div><div class="line">84</div><div class="line">85</div><div class="line">86</div><div class="line">87</div><div class="line">88</div><div class="line">89</div><div class="line">90</div><div class="line">91</div><div class="line">92</div><div class="line">93</div><div class="line">94</div><div class="line">95</div><div class="line">96</div><div class="line">97</div><div class="line">98</div><div class="line">99</div><div class="line">100</div><div class="line">101</div><div class="line">102</div><div class="line">103</div><div class="line">104</div><div class="line">105</div><div class="line">106</div><div class="line">107</div><div class="line">108</div><div class="line">109</div><div class="line">110</div><div class="line">111</div><div class="line">112</div><div class="line">113</div><div class="line">114</div><div class="line">115</div><div class="line">116</div><div class="line">117</div><div class="line">118</div><div class="line">119</div><div class="line">120</div><div class="line">121</div><div class="line">122</div><div class="line">123</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 发送请求给 broker（只是将对应处理后放入到对应的 queue 中）</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">sendRequestsToBrokers</span></span>(controllerEpoch: <span class="type">Int</span>) &#123;</div><div class="line">  <span class="keyword">try</span> &#123;</div><div class="line">    <span class="comment">//note: LeaderAndIsr 请求</span></div><div class="line">    leaderAndIsrRequestMap.foreach &#123; <span class="keyword">case</span> (broker, partitionStateInfos) =&gt;</div><div class="line">      partitionStateInfos.foreach &#123; <span class="keyword">case</span> (topicPartition, state) =&gt;</div><div class="line">        <span class="keyword">val</span> typeOfRequest = <span class="keyword">if</span> (broker == state.leaderIsrAndControllerEpoch.leaderAndIsr.leader) <span class="string">"become-leader"</span> <span class="keyword">else</span> <span class="string">"become-follower"</span></div><div class="line">        stateChangeLogger.trace((<span class="string">"Controller %d epoch %d sending %s LeaderAndIsr request %s to broker %d "</span> +</div><div class="line">                                 <span class="string">"for partition [%s,%d]"</span>).format(controllerId, controllerEpoch, typeOfRequest,</div><div class="line">                                                                 state.leaderIsrAndControllerEpoch, broker,</div><div class="line">                                                                 topicPartition.topic, topicPartition.partition))</div><div class="line">      &#125;</div><div class="line">      <span class="comment">//note: leader id 集合</span></div><div class="line">      <span class="keyword">val</span> leaderIds = partitionStateInfos.map(_._2.leaderIsrAndControllerEpoch.leaderAndIsr.leader).toSet</div><div class="line">      <span class="keyword">val</span> leaders = controllerContext.liveOrShuttingDownBrokers.filter(b =&gt; leaderIds.contains(b.id)).map &#123;</div><div class="line">        _.getNode(controller.config.interBrokerListenerName)</div><div class="line">      &#125;</div><div class="line">      <span class="comment">//note: requests.PartitionState</span></div><div class="line">      <span class="keyword">val</span> partitionStates = partitionStateInfos.map &#123; <span class="keyword">case</span> (topicPartition, partitionStateInfo) =&gt;</div><div class="line">        <span class="keyword">val</span> <span class="type">LeaderIsrAndControllerEpoch</span>(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch</div><div class="line">        <span class="keyword">val</span> partitionState = <span class="keyword">new</span> requests.<span class="type">PartitionState</span>(controllerEpoch, leaderIsr.leader,</div><div class="line">          leaderIsr.leaderEpoch, leaderIsr.isr.map(<span class="type">Integer</span>.valueOf).asJava, leaderIsr.zkVersion,</div><div class="line">          partitionStateInfo.allReplicas.map(<span class="type">Integer</span>.valueOf).asJava)</div><div class="line">        topicPartition -&gt; partitionState</div><div class="line">      &#125;</div><div class="line">      <span class="comment">//note: 构造 LeaderAndIsr 请求,并添加到对应的 queue 中</span></div><div class="line">      <span class="keyword">val</span> leaderAndIsrRequest = <span class="keyword">new</span> <span class="type">LeaderAndIsrRequest</span>.</div><div class="line">          <span class="type">Builder</span>(controllerId, controllerEpoch, partitionStates.asJava, leaders.asJava)</div><div class="line">      controller.sendRequest(broker, <span class="type">ApiKeys</span>.<span class="type">LEADER_AND_ISR</span>, leaderAndIsrRequest, <span class="literal">null</span>)</div><div class="line">    &#125;</div><div class="line">    leaderAndIsrRequestMap.clear() <span class="comment">//note: 清空 leaderAndIsr 集合</span></div><div class="line"></div><div class="line">    <span class="comment">//note: update-metadata 请求</span></div><div class="line">    updateMetadataRequestPartitionInfoMap.foreach(p =&gt; stateChangeLogger.trace((<span class="string">"Controller %d epoch %d sending UpdateMetadata request %s "</span> +</div><div class="line">      <span class="string">"to brokers %s for partition %s"</span>).format(controllerId, controllerEpoch, p._2.leaderIsrAndControllerEpoch,</div><div class="line">      updateMetadataRequestBrokerSet.toString(), p._1)))</div><div class="line">    <span class="keyword">val</span> partitionStates = updateMetadataRequestPartitionInfoMap.map &#123; <span class="keyword">case</span> (topicPartition, partitionStateInfo) =&gt;</div><div class="line">      <span class="keyword">val</span> <span class="type">LeaderIsrAndControllerEpoch</span>(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch</div><div class="line">      <span class="keyword">val</span> partitionState = <span class="keyword">new</span> requests.<span class="type">PartitionState</span>(controllerEpoch, leaderIsr.leader,</div><div class="line">        leaderIsr.leaderEpoch, leaderIsr.isr.map(<span class="type">Integer</span>.valueOf).asJava, leaderIsr.zkVersion,</div><div class="line">        partitionStateInfo.allReplicas.map(<span class="type">Integer</span>.valueOf).asJava)</div><div class="line">      topicPartition -&gt; partitionState</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="keyword">val</span> version: <span class="type">Short</span> =</div><div class="line">      <span class="keyword">if</span> (controller.config.interBrokerProtocolVersion &gt;= <span class="type">KAFKA_0_10_2_IV0</span>) <span class="number">3</span></div><div class="line">      <span class="keyword">else</span> <span class="keyword">if</span> (controller.config.interBrokerProtocolVersion &gt;= <span class="type">KAFKA_0_10_0_IV1</span>) <span class="number">2</span></div><div class="line">      <span class="keyword">else</span> <span class="keyword">if</span> (controller.config.interBrokerProtocolVersion &gt;= <span class="type">KAFKA_0_9_0</span>) <span class="number">1</span></div><div class="line">      <span class="keyword">else</span> <span class="number">0</span></div><div class="line"></div><div class="line">    <span class="comment">//note: 构造 update-metadata 请求</span></div><div class="line">    <span class="keyword">val</span> updateMetadataRequest = &#123;</div><div class="line">      <span class="keyword">val</span> liveBrokers = <span class="keyword">if</span> (version == <span class="number">0</span>) &#123;</div><div class="line">        <span class="comment">// Version 0 of UpdateMetadataRequest only supports PLAINTEXT.</span></div><div class="line">        controllerContext.liveOrShuttingDownBrokers.map &#123; broker =&gt;</div><div class="line">          <span class="keyword">val</span> securityProtocol = <span class="type">SecurityProtocol</span>.<span class="type">PLAINTEXT</span></div><div class="line">          <span class="keyword">val</span> listenerName = <span class="type">ListenerName</span>.forSecurityProtocol(securityProtocol)</div><div class="line">          <span class="keyword">val</span> node = broker.getNode(listenerName)</div><div class="line">          <span class="keyword">val</span> endPoints = <span class="type">Seq</span>(<span class="keyword">new</span> <span class="type">EndPoint</span>(node.host, node.port, securityProtocol, listenerName))</div><div class="line">          <span class="keyword">new</span> <span class="type">UpdateMetadataRequest</span>.<span class="type">Broker</span>(broker.id, endPoints.asJava, broker.rack.orNull)</div><div class="line">        &#125;</div><div class="line">      &#125; <span class="keyword">else</span> &#123;</div><div class="line">        controllerContext.liveOrShuttingDownBrokers.map &#123; broker =&gt;</div><div class="line">          <span class="keyword">val</span> endPoints = broker.endPoints.map &#123; endPoint =&gt;</div><div class="line">            <span class="keyword">new</span> <span class="type">UpdateMetadataRequest</span>.<span class="type">EndPoint</span>(endPoint.host, endPoint.port, endPoint.securityProtocol, endPoint.listenerName)</div><div class="line">          &#125;</div><div class="line">          <span class="keyword">new</span> <span class="type">UpdateMetadataRequest</span>.<span class="type">Broker</span>(broker.id, endPoints.asJava, broker.rack.orNull)</div><div class="line">        &#125;</div><div class="line">      &#125;</div><div class="line">      <span class="keyword">new</span> <span class="type">UpdateMetadataRequest</span>.<span class="type">Builder</span>(</div><div class="line">        controllerId, controllerEpoch, partitionStates.asJava, liveBrokers.asJava).</div><div class="line">        setVersion(version)</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="comment">//note: 将请求添加到对应的 queue</span></div><div class="line">    updateMetadataRequestBrokerSet.foreach &#123; broker =&gt;</div><div class="line">      controller.sendRequest(broker, <span class="type">ApiKeys</span>.<span class="type">UPDATE_METADATA_KEY</span>, updateMetadataRequest, <span class="literal">null</span>)</div><div class="line">    &#125;</div><div class="line">    updateMetadataRequestBrokerSet.clear() <span class="comment">//note: 清空对应的请求记录</span></div><div class="line">    updateMetadataRequestPartitionInfoMap.clear()</div><div class="line"></div><div class="line">    <span class="comment">//note: StopReplica 请求的处理</span></div><div class="line">    stopReplicaRequestMap.foreach &#123; <span class="keyword">case</span> (broker, replicaInfoList) =&gt;</div><div class="line">      <span class="keyword">val</span> stopReplicaWithDelete = replicaInfoList.filter(_.deletePartition).map(_.replica).toSet</div><div class="line">      <span class="keyword">val</span> stopReplicaWithoutDelete = replicaInfoList.filterNot(_.deletePartition).map(_.replica).toSet</div><div class="line">      debug(<span class="string">"The stop replica request (delete = true) sent to broker %d is %s"</span></div><div class="line">        .format(broker, stopReplicaWithDelete.mkString(<span class="string">","</span>)))</div><div class="line">      debug(<span class="string">"The stop replica request (delete = false) sent to broker %d is %s"</span></div><div class="line">        .format(broker, stopReplicaWithoutDelete.mkString(<span class="string">","</span>)))</div><div class="line"></div><div class="line">      <span class="keyword">val</span> (replicasToGroup, replicasToNotGroup) = replicaInfoList.partition(r =&gt; !r.deletePartition &amp;&amp; r.callback == <span class="literal">null</span>)</div><div class="line"></div><div class="line">      <span class="comment">// Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially</span></div><div class="line">      <span class="comment">// changes the order in which the requests are sent for the same partitions, but that's OK.</span></div><div class="line">      <span class="keyword">val</span> stopReplicaRequest = <span class="keyword">new</span> <span class="type">StopReplicaRequest</span>.<span class="type">Builder</span>(controllerId, controllerEpoch, <span class="literal">false</span>,</div><div class="line">        replicasToGroup.map(r =&gt; <span class="keyword">new</span> <span class="type">TopicPartition</span>(r.replica.topic, r.replica.partition)).toSet.asJava)</div><div class="line">      controller.sendRequest(broker, <span class="type">ApiKeys</span>.<span class="type">STOP_REPLICA</span>, stopReplicaRequest)</div><div class="line"></div><div class="line">      replicasToNotGroup.foreach &#123; r =&gt;</div><div class="line">        <span class="keyword">val</span> stopReplicaRequest = <span class="keyword">new</span> <span class="type">StopReplicaRequest</span>.<span class="type">Builder</span>(</div><div class="line">            controllerId, controllerEpoch, r.deletePartition,</div><div class="line">            <span class="type">Set</span>(<span class="keyword">new</span> <span class="type">TopicPartition</span>(r.replica.topic, r.replica.partition)).asJava)</div><div class="line">        controller.sendRequest(broker, <span class="type">ApiKeys</span>.<span class="type">STOP_REPLICA</span>, stopReplicaRequest, r.callback)</div><div class="line">      &#125;</div><div class="line">    &#125;</div><div class="line">    stopReplicaRequestMap.clear()</div><div class="line">  &#125; <span class="keyword">catch</span> &#123;</div><div class="line">    <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt;</div><div class="line">      <span class="keyword">if</span> (leaderAndIsrRequestMap.nonEmpty) &#123;</div><div class="line">        error(<span class="string">"Haven't been able to send leader and isr requests, current state of "</span> +</div><div class="line">            <span class="string">s"the map is <span class="subst">$leaderAndIsrRequestMap</span>. Exception message: <span class="subst">$e</span>"</span>)</div><div class="line">      &#125;</div><div class="line">      <span class="keyword">if</span> (updateMetadataRequestBrokerSet.nonEmpty) &#123;</div><div class="line">        error(<span class="string">s"Haven't been able to send metadata update requests to brokers <span class="subst">$updateMetadataRequestBrokerSet</span>, "</span> +</div><div class="line">              <span class="string">s"current state of the partition info is <span class="subst">$updateMetadataRequestPartitionInfoMap</span>. Exception message: <span class="subst">$e</span>"</span>)</div><div class="line">      &#125;</div><div class="line">      <span class="keyword">if</span> (stopReplicaRequestMap.nonEmpty) &#123;</div><div class="line">        error(<span class="string">"Haven't been able to send stop replica requests, current state of "</span> +</div><div class="line">            <span class="string">s"the map is <span class="subst">$stopReplicaRequestMap</span>. Exception message: <span class="subst">$e</span>"</span>)</div><div class="line">      &#125;</div><div class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(e)</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>上面这个方法看着很复杂，其实做的事情很明确，就是将三个集合中的请求发送对应 Broker 的请求队列中，这里简单作一个总结：</p>
+<ol>
+<li>从 leaderAndIsrRequestMap 集合中构造相应的 LeaderAndIsr 请求，通过 Controller 的 <code>sendRequest()</code> 方法将请求添加到 Broker 对应的 MessageQueue 中，最后清空 leaderAndIsrRequestMap 集合；</li>
+<li>从 updateMetadataRequestPartitionInfoMap 集合中构造相应的 UpdateMetadata 请求，，通过 Controller 的 <code>sendRequest()</code> 方法将请求添加到 Broker 对应的 MessageQueue 中，最后清空 updateMetadataRequestBrokerSet 和 updateMetadataRequestPartitionInfoMap 集合；</li>
+<li>从 stopReplicaRequestMap 集合中构造相应的 StopReplica 请求，在构造时会根据是否设置删除标志将要涉及的 Partition 分成两类，构造对应的请求，对于要删除数据的 StopReplica 会设置相应的回调函数，然后通过 Controller 的 <code>sendRequest()</code> 方法将请求添加到 Broker 对应的 MessageQueue 中，最后清空 stopReplicaRequestMap 集合。</li>
+</ol>
+<p>走到这一步，Controller 要发送的请求算是都添加到对应 Broker 的 MessageQueue 中，后台的 RequestSendThread 线程会从这个请求队列中遍历相应的请求，发送给对应的 Broker。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;本篇主要讲述 Controller 向各个 Broker 发送请求的模型，算是对 &lt;a href=&quot;http://matt33.com/2018/06/15/kafka-controller-start/#Controller-Channel-Manager&quot;&gt;Contro
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
+    
+  </entry>
   
   <entry>
     <title>Kafka 源码解析之 Topic 的新建/扩容/删除（二十）</title>
@@ -677,7 +758,7 @@
     <link href="http://matt33.com/2018/06/15/kafka-controller-start/"/>
     <id>http://matt33.com/2018/06/15/kafka-controller-start/</id>
     <published>2018-06-15T03:04:14.000Z</published>
-    <updated>2018-06-18T05:22:59.000Z</updated>
+    <updated>2018-06-23T03:28:01.000Z</updated>
     
     <content type="html"><![CDATA[<p>从本篇文章开始，Kafka 源码解析就正式进入了 Controller 部分，Controller 作为 Kafka Server 端一个重要的组件，它的角色类似于其他分布式系统 Master 的角色，跟其他系统不一样的是，Kafka 集群的任何一台 Broker 都可以作为 Controller，但是在一个集群中同时只会有一个 Controller 是 alive 状态。Controller 在集群中负责的事务很多，比如：集群 meta 信息的一致性保证、Partition leader 的选举、broker 上下线等都是由 Controller 来具体负责。Controller 部分的内容还是比较多的，计划分5篇左右的文章讲述，本文先来看下 Controller 的简介、Controller 的选举、Controller 选举后服务的启动流程以及 Controller 的四种不同 leader 选举机制。分区状态机、副本副本状态机以及对各种 listener 的处理将在后续的文章中展开。</p>
 <h2 id="Controller-简介"><a href="#Controller-简介" class="headerlink" title="Controller 简介"></a>Controller 简介</h2><p>在于分布式系统中，总会有一个地方需要对全局 meta 做一个统一的维护，Kafka 的 Controller 就是充当这个角色的。Kafka 简单的框架图如下所示</p>
@@ -815,7 +896,7 @@
 </blockquote>
 <h3 id="Controller-Channel-Manager"><a href="#Controller-Channel-Manager" class="headerlink" title="Controller Channel Manager"></a>Controller Channel Manager</h3><p><code>initializeControllerContext()</code> 方法会通过 <code>startChannelManager()</code> 方法初始化 ControllerChannelManager 对象，如下所示：</p>
 <figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 启动 ChannelManager 线程</span></div><div class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">startChannelManager</span></span>() &#123;</div><div class="line">  controllerContext.controllerChannelManager = <span class="keyword">new</span> <span class="type">ControllerChannelManager</span>(controllerContext, config, time, metrics, threadNamePrefix)</div><div class="line">  controllerContext.controllerChannelManager.startup()</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>ControllerChannelManager 在初始化时，会为集群中的每个节点初始化一个 ControllerBrokerStateInfo 对象，该对象包含三个部分：</p>
+<p>ControllerChannelManager 在初始化时，会为集群中的每个节点初始化一个 ControllerBrokerStateInfo 对象，该对象包含四个部分：</p>
 <ol>
 <li>NetworkClient：网络连接对象；</li>
 <li>Node：节点信息；</li>
@@ -2900,275 +2981,6 @@
     
     
       <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>谈一谈 Java IO 模型</title>
-    <link href="http://matt33.com/2017/08/12/java-nio/"/>
-    <id>http://matt33.com/2017/08/12/java-nio/</id>
-    <published>2017-08-12T09:51:56.000Z</published>
-    <updated>2017-08-18T14:03:40.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>Java IO 模型对于 Java 开发工程师来说，是日常工作中经常接触的内容，特别是随着分布式系统的兴起，IO 也显得越来越重要，Java 的 IO 模型本质上还是利用操作系统提供的接口来实现，不熟悉这一部分内容的话，可以先看一下上篇文章<a href="http://matt33.com/2017/08/06/unix-io/">Unix 网络 IO 模型及 Linux 的 IO 多路复用模型</a>，本文跟上篇的内容是紧密相连的，特别是本文的重点 —— Java NIO 部分，其底层原理就是 UNIX 的 IO 多路复用，IO 多路复用在上篇文章中讲述了很多。</p>
-<p>这篇文章大概内容如下：</p>
-<ol>
-<li>Java IO 模型的简单介绍；</li>
-<li>BIO 、NIO、AIO 模型的介绍，会详细介绍 NIO；</li>
-<li>几种 IO 模型的对比。</li>
-</ol>
-<h1 id="Java-IO-模型介绍"><a href="#Java-IO-模型介绍" class="headerlink" title="Java IO 模型介绍"></a>Java IO 模型介绍</h1><p>在 JDK 推出 Java NIO 之前，基于 Java 的所有 Socket 通信都采用了同步阻塞模式（BIO），这种一对一的通信模型虽然简化了开发的难度，但在性能和可靠性方面却存在这巨大的瓶颈，特别是无法处理高并发的场景，使得 Java 在服务器端应用十分有限。</p>
-<p>正是由于 Java 传统 BIO 的拙劣表现，使得 Java 不得不去开发新版的 IO 模型，最终，JDK1.4 提供了新的 NIO 类库，Java 可以支持非阻塞 IO；之后，JDK1.7 正式发布，不但对 NIO 进行了升级，还提供了 AIO 功能。本文就是在对 Java 这些 IO 模型学习后，总结的一篇笔记。</p>
-<h2 id="网络编程"><a href="#网络编程" class="headerlink" title="网络编程"></a>网络编程</h2><p>网络编程的基本模型是 Client/Server 模型，也就是两个进程之间进行相互通信，其中服务端提供位置信息（绑定的 IP 地址和端口），客户端通过连接操作向服务端监听的地址发起连接请求，通过三次握手建立连接，如果连接成功，双方就可以通过网络套接字（socket）进行通信（可以参考<a href="http://localhost:8080/2016/08/30/http-protocol/" target="_blank" rel="external">TCP的三次握手和四次挥手</a>），下面先看一下两种对 IO 模型常见的分类方式。</p>
-<h2 id="同步与异步"><a href="#同步与异步" class="headerlink" title="同步与异步"></a>同步与异步</h2><p>描述的是用户线程与内核的交互方式，与消息的通知机制有关：</p>
-<ol>
-<li>同步：当一个同步调用发出后，需要等待返回消息（用户线程不断去询问），才能继续进行；</li>
-<li>异步：当一个异步调用发出后，调用者不能立即得到返回消息，完成后会通过状态、通知和回调来通知调用者。</li>
-</ol>
-<p>简单来说就是：</p>
-<ol>
-<li>同步：同步等待消息通知，消息返回才能继续进行；</li>
-<li>异步：异步等待消息通知，完成后被调系统通过回调等来通过调用者。</li>
-</ol>
-<h2 id="阻塞与非阻塞"><a href="#阻塞与非阻塞" class="headerlink" title="阻塞与非阻塞"></a>阻塞与非阻塞</h2><p>阻塞和非阻塞指的是不能立刻得到结果之前，会不会阻塞当前线程。</p>
-<ol>
-<li>阻塞：当前线程会被挂起，直到结果返回；</li>
-<li>非阻塞：指在不能立刻得到结果之前，该函数不会阻塞当前线程，而会立刻返回（会导致线程切换的增加）。</li>
-</ol>
-<p>举个栗子说明：</p>
-<table>
-<thead>
-<tr>
-<th>类别</th>
-<th>示例</th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>同步阻塞</td>
-<td>在银行排队，不干别的事情</td>
-<td>效率最低</td>
-</tr>
-<tr>
-<td>同步非阻塞</td>
-<td>排队时，边打电话边抬头看是否到自己了</td>
-<td>效率低下</td>
-</tr>
-<tr>
-<td>异步阻塞</td>
-<td>在银行领一个号后，在银行里等，不能做别的事情</td>
-<td></td>
-</tr>
-<tr>
-<td>异步非阻塞</td>
-<td>领完号后，在忙着自己的事情，直到柜台通知</td>
-<td>效率较高</td>
-</tr>
-</tbody>
-</table>
-<h1 id="BIO"><a href="#BIO" class="headerlink" title="BIO"></a>BIO</h1><p>BIO 模型是 Java IO 最开始提供的一种 IO 模型，BIO 又可以细分为两种模型，一是传统的同步阻塞模型，二是在对传统 BIO 模型的基本上进行的优化，又称为伪异步 IO 模型。</p>
-<h2 id="传统的-BIO-模型"><a href="#传统的-BIO-模型" class="headerlink" title="传统的 BIO 模型"></a>传统的 BIO 模型</h2><p>传统 BIO 中，ServerSocket 负责绑定 IP 地址，启动监听端口；Socket 负责发起连接操作，连接成功后，双方通过输入和输出流进行同步阻塞通信。采用 BIO 通信模型的 Server，通常由一个独立的 Acceptor 线程负责监听 Client 端的连接，它接受到 Client 端连接请求后为每个 Client 创建一个新的线程进行处理，处理完之后，通过输出流返回给 Client 端，线程销毁，过程如下图所示（图来自《Netty 权威指南》）。</p>
-<p><img src="/images/java/BIO.png" alt="传统 Java BIO 模型"></p>
-<p>这个模型最大的问题是：</p>
-<ul>
-<li>缺乏扩展性，不能处理高性能、高并发场景，线程是 JVM 中非常宝贵的资源，当线程数膨胀后，系统的性能就会急剧下降，随着并发访问量的继续增大，系统就会出现线程堆栈溢出、创建新线程失败等问题，导致 Server 不能对外提供服务。</li>
-</ul>
-<p>示例代码参考 <a href="https://github.com/wangzzu/ProgramlLearn/tree/aab89008091660f1f231763660eb329eb5928bde/java_learn/java_socket/src/main/java/bio/" target="_blank" rel="external">Java BIO 示例</a>。</p>
-<h2 id="伪异步-IO-模型"><a href="#伪异步-IO-模型" class="headerlink" title="伪异步 IO 模型"></a>伪异步 IO 模型</h2><p>为了改进这种一对一的连接模型，后来又演进出了一种通过线程池或者消息队列实现 1 个或者多个线程处理所有 Client 请求的模型，由于它底层依然是同步阻塞 IO，所以被称为【伪异步 IO 模型】。相比于传统 BIO 后端不断创建新的线程处理 Client 请求，它在后端使用一个<strong>线程池</strong>来代替，通过线程池可以灵活的调配线程资源，设置线程的最大值，防止由于海量并发接入导致线程资源耗尽，过程如下图所示（图来自《Netty 权威指南》）。</p>
-<p><img src="/images/java/BIO2.png" alt="伪异步 IO 模型"></p>
-<p>看似这个模型解决了 BIO 面对的问题，实际上，由于它是面向数据流的模型，底层依然是同步阻塞模型，在处理一个 socket 输入流，它会一直阻塞下去，除非：有数据可读、可用数据读取完毕、有异常，否则会一直一直阻塞下去。这个模型最大的问题是：</p>
-<ul>
-<li>阻塞的时间取决于对应 IO 线程的处理速度和网络 IO 的传输速度，处理效率不可控。</li>
-</ul>
-<h1 id="Java-NIO"><a href="#Java-NIO" class="headerlink" title="Java NIO"></a>Java NIO</h1><p>Java NIO 是 Java IO 模型中最重要的 IO 模型，也是本文主要讲述的内容，正式由于 NIO 的出现，Java 才能在服务端获得跟 C 和 C++ 一样的运行效率，NIO 是 New IO（或者 Non-block IO）的简称。</p>
-<p>与 Socket 类和 ServerSocket 类相对应，NIO 也提供了 SocketChannel 和 ServerSocketChannel 两种不同套接字通道的实现，它们都支持阻塞和非阻塞两种模式。一般来说，低负载、低并发的应用程序可以选择同步阻塞 IO 以降低复杂度，但是高负载、高并发的网络应用，需要使用 NIO 的非阻塞模式进行开发。</p>
-<h2 id="基本概念"><a href="#基本概念" class="headerlink" title="基本概念"></a>基本概念</h2><p>在 NIO 中有三种非常重要的概念：</p>
-<ul>
-<li>缓冲区（buffer）：本质上是一个数组，它包含一些要读写的数据；</li>
-<li>通道（channel）：是一个通道，通过它读写数据，类似于自来水管；</li>
-<li>多路复用器（selector）：用于选择已经就绪的任务，selector 会轮询注册在其上的 channel，选出已经就绪的 channel。</li>
-</ul>
-<p><img src="/images/java/NIO.png" alt="NIO 的简单模型"></p>
-<p>三者之间的关系如上图所示，这里先简单概括一下：</p>
-<ul>
-<li>Buffer：是缓冲区，任何时候访问 NIO 数据，都是通过 Buffer 进行；</li>
-<li>Channel：通过它读写 Buffer 中的数据，可以用于读、写或同时读写；</li>
-<li>Selector：多路复用器，Selector 不断轮询注册在其上的 Channel，如果某个 Channel 有新的 TCP 链接接入、读和写事件，这个 Channel 就处于就绪状态，会被 Selector 轮组出来，然后通过<code>SelectionKey()</code> 可以获取就绪 Channel 的集合，进行后续的 IO 操作。</li>
-</ul>
-<p>下面详细介绍一下这三个概念。</p>
-<h3 id="Channel"><a href="#Channel" class="headerlink" title="Channel"></a>Channel</h3><p>Channel 是全双工的，可以比流更好地映射底层操作系统的 API，与流也非常相似，有以下几点区别：</p>
-<ul>
-<li>Channel 可以读也可以写，但流（InputStream 或 OutputStream）是单向的；</li>
-<li>通道可以异步读写；</li>
-<li>它是基于缓冲区（Buffer）进行读写；</li>
-</ul>
-<p>在 Java 中提供以下几种 Channel：</p>
-<ol>
-<li>FileChannel：用于文件的读写；</li>
-<li>DatagramChannel：用于 UDP 数据读写；</li>
-<li>SocketChannel：用于 Socket 数据读写；</li>
-<li>ServerSocketChannel：监听 TCP 连接请求。</li>
-</ol>
-<p>这些 Channel 类之间的继承关系如下图所示</p>
-<p><img src="/images/java/channel.png" alt="Channel 之间的继承关系"></p>
-<p>从上图中，可以看出，Channel 可以分为两大类：用于网络读写的 <code>SelectableChannel</code> 和用于文件操作的 <code>FileChannel</code>。</p>
-<p>其中，FileChannel 只能在阻塞模式下工作，具体可以参考<a href="http://wiki.jikexueyuan.com/project/java-nio-zh/java-nio-filechannel.html" target="_blank" rel="external">Java NIO FileChannel文件通道</a>。</p>
-<h4 id="NIO-Scatter-Gather"><a href="#NIO-Scatter-Gather" class="headerlink" title="NIO Scatter/Gather"></a>NIO Scatter/Gather</h4><p>Java NIO 发布时内置了对 scatter/gather的支持：</p>
-<ul>
-<li>Scattering read 指的是从通道读取的操作能把数据写入多个 Buffer，也就是 sctters 代表了数据从一个 Channel 到多个 Buffer的过程。</li>
-<li>Gathering write 则正好相反，表示的是从多个 Buffer 把数据写入到一个 Channel中。</li>
-</ul>
-<p><img src="/images/java/scatter-gather.png" alt="Channel 之间的继承关系"></p>
-<p>示例如下，具体参考 <a href="http://wiki.jikexueyuan.com/project/java-nio-zh/java-nio-scatter-gather.html" target="_blank" rel="external">Java NIO Scatter / Gather</a></p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// Scattering read</span></div><div class="line">ByteBuffer header = ByteBuffer.allocate(<span class="number">128</span>);</div><div class="line">ByteBuffer body   = ByteBuffer.allocate(<span class="number">1024</span>);</div><div class="line"></div><div class="line">ByteBuffer[] bufferArray = &#123; header, body &#125;;</div><div class="line">channel.read(bufferArray);</div><div class="line"></div><div class="line"><span class="comment">// Gathering write</span></div><div class="line">ByteBuffer header = ByteBuffer.allocate(<span class="number">128</span>);</div><div class="line">ByteBuffer body   = ByteBuffer.allocate(<span class="number">1024</span>);</div><div class="line"></div><div class="line">ByteBuffer[] bufferArray = &#123; header, body &#125;;</div><div class="line">channel.write(bufferArray);</div></pre></td></tr></table></figure>
-<h3 id="Buffer"><a href="#Buffer" class="headerlink" title="Buffer"></a>Buffer</h3><p>Buffer，本质上是一块内存区，可以用来读写数据，它包含一些要写入或者要读出的数据。在 NIO 中，所有数据都是通过 Buffer 处理的，读取数据时，它是直接读到缓冲区中，写入数据时，写入到缓冲区。</p>
-<p>最常用的缓冲区是 ByteBuffer，一个 ByteBuffer 提供了一组功能用于操作 byte 数组，除了 ByteBuffer，还有其他的一些 Buffer，如：CharBuffer、IntBuffer 等，它们之间的关系如下图所示。</p>
-<p><img src="/images/java/buffer.png" alt="Buffer 之间的继承关系"></p>
-<h4 id="基本用法"><a href="#基本用法" class="headerlink" title="基本用法"></a>基本用法</h4><p>Buffer 基本用法（读写数据过程）：</p>
-<ol>
-<li>把数据写入 Buffer；</li>
-<li>调用 <code>flip()</code>，Buffer 由写模式变为读模式；</li>
-<li>Buffer 中读取数据；</li>
-<li>调用 <code>clear()</code> 清空 buffer，等待下次写入。</li>
-</ol>
-<p>示例如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">byte</span>[] req = <span class="string">"QUERY TIME ORDER"</span>.getBytes();</div><div class="line">ByteBuffer byteBuffer = ByteBuffer.allocate(req.length);</div><div class="line">byteBuffer.put(req);</div><div class="line">byteBuffer.flip();</div><div class="line"><span class="keyword">while</span> (byteBuffer.hasRemaining())&#123;</div><div class="line">     System.out.println((<span class="keyword">char</span>) byteBuffer.get());</div><div class="line">&#125;</div><div class="line">byteBuffer.clear();</div></pre></td></tr></table></figure>
-<h4 id="Buffer-位置信息"><a href="#Buffer-位置信息" class="headerlink" title="Buffer 位置信息"></a>Buffer 位置信息</h4><p>Buffer 实质上就是一块内存，用于读写数据，这块内存被 NIO Buffer 管理，一个 Buffer 有三个属性是必须掌握的，分别是：</p>
-<ul>
-<li>capacity：容量；</li>
-<li>position：位置；</li>
-<li>limit：限制；</li>
-</ul>
-<p>其中，position 和 limit 的具体含义取决于当前 buffer 的模式，capacity 在两种模式下都表示容量，Buffer 读模式和写模式如下图所示。</p>
-<p><img src="/images/java/buffer-position.png" alt="Buffer 的位置信息"></p>
-<ol>
-<li>容量（capacity）<ul>
-<li>Buffer 有一块固定的内存，其大小就是 capacity，一旦 Buffer 写满，就需要清空已读数据以便下次继续写入新的数据；</li>
-</ul>
-</li>
-<li>位置（Position）<ul>
-<li>写模式时，当写入数据到 Buffer 的时候从一个确定的位置开始，初始化时这个位置 position 为0，写入数据后，position 的值就会指向数据之后的单元，position 最大的值可以达到 <code>capacity-1</code>；</li>
-<li>读模式时，也需要从一个确定的位置开始，Buffer 从写模式变为读模式时，position 会归零，每次读取后，position 向后移动；</li>
-</ul>
-</li>
-<li>上限（limit）<ul>
-<li>写模式时，limit 就是能写入的最大数据量，等同于 Buffer 的容量；</li>
-<li>读模式时，limit 代表我们能读取的最大容量，它的值等同于写模式下 position 位置。</li>
-</ul>
-</li>
-</ol>
-<h4 id="Buffer-常用方法"><a href="#Buffer-常用方法" class="headerlink" title="Buffer 常用方法"></a>Buffer 常用方法</h4><ul>
-<li><code>flip()</code>：把 buffer 从模式调整为读模式，在读模式下，可以读取所有已经写入的数据；</li>
-<li><code>clear()</code>：清空整个 buffer；</li>
-<li><code>compact()</code>：只清空已读取的数据，未被读取的数据会被移动到 buffer 的开始位置，写入位置则紧跟着未读数据之后；</li>
-<li><code>rewind()</code>：将 position 置为0，这样我们可以重复读取 Buffer 中的数据，limit 保持不变；</li>
-<li><code>mark()</code>和<code>reset()</code>：通过mark方法可以标记当前的position，通过reset来恢复mark的位置</li>
-<li><code>equals()</code>：判断两个 Buffer 是否相等，需满足：类型相同、Buffer 中剩余字节数相同、所有剩余字节相等；</li>
-<li><code>compareTo()</code>：compareTo 比较 Buffer 中的剩余元素，只不过这个方法适用于比较排序的。</li>
-</ul>
-<h3 id="Selector"><a href="#Selector" class="headerlink" title="Selector"></a>Selector</h3><p>Selector 是 Java NIO 核心部分，简单来说，它的作用就是：Selector 不断轮询注册在其上的 Channel，如果某个 Channel 上面有新的 TCP 连接、读和写事件，这个 Channel 就处于就绪状态，会被 Selector 轮询出来，然后通过 <code>SelectorKey()</code> 可以获取就绪 Channel 的集合，进行后续的 IO 操作。</p>
-<p>一个 Selector 可以轮询多个 Channel，由于 JDK 底层使用了 <code>epoll()</code> 实现，它并没有最大连接句柄 1024/2048 的限制，这就意味着只需要一个线程负责 Selector 的轮询，就可以连接上千上万的 Client。</p>
-<h4 id="注册-Channel"><a href="#注册-Channel" class="headerlink" title="注册 Channel"></a>注册 Channel</h4><p>举一个栗子，简单介绍 <code>Selector</code> 的使用。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 创建一个 Selector</span></div><div class="line">Selector selector = Selector.open();</div><div class="line"><span class="comment">// 将一个 Channel 注册到 Selector 上</span></div><div class="line">channel.configureBlocking(<span class="keyword">false</span>);</div><div class="line">SelectionKey key = channel.register(selector, SelectionKey.OP_READ);</div></pre></td></tr></table></figure>
-<p><code>register()</code> 的第二个参数代表的是 selector 监听的事件类型，Selector 可以监听事件类型总共有以下四种：</p>
-<ol>
-<li>SelectionKey.OP_CONNECT：只会注册一次，成功之后（TCP 连接建立之后），这个监听事件就取消了；</li>
-<li>SelectionKey.OP_ACCEPT：主要用于服务端，就是监听是否有新的连接请求；</li>
-<li>SelectionKey.OP_READ：注册之后不会取消，监听是否数据到来；</li>
-<li>SelectionKey.OP_WRITE：最好的使用方法是每当发送数据时，就注册一次，然后再取消，否则每次 select 轮询时，注册 OP_WRITE 事件的 Channel 都是 ready 的，除非 socket send buffer 满了（参考 <a href="https://stackoverflow.com/questions/23136079/communicating-between-nio-op-read-and-op-write-operations" target="_blank" rel="external">Communicating between nio OP_READ and OP_WRITE operations</a>）。</li>
-</ol>
-<h4 id="SelectionKey"><a href="#SelectionKey" class="headerlink" title="SelectionKey"></a>SelectionKey</h4><p><code>Set&lt;SelectionKey&gt; selectionKeys = selector.selectedKeys();</code> 返回的是已经就绪的 Channel 集合，<code>SelectionKey</code> 对象的详细属性如下图所示。</p>
-<p><img src="/images/java/SelectionKey.png" alt="SelectionKey 的详情"></p>
-<h2 id="NIO-原理"><a href="#NIO-原理" class="headerlink" title="NIO 原理"></a>NIO 原理</h2><p>Java NIO 实现的关键是 IO 多路复用（具体可以参考上篇文章：<a href="http://matt33.com/2017/08/06/unix-io/#Linux-的-IO-多路复用模型">Linux 的 IO 多路复用模型</a>），在 Linux 平台，Java NIO 是基于 epoll（2.6以上，之前是 Select） 来实现的。</p>
-<p>Linux 的 select/epoll  使用的是 Reactor 网络 IO 模式。网络编程中，有两种常用的设计模式，它们都是基于事件驱动：</p>
-<ul>
-<li>Reactor 模式：主动模式，应用程序不断去轮询，问操作系统 IO 是否就绪，实际的 IO 操作还是由应用实现（IO 多路复用采用的模式）；</li>
-<li>Proactor 模式：被动模式，操作系统把 IO 完成后通知应用程序，此时数据已经就绪。</li>
-</ul>
-<p>这两种模式详细内容可以参考<a href="http://daoluan.net/linux/%E5%AD%A6%E4%B9%A0%E6%80%BB%E7%BB%93/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/2013/08/20/two-high-performance-io-design-patterns.html" target="_blank" rel="external">两种高性能 I/O 设计模式 Reactor 和 Proactor</a>一文。</p>
-<h2 id="NIO-编程"><a href="#NIO-编程" class="headerlink" title="NIO 编程"></a>NIO 编程</h2><p>关于 Java NIO，有两种最常见的使用方式：</p>
-<ul>
-<li>使用原生的 Java NIO（如 Kafka）；</li>
-<li>使用 Netty（Hadoop 的 RPC 框架 Avro 底层使用 Netty 做通信框架）。</li>
-</ul>
-<p>在实际使用中，推荐第二种，使用 Netty 将会大大提高开发效率，后续会写篇关于 Netty 的文章，介绍一下 Netty 的具体内容，这里使用一个基于 Java 原生 NIO API 的小示例，讲述一下 NIO 的使用方法。</p>
-<h3 id="Client-端"><a href="#Client-端" class="headerlink" title="Client 端"></a>Client 端</h3><p>NIO Client 创建序列图如下图所示（图片来自《Netty 权威指南》）。</p>
-<p><img src="/images/java/nio-client.png" alt="NIO Client 端序列图"></p>
-<p>具体的代码及注释参考：<a href="https://github.com/wangzzu/ProgramlLearn/tree/aab89008091660f1f231763660eb329eb5928bde/java_learn/java_socket/src/main/java/nio/client/" target="_blank" rel="external">NIO Client 端代码</a>。</p>
-<h3 id="Server-端"><a href="#Server-端" class="headerlink" title="Server 端"></a>Server 端</h3><p>NIO Server 创建序列图如下图所示（图片来自《Netty 权威指南》）。</p>
-<p><img src="/images/java/nio-server.png" alt="NIO Server 端序列图"></p>
-<p>具体的代码及注释参考：<a href="https://github.com/wangzzu/ProgramlLearn/tree/aab89008091660f1f231763660eb329eb5928bde/java_learn/java_socket/src/main/java/nio/server/" target="_blank" rel="external">NIO Server 端代码</a>。</p>
-<h1 id="IO-模型对比"><a href="#IO-模型对比" class="headerlink" title="IO 模型对比"></a>IO 模型对比</h1><p>在对比之前，先简单介绍 Java AIO 模型，这里就不再进行相应的展开了。</p>
-<h2 id="AIO"><a href="#AIO" class="headerlink" title="AIO"></a>AIO</h2><p>NIO 2.0 中引入异步通道的概念，并提供了异步文件通道和异步套接字导通的实现，它是真正的异步非阻塞I IO，底层是利用事件驱动（AIO）实现，不需要多路复用器（Selector）对注册的通道进行轮组操作即可实现异步读写。</p>
-<p>可以参考<a href="https://www.ibm.com/developerworks/cn/java/j-lo-nio2/" target="_blank" rel="external">在 Java 7 中体会 NIO.2 异步执行的快乐</a></p>
-<h2 id="几种-IO-模型功能和特性对比"><a href="#几种-IO-模型功能和特性对比" class="headerlink" title="几种 IO 模型功能和特性对比"></a>几种 IO 模型功能和特性对比</h2><table>
-<thead>
-<tr>
-<th></th>
-<th>传统 BIO</th>
-<th>伪异步 IO</th>
-<th>NIO</th>
-<th>AIO</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>client 数：IO 线程数</td>
-<td>1：1</td>
-<td>M：N（M 可以大于 N）</td>
-<td>M：1</td>
-<td>M：0（不需要额外的线程，被动回调）</td>
-</tr>
-<tr>
-<td>IO 类型（阻塞）</td>
-<td>阻塞IO</td>
-<td>阻塞IO</td>
-<td>非阻塞IO</td>
-<td>非阻塞IO</td>
-</tr>
-<tr>
-<td>IO 类型（同步）</td>
-<td>同步 IO</td>
-<td>同步 IO</td>
-<td>同步 IO（IO 多路复用）</td>
-<td>异步 IO</td>
-</tr>
-<tr>
-<td>可靠性</td>
-<td>非常差</td>
-<td>差</td>
-<td>高</td>
-<td>高</td>
-</tr>
-<tr>
-<td>吞吐量</td>
-<td>低</td>
-<td>中</td>
-<td>高</td>
-<td>高</td>
-</tr>
-</tbody>
-</table>
-<p>本文主要是对 Java IO 模型总结，特别是对 NIO 模型的总结。</p>
-<hr>
-<p>参考</p>
-<ul>
-<li>《Netty 权威指南》；</li>
-<li>Java NIO <a href="http://tutorials.jenkov.com/java-nio/index.html" target="_blank" rel="external">英文版</a>，<a href="http://ifeve.com/java-nio-all/" target="_blank" rel="external">中文版</a>；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;Java IO 模型对于 Java 开发工程师来说，是日常工作中经常接触的内容，特别是随着分布式系统的兴起，IO 也显得越来越重要，Java 的 IO 模型本质上还是利用操作系统提供的接口来实现，不熟悉这一部分内容的话，可以先看一下上篇文章&lt;a href=&quot;http://m
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="linux" scheme="http://matt33.com/tags/linux/"/>
     
   </entry>
   
