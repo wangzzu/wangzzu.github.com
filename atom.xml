@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-06-25T04:11:21.000Z</updated>
+  <updated>2018-06-27T15:43:29.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,106 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Kafka 源码解析之 Server 1+N+M 网络处理模型（二十三）</title>
+    <link href="http://matt33.com/2018/06/27/kafka-server-process-model/"/>
+    <id>http://matt33.com/2018/06/27/kafka-server-process-model/</id>
+    <published>2018-06-27T15:18:01.000Z</published>
+    <updated>2018-06-27T15:43:29.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>前面7篇对 Kafka Controller 的内容做了相应的总结，Controller 这部分的总结算是暂时告一段落，本节会讲述 Kafka 源码分析系列中最后一节的内容，是关于 Server 端对不同类型请求处理的网络模型。在前面的文章中也讲述过几种不同类型的请求处理实现，如果还有印象，就会知道它们都是通过 KafkaApis 对象处理的，但是前面并没有详细讲述 Server 端是如何监听到相应的请求、请求是如何交给 KafkaApis 对象进行处理，以及处理后是如何返回给请求者（请求者可以是 client 也可以是 server），这些都属于 Server 的网络处理模型，也是本文讲述的主要内容。</p>
+<h2 id="Server-网络模型整体流程"><a href="#Server-网络模型整体流程" class="headerlink" title="Server 网络模型整体流程"></a>Server 网络模型整体流程</h2><p>Kafka Server 启动后，会通过 KafkaServer 的 <code>startup()</code> 方法初始化涉及到网络模型的相关对象，如下所示：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">startup</span></span>()&#123;</div><div class="line">  <span class="comment">//note: socketServer</span></div><div class="line">  socketServer = <span class="keyword">new</span> <span class="type">SocketServer</span>(config, metrics, time, credentialProvider)</div><div class="line">  socketServer.startup()</div><div class="line">  <span class="comment">//<span class="doctag">NOTE:</span> 初始化 KafkaApis 实例,每个 Server 只会启动一个线程</span></div><div class="line">  apis = <span class="keyword">new</span> <span class="type">KafkaApis</span>(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator,</div><div class="line">    kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,</div><div class="line">    clusterId, time)</div><div class="line"></div><div class="line">  requestHandlerPool = <span class="keyword">new</span> <span class="type">KafkaRequestHandlerPool</span>(config.brokerId, socketServer.requestChannel, apis, time,</div><div class="line">    config.numIoThreads)</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>Kafka Server 在启动时会初始化 SocketServer、KafkaApis 和 KafkaRequestHandlerPool 对象，这也是 Server 网络处理模型的主要组成部分。Kafka Server 的网络处理模型也是基于 Java NIO 机制实现的，实现模式与 Reactor 模式类似，其完整的处理流程图如下所示：</p>
+<p><img src="/images/kafka/server-nio.png" alt="Kafka Server 1+N+M 网络处理模型"></p>
+<p>上图如果现在不理解，并不要紧，这里先简单介绍一些，讲述一下整体的流程，本节下面会结合 Kafka 的代码详细来讲述图中的过程。上图的网络模型可以简要总结为以下三个重要组成部分：</p>
+<ol>
+<li>1 个 Acceptor 线程，负责监听 Socket 新的连接请求，注册了 <code>OP_ACCEPT</code> 事件，将新的连接按照 round robin 方式交给对应的 Processor 线程处理；</li>
+<li>N 个 Processor 线程，其中每个 Processor 都有自己的 selector，它会向 Acceptor 分配的 SocketChannel 注册相应的 <code>OP_READ</code> 事件，N 的大小由 <code>num.networker.threads</code> 决定；</li>
+<li>M 个 KafkaRequestHandler  线程处理请求，并将处理的结果返回给 Processor 线程对应的 response queue 中，由 Processor 将处理的结果返回给相应的请求发送者，M 的大小由 <code>num.io.threads</code> 来决定。</li>
+</ol>
+<p>上图展示的整体的处理流程如下所示：</p>
+<ol>
+<li>Acceptor 监听到来自请求者（请求者可以是来自 client，也可以来自 server）的新的连接，Acceptor 将这个请求者按照 round robin 的方式交给对对应的 Processor 进行处理；</li>
+<li>Processor 注册这个 SocketChannel 的 <code>OP_READ</code> 的事件，如果有请求发送过来就可以被 Processor 的 Selector 选中；</li>
+<li>Processor 将请求者发送的请求放入到一个 Request Queue 中，这是所有 Processor 共有的一个队列；</li>
+<li>KafkaRequestHandler 从 Request Queue 中取出请求；</li>
+<li>调用 KafkaApis 进行相应的处理；</li>
+<li>处理的结果放入到该 Processor 对应的 Response Queue 中（每个 request 都标识它们来自哪个 Processor），Request Queue 的数量与 Processor 的数量保持一致；</li>
+<li>Processor 从对应的 Response Queue 中取出 response；</li>
+<li>Processor 将处理的结果返回给对应的请求者。</li>
+</ol>
+<p>上面是 Server 端网络处理的整体流程，下面我们开始详细讲述上面内容在 Kafka 中实现。</p>
+<h2 id="SocketServer"><a href="#SocketServer" class="headerlink" title="SocketServer"></a>SocketServer</h2><p>SocketServer 是接收 Socket 连接、处理请求并返回处理结果的地方，Acceptor 及 Processor 的初始化、处理逻辑都是在这里实现的。在SocketServer 内有几个比较重要的变量，这里先来看下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">SocketServer</span>(<span class="params">val config: <span class="type">KafkaConfig</span>, val metrics: <span class="type">Metrics</span>, val time: <span class="type">Time</span>, val credentialProvider: <span class="type">CredentialProvider</span></span>) <span class="keyword">extends</span> <span class="title">Logging</span> <span class="keyword">with</span> <span class="title">KafkaMetricsGroup</span> </span>&#123;</div><div class="line"></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> endpoints = config.listeners.map(l =&gt; l.listenerName -&gt; l).toMap <span class="comment">//note: broker 开放的端口数</span></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> numProcessorThreads = config.numNetworkThreads <span class="comment">//note: num.network.threads 默认为 3个，即 processor</span></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> maxQueuedRequests = config.queuedMaxRequests <span class="comment">//note:  queued.max.requests，request 队列中允许的最多请求数，默认是500</span></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> totalProcessorThreads = numProcessorThreads * endpoints.size <span class="comment">//note: 每个端口会对应 N 个 processor</span></div><div class="line"></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> maxConnectionsPerIp = config.maxConnectionsPerIp <span class="comment">//note: 默认 2147483647</span></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides</div><div class="line"></div><div class="line">  <span class="keyword">this</span>.logIdent = <span class="string">"[Socket Server on Broker "</span> + config.brokerId + <span class="string">"], "</span></div><div class="line"></div><div class="line">  <span class="comment">//note: 请求队列</span></div><div class="line">  <span class="keyword">val</span> requestChannel = <span class="keyword">new</span> <span class="type">RequestChannel</span>(totalProcessorThreads, maxQueuedRequests)</div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> processors = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">Processor</span>](totalProcessorThreads)</div><div class="line"></div><div class="line">  <span class="keyword">private</span>[network] <span class="keyword">val</span> acceptors = mutable.<span class="type">Map</span>[<span class="type">EndPoint</span>, <span class="type">Acceptor</span>]()</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">RequestChannel</span>(<span class="params">val numProcessors: <span class="type">Int</span>, val queueSize: <span class="type">Int</span></span>) <span class="keyword">extends</span> <span class="title">KafkaMetricsGroup</span> </span>&#123;</div><div class="line">  <span class="keyword">private</span> <span class="keyword">var</span> responseListeners: <span class="type">List</span>[(<span class="type">Int</span>) =&gt; <span class="type">Unit</span>] = <span class="type">Nil</span></div><div class="line">  <span class="comment">//note: 一个 requestQueue 队列,N 个 responseQueues 队列</span></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> requestQueue = <span class="keyword">new</span> <span class="type">ArrayBlockingQueue</span>[<span class="type">RequestChannel</span>.<span class="type">Request</span>](queueSize)</div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> responseQueues = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">BlockingQueue</span>[<span class="type">RequestChannel</span>.<span class="type">Response</span>]](numProcessors)</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>其中</p>
+<ol>
+<li><code>numProcessorThreads</code>：决定了 Processor 的个数，默认是3个，也就是 1+N+M 的 N 的数值；</li>
+<li><code>maxQueuedRequests</code>：决定了 request queue 中最多允许放入多少个请求（等待处理的请求），默认是 500；</li>
+<li>在 <code>RequestChannel</code> 中初始化了一个 requestQueue 和 N 个 responseQueue。</li>
+</ol>
+<h3 id="SocketServer-初始化"><a href="#SocketServer-初始化" class="headerlink" title="SocketServer 初始化"></a>SocketServer 初始化</h3><p>在 SocketServer 初始化方法 <code>startup()</code> 中，会初始化 1 个 Acceptor 和 N 个 Processor 线程（每个 EndPoint 都会初始化这么多，一般来说一个 Server 只会设置一个端口），其实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">startup</span></span>() &#123;</div><div class="line">  <span class="keyword">this</span>.synchronized &#123;</div><div class="line">    <span class="comment">//note: 一台 broker 一般只设置一个端口，当然这里也可以设置两个</span></div><div class="line">    config.listeners.foreach &#123; endpoint =&gt;</div><div class="line">      <span class="keyword">val</span> listenerName = endpoint.listenerName</div><div class="line">      <span class="keyword">val</span> securityProtocol = endpoint.securityProtocol</div><div class="line">      <span class="keyword">val</span> processorEndIndex = processorBeginIndex + numProcessorThreads</div><div class="line"></div><div class="line">      <span class="comment">//note: N 个 processor</span></div><div class="line">      <span class="keyword">for</span> (i &lt;- processorBeginIndex until processorEndIndex)</div><div class="line">        processors(i) = newProcessor(i, connectionQuotas, listenerName, securityProtocol)</div><div class="line"></div><div class="line">      <span class="comment">//note: 1个 Acceptor</span></div><div class="line">      <span class="keyword">val</span> acceptor = <span class="keyword">new</span> <span class="type">Acceptor</span>(endpoint, sendBufferSize, recvBufferSize, brokerId,</div><div class="line">        processors.slice(processorBeginIndex, processorEndIndex), connectionQuotas)</div><div class="line">      acceptors.put(endpoint, acceptor)</div><div class="line">      <span class="type">Utils</span>.newThread(<span class="string">s"kafka-socket-acceptor-<span class="subst">$listenerName</span>-<span class="subst">$securityProtocol</span>-<span class="subst">$&#123;endpoint.port&#125;</span>"</span>, acceptor, <span class="literal">false</span>).start()</div><div class="line">      acceptor.awaitStartup()</div><div class="line"></div><div class="line">      processorBeginIndex = processorEndIndex</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="Acceptor-处理"><a href="#Acceptor-处理" class="headerlink" title="Acceptor 处理"></a>Acceptor 处理</h3><p>SocketServer 在初始化后 Acceptor 线程后，Acceptor 启动，会首先注册 <code>OP_ACCEPT</code> 事件，监听是否有新的连接，如果来了新的连接就将该 SocketChannel 交给对应的 Processor 进行处理，Processor 是通过 round robin 方法选择的，这样可以保证 Processor 的负载相差无几（至少可以保证监听的 SocketChannel 差不多），实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">run</span></span>() &#123;</div><div class="line">  serverChannel.register(nioSelector, <span class="type">SelectionKey</span>.<span class="type">OP_ACCEPT</span>)<span class="comment">//note: 注册 accept 事件</span></div><div class="line">  startupComplete()</div><div class="line">  <span class="keyword">try</span> &#123;</div><div class="line">    <span class="keyword">var</span> currentProcessor = <span class="number">0</span></div><div class="line">    <span class="keyword">while</span> (isRunning) &#123;</div><div class="line">      <span class="keyword">try</span> &#123;</div><div class="line">        <span class="keyword">val</span> ready = nioSelector.select(<span class="number">500</span>)</div><div class="line">        <span class="keyword">if</span> (ready &gt; <span class="number">0</span>) &#123;</div><div class="line">          <span class="keyword">val</span> keys = nioSelector.selectedKeys()</div><div class="line">          <span class="keyword">val</span> iter = keys.iterator()</div><div class="line">          <span class="keyword">while</span> (iter.hasNext &amp;&amp; isRunning) &#123;</div><div class="line">            <span class="keyword">try</span> &#123;</div><div class="line">              <span class="keyword">val</span> key = iter.next</div><div class="line">              iter.remove()</div><div class="line">              <span class="keyword">if</span> (key.isAcceptable)</div><div class="line">                accept(key, processors(currentProcessor))<span class="comment">//note: 拿到一个socket 连接，轮询选择一个processor进行处理</span></div><div class="line">              <span class="keyword">else</span></div><div class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">"Unrecognized key state for acceptor thread."</span>)</div><div class="line"></div><div class="line">              <span class="comment">//note: 轮询算法,使用 round robin</span></div><div class="line">              <span class="comment">// round robin to the next processor thread</span></div><div class="line">              currentProcessor = (currentProcessor + <span class="number">1</span>) % processors.length</div><div class="line">            &#125; <span class="keyword">catch</span> &#123;</div><div class="line">              <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">"Error while accepting connection"</span>, e)</div><div class="line">            &#125;</div><div class="line">          &#125;</div><div class="line">        &#125;</div><div class="line">      &#125;</div><div class="line">      <span class="keyword">catch</span> &#123;</div><div class="line">        <span class="comment">// We catch all the throwables to prevent the acceptor thread from exiting on exceptions due</span></div><div class="line">        <span class="comment">// to a select operation on a specific channel or a bad request. We don't want</span></div><div class="line">        <span class="comment">// the broker to stop responding to requests from other clients in these scenarios.</span></div><div class="line">        <span class="keyword">case</span> e: <span class="type">ControlThrowable</span> =&gt; <span class="keyword">throw</span> e</div><div class="line">        <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">"Error occurred"</span>, e)</div><div class="line">      &#125;</div><div class="line">    &#125;</div><div class="line">  &#125; <span class="keyword">finally</span> &#123;</div><div class="line">    debug(<span class="string">"Closing server socket and selector."</span>)</div><div class="line">    swallowError(serverChannel.close())</div><div class="line">    swallowError(nioSelector.close())</div><div class="line">    shutdownComplete()</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>Acceptor 通过 <code>accept()</code> 将该新连接交给对应的 Processor，其实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 处理一个新的连接</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">accept</span></span>(key: <span class="type">SelectionKey</span>, processor: <span class="type">Processor</span>) &#123;</div><div class="line">  <span class="comment">//note: accept 事件发生时，获取注册到 selector 上的 ServerSocketChannel</span></div><div class="line">  <span class="keyword">val</span> serverSocketChannel = key.channel().asInstanceOf[<span class="type">ServerSocketChannel</span>]</div><div class="line">  <span class="keyword">val</span> socketChannel = serverSocketChannel.accept()</div><div class="line">  <span class="keyword">try</span> &#123;</div><div class="line">    connectionQuotas.inc(socketChannel.socket().getInetAddress)</div><div class="line">    socketChannel.configureBlocking(<span class="literal">false</span>)</div><div class="line">    socketChannel.socket().setTcpNoDelay(<span class="literal">true</span>)</div><div class="line">    socketChannel.socket().setKeepAlive(<span class="literal">true</span>)</div><div class="line">    <span class="keyword">if</span> (sendBufferSize != <span class="type">Selectable</span>.<span class="type">USE_DEFAULT_BUFFER_SIZE</span>)</div><div class="line">      socketChannel.socket().setSendBufferSize(sendBufferSize)</div><div class="line"></div><div class="line">    debug(<span class="string">"Accepted connection from %s on %s and assigned it to processor %d, sendBufferSize [actual|requested]: [%d|%d] recvBufferSize [actual|requested]: [%d|%d]"</span></div><div class="line">          .format(socketChannel.socket.getRemoteSocketAddress, socketChannel.socket.getLocalSocketAddress, processor.id,</div><div class="line">                socketChannel.socket.getSendBufferSize, sendBufferSize,</div><div class="line">                socketChannel.socket.getReceiveBufferSize, recvBufferSize))</div><div class="line"></div><div class="line">    <span class="comment">//note: 轮询选择不同的 processor 进行处理</span></div><div class="line">    processor.accept(socketChannel)</div><div class="line">  &#125; <span class="keyword">catch</span> &#123;</div><div class="line">    <span class="keyword">case</span> e: <span class="type">TooManyConnectionsException</span> =&gt;</div><div class="line">      info(<span class="string">"Rejected connection from %s, address already has the configured maximum of %d connections."</span>.format(e.ip, e.count))</div><div class="line">      close(socketChannel)</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="Processor-处理"><a href="#Processor-处理" class="headerlink" title="Processor 处理"></a>Processor 处理</h3><p>在前面，Acceptor 通过 <code>accept()</code> 将新的连接交给 Processor，Processor 实际上是将该 SocketChannel 添加到该 Processor 的 <code>newConnections</code> 队列中，实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">accept</span></span>(socketChannel: <span class="type">SocketChannel</span>) &#123;</div><div class="line">  newConnections.add(socketChannel)<span class="comment">//note: 添加到队列中</span></div><div class="line">  wakeup()<span class="comment">//note: 唤醒 Processor 的 selector（如果此时在阻塞的话）</span></div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这里详细看下 Processor 线程做了什么事情，其 <code>run()</code> 方法的实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">run</span></span>() &#123;</div><div class="line">  startupComplete()</div><div class="line">  <span class="keyword">while</span> (isRunning) &#123;</div><div class="line">    <span class="keyword">try</span> &#123;</div><div class="line">      <span class="comment">// setup any new connections that have been queued up</span></div><div class="line">      configureNewConnections()<span class="comment">//note: 对新的 socket 连接,并注册 READ 事件</span></div><div class="line">      <span class="comment">// register any new responses for writing</span></div><div class="line">      processNewResponses()<span class="comment">//note: 处理 response 队列中 response</span></div><div class="line">      poll() <span class="comment">//note: 监听所有的 socket channel，是否有新的请求发送过来</span></div><div class="line">      processCompletedReceives() <span class="comment">//note: 处理接收到请求，将其放入到 request queue 中</span></div><div class="line">      processCompletedSends() <span class="comment">//note: 处理已经完成的发送</span></div><div class="line">      processDisconnected() <span class="comment">//note: 处理断开的连接</span></div><div class="line">    &#125; <span class="keyword">catch</span> &#123;</div><div class="line">      <span class="comment">// We catch all the throwables here to prevent the processor thread from exiting. We do this because</span></div><div class="line">      <span class="comment">// letting a processor exit might cause a bigger impact on the broker. Usually the exceptions thrown would</span></div><div class="line">      <span class="comment">// be either associated with a specific socket channel or a bad request. We just ignore the bad socket channel</span></div><div class="line">      <span class="comment">// or request. This behavior might need to be reviewed if we see an exception that need the entire broker to stop.</span></div><div class="line">      <span class="keyword">case</span> e: <span class="type">ControlThrowable</span> =&gt; <span class="keyword">throw</span> e</div><div class="line">      <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt;</div><div class="line">        error(<span class="string">"Processor got uncaught exception."</span>, e)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  debug(<span class="string">"Closing selector - processor "</span> + id)</div><div class="line">  swallowError(closeAll())</div><div class="line">  shutdownComplete()</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>Processor 在一次循环中，主要做的事情如下：</p>
+<ol>
+<li><code>configureNewConnections()</code>：对新添加到 <code>newConnections</code> 队列中的 SocketChannel 进行处理，这里主要是 Processor 的 selector 注册该连接的 <code>OP_READ</code> 事件；</li>
+<li><code>processNewResponses()</code>：从该 Processor 对应的 response queue 中取出一个 response，进行发送；</li>
+<li><code>poll()</code>：调用 selector 的 <code>poll()</code> 方法，遍历注册的 SocketChannel，查看是否有事件准备就绪；</li>
+<li><code>processCompletedReceives()</code>：将接收到请求添加到的 request queue 中；</li>
+<li><code>processCompletedSends()</code>：处理已经完成的响应发送；</li>
+<li><code>processDisconnected()</code>：处理断开的 SocketChannel。</li>
+</ol>
+<p>上面就是 Processor 线程处理的主要逻辑，先是向新的 SocketChannel 注册相应的事件，监控是否有请求发送过来，接着从 response queue 中取出处理完成的请求发送给对应的请求者，然后调用一下 selector 的 <code>poll()</code>，遍历一下注册的所有 SocketChannel，判断是否有事件就绪，然后做相应的处理。这里需要注意的是，request queue 是所有 Processor 公用的一个队列，而 response queue 则是与 Processor 一一对应的，因为每个 Processor 监听的 SocketChannel 并不是同一批的，如果公有一个 response queue，那么这个 N 个 Processor 的 selector 要去监听所有的 SocketChannel，而不是现在这种，只需要去关注分配给自己的 SocketChannel。</p>
+<p>下面分别看下上面的这些方法的具体实现。</p>
+<h4 id="configureNewConnections"><a href="#configureNewConnections" class="headerlink" title="configureNewConnections"></a>configureNewConnections</h4><p><code>configureNewConnections()</code> 对新添加到 <code>newConnections</code> 队列中的 SocketChannel 进行处理，主要是 selector 注册相应的 <code>OP_READ</code> 事件，其实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 如果有新的连接过来，将该 Channel 的 OP_READ 事件注册到 selector 上</span></div><div class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">configureNewConnections</span></span>() &#123;</div><div class="line">  <span class="keyword">while</span> (!newConnections.isEmpty) &#123;</div><div class="line">    <span class="keyword">val</span> channel = newConnections.poll()</div><div class="line">    <span class="keyword">try</span> &#123;</div><div class="line">      debug(<span class="string">s"Processor <span class="subst">$id</span> listening to new connection from <span class="subst">$&#123;channel.socket.getRemoteSocketAddress&#125;</span>"</span>)</div><div class="line">      <span class="keyword">val</span> localHost = channel.socket().getLocalAddress.getHostAddress</div><div class="line">      <span class="keyword">val</span> localPort = channel.socket().getLocalPort</div><div class="line">      <span class="keyword">val</span> remoteHost = channel.socket().getInetAddress.getHostAddress</div><div class="line">      <span class="keyword">val</span> remotePort = channel.socket().getPort</div><div class="line">      <span class="keyword">val</span> connectionId = <span class="type">ConnectionId</span>(localHost, localPort, remoteHost, remotePort).toString</div><div class="line">      selector.register(connectionId, channel)</div><div class="line">    &#125; <span class="keyword">catch</span> &#123;</div><div class="line">      <span class="comment">// We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other</span></div><div class="line">      <span class="comment">// throwables will be caught in processor and logged as uncaught exceptions.</span></div><div class="line">      <span class="keyword">case</span> <span class="type">NonFatal</span>(e) =&gt;</div><div class="line">        <span class="keyword">val</span> remoteAddress = channel.getRemoteAddress</div><div class="line">        <span class="comment">// need to close the channel here to avoid a socket leak.</span></div><div class="line">        close(channel)</div><div class="line">        error(<span class="string">s"Processor <span class="subst">$id</span> closed connection from <span class="subst">$remoteAddress</span>"</span>, e)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h4 id="processNewResponses"><a href="#processNewResponses" class="headerlink" title="processNewResponses"></a>processNewResponses</h4><p><code>processNewResponses()</code> 方法是从该 Processor 对应的 response queue 中取出一个 response，Processor 是通过 RequestChannel 的 <code>receiveResponse()</code> 从该 Processor 对应的 response queue 中取出 response，如下所示：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 获取 response</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">receiveResponse</span></span>(processor: <span class="type">Int</span>): <span class="type">RequestChannel</span>.<span class="type">Response</span> = &#123;</div><div class="line">  <span class="keyword">val</span> response = responseQueues(processor).poll()</div><div class="line">  <span class="keyword">if</span> (response != <span class="literal">null</span>)</div><div class="line">    response.request.responseDequeueTimeMs = <span class="type">Time</span>.<span class="type">SYSTEM</span>.milliseconds</div><div class="line">  response</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>取到相应的 response 之后，会判断该 response 的类型，进行相应的操作，如果需要返回，那么会调用 <code>sendResponse()</code> 发送该 response，如下所示：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 处理一个新的 response 响应</span></div><div class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">processNewResponses</span></span>() &#123;</div><div class="line">  <span class="keyword">var</span> curr = requestChannel.receiveResponse(id)</div><div class="line">  <span class="keyword">while</span> (curr != <span class="literal">null</span>) &#123;</div><div class="line">    <span class="keyword">try</span> &#123;</div><div class="line">      curr.responseAction <span class="keyword">match</span> &#123;</div><div class="line">        <span class="keyword">case</span> <span class="type">RequestChannel</span>.<span class="type">NoOpAction</span> =&gt; <span class="comment">//note: 如果这个请求不需要返回 response，再次注册该监听事件</span></div><div class="line">          <span class="comment">// There is no response to send to the client, we need to read more pipelined requests</span></div><div class="line">          <span class="comment">// that are sitting in the server's socket buffer</span></div><div class="line">          curr.request.updateRequestMetrics</div><div class="line">          trace(<span class="string">"Socket server received empty response to send, registering for read: "</span> + curr)</div><div class="line">          <span class="keyword">val</span> channelId = curr.request.connectionId</div><div class="line">          <span class="keyword">if</span> (selector.channel(channelId) != <span class="literal">null</span> || selector.closingChannel(channelId) != <span class="literal">null</span>)</div><div class="line">              selector.unmute(channelId)</div><div class="line">        <span class="keyword">case</span> <span class="type">RequestChannel</span>.<span class="type">SendAction</span> =&gt; <span class="comment">//note: 需要发送的 response，那么进行发送</span></div><div class="line">          sendResponse(curr)</div><div class="line">        <span class="keyword">case</span> <span class="type">RequestChannel</span>.<span class="type">CloseConnectionAction</span> =&gt; <span class="comment">//note: 要关闭的 response</span></div><div class="line">          curr.request.updateRequestMetrics</div><div class="line">          trace(<span class="string">"Closing socket connection actively according to the response code."</span>)</div><div class="line">          close(selector, curr.request.connectionId)</div><div class="line">      &#125;</div><div class="line">    &#125; <span class="keyword">finally</span> &#123;</div><div class="line">      curr = requestChannel.receiveResponse(id)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">/* `protected` for test usage */</span></div><div class="line"><span class="comment">//note: 发送的对应的 response</span></div><div class="line"><span class="keyword">protected</span>[network] <span class="function"><span class="keyword">def</span> <span class="title">sendResponse</span></span>(response: <span class="type">RequestChannel</span>.<span class="type">Response</span>) &#123;</div><div class="line">  trace(<span class="string">s"Socket server received response to send, registering for write and sending data: <span class="subst">$response</span>"</span>)</div><div class="line">  <span class="keyword">val</span> channel = selector.channel(response.responseSend.destination)</div><div class="line">  <span class="comment">// `channel` can be null if the selector closed the connection because it was idle for too long</span></div><div class="line">  <span class="keyword">if</span> (channel == <span class="literal">null</span>) &#123;</div><div class="line">    warn(<span class="string">s"Attempting to send response via channel for which there is no open connection, connection id <span class="subst">$id</span>"</span>)</div><div class="line">    response.request.updateRequestMetrics()</div><div class="line">  &#125;</div><div class="line">  <span class="keyword">else</span> &#123;</div><div class="line">    selector.send(response.responseSend) <span class="comment">//note: 发送该 response</span></div><div class="line">    inflightResponses += (response.request.connectionId -&gt; response) <span class="comment">//note: 添加到 inflinght 中</span></div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h4 id="processCompletedReceives"><a href="#processCompletedReceives" class="headerlink" title="processCompletedReceives"></a>processCompletedReceives</h4><p><code>processCompletedReceives()</code> 方法的主要作用是处理接收到请求，并将其放入到 request queue 中，其实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 处理接收到的所有请求</span></div><div class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">processCompletedReceives</span></span>() &#123;</div><div class="line">  selector.completedReceives.asScala.foreach &#123; receive =&gt;</div><div class="line">    <span class="keyword">try</span> &#123;</div><div class="line">      <span class="keyword">val</span> openChannel = selector.channel(receive.source)</div><div class="line">      <span class="keyword">val</span> session = &#123;</div><div class="line">        <span class="comment">// Only methods that are safe to call on a disconnected channel should be invoked on 'channel'.</span></div><div class="line">        <span class="keyword">val</span> channel = <span class="keyword">if</span> (openChannel != <span class="literal">null</span>) openChannel <span class="keyword">else</span> selector.closingChannel(receive.source)</div><div class="line">        <span class="type">RequestChannel</span>.<span class="type">Session</span>(<span class="keyword">new</span> <span class="type">KafkaPrincipal</span>(<span class="type">KafkaPrincipal</span>.<span class="type">USER_TYPE</span>, channel.principal.getName), channel.socketAddress)</div><div class="line">      &#125;</div><div class="line">      <span class="keyword">val</span> req = <span class="type">RequestChannel</span>.<span class="type">Request</span>(processor = id, connectionId = receive.source, session = session,</div><div class="line">        buffer = receive.payload, startTimeMs = time.milliseconds, listenerName = listenerName,</div><div class="line">        securityProtocol = securityProtocol)</div><div class="line">      requestChannel.sendRequest(req) <span class="comment">//note: 添加到请求队列，如果队列满了，将会阻塞</span></div><div class="line">      selector.mute(receive.source) <span class="comment">//note: 移除该连接的 OP_READ 监听</span></div><div class="line">    &#125; <span class="keyword">catch</span> &#123;</div><div class="line">      <span class="keyword">case</span> e @ (_: <span class="type">InvalidRequestException</span> | _: <span class="type">SchemaException</span>) =&gt;</div><div class="line">        <span class="comment">// note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier</span></div><div class="line">        error(<span class="string">s"Closing socket for <span class="subst">$&#123;receive.source&#125;</span> because of error"</span>, e)</div><div class="line">        close(selector, receive.source)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h4 id="processCompletedSends"><a href="#processCompletedSends" class="headerlink" title="processCompletedSends"></a>processCompletedSends</h4><p><code>processCompletedSends()</code> 方法是处理已经完成的发送，其实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">processCompletedSends</span></span>() &#123;</div><div class="line">  selector.completedSends.asScala.foreach &#123; send =&gt;</div><div class="line">    <span class="comment">//note: response 发送完成，从正在发送的集合中移除</span></div><div class="line">    <span class="keyword">val</span> resp = inflightResponses.remove(send.destination).getOrElse &#123;</div><div class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">IllegalStateException</span>(<span class="string">s"Send for <span class="subst">$&#123;send.destination&#125;</span> completed, but not in `inflightResponses`"</span>)</div><div class="line">    &#125;</div><div class="line">    resp.request.updateRequestMetrics()</div><div class="line">    selector.unmute(send.destination) <span class="comment">//note: 完成这个请求之后再次监听 OP_READ 事件</span></div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h2 id="KafkaRequestHandlerPool"><a href="#KafkaRequestHandlerPool" class="headerlink" title="KafkaRequestHandlerPool"></a>KafkaRequestHandlerPool</h2><p>上面主要是讲述 SocketServer 中 Acceptor 与 Processor 的处理内容，也就是 1+N+M 模型中 1+N 部分，下面开始讲述 M 部分，也就是 KafkaRequestHandler 的内容，其初始化实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">KafkaRequestHandlerPool</span>(<span class="params">val brokerId: <span class="type">Int</span>,</span></span></div><div class="line">                              val requestChannel: <span class="type">RequestChannel</span>,</div><div class="line">                              val apis: <span class="type">KafkaApis</span>,</div><div class="line">                              time: <span class="type">Time</span>,</div><div class="line">                              numThreads: <span class="type">Int</span>) <span class="keyword">extends</span> <span class="title">Logging</span> <span class="keyword">with</span> <span class="title">KafkaMetricsGroup</span> &#123;</div><div class="line"></div><div class="line">  <span class="comment">/* a meter to track the average free capacity of the request handlers */</span></div><div class="line">  <span class="keyword">private</span> <span class="keyword">val</span> aggregateIdleMeter = newMeter(<span class="string">"RequestHandlerAvgIdlePercent"</span>, <span class="string">"percent"</span>, <span class="type">TimeUnit</span>.<span class="type">NANOSECONDS</span>)</div><div class="line"></div><div class="line">  <span class="keyword">this</span>.logIdent = <span class="string">"[Kafka Request Handler on Broker "</span> + brokerId + <span class="string">"], "</span></div><div class="line">  <span class="keyword">val</span> threads = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">Thread</span>](numThreads)</div><div class="line">  <span class="keyword">val</span> runnables = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">KafkaRequestHandler</span>](numThreads)</div><div class="line">  <span class="comment">//note: 建立 M 个（numThreads）KafkaRequestHandler</span></div><div class="line">  <span class="keyword">for</span>(i &lt;- <span class="number">0</span> until numThreads) &#123;</div><div class="line">    <span class="comment">//note: requestChannel 是 Processor 存放 request 请求的地方,也是 Handler 处理完请求存放 response 的地方</span></div><div class="line">    runnables(i) = <span class="keyword">new</span> <span class="type">KafkaRequestHandler</span>(i, brokerId, aggregateIdleMeter, numThreads, requestChannel, apis, time)</div><div class="line">    threads(i) = <span class="type">Utils</span>.daemonThread(<span class="string">"kafka-request-handler-"</span> + i, runnables(i))</div><div class="line">    threads(i).start()</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  <span class="function"><span class="keyword">def</span> <span class="title">shutdown</span></span>() &#123;</div><div class="line">    info(<span class="string">"shutting down"</span>)</div><div class="line">    <span class="keyword">for</span>(handler &lt;- runnables)</div><div class="line">      handler.shutdown</div><div class="line">    <span class="keyword">for</span>(thread &lt;- threads)</div><div class="line">      thread.join</div><div class="line">    info(<span class="string">"shut down completely"</span>)</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>如上面实现所示：</p>
+<ol>
+<li>KafkaRequestHandlerPool 会初始化 M 个 KafkaRequestHandler 线程，并启动该线程；</li>
+<li>在初始化 KafkaRequestHandler 时，传入一个 requestChannel 变量，这个是 Processor 存放 request 的地方，KafkaRequestHandler 在处理请求时，会从这个 queue 中取出相应的 request。</li>
+</ol>
+<h3 id="KafkaRequestHandler"><a href="#KafkaRequestHandler" class="headerlink" title="KafkaRequestHandler"></a>KafkaRequestHandler</h3><p>KafkaRequestHandler 线程的处理实现如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">run</span></span>() &#123;</div><div class="line">  <span class="keyword">while</span>(<span class="literal">true</span>) &#123;</div><div class="line">    <span class="keyword">try</span> &#123;</div><div class="line">      <span class="keyword">var</span> req : <span class="type">RequestChannel</span>.<span class="type">Request</span> = <span class="literal">null</span></div><div class="line">      <span class="keyword">while</span> (req == <span class="literal">null</span>) &#123;</div><div class="line">        <span class="comment">// We use a single meter for aggregate idle percentage for the thread pool.</span></div><div class="line">        <span class="comment">// Since meter is calculated as total_recorded_value / time_window and</span></div><div class="line">        <span class="comment">// time_window is independent of the number of threads, each recorded idle</span></div><div class="line">        <span class="comment">// time should be discounted by # threads.</span></div><div class="line">        <span class="keyword">val</span> startSelectTime = time.nanoseconds</div><div class="line">        req = requestChannel.receiveRequest(<span class="number">300</span>) <span class="comment">//note: 从 request queue 中拿去 request</span></div><div class="line">        <span class="keyword">val</span> idleTime = time.nanoseconds - startSelectTime</div><div class="line">        aggregateIdleMeter.mark(idleTime / totalHandlerThreads)</div><div class="line">      &#125;</div><div class="line"></div><div class="line">      <span class="keyword">if</span>(req eq <span class="type">RequestChannel</span>.<span class="type">AllDone</span>) &#123;</div><div class="line">        debug(<span class="string">"Kafka request handler %d on broker %d received shut down command"</span>.format(</div><div class="line">          id, brokerId))</div><div class="line">        <span class="keyword">return</span></div><div class="line">      &#125;</div><div class="line">      req.requestDequeueTimeMs = time.milliseconds</div><div class="line">      trace(<span class="string">"Kafka request handler %d on broker %d handling request %s"</span>.format(id, brokerId, req))</div><div class="line">      apis.handle(req) <span class="comment">//note: 处理请求,并将处理的结果通过 sendResponse 放入 response queue 中</span></div><div class="line">    &#125; <span class="keyword">catch</span> &#123;</div><div class="line">      <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">"Exception when handling request"</span>, e)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>上述方法的实现逻辑：</p>
+<ol>
+<li>从 RequestChannel 取出相应的 request；</li>
+<li>KafkaApis 处理这个 request，并通过 <code>requestChannel.sendResponse()</code> 将处理的结果放入 requestChannel 的 response queue 中，如下所示：</li>
+</ol>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 将 response 添加到对应的队列中</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">sendResponse</span></span>(response: <span class="type">RequestChannel</span>.<span class="type">Response</span>) &#123;</div><div class="line">  responseQueues(response.processor).put(response)</div><div class="line">  <span class="keyword">for</span>(onResponse &lt;- responseListeners)</div><div class="line">    onResponse(response.processor) <span class="comment">//note: 调用对应 processor 的 wakeup 方法</span></div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>到这里为止，一个请求从 Processor 接收，到 KafkaRequestHandler 通过 KafkaApis 处理并放回该 Processor 对应的 response queue 这整个过程就完成了（建议阅读本文的时候结合最前面的流程图一起看）。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;前面7篇对 Kafka Controller 的内容做了相应的总结，Controller 这部分的总结算是暂时告一段落，本节会讲述 Kafka 源码分析系列中最后一节的内容，是关于 Server 端对不同类型请求处理的网络模型。在前面的文章中也讲述过几种不同类型的请求处理实
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
+    
+  </entry>
   
   <entry>
     <title>Kafka 源码解析之 LeaderAndIsr 请求的处理（二十二）</title>
@@ -2625,333 +2725,6 @@
     <summary type="html">
     
       &lt;p&gt;今天把 Kafka Producer 最后一部分给讲述一下，Producer 大部分内容都已经在前面几篇文章介绍过了，这里简单做个收尾，但并不是对前面的总结，本文从两块来讲述：RecordAccumulator 类的实现、Kafka Producer 如何保证其顺序性以及 
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Kafka 最佳实践【译】</title>
-    <link href="http://matt33.com/2017/09/04/kafka-best-pratice/"/>
-    <id>http://matt33.com/2017/09/04/kafka-best-pratice/</id>
-    <published>2017-09-04T14:07:58.000Z</published>
-    <updated>2017-09-05T00:59:02.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>这里翻译一篇关于 Kafka 实践的文章，内容来自 DataWorks Summit/Hadoop Summit（<a href="https://dataworkssummit.com/munich-2017/sessions/apache-kafka-best-practices/" target="_blank" rel="external">Hadoop Summit</a>）上一篇分享，PPT 见<a href="https://www.slideshare.net/HadoopSummit/apache-kafka-best-practices" target="_blank" rel="external">Apache Kafka Best Pratices</a>，里面讲述了很多关于 Kafka 配置、监控、优化的内容，绝对是在实践中总结出的精华，有很大的借鉴参考意义，本文主要是根据 PPT 的内容进行翻译及适当补充。</p>
-<p>Kafka 的架构这里就不多做介绍了，直接不如正题。</p>
-<h2 id="Kafka-基本配置及性能优化"><a href="#Kafka-基本配置及性能优化" class="headerlink" title="Kafka 基本配置及性能优化"></a>Kafka 基本配置及性能优化</h2><p>这里主要是 Kafka 集群基本配置的相关内容。</p>
-<h3 id="硬件要求"><a href="#硬件要求" class="headerlink" title="硬件要求"></a>硬件要求</h3><p>Kafka 集群基本硬件的保证</p>
-<table>
-<thead>
-<tr>
-<th></th>
-<th>集群规模</th>
-<th>内存</th>
-<th>CPU</th>
-<th>存储</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Kafka Brokers</td>
-<td>3+</td>
-<td>24GB+（小规模）；64GB+（大规模）</td>
-<td>多核（12CPU+），并允许超线程</td>
-<td>6+ 1TB 的专属磁盘（RAID 或 JBOD）</td>
-</tr>
-<tr>
-<td>Zookeeper</td>
-<td>3（小规模）；5（大规模）</td>
-<td>8GB+（小规模）；24GB+（大规模）</td>
-<td>2核+</td>
-<td>SSD 用于中间的日志传输</td>
-</tr>
-</tbody>
-</table>
-<h3 id="OS-调优"><a href="#OS-调优" class="headerlink" title="OS 调优"></a>OS 调优</h3><ul>
-<li>OS page cache：应当可以缓存所有活跃的 Segment（Kafka 中最基本的数据存储单位）；</li>
-<li>fd 限制：100k+；</li>
-<li>禁用 swapping：简单来说，swap 作用是当内存的使用达到一个临界值时就会将内存中的数据移动到 swap 交换空间，但是此时，内存可能还有很多空余资源，swap 走的是磁盘 IO，对于内存读写很在意的系统，最好禁止使用 swap 分区（参考<a href="https://www.quora.com/What-is-swapping-in-an-OS" target="_blank" rel="external">What is swapping in an OS?</a>）；</li>
-<li>TCP 调优；</li>
-<li>JVM 配置<ol>
-<li>JDK 8 并且使用 G1 垃圾收集器；</li>
-<li>至少要分配 6-8 GB 的堆内存。</li>
-</ol>
-</li>
-</ul>
-<h3 id="Kafka-磁盘存储"><a href="#Kafka-磁盘存储" class="headerlink" title="Kafka 磁盘存储"></a>Kafka 磁盘存储</h3><ul>
-<li>使用多块磁盘，并配置为 Kafka 专用的磁盘；</li>
-<li>JBOD vs RAID10；</li>
-<li>JBOD（Just a Bunch of Disks，简单来说它表示一个没有控制软件提供协调控制的磁盘集合，它将多个物理磁盘串联起来，提供一个巨大的逻辑磁盘，数据是按序存储，它的性能与单块磁盘类似）</li>
-<li>JBOD 的一些缺陷：<ul>
-<li>任何磁盘的损坏都会导致异常关闭，并且需要较长的时间恢复；</li>
-<li>数据不保证一致性；</li>
-<li>多级目录；</li>
-</ul>
-</li>
-<li>社区也正在解决这么问题，可以关注 KIP 112、113：<ul>
-<li>必要的工具用于管理 JBOD；</li>
-<li>自动化的分区管理；</li>
-<li>磁盘损坏时，Broker 可以将 replicas 迁移到好的磁盘上；</li>
-<li>在同一个 Broker 的磁盘间 reassign replicas；</li>
-</ul>
-</li>
-<li>RAID 10 的特点：<ul>
-<li>可以允许单磁盘的损坏；</li>
-<li>性能和保护；</li>
-<li>不同磁盘间的负载均衡；</li>
-<li>高命中来减少 space；</li>
-<li>单一的 mount point；</li>
-</ul>
-</li>
-<li>文件系统：<ul>
-<li>使用 EXT 或 XFS；</li>
-<li>SSD；</li>
-</ul>
-</li>
-</ul>
-<h3 id="基本的监控"><a href="#基本的监控" class="headerlink" title="基本的监控"></a>基本的监控</h3><p>Kafka 集群需要监控的一些指标，这些指标反应了集群的健康度。</p>
-<ul>
-<li>CPU 负载；</li>
-<li>Network Metrics；</li>
-<li>File Handle 使用；</li>
-<li>磁盘空间；</li>
-<li>磁盘 IO 性能；</li>
-<li>GC 信息；</li>
-<li>ZooKeeper 监控。</li>
-</ul>
-<h2 id="Kafka-replica-相关配置及监控"><a href="#Kafka-replica-相关配置及监控" class="headerlink" title="Kafka replica 相关配置及监控"></a>Kafka replica 相关配置及监控</h2><h3 id="Kafka-Replication"><a href="#Kafka-Replication" class="headerlink" title="Kafka Replication"></a>Kafka Replication</h3><ul>
-<li>Partition 有两种副本：Leader，Follower；</li>
-<li>Leader 负责维护 in-sync-replicas(ISR)<ul>
-<li><code>replica.lag.time.max.ms</code>：默认为10000，如果 follower 落后于 leader 的消息数超过这个数值时，leader 就将 follower 从 isr 列表中移除；</li>
-<li><code>num.replica.fetchers</code>，默认为1，用于从 leader 同步数据的 fetcher 线程数；</li>
-<li><code>min.insync.replica</code>：Producer 端使用来用于保证 Durability（持久性）；</li>
-</ul>
-</li>
-</ul>
-<h3 id="Under-Replicated-Partitions"><a href="#Under-Replicated-Partitions" class="headerlink" title="Under Replicated Partitions"></a>Under Replicated Partitions</h3><p>当发现 replica 的配置与集群的不同时，一般情况都是集群上的 replica 少于配置数时，可以从以下几个角度来排查问题：</p>
-<ul>
-<li>JMX 监控项：kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions；</li>
-<li>可能的原因：<ul>
-<li>Broker 挂了？</li>
-<li>Controller 的问题？</li>
-<li>ZooKeeper 的问题？</li>
-<li>Network 的问题？</li>
-</ul>
-</li>
-<li>解决办法：<ul>
-<li>调整 ISR 的设置；</li>
-<li>Broker 扩容。</li>
-</ul>
-</li>
-</ul>
-<h3 id="Controller"><a href="#Controller" class="headerlink" title="Controller"></a>Controller</h3><ul>
-<li>负责管理 partition 生命周期；</li>
-<li>避免 Controller’s ZK 会话超时：<ul>
-<li>ISR 抖动；</li>
-<li>ZK Server 性能问题；</li>
-<li>Broker 长时间的 GC；</li>
-<li>网络 IO 问题；</li>
-</ul>
-</li>
-<li>监控：<ul>
-<li>kafka.controller:type=KafkaController,name=ActiveControllerCount，应该为1；</li>
-<li>LeaderElectionRate。</li>
-</ul>
-</li>
-</ul>
-<h3 id="Unclean-leader-选举"><a href="#Unclean-leader-选举" class="headerlink" title="Unclean leader 选举"></a>Unclean leader 选举</h3><p>允许不在 isr 中 replica 被选举为 leader。</p>
-<ul>
-<li>这是 Availability 和 Correctness 之间选择，Kafka 默认选择了可用性；</li>
-<li><code>unclean.leader.election.enable</code>：默认为 true，即允许不在 isr 中 replica 选为 leader，这个配置可以全局配置，也可以在 topic 级别配置；</li>
-<li>监控：kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec。</li>
-</ul>
-<h2 id="Broker-配置"><a href="#Broker-配置" class="headerlink" title="Broker 配置"></a>Broker 配置</h2><p>Broker 级别有几个比较重要的配置，一般需要根据实际情况进行相应配置的：</p>
-<ul>
-<li><code>log.retention.{ms, minutes, hours}</code> , <code>log.retention.bytes</code>：数据保存时间；</li>
-<li><code>message.max.bytes</code>, <code>replica.fetch.max.bytes</code>；</li>
-<li><code>delete.topic.enable</code>：默认为 false，是否允许通过 admin tool 来删除 topic；</li>
-<li><code>unclean.leader.election.enable</code> = false，参见上面；</li>
-<li><code>min.insync.replicas</code> = 2：当 Producer 的 acks 设置为 all 或 -1 时，<code>min.insync.replicas</code> 代表了必须进行确认的最小 replica 数，如果不够的话 Producer 将会报 <code>NotEnoughReplicas</code> 或 <code>NotEnoughReplicasAfterAppend</code> 异常；</li>
-<li><code>replica.lag.time.max.ms</code>（超过这个时间没有发送请求的话，follower 将从 isr 中移除）, num.replica.fetchers；</li>
-<li><code>replica.fetch.response.max.bytes</code>；</li>
-<li><code>zookeeper.session.timeout.ms</code> = 30s；</li>
-<li><code>num.io.threads</code>：默认为8，KafkaRequestHandlerPool 的大小。</li>
-</ul>
-<h2 id="Kafka-相关资源的评估"><a href="#Kafka-相关资源的评估" class="headerlink" title="Kafka 相关资源的评估"></a>Kafka 相关资源的评估</h2><h3 id="集群评估"><a href="#集群评估" class="headerlink" title="集群评估"></a>集群评估</h3><ul>
-<li>Broker 评估<ul>
-<li>每个 Broker 的 Partition 数不应该超过2k；</li>
-<li>控制 partition 大小（不要超过25GB）；</li>
-</ul>
-</li>
-<li>集群评估（Broker 的数量根据以下条件配置）<ul>
-<li>数据保留时间；</li>
-<li>集群的流量大小；</li>
-</ul>
-</li>
-<li>集群扩容：<ul>
-<li>磁盘使用率应该在 60% 以下；</li>
-<li>网络使用率应该在 75% 以下；</li>
-</ul>
-</li>
-<li>集群监控<ul>
-<li>保持负载均衡；</li>
-<li>确保 topic 的 partition 均匀分布在所有 Broker 上；</li>
-<li>确保集群的阶段没有耗尽磁盘或带宽。</li>
-</ul>
-</li>
-</ul>
-<h3 id="Broker-监控"><a href="#Broker-监控" class="headerlink" title="Broker 监控"></a>Broker 监控</h3><ul>
-<li>Partition 数：kafka.server:type=ReplicaManager,name=PartitionCount；</li>
-<li>Leader 副本数：kafka.server:type=ReplicaManager,name=LeaderCount；</li>
-<li>ISR 扩容/缩容率：kafka.server:type=ReplicaManager,name=IsrExpandsPerSec；</li>
-<li>读写速率：Message in rate/Byte in rate/Byte out rate；</li>
-<li>网络请求的平均空闲率：NetworkProcessorAvgIdlePercent；</li>
-<li>请求处理平均空闲率：RequestHandlerAvgIdlePercent。</li>
-</ul>
-<h3 id="Topic-评估"><a href="#Topic-评估" class="headerlink" title="Topic 评估"></a>Topic 评估</h3><ul>
-<li>partition 数<ul>
-<li>Partition 数应该至少与最大 consumer group 中 consumer 线程数一致；</li>
-<li>对于使用频繁的 topic，应该设置更多的 partition；</li>
-<li>控制 partition 的大小（25GB 左右）；</li>
-<li>考虑应用未来的增长（可以使用一种机制进行自动扩容）；</li>
-</ul>
-</li>
-<li>使用带 key 的 topic；</li>
-<li>partition 扩容：当 partition 的数据量超过一个阈值时应该自动扩容（实际上还应该考虑网络流量）。</li>
-</ul>
-<h3 id="合理地设置-partition"><a href="#合理地设置-partition" class="headerlink" title="合理地设置 partition"></a>合理地设置 partition</h3><ul>
-<li>根据吞吐量的要求设置 partition 数：<ul>
-<li>假设 Producer 单 partition 的吞吐量为 P；</li>
-<li>consumer 消费一个 partition 的吞吐量为 C；</li>
-<li>而要求的吞吐量为 T；</li>
-<li>那么 partition 数至少应该大于 T/P、T/c 的最大值；</li>
-</ul>
-</li>
-<li>更多的 partition，意味着：<ul>
-<li>更多的 fd；</li>
-<li>可能增加 Unavailability（可能会增加不可用的时间）；</li>
-<li>可能增加端到端的延迟；</li>
-<li>client 端将会使用更多的内存。</li>
-</ul>
-</li>
-</ul>
-<p>关于 Partition 的设置可以参考这篇文章<a href="https://www.confluent.io/blog/how-to-choose-the-number-of-topicspartitions-in-a-kafka-cluster/" target="_blank" rel="external">How to choose the number of topics/partitions in a Kafka cluster?</a>，这里简单讲述一下，Partition 的增加将会带来以下几个优点和缺点：</p>
-<ol>
-<li>增加吞吐量：对于 consumer 来说，一个 partition 只能被一个 consumer 线程所消费，适当增加 partition 数，可以增加 consumer 的并发，进而增加系统的吞吐量；</li>
-<li>需要更多的 fd：对于每一个 segment，在 broker 都会有一个对应的 index 和实际数据文件，而对于 Kafka Broker，它将会对于每个 segment 每个 index 和数据文件都会打开相应的 file handle（可以理解为 fd），因此，partition 越多，将会带来更多的 fd；</li>
-<li>可能会增加数据不可用性（主要是指增加不可用时间）：主要是指 broker 宕机的情况，越多的 partition 将会意味着越多的 partition 需要 leader 选举（leader 在宕机这台 broker 的 partition 需要重新选举），特别是如果刚好 controller 宕机，重新选举的 controller 将会首先读取所有 partition 的 metadata，然后才进行相应的 leader 选举，这将会带来更大不可用时间；</li>
-<li>可能增加 End-to-end 延迟：一条消息只有其被同步到 isr 的所有 broker 上后，才能被消费，partition 越多，不同节点之间同步就越多，这可能会带来毫秒级甚至数十毫秒级的延迟；</li>
-<li>Client 将会需要更多的内存：Producer 和 Consumer 都会按照 partition 去缓存数据，每个 partition 都会带来数十 KB 的消耗，partition 越多, Client 将会占用更多的内存。</li>
-</ol>
-<h2 id="Producer-的相关配置、性能调优及监控"><a href="#Producer-的相关配置、性能调优及监控" class="headerlink" title="Producer 的相关配置、性能调优及监控"></a>Producer 的相关配置、性能调优及监控</h2><h3 id="Quotas"><a href="#Quotas" class="headerlink" title="Quotas"></a>Quotas</h3><ul>
-<li>避免被恶意 Client 攻击，保证 SLA；</li>
-<li>设置 produce 和 fetch 请求的字节速率阈值；</li>
-<li>可以应用在 user、client-id、或者 user 和 client-id groups；</li>
-<li>Broker 端的 metrics 监控：throttle-rate、byte-rate；</li>
-<li><code>replica.fetch.response.max.bytes</code>：用于限制 replica 拉取请求的内存使用；</li>
-<li>进行数据迁移时限制贷款的使用，<code>kafka-reassign-partitions.sh -- -throttle option</code>。</li>
-</ul>
-<h3 id="Kafka-Producer"><a href="#Kafka-Producer" class="headerlink" title="Kafka Producer"></a>Kafka Producer</h3><ul>
-<li>使用 Java 版的 Client；</li>
-<li>使用 <code>kafka-producer-perf-test.sh</code> 测试你的环境；</li>
-<li>设置内存、CPU、batch 压缩；<ul>
-<li>batch.size：该值设置越大，吞吐越大，但延迟也会越大；</li>
-<li>linger.ms：表示 batch 的超时时间，该值越大，吞吐越大、但延迟也会越大；</li>
-<li><code>max.in.flight.requests.per.connection</code>：默认为5，表示 client 在 blocking 之前向单个连接（broker）发送的未确认请求的最大数，超过1时，将会影响数据的顺序性；</li>
-<li><code>compression.type</code>：压缩设置，会提高吞吐量；</li>
-<li><code>acks</code>：数据 durability 的设置；</li>
-</ul>
-</li>
-<li>避免大消息<ul>
-<li>会使用更多的内存；</li>
-<li>降低 Broker 的处理速度；</li>
-</ul>
-</li>
-</ul>
-<h3 id="性能调优"><a href="#性能调优" class="headerlink" title="性能调优"></a>性能调优</h3><ul>
-<li>如果吞吐量小于网络带宽<ul>
-<li>增加线程；</li>
-<li>提高 batch.size；</li>
-<li>增加更多 producer 实例；</li>
-<li>增加 partition 数；</li>
-</ul>
-</li>
-<li>设置 acks=-1 时，如果延迟增大：可以增大 <code>num.replica.fetchers</code>（follower 同步数据的线程数）来调解；</li>
-<li>跨数据中心的传输：增加 socket 缓冲区设置以及 OS tcp 缓冲区设置。</li>
-</ul>
-<h3 id="Prodcuer-监控"><a href="#Prodcuer-监控" class="headerlink" title="Prodcuer 监控"></a>Prodcuer 监控</h3><ul>
-<li>batch-size-avg</li>
-<li>compression-rate-avg</li>
-<li>waiting-threads</li>
-<li>buffer-available-bytes</li>
-<li>record-queue-time-max</li>
-<li>record-send-rate</li>
-<li>records-per-request-avg</li>
-</ul>
-<h2 id="Kafka-Consumer-配置、性能调优及监控"><a href="#Kafka-Consumer-配置、性能调优及监控" class="headerlink" title="Kafka Consumer 配置、性能调优及监控"></a>Kafka Consumer 配置、性能调优及监控</h2><h3 id="Kafka-Consumer"><a href="#Kafka-Consumer" class="headerlink" title="Kafka Consumer"></a>Kafka Consumer</h3><ul>
-<li>使用 <code>kafka-consumer-perf-test.sh</code> 测试环境；</li>
-<li>吞吐量问题：<ul>
-<li>partition 数太少；</li>
-<li>OS page cache：分配足够的内存来缓存数据；</li>
-<li>应用的处理逻辑；</li>
-</ul>
-</li>
-<li>offset topic（<code>__consumer_offsets</code>）<ul>
-<li><code>offsets.topic.replication.factor</code>：默认为3；</li>
-<li><code>offsets.retention.minutes</code>：默认为1440，即 1day；<br>– MonitorISR，topicsize；</li>
-</ul>
-</li>
-<li>offset commit较慢：异步 commit 或 手动 commit。</li>
-</ul>
-<h3 id="Consumer-配置"><a href="#Consumer-配置" class="headerlink" title="Consumer 配置"></a>Consumer 配置</h3><ul>
-<li><code>fetch.min.bytes</code> 、<code>fetch.max.wait.ms</code>；</li>
-<li><code>max.poll.interval.ms</code>：调用 <code>poll()</code> 之后延迟的最大时间，超过这个时间没有调用 <code>poll()</code> 的话，就会认为这个 consumer 挂掉了，将会进行 rebalance；</li>
-<li><code>max.poll.records</code>：当调用 <code>poll()</code> 之后返回最大的 record 数，默认为500；</li>
-<li><code>session.timeout.ms</code>；</li>
-<li>Consumer Rebalance<br>– check timeouts<br>– check processing times/logic<br>– GC Issues</li>
-<li>网络配置；</li>
-</ul>
-<h3 id="Consumer-监控"><a href="#Consumer-监控" class="headerlink" title="Consumer 监控"></a>Consumer 监控</h3><p>consumer 是否跟得上数据的发送速度。</p>
-<ul>
-<li>Consumer Lag：consumer offset 与 the end of log（partition 可以消费的最大 offset） 的差值；</li>
-<li>监控<ul>
-<li>metric 监控：records-lag-max；</li>
-<li>通过 <code>bin/kafka-consumer-groups.sh</code> 查看；</li>
-<li>用于 consumer 监控的 LinkedIn’s Burrow；</li>
-</ul>
-</li>
-<li>减少 Lag<ul>
-<li>分析 consumer：是 GC 问题还是 Consumer hang 住了；</li>
-<li>增加 Consumer 的线程；</li>
-<li>增加分区数和 consumer 线程；</li>
-</ul>
-</li>
-</ul>
-<h2 id="如何保证数据不丢"><a href="#如何保证数据不丢" class="headerlink" title="如何保证数据不丢"></a>如何保证数据不丢</h2><p>这个是常用的配置，这里截了 PPT 中的内容</p>
-<p><img src="/images/kafka/not-data-less.png" alt="Kafka 数据不丢配置"></p>
-<ul>
-<li><code>block.on.buffer.full</code>：默认设置为 false，当达到内存设置时，可能通过 block 停止接受新的 record 或者抛出一些错误，默认情况下，Producer 将不会抛出  BufferExhaustException，而是当达到 <code>max.block.ms</code> 这个时间后直接抛出 TimeoutException。设置为 true 的意义就是将 <code>max.block.ms</code> 设置为 Long.MAX_VALUE，未来版本中这个设置将被遗弃，推荐设置 <code>max.block.ms</code>。</li>
-</ul>
-<hr>
-<p>参考：</p>
-<ol>
-<li><a href="https://www.slideshare.net/HadoopSummit/apache-kafka-best-practices" target="_blank" rel="external">Apache Kafka Best Pratices</a>；</li>
-<li>胡夕-<a href="http://www.cnblogs.com/huxi2b/p/6720292.html" target="_blank" rel="external">【译】Kafka最佳实践 / Kafka Best Practices</a>；</li>
-<li><a href="https://www.confluent.io/blog/how-to-choose-the-number-of-topicspartitions-in-a-kafka-cluster/" target="_blank" rel="external">How to choose the number of topics/partitions in a Kafka cluster?</a>；</li>
-<li><a href="https://www.zhihu.com/question/20131784" target="_blank" rel="external">raid有哪几种有什么区别？希望讲通俗点</a>；</li>
-<li><a href="https://stackoverflow.com/questions/33536061/file-descriptors-and-file-handles-and-c#" target="_blank" rel="external">File Descriptors and File Handles (and C)</a>.</li>
-</ol>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;这里翻译一篇关于 Kafka 实践的文章，内容来自 DataWorks Summit/Hadoop Summit（&lt;a href=&quot;https://dataworkssummit.com/munich-2017/sessions/apache-kafka-best-prac
     
     </summary>
     
