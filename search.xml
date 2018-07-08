@@ -4,6 +4,195 @@
   
     
     <entry>
+      <title><![CDATA[分布式系统的一致性协议之 2PC 和 3PC]]></title>
+      <url>http://matt33.com/2018/07/08/distribute-system-consistency-protocol/</url>
+      <content type="html"><![CDATA[<p>在分布式系统领域，有一个理论，对于分布式系统的设计影响非常大，那就是 CAP 理论，即对于一个分布式系统而言，它是无法同时满足 Consistency(强一致性)、Availability(可用性) 和  Partition tolerance(分区容忍性) 这三个条件的，最多只能满足其中两个。但在实际中，由于网络环境是不可信的，所以分区容忍性几乎是必不可选的，设计者基本就是在一致性和可用性之间做选择，当然大部分情况下，大家都会选择牺牲一部分的一致性来保证可用性（可用性较差的系统非常影响用户体验的，但是对另一些场景，比如支付场景，强一致性是必须要满足）。但是分布式系统又无法彻底放弃一致性（Consistency），如果真的放弃一致性，那么就说明这个系统中的数据根本不可信，数据也就没有意义，那么这个系统也就没有任何价值可言。</p>
+<h2 id="CAP-理论"><a href="#CAP-理论" class="headerlink" title="CAP 理论"></a>CAP 理论</h2><p>CAP 理论三个特性的详细含义如下：</p>
+<ol>
+<li>一致性（Consistency）：每次读取要么是最新的数据，要么是一个错误；</li>
+<li>可用性（Availability）：client 在任何时刻的读写操作都能在限定的延迟内完成的，即每次请求都能获得一个响应（非错误），但不保证是最新的数据；</li>
+<li>分区容忍性（Partition tolerance）：在大规模分布式系统中，网络分区现象，即分区间的机器无法进行网络通信的情况是必然会发生的，系统应该能保证在这种情况下可以正常工作。</li>
+</ol>
+<h3 id="分区容忍性"><a href="#分区容忍性" class="headerlink" title="分区容忍性"></a>分区容忍性</h3><p>很多人可能对分区容忍性不太理解，知乎有一个回答对这个解释的比较清楚（<a href="https://www.zhihu.com/question/54105974" target="_blank" rel="external">CAP理论中的P到底是个什么意思？</a>），这里引用一下：</p>
+<ul>
+<li>一个分布式系统里面，节点组成的网络本来应该是连通的。然而可能因为一些故障，使得有些节点之间不连通了，整个网络就分成了几块区域。数据就散布在了这些不连通的区域中。这就叫分区。</li>
+<li>当你一个数据项只在一个节点中保存，那么分区出现后，和这个节点不连通的部分就访问不到这个数据了。这时分区就是无法容忍的。</li>
+<li>提高分区容忍性的办法就是一个数据项复制到多个节点上，那么出现分区之后，这一数据项就可能分布到各个区里，容忍性就提高了。</li>
+<li>然而，要把数据复制到多个节点，就会带来一致性的问题，就是多个节点上面的数据可能是不一致的。</li>
+<li>要保证一致，每次写操作就都要等待全部节点写成功，而这等待又会带来可用性的问题。</li>
+<li>总的来说就是，数据存在的节点越多，分区容忍性越高，但要复制更新的数据就越多，一致性就越难保证。为了保证一致性，更新所有节点数据所需要的时间就越长，可用性就会降低。</li>
+</ul>
+<h3 id="CAP-如何选择"><a href="#CAP-如何选择" class="headerlink" title="CAP 如何选择"></a>CAP 如何选择</h3><p>CAP 理论一个经典原理如下所示：</p>
+<p><img src="/images/distribute/CAP.png" alt="CAP 理论原理"></p>
+<p>CAP 定理表明，在存在网络分区的情况下，一致性和可用性必须二选一。而在没有发生网络故障时，即分布式系统正常运行时，一致性和可用性是可以同时被满足的。但是，对于大多数互联网应用来说，因为规模比较大，部署节点分散，网络故障是常态，可用性是必须要保证的，所以只有舍弃一致性来保证服务的 AP。但是对于一些金融相关行业，它有很多场景需要确保一致性，这种情况通常会权衡 CA 和 CP 模型，CA 模型网络故障时完全不可用，CP 模型具备部分可用性。</p>
+<p>在一个分布式系统中，对于这三个特性，我们只能三选二，无法同时满足这三个特性，三选二的组合以及这样系统的特点总结如下（来自<a href="http://www.infoq.com/cn/news/2018/05/distributed-system-architecture" target="_blank" rel="external">左耳朵耗子推荐：分布式系统架构经典资料</a>）：</p>
+<ul>
+<li>CA (Consistency + Availability)：关注一致性和可用性，它需要非常严格的全体一致的协议，比如“两阶段提交”（2PC）。CA 系统不能容忍网络错误或节点错误，一旦出现这样的问题，整个系统就会拒绝写请求，因为它并不知道对面的那个结点是否挂掉了，还是只是网络问题。唯一安全的做法就是把自己变成只读的。</li>
+<li>CP (consistency + partition tolerance)：关注一致性和分区容忍性。它关注的是系统里大多数人的一致性协议，比如：Paxos 算法 (Quorum 类的算法)。这样的系统只需要保证大多数结点数据一致，而少数的结点会在没有同步到最新版本的数据时变成不可用的状态。这样能够提供一部分的可用性。</li>
+<li>AP (availability + partition tolerance)：这样的系统关心可用性和分区容忍性。因此，这样的系统不能达成一致性，需要给出数据冲突，给出数据冲突就需要维护数据版本。Dynamo 就是这样的系统。</li>
+</ul>
+<p>对于分布式系统分区容忍性是天然具备的要求，否则一旦出现网络分区，系统就拒绝所有写入只允许可读，这对大部分的场景是不可接收的，因此，在设计分布式系统时，更多的情况下是选举 CP 还是 AP，要么选择强一致性弱可用性，要么选择高可用性容忍弱一致性。</p>
+<h3 id="一致性模型"><a href="#一致性模型" class="headerlink" title="一致性模型"></a>一致性模型</h3><p>关于分布式系统的一致性模型有以下几种：</p>
+<h4 id="强一致性"><a href="#强一致性" class="headerlink" title="强一致性"></a>强一致性</h4><p>当更新操作完成之后，任何多个后续进程或者线程的访问都会返回最新的更新过的值，直到这个数据被其他数据更新为止。</p>
+<p>但是这种实现对性能影响较大，因为这意味着，只要上次的操作没有处理完，就不能让用户读取数据。</p>
+<h4 id="弱一致性"><a href="#弱一致性" class="headerlink" title="弱一致性"></a>弱一致性</h4><p>系统并不保证进程或者线程的访问都会返回最新更新过的值。系统在数据写入成功之后，不承诺立即可以读到最新写入的值，也不会具体的承诺多久之后可以读到。但会尽可能保证在某个时间级别（比如秒级别）之后，可以让数据达到一致性状态。</p>
+<h4 id="最终一致性"><a href="#最终一致性" class="headerlink" title="最终一致性"></a>最终一致性</h4><p>最终一致性也是弱一致性的一种，它无法保证数据更新后，所有后续的访问都能看到最新数值，而是需要一个时间，在这个时间之后可以保证这一点，而在这个时间内，数据也许是不一致的，这个系统无法保证强一致性的时间片段被称为「不一致窗口」。不一致窗口的时间长短取决于很多因素，比如备份数据的个数、网络传输延迟速度、系统负载等。</p>
+<p>最终一致性在实际应用中又有多种变种：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>因果一致性</td>
+<td>如果 A 进程在更新之后向 B 进程通知更新的完成，那么 B 的访问操作将会返回更新的值。而没有因果关系的 C 进程将会遵循最终一致性的规则（C 在不一致窗口内还是看到是旧值）。</td>
+</tr>
+<tr>
+<td>读你所写一致性</td>
+<td>因果一致性的特定形式。一个进程进行数据更新后，会给自己发送一条通知，该进程后续的操作都会以最新值作为基础，而其他的进程还是只能在不一致窗口之后才能看到最新值。</td>
+</tr>
+<tr>
+<td>会话一致性</td>
+<td>读你所写一致性的特定形式。进程在访问存储系统同一个会话内，系统保证该进程可以读取到最新之，但如果会话终止，重新连接后，如果此时还在不一致窗口内，还是可嫩读取到旧值。</td>
+</tr>
+<tr>
+<td>单调读一致性</td>
+<td>如果一个进程已经读取到一个特定值，那么该进程不会读取到该值以前的任何值。</td>
+</tr>
+<tr>
+<td>单调写一致性</td>
+<td>系统保证对同一个进程的写操作串行化。</td>
+</tr>
+</tbody>
+</table>
+<p>它们的关系又如下图所示（图来自 <a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>）：</p>
+<p><img src="/images/distribute/consistency.png" alt="一致性模型之间关系"></p>
+<h2 id="分布式一致性协议"><a href="#分布式一致性协议" class="headerlink" title="分布式一致性协议"></a>分布式一致性协议</h2><p>为了解决分布式系统的一致性问题，在长期的研究探索过程中，业内涌现出了一大批经典的一致性协议和算法，其中比较著名的有二阶段提交协议（2PC），三阶段提交协议（3PC）和 Paxos 算法（本文暂时先不介绍）。</p>
+<p>Google 2009年 在<a href="https://snarfed.org/transactions_across_datacenters_io.html" target="_blank" rel="external">Transaction Across DataCenter</a> 的分享中，对一致性协议在业内的实践做了一简单的总结，如下图所示，这是 CAP 理论在工业界应用的实践经验。</p>
+<p><img src="/images/distribute/cap-sumarry.png" alt="CAP 理论在工业界的实践"></p>
+<p>其中，第一行表头代表了分布式系统中通用的一致性方案，包括冷备、Master/Slave、Master/Master、两阶段提交以及基于 Paxos 算法的解决方案，第一列表头代表了分布式系统大家所关心的各项指标，包括一致性、事务支持程度、数据延迟、系统吞吐量、数据丢失可能性、故障自动恢复方式。</p>
+<h2 id="两阶段提交协议（2PC）"><a href="#两阶段提交协议（2PC）" class="headerlink" title="两阶段提交协议（2PC）"></a>两阶段提交协议（2PC）</h2><p>二阶段提交协议（Two-phase Commit，即2PC）是常用的分布式事务解决方案，它可以保证在分布式事务中，要么所有参与进程都提交事务，要么都取消事务，即实现 ACID 的原子性（A）。在数据一致性中，它的含义是：要么所有副本（备份数据）同时修改某个数值，要么都不更改，以此来保证数据的强一致性。</p>
+<p>2PC 要解决的问题可以简单总结为：在分布式系统中，每个节点虽然可以知道自己的操作是成功还是失败，却是无法知道其他节点的操作状态。当一个事务需要跨越多个节点时，为了保持事务的 ACID 特性，需要引入一个作为<strong>协调者</strong>的组件来统一掌控所有节点（参与者）的操作结果并最终指示这些节点是否要把操作结果进行真正的提交（比如将更新后的数据写入磁盘等等）。因此，二阶段提交的算法思路可以概括为： 参与者将操作结果通知协调者，再由协调者根据所有参与者的反馈情报决定各参与者是否要提交操作还是中止操作。</p>
+<h3 id="2PC-过程"><a href="#2PC-过程" class="headerlink" title="2PC 过程"></a>2PC 过程</h3><p>关于两阶段提交的过程如下图所示：</p>
+<p><img src="/images/distribute/2pc_process.png" alt="两阶段提交过程"></p>
+<p>顾名思义，2PC 分为两个过程：</p>
+<ol>
+<li>表决阶段：此时 Coordinator （协调者）向所有的参与者发送一个 vote request，参与者在收到这请求后，如果准备好了就会向 Coordinator 发送一个 <code>VOTE_COMMIT</code> 消息作为回应，告知 Coordinator 自己已经做好了准备，否则会返回一个 <code>VOTE_ABORT</code> 消息；</li>
+<li>提交阶段：Coordinator 收到所有参与者的表决信息，如果所有参与者一致认为可以提交事务，那么 Coordinator 就会发送 <code>GLOBAL_COMMIT</code> 消息，否则发送 <code>GLOBAL_ABORT</code> 消息；对于参与者而言，如果收到 <code>GLOBAL_COMMIT</code> 消息，就会提交本地事务，否则就会取消本地事务。</li>
+</ol>
+<h3 id="2PC-一致性问题"><a href="#2PC-一致性问题" class="headerlink" title="2PC 一致性问题"></a>2PC 一致性问题</h3><p>这里先讨论一下，2PC 是否可以在任何情况下都可以解决一致性问题，在实际的网络生产中，各种情况都有可能发生，这里，我们先从理论上分析各种意外情况。</p>
+<p>2PC 在执行过程中可能发生 Coordinator 或者参与者突然宕机的情况，在不同时期宕机可能有不同的现象。</p>
+<table>
+<thead>
+<tr>
+<th>情况</th>
+<th>分析及解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Coordinator 挂了，参与者没挂</td>
+<td>这种情况其实比较好解决，只要找一个 Coordinator 的替代者。当他成为新的 Coordinator 的时候，询问所有参与者的最后那条事务的执行情况，他就可以知道是应该做什么样的操作了。所以，这种情况不会导致数据不一致。</td>
+</tr>
+<tr>
+<td>参与者挂了（无法恢复），Coordinator 没挂</td>
+<td>如果挂了之后没有恢复，那么是不会导致数据一致性问题。</td>
+</tr>
+<tr>
+<td>参与者挂了（后来恢复），Coordinator 没挂</td>
+<td>恢复后参与者如果发现有未执行完的事务操作，直接取消，然后再询问 Coordinator 目前我应该怎么做，协调者就会比对自己的事务执行记录和该参与者的事务执行记录，告诉他应该怎么做来保持数据的一致性。</td>
+</tr>
+</tbody>
+</table>
+<p>还有一种情况是：参与者挂了，Coordinator 也挂了，需要再细分为几种类型来讨论：</p>
+<table>
+<thead>
+<tr>
+<th>情况</th>
+<th>分析及解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Coordinator 和参与者在第一阶段挂了</td>
+<td>由于这时还没有执行 commit 操作，新选出来的 Coordinator 可以询问各个参与者的情况，再决定是进行 commit 还是 roolback。因为还没有 commit，所以不会导致数据一致性问题。</td>
+</tr>
+<tr>
+<td>Coordinator 和参与者在第二阶段挂了，但是挂的这个参与者在挂之前还没有做相关操作</td>
+<td>这种情况下，当新的 Coordinator 被选出来之后，他同样是询问所有参与者的情况。只要有机器执行了 abort（roolback）操作或者第一阶段返回的信息是 No 的话，那就直接执行 roolback 操作。如果没有人执行 abort 操作，但是有机器执行了 commit 操作，那么就直接执行 commit 操作。这样，当挂掉的参与者恢复之后，只要按照 Coordinator 的指示进行事务的 commit 还是 roolback 操作就可以了。因为挂掉的机器并没有做 commit 或者 roolback 操作，而没有挂掉的机器们和新的 Coordinator 又执行了同样的操作，那么这种情况不会导致数据不一致现象。</td>
+</tr>
+<tr>
+<td>Coordinator 和参与者在第二阶段挂了，挂的这个参与者在挂之前已经执行了操作。但是由于他挂了，没有人知道他执行了什么操作。</td>
+<td>这种情况下，新的 Coordinator 被选出来之后，如果他想负起 Coordinator 的责任的话他就只能按照之前那种情况来执行 commit 或者 roolback 操作。这样新的 Coordinator 和所有没挂掉的参与者就保持了数据的一致性，我们假定他们执行了 commit。但是，这个时候，那个挂掉的参与者恢复了怎么办，因为他已经执行完了之前的事务，如果他执行的是 commit 那还好，和其他的机器保持一致了，万一他执行的是 roolback 操作呢？这不就导致数据的不一致性了么？虽然这个时候可以再通过手段让他和 Coordinator 通信，再想办法把数据搞成一致的，但是，这段时间内他的数据状态已经是不一致的了！</td>
+</tr>
+</tbody>
+</table>
+<p>所以，2PC协议中，如果出现协调者和参与者都挂了的情况，有可能导致数据不一致。为了解决这个问题，衍生除了3PC。</p>
+<h3 id="2PC-优缺点"><a href="#2PC-优缺点" class="headerlink" title="2PC 优缺点"></a>2PC 优缺点</h3><p>简单总结一下 2PC 的优缺点：</p>
+<ul>
+<li>优点：原理简洁清晰、实现方便；</li>
+<li>缺点：同步阻塞、单点问题、某些情况可能导致数据不一致。</li>
+</ul>
+<p>关于这几个缺点，在实际应用中，都是对2PC 做了相应的改造：</p>
+<ol>
+<li>同步阻塞：2PC 有几个过程（比如 Coordinator 等待所有参与者表决的过程中）都是同步阻塞的，在实际的应用中，这可能会导致长阻塞问题，这个问题是通过超时判断机制来解决的，但并不能完全解决同步阻塞问题；</li>
+<li>Coordinator 单点问题：实际生产应用中，Coordinator 都会有相应的备选节点；</li>
+<li>数据不一致：这个在前面已经讲述过了，如果在第二阶段，Coordinator 和参与者都出现挂掉的情况下，是有可能导致数据不一致的。</li>
+</ol>
+<h2 id="三阶段提交协议（3PC）"><a href="#三阶段提交协议（3PC）" class="headerlink" title="三阶段提交协议（3PC）"></a>三阶段提交协议（3PC）</h2><p>三阶段提交协议（Three-Phase Commit， 3PC）最关键要解决的就是 Coordinator 和参与者同时挂掉导致数据不一致的问题，所以 3PC 把在 2PC 中又添加一个阶段，这样三阶段提交就有：CanCommit、PreCommit 和 DoCommit 三个阶段。</p>
+<h3 id="3PC-过程"><a href="#3PC-过程" class="headerlink" title="3PC 过程"></a>3PC 过程</h3><p>三阶段提交协议的过程如下图（图来自 <a href="https://en.wikipedia.org/wiki/Three-phase_commit_protocol" target="_blank" rel="external">维基百科：三阶段提交</a>）所示：</p>
+<p><img src="/images/distribute/Three-phase_commit_diagram.png" alt="三节点提交过程"></p>
+<p>3PC 的详细过程如下（这个过程步骤内容来自 <a href="https://segmentfault.com/a/1190000004474543" target="_blank" rel="external">2PC到3PC到Paxos到Raft到ISR</a>）：</p>
+<h4 id="阶段一-CanCommit"><a href="#阶段一-CanCommit" class="headerlink" title="阶段一 CanCommit"></a>阶段一 CanCommit</h4><ol>
+<li>事务询问：Coordinator 向各参与者发送 CanCommit 的请求，询问是否可以执行事务提交操作，并开始等待各参与者的响应；</li>
+<li>参与者向 Coordinator 反馈询问的响应：参与者收到 CanCommit 请求后，正常情况下，如果自身认为可以顺利执行事务，那么会反馈 Yes 响应，并进入预备状态，否则反馈 No。</li>
+</ol>
+<h4 id="阶段二-PreCommit"><a href="#阶段二-PreCommit" class="headerlink" title="阶段二 PreCommit"></a>阶段二 PreCommit</h4><p><strong>执行事务预提交</strong>：如果 Coordinator 接收到各参与者反馈都是Yes，那么执行事务预提交：</p>
+<ol>
+<li>发送预提交请求：Coordinator 向各参与者发送 preCommit 请求，并进入 prepared 阶段；</li>
+<li>事务预提交：参与者接收到 preCommit 请求后，会执行事务操作，并将 Undo 和 Redo 信息记录到事务日记中；</li>
+<li>各参与者向 Coordinator 反馈事务执行的响应：如果各参与者都成功执行了事务操作，那么反馈给协调者 ACK 响应，同时等待最终指令，提交 commit 或者终止 abort，结束流程；</li>
+</ol>
+<p><strong>中断事务</strong>：如果任何一个参与者向 Coordinator 反馈了 No 响应，或者在等待超时后，Coordinator 无法接收到所有参与者的反馈，那么就会中断事务。</p>
+<ol>
+<li>发送中断请求：Coordinator 向所有参与者发送 abort 请求；</li>
+<li>中断事务：无论是收到来自 Coordinator 的 abort 请求，还是等待超时，参与者都中断事务。</li>
+</ol>
+<h4 id="阶段三-doCommit"><a href="#阶段三-doCommit" class="headerlink" title="阶段三 doCommit"></a>阶段三 doCommit</h4><p><strong>执行提交</strong></p>
+<ol>
+<li>发送提交请求：假设 Coordinator 正常工作，接收到了所有参与者的 ack 响应，那么它将从预提交阶段进入提交状态，并向所有参与者发送 doCommit 请求；</li>
+<li>事务提交：参与者收到 doCommit 请求后，正式提交事务，并在完成事务提交后释放占用的资源；</li>
+<li>反馈事务提交结果：参与者完成事务提交后，向 Coordinator 发送 ACK 信息；</li>
+<li>完成事务：Coordinator 接收到所有参与者 ack 信息，完成事务。</li>
+</ol>
+<p><strong>中断事务</strong>：假设 Coordinator 正常工作，并且有任一参与者反馈 No，或者在等待超时后无法接收所有参与者的反馈，都会中断事务</p>
+<ol>
+<li>发送中断请求：Coordinator 向所有参与者节点发送 abort 请求；</li>
+<li>事务回滚：参与者接收到 abort 请求后，利用 undo 日志执行事务回滚，并在完成事务回滚后释放占用的资源；</li>
+<li>反馈事务回滚结果：参与者在完成事务回滚之后，向 Coordinator 发送 ack 信息；</li>
+<li>中断事务：Coordinator 接收到所有参与者反馈的 ack 信息后，中断事务。</li>
+</ol>
+<h3 id="3PC-分析"><a href="#3PC-分析" class="headerlink" title="3PC 分析"></a>3PC 分析</h3><p>3PC 虽然解决了 Coordinator 与参与者都异常情况下导致数据不一致的问题，3PC 依然带来其他问题：比如，网络分区问题，在 preCommit 消息发送后突然两个机房断开，这时候 Coordinator 所在机房会 abort, 另外剩余参与者的机房则会 commit。</p>
+<p>而且由于3PC 的设计过于复杂，在解决2PC 问题的同时也引入了新的问题，所以在实际上应用不是很广泛。</p>
+<p>参考：</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol" target="_blank" rel="external">维基百科：二阶段提交</a>；</li>
+<li><a href="https://en.wikipedia.org/wiki/Three-phase_commit_protocol" target="_blank" rel="external">维基百科：三阶段提交</a>；</li>
+<li><a href="http://www.infoq.com/cn/news/2018/05/distributed-system-architecture" target="_blank" rel="external">左耳朵耗子推荐：分布式系统架构经典资料</a>；</li>
+<li><a href="http://www.hollischuang.com/archives/663" target="_blank" rel="external">关于分布式一致性的探究</a>；</li>
+<li><a href="http://www.hollischuang.com/archives/681" target="_blank" rel="external">关于分布式事务、两阶段提交协议、三阶提交协议</a>；</li>
+<li><a href="http://www.hollischuang.com/archives/1580" target="_blank" rel="external">深入理解分布式系统的2PC和3PC</a>；</li>
+<li><a href="https://segmentfault.com/a/1190000004474543" target="_blank" rel="external">2PC到3PC到Paxos到Raft到ISR</a>；</li>
+<li><a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>；</li>
+<li><a href="https://coolshell.cn/articles/10910.html" target="_blank" rel="external">分布式系统的事务处理</a>。</li>
+</ul>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[Java 守护线程]]></title>
       <url>http://matt33.com/2018/07/07/java-daemon-thread/</url>
       <content type="html"><![CDATA[<p>在 Java 并发编程实践或看涉及到 Java 并发相关的代码时，经常会遇到一些线程（比如做 metrics 统计的线程等）会通过 <code>setDaemon()</code> 方法设置将该线程的 daemon 变量设置为 True，也就是将这个线程设置为了<strong>守护线程(daemon thread)</strong>，那么什么是守护线程呢？或者说守护线程与非守护线程（普通线程）的区别在什么地方呢？这个就是本文主要讲述的内容。</p>
