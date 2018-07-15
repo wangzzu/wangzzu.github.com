@@ -4,6 +4,162 @@
   
     
     <entry>
+      <title><![CDATA[Kafka Controller Redesign 方案]]></title>
+      <url>http://matt33.com/2018/07/14/kafka-controller-redesign/</url>
+      <content type="html"><![CDATA[<p>Kafka Controller 是 Kafka 的核心组件，在前面的文章中，已经详细讲述过 Controller 部分的内容。在过去的几年根据大家在生产环境中应用的反馈，Controller 也积累了一些比较大的问题，而针对这些问题的修复，代码的改动量都是非常大的，无疑是一次重构，因此，社区准备在新版的系统里对 Controller 做一些相应的优化（0.11.0及以后的版本），相应的设计方案见：<a href="https://docs.google.com/document/d/1rLDmzDOGQQeSiMANP0rC2RYp_L7nUGHzFD9MQISgXYM/edit#heading=h.pxfjarumuhko" target="_blank" rel="external">Kafka Controller Redesign</a>，本文的内容就是结合这篇文章做一个简单的总结。</p>
+<h2 id="Controller-功能"><a href="#Controller-功能" class="headerlink" title="Controller 功能"></a>Controller 功能</h2><p>在一个 Kafka 中，Controller 要处理的事情总结如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>详情</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cluster metadata updates</td>
+<td>producer 或 consumer 可以通过 MetadataRequest 请求从集群任何一台 broker 上查询到某个 Partition 的 metadata 信息，如果一个 Partition 的 leader 或 isr 等信息变化，Controller 会广播到集群的所有 broker 上，这样每台 Broker 都会有该 Partition 的最新 Metadata 信息</td>
+</tr>
+<tr>
+<td>topic creation</td>
+<td>用户可以通过多种方式创建一个 topic，最终的结果都是在 zk 的 <code>/brokers/topics</code> 目录下新建一个 topic 节点信息，controller 通过监控这个目录来判断是否有新的 topic 需要创建</td>
+</tr>
+<tr>
+<td>topic deletion</td>
+<td>Controller 通过监控 zk 的 <code>/admin/delete_topics</code> 节点来触发 topic 删除操作</td>
+</tr>
+<tr>
+<td>partition reassignment</td>
+<td>Controller 通过监控 zk 的 <code>/admin/reassign_partitions</code> 节点来触发 Partition 的副本迁移操作</td>
+</tr>
+<tr>
+<td>preferred replica leader election</td>
+<td>Controller 通过监控 zk 的 <code>/admin/preferred_replica_election</code> 节点来触发最优 leader 选举操作，该操作的目的选举 Partition 的第一个 replica 作为 leader</td>
+</tr>
+<tr>
+<td>topic partition expansion</td>
+<td>Controller 通过监控 zk 的 <code>/brokers/topics/&lt;topic&gt;</code> 数据内容的变化，来触发 Topic 的 Partition 扩容操作</td>
+</tr>
+<tr>
+<td>broker join</td>
+<td>Controller 通过监控 zk 的 <code>/brokers/ids</code> 目录变化，就会知道哪些 broker 是最新加入的，进而触发 broker 的上线操作</td>
+</tr>
+<tr>
+<td>broker failure</td>
+<td>同样，Controller 通过监控 zk 的 <code>/brokers/ids</code> 目录变化，就会知道哪些 broker 掉线了，进而触发 broker 的下线操作</td>
+<td></td>
+</tr>
+<tr>
+<td>controlled shutdown</td>
+<td>Controller 通过处理 ControlledShudownRequest 请求来优雅地关闭一个 broker 节点，主动关闭与直接 kill 的区别，它可以减少 Partition 的不可用时间，因为一个 broker 的 zk 临时节点消失是需要一定时间的</td>
+</tr>
+<tr>
+<td>controller leader election</td>
+<td>集群中所有 broker 会监听 zk 的 <code>/controller</code> 节点，如果该节点消失，所有的 broker 都回去抢占 controller 节点，抢占成功的，就成了最新的 controller</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Controller-目前存在的问题"><a href="#Controller-目前存在的问题" class="headerlink" title="Controller 目前存在的问题"></a>Controller 目前存在的问题</h2><p>之所以要重新设计 Controller，是因为现在的 Controller 积累了一些比较难解决的问题，这些问题解决起来，代码改动量都是巨大的，甚至需要改变 controller 部门的设计，基本就跟重构差不多了，下面我们先来了看一下 controller 之前（主要是 0.11.0 之前的版本）存在的一些问题。</p>
+<p>目前遇到的比较大的问题有以下几个：</p>
+<ol>
+<li>Partition 级别同步 zk 写；</li>
+<li>sequential per-partition controller-to-broker requests；</li>
+<li>Controller 复杂的并发语义；</li>
+<li>代码组织混乱；</li>
+<li>控制类请求与数据类请求未分离；</li>
+<li>Controller 给 broker 的请求中没有 broker 的 generation信息；</li>
+<li>ZkClient 阻碍 Client 的状态管理。</li>
+</ol>
+<h3 id="Partition-级别同步-zk-写"><a href="#Partition-级别同步-zk-写" class="headerlink" title="Partition 级别同步 zk 写"></a>Partition 级别同步 zk 写</h3><p>zookeeper 的同步写意味着在下次写之前需要等待前面整个过程的结束，而且由于它们都是 partition 粒度的（一个 Partition 一个 Partition 的去执行写操作），对于 Partition 非常多的集群来说，需要等待的时间会更长，Controller 通常会在下面这两个地方做 Partition 级别 zookeeper 同步写操作：</p>
+<ol>
+<li>PartitionStateMachine 在进行触发 leader 选举（partition 目的状态是 OnlinePartition），将会触发上面的操作；</li>
+<li>ReplicaStateMachine 更新 LeaderAndIsr 信息到 zk（replica 状态转变为 OfflineReplica），这种情况也触发这种情况，它既阻碍了 Controller 进程，也有可能会 zk 造成压力。</li>
+</ol>
+<h3 id="sequential-per-partition-controller-to-broker-requests"><a href="#sequential-per-partition-controller-to-broker-requests" class="headerlink" title="sequential per-partition controller-to-broker requests"></a>sequential per-partition controller-to-broker requests</h3><p>Controller 在向 Broker 发送请求，有些情况下也是 Partition 粒度去发送的，效率非常低，比如在 Controller 处理 broker shutdown 请求时，这里是按 Partition 级别处理，每处理一个 Partition 都会执行 Partition、Replica 状态变化以及 Metadata 更新，并且调用 <code>sendRequestsToBrokers()</code> 向 broker 发送请求，这样的话，效率将变得非常低。</p>
+<h3 id="Controller-复杂的并发语义"><a href="#Controller-复杂的并发语义" class="headerlink" title="Controller 复杂的并发语义"></a>Controller 复杂的并发语义</h3><p>Controller 需要在多个线程之间共享状态信息，这些线程有：</p>
+<ol>
+<li>IO threads handling controlled shutdown requests</li>
+<li>The ZkClient org.I0Itec.zkclient.ZkEventThread processing zookeeper callbacks sequentially；</li>
+<li>The TopicDeletionManager kafka.controller.DeleteTopicsThread；</li>
+<li>Per-broker RequestSendThread within ControllerChannelManager.</li>
+</ol>
+<p>所有这些线程都需要访问或修改状态信息（ControllerContext），现在它们是通过 ControllerContext 的 controllerLock（排它锁）实现的，Controller 的并发变得虚弱无力。</p>
+<h3 id="代码组织混乱"><a href="#代码组织混乱" class="headerlink" title="代码组织混乱"></a>代码组织混乱</h3><p>KafkaController 部分的代码组织（KafkaController、PartitionStateMachine 和 ReplicaStateMachine）不是很清晰，比如，下面的问题就很难回答：</p>
+<ol>
+<li>where and when does zookeeper get updated?</li>
+<li>where and when does a controller-to-broker request get formed?</li>
+<li>what impact does a failing zookeeper update or controller-to-broker request have on the cluster state?</li>
+</ol>
+<p>这也导致了这部分很多开发者不敢轻易去改动。</p>
+<h3 id="控制类请求与数据类请求未分离"><a href="#控制类请求与数据类请求未分离" class="headerlink" title="控制类请求与数据类请求未分离"></a>控制类请求与数据类请求未分离</h3><p>现在 broker 收到的请求，有来自 client、broker 和 controller 的请求，这些请求都会被放到同一个 requestQueue 中，它们有着同样的优先级，所以来自 client 的请求很可能会影响来自 controller 请求的处理（如果是 leader 变动的请求，ack 设置的不是 all，这种情况有可能会导致数据丢失）。</p>
+<h3 id="Controller-给-broker-的请求中没有-broker-的-generation信息"><a href="#Controller-给-broker-的请求中没有-broker-的-generation信息" class="headerlink" title="Controller 给 broker 的请求中没有 broker 的 generation信息"></a>Controller 给 broker 的请求中没有 broker 的 generation信息</h3><p>这里的 Broker generation 代表着一个标识，每当它重新加入集群时，这个标识都会变化。如果 Controller 的请求没有这个信息的话，可能会导致一个重启的 Broker 收到之前的请求，让 Broker 进入到一个错误的状态。</p>
+<p>比如，Broker 收到之前的 StopReplica 请求，可能会导致副本同步线程退出。</p>
+<h3 id="ZkClient-阻碍-Client-的状态管理"><a href="#ZkClient-阻碍-Client-的状态管理" class="headerlink" title="ZkClient 阻碍 Client 的状态管理"></a>ZkClient 阻碍 Client 的状态管理</h3><p>这里的状态管理指的是当 Client 发生重连或会话过期时，Client 可以监控这种状态变化，并做出一些处理，因为开源版的 ZKClient 在处理 notification 时，是线性处理的，一些 notification 会被先放到 ZkEventThread’s queue 中，这样会导致一些最新的 notification 不能及时被处理，特别是与 zk 连接断开重连的情况。</p>
+<h2 id="Controller-改进方案"><a href="#Controller-改进方案" class="headerlink" title="Controller 改进方案"></a>Controller 改进方案</h2><p>关于上述问题，Kafka 提出了一些改进方案，有些已经在最新版的系统中实现，有的还在规划中。</p>
+<h3 id="使用异步的-zk-api"><a href="#使用异步的-zk-api" class="headerlink" title="使用异步的 zk api"></a>使用异步的 zk api</h3><p>Zookeeper 的 client 提供三种执行请求的方式：</p>
+<ol>
+<li>同步调用，意味着下次请求需要等待当前当前请求的完成；</li>
+<li>异步调用，意味着不需要等待当前请求的完成就可以开始下次请求的执行，并且我们可以通过回调机制去处理请求返回的结果；</li>
+<li>单请求的 batch 调用，意味着 batch 内的所有请求都会在一次事务处理中完成，这里需要关注的是 zookeeper 的 server 对单请求的大小是有限制的（jute.maxbuffer）。</li>
+</ol>
+<p>文章中给出了三种请求的测试结果，Kafka 最后选取的是异步处理机制，因为对于单请求处理，异步处理更加简洁，并且相比于同步处理还可以保持一个更好的写性能。</p>
+<h3 id="improve-controller-to-broker-request-batching"><a href="#improve-controller-to-broker-request-batching" class="headerlink" title="improve controller-to-broker request batching"></a>improve controller-to-broker request batching</h3><p>这个在设计文档还是 TODO 状态，具体的方案还没确定，不过基本可以猜测一下，因为目的是提高 batch 发送能力，那么只能是在调用对每个 broker 的 RequestSenderThread 线程发送请求之前，做一下检测，而不是来一个请求立马就发送，这是一个性能与时间的权衡，如果不是立马发送请求，那么可能会带来 broker 短时 metadata 信息的不一致，这个不一致时间不同的应用场景要求是不一样的。</p>
+<h3 id="单线程的事件处理模型"><a href="#单线程的事件处理模型" class="headerlink" title="单线程的事件处理模型"></a>单线程的事件处理模型</h3><p>采用单线程的时间处理模型将极大简化 Controller 的并发实现，只允许这个线程访问和修改 Controller 的本地状态信息，因此在 Controller 部分也就不需要到处加锁来保证线程安全了。</p>
+<p>目前 1.1.0 的实现中，Controller 使用了一个 ControllerEventThread 线程来处理所有的 event，目前可以支持13种不同类型事件：</p>
+<ol>
+<li>Idle：代表当前 ControllerEventThread 处理空闲状态；</li>
+<li>ControllerChange：Controller 切换处理；</li>
+<li>BrokerChange：Broker 变动处理，broker 可能有上线或掉线；</li>
+<li>TopicChange：Topic 新增处理；</li>
+<li>TopicDeletion：Topic 删除处理；</li>
+<li>PartitionReassignment：Partition 副本迁移处理；</li>
+<li>AutoLeaderBalance：自动 rebalance 处理；</li>
+<li>ManualLeaderBalance：最优 leader 选举处理，这里叫做手动 rebalance，手动去切流量；</li>
+<li>ControlledShutdown：优雅关闭 broker；</li>
+<li>IsrChange：Isr 变动处理；</li>
+<li>LeaderAndIsrResponseReceived；</li>
+<li>LogDirChange：Broker 某个目录失败后的处理（比如磁盘坏掉等）；</li>
+<li>ControllerShutdown：ControllerEventThread 处理这个事件时，会关闭当前线程。</li>
+</ol>
+<h3 id="重构集群状态管理"><a href="#重构集群状态管理" class="headerlink" title="重构集群状态管理"></a>重构集群状态管理</h3><p>这部分的改动，目前社区也没有一个很好的解决思路，重构这部分的目的是希望 Partition、Replica 的状态管理变得更清晰一些，让我们从代码中可以清楚地明白状态是在什么时间、什么地方、什么条件下被触发的。这个优化其实是跟上面那个有很大关联，采用单线程的事件处理模型，可以让状态管理也变得更清晰。</p>
+<h4 id="prioritize-controller-requests"><a href="#prioritize-controller-requests" class="headerlink" title="prioritize controller requests"></a>prioritize controller requests</h4><p>我们想要把控制类请求与数据类请求分开，提高 controller 请求的优先级，这样的话即使 Broker 中请求有堆积，Broker 也会优先处理控制类的请求。</p>
+<p>这部分的优化可以在网络层的 RequestChannel 中做，RequestChannel 可以根据请求的 id 信息把请求分为正常的和优先的，如果请求是 UpdateMetadataRequest、LeaderAndIsrRequest 或者 StopReplicaRequest，那么这个请求的优先级应该提高。实现方案有以下两种：</p>
+<ol>
+<li>在请求队列中增加一个优先级队列，优先级高的请求放到 the prioritized request queue 中，优先级低的放到普通请求队列中，但是无论使用一个定时拉取（poll）还是2个定时拉取，都会带来其他的问题，要么是增大普通请求的处理延迟，要么是增大了优先级高请求的延迟；</li>
+<li>直接使用优先级队列代替现在的普通队列，设计上更倾向与这一种。</li>
+</ol>
+<p>目前这部分在1.1.0中还未实现。</p>
+<h3 id="Controller-发送请求中添加-broker-的-generation-信息"><a href="#Controller-发送请求中添加-broker-的-generation-信息" class="headerlink" title="Controller 发送请求中添加 broker 的 generation 信息"></a>Controller 发送请求中添加 broker 的 generation 信息</h3><p>generation 信息是用来标识当前 broker 加入集群 epoch 信息，每当 broker 重新加入集群中，该 broker.id 对应的 generation 都应该变化（要求递增），目前有两种实现方案：</p>
+<ol>
+<li>为 broker 分配的一个全局唯一的 id，由 controller 广播给其他 broker；</li>
+<li>直接使用 zookeeper 的 zxid 信息（broker.id 注册时的 zxid）。</li>
+</ol>
+<h3 id="直接使用原生的-Zookeeper-client"><a href="#直接使用原生的-Zookeeper-client" class="headerlink" title="直接使用原生的 Zookeeper client"></a>直接使用原生的 Zookeeper client</h3><p>Client 端的状态管理意味着当 Client 端发生状态变化（像连接中断或回话超时）时，我们有能力做一些操作。其中，zookeeper client 有效的状态（目前的 client 比下面又多了几种状态，这里先不深入）是:</p>
+<ul>
+<li>NOT_CONNECTED： the initial state of the client；</li>
+<li>CONNECTING： the client is establishing a connection to zookeeper；</li>
+<li>CONNECTED： the client has established a connection and session to zookeeper；</li>
+<li>CLOSED： the session has closed or expired。</li>
+</ul>
+<p>有效的状态转移是：</p>
+<ul>
+<li>NOT_CONNECTED &gt; CONNECTING</li>
+<li>CONNECTING &gt; CONNECTED</li>
+<li>CONNECTING &gt; CLOSED</li>
+<li>CONNECTED &gt; CONNECTING</li>
+<li>CONNECTED &gt; CLOSED</li>
+</ul>
+<p>最开始的设想是直接使用原生 Client 的异步调用方式，这样的话依然可以通过回调方法监控到状态的变化（像连接中断或回话超时），同样，在每次事件处理时，可以通过检查状态信息来监控到 Client 状态的变化，及时做一些处理。</p>
+<p>当一个 Client 接收到连接中断的 notification（Client 状态变成了 CONNECTING 状态），它意味着 Client 不能再从 zookeeper 接收到任何 notification 了。如果断开连接，对于 Controller 而言，无论它现在正在做什么它都应该先暂停，因为可能集群的 Controller 已经切换到其他机器上了，只是它还没接收到通知，它如果还在工作，可能会导致集群状态不一致。当连接断开后，Client 可以重新建立连接（re-establish，状态变为 CONNECTED）或者会话过期（状态变为 CLOSED，会话过期是由 zookeeper Server 来决定的）。如果变成了 CONNECTED 状态，Controller 应该重新开始这些暂停的操作，而如果状态变成了 CLOSED 状态，旧的 Controller 就会知道它不再是 controller，应该丢弃掉这些任务。</p>
+<p>参考：</p>
+<ul>
+<li><a href="https://docs.google.com/document/d/1rLDmzDOGQQeSiMANP0rC2RYp_L7nUGHzFD9MQISgXYM/edit#heading=h.pxfjarumuhko" target="_blank" rel="external">Kafka Controller Redesign</a>；</li>
+<li><a href="https://www.cnblogs.com/huxi2b/p/6980045.html" target="_blank" rel="external">Kafka controller重设计</a>。</li>
+</ul>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[分布式系统的一致性协议之 2PC 和 3PC]]></title>
       <url>http://matt33.com/2018/07/08/distribute-system-consistency-protocol/</url>
       <content type="html"><![CDATA[<p>在分布式系统领域，有一个理论，对于分布式系统的设计影响非常大，那就是 CAP 理论，即对于一个分布式系统而言，它是无法同时满足 Consistency(强一致性)、Availability(可用性) 和  Partition tolerance(分区容忍性) 这三个条件的，最多只能满足其中两个。但在实际中，由于网络环境是不可信的，所以分区容忍性几乎是必不可选的，设计者基本就是在一致性和可用性之间做选择，当然大部分情况下，大家都会选择牺牲一部分的一致性来保证可用性（可用性较差的系统非常影响用户体验的，但是对另一些场景，比如支付场景，强一致性是必须要满足）。但是分布式系统又无法彻底放弃一致性（Consistency），如果真的放弃一致性，那么就说明这个系统中的数据根本不可信，数据也就没有意义，那么这个系统也就没有任何价值可言。</p>
@@ -4776,7 +4932,7 @@
 <p>通过表格来设计一个网页如下图所示。</p>
 <p><img src="/images/web/html_lianxi.png" alt="示例"></p>
 <p>上面的示例使用表格来进行表示的一个网页，如果使用 <code>div</code> 元素应该怎么做，下面使用 <code>div</code> 元素来重新设计一下上面的网页。</p>
-<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="undefined"></span></div><div class="line">            div#container&#123;width:1000px&#125;</div><div class="line">            div#header &#123;background-color: royalblue ;height: 100px;text-align:center;font-size: 20px&#125;</div><div class="line">            div#sidebar&#123;background-color: darkorange;height:400px;width:300px;float:left;&#125;</div><div class="line">            div#mainbody &#123;background-color: forestgreen;height:400px;width:700px;float:left;&#125;</div><div class="line">            div#footer &#123;background-color: powderblue;height: 100px;clear:both;text-align:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">head</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">style</span>&gt;</span><span class="css"></span></div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#container</span>&#123;<span class="attribute">width</span>:<span class="number">1000px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#header</span> &#123;<span class="attribute">background-color</span>: royalblue ;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">text-align</span>:center;<span class="attribute">font-size</span>: <span class="number">20px</span>&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#sidebar</span>&#123;<span class="attribute">background-color</span>: darkorange;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">300px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#mainbody</span> &#123;<span class="attribute">background-color</span>: forestgreen;<span class="attribute">height</span>:<span class="number">400px</span>;<span class="attribute">width</span>:<span class="number">700px</span>;<span class="attribute">float</span>:left;&#125;</div><div class="line">            <span class="selector-tag">div</span><span class="selector-id">#footer</span> &#123;<span class="attribute">background-color</span>: powderblue;<span class="attribute">height</span>: <span class="number">100px</span>;<span class="attribute">clear</span>:both;<span class="attribute">text-align</span>:center;&#125;</div><div class="line">        <span class="tag">&lt;/<span class="name">style</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">head</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">body</span>&gt;</span></div><div class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"container"</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"header"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>matt's blog<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"sidebar"</span>&gt;</span></div><div class="line">               <span class="tag">&lt;<span class="name">dl</span>&gt;</span></div><div class="line">                   <span class="tag">&lt;<span class="name">dt</span>&gt;</span>list of blogs<span class="tag">&lt;/<span class="name">dt</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;<span class="name">dd</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;<span class="name">ol</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>hadoop<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>java<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                            <span class="tag">&lt;<span class="name">li</span>&gt;</span>kafka<span class="tag">&lt;/<span class="name">li</span>&gt;</span></div><div class="line">                        <span class="tag">&lt;/<span class="name">ol</span>&gt;</span></div><div class="line">                    <span class="tag">&lt;/<span class="name">dd</span>&gt;</span></div><div class="line">               <span class="tag">&lt;/<span class="name">dl</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"mainbody"</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">h1</span>&gt;</span>hello word<span class="tag">&lt;/<span class="name">h1</span>&gt;</span></div><div class="line">                <span class="tag">&lt;<span class="name">p</span>&gt;</span>this is matt's blog<span class="tag">&lt;/<span class="name">p</span>&gt;</span></div><div class="line">            <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">            <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">"footer"</span>&gt;</span>good good study day day up<span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></div><div class="line">    <span class="tag">&lt;/<span class="name">body</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></div></pre></td></tr></table></figure>
 <h2 id="HTML-表单"><a href="#HTML-表单" class="headerlink" title="HTML 表单"></a>HTML 表单</h2><p>表单标签是什么呢？这个是在网页是很常见的，表单标签就是用于网页中的数据提交，比如我们注册网页，在留言板中留言、评论等可以填写数据，提交处理地方都需要表单标签，<code>form</code> 表单标签内有输入框 input、单选、多选、<code>select</code> 下拉列表菜单与跳转菜单、提交按钮等标签内容。</p>
 <figure class="highlight html"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div></pre></td><td class="code"><pre><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    user：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"text"</span> <span class="attr">name</span>=<span class="string">"user"</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    password：</div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"password"</span> <span class="attr">name</span>=<span class="string">"password"</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"male"</span> /&gt;</span> Male</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"radio"</span> <span class="attr">name</span>=<span class="string">"sex"</span> <span class="attr">value</span>=<span class="string">"female"</span> /&gt;</span> Female</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div><div class="line"></div><div class="line"><span class="tag">&lt;<span class="name">form</span>&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"married"</span> /&gt;</span></div><div class="line">    married</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"have a job"</span> /&gt;</span></div><div class="line">    have a job</div><div class="line">    <span class="tag">&lt;<span class="name">br</span>/&gt;</span></div><div class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">"checkbox"</span> <span class="attr">name</span>=<span class="string">"chinese"</span> /&gt;</span></div><div class="line">    chinese</div><div class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></div></pre></td></tr></table></figure>
 <p>其中，name 是明文显示，password 是隐藏的，<code>radio</code> 属性是单选，<code>checkbox</code> 属性是双选，上面展示的效果如下图所示。</p>
