@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-07-15T04:17:12.000Z</updated>
+  <updated>2018-07-15T15:46:56.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,169 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>HDFS 架构学习总结</title>
+    <link href="http://matt33.com/2018/07/15/hdfs-architecture-learn/"/>
+    <id>http://matt33.com/2018/07/15/hdfs-architecture-learn/</id>
+    <published>2018-07-15T15:46:45.000Z</published>
+    <updated>2018-07-15T15:46:56.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>HDFS（Hadoop Distributed File System）是一个分布式文件存储系统，几乎是离线存储领域的标准解决方案（有能力自研的大厂列外），业内应用非常广泛。近段抽时间，看一下 HDFS 的架构设计，虽然研究生也学习过相关内容，但是现在基本忘得差不多了，今天抽空对这块做了一个简单的总结，也算是再温习了一下这块的内容，这样后续再看 HDFS 方面的文章时，不至于处于懵逼状态。</p>
+<h2 id="HDFS-1-0-架构"><a href="#HDFS-1-0-架构" class="headerlink" title="HDFS 1.0 架构"></a>HDFS 1.0 架构</h2><p>HDFS 采用的是 Master/Slave 架构，一个 HDFS 集群包含一个单独的 NameNode 和多个 DataNode 节点，如下图所示（这个图是 HDFS1.0的架构图，经典的架构图）：</p>
+<p><img src="/images/hadoop/hdfs.jpg" alt="HDFS 1.0 架构图"></p>
+<h3 id="NameNode"><a href="#NameNode" class="headerlink" title="NameNode"></a>NameNode</h3><p>NameNode 负责管理整个分布式系统的元数据，主要包括：</p>
+<ul>
+<li>目录树结构；</li>
+<li>文件到数据库 Block 的映射关系；</li>
+<li>Block 副本及其存储位置等管理数据；</li>
+<li>DataNode 的状态监控，两者通过段时间间隔的心跳来传递管理信息和数据信息，通过这种方式的信息传递，NameNode 可以获知每个 DataNode 保存的 Block 信息、DataNode 的健康状况、命令 DataNode 启动停止等（如果发现某个 DataNode 节点故障，NameNode 会将其负责的 block 在其他 DataNode 上进行备份）。</li>
+</ul>
+<p>这些数据保存在内存中，同时在磁盘保存两个元数据管理文件：fsimage 和 editlog。</p>
+<ul>
+<li>fsimage：是内存命名空间元数据在外存的镜像文件；</li>
+<li>editlog：则是各种元数据操作的 write-ahead-log 文件，在体现到内存数据变化前首先会将操作记入 editlog 中，以防止数据丢失。</li>
+</ul>
+<p>这两个文件相结合可以构造完整的内存数据。</p>
+<h3 id="Secondary-NameNode"><a href="#Secondary-NameNode" class="headerlink" title="Secondary NameNode"></a>Secondary NameNode</h3><p>Secondary NameNode 并不是 NameNode 的热备机，而是定期从 NameNode 拉取 fsimage 和 editlog 文件，并对两个文件进行合并，形成新的 fsimage 文件并传回 NameNode，这样做的目的是减轻 NameNod 的工作压力，本质上 SNN 是一个提供检查点功能服务的服务点。</p>
+<h3 id="DataNode"><a href="#DataNode" class="headerlink" title="DataNode"></a>DataNode</h3><p>负责数据块的实际存储和读写工作，Block 默认是64MB（HDFS2.0改成了128MB），当客户端上传一个大文件时，HDFS 会自动将其切割成固定大小的 Block，为了保证数据可用性，每个 Block 会以多备份的形式存储，默认是3份。</p>
+<h3 id="文件写入过程"><a href="#文件写入过程" class="headerlink" title="文件写入过程"></a>文件写入过程</h3><p>Client 向 HDFS 文件写入的过程可以参考<a href="http://shiyanjun.cn/archives/942.html" target="_blank" rel="external">HDFS写文件过程分析</a>，整体过程如下图（这个图比较经典，最开始来自<a href="https://book.douban.com/subject/3220004/" target="_blank" rel="external">《Hadoop：The Definitive Guide》</a>）所示：</p>
+<p><img src="/images/hadoop/hdfs-write-flow.png" alt="HDFS 文件写入过程"></p>
+<p>具体过程如下：</p>
+<ol>
+<li>Client 调用 DistributedFileSystem 对象的 <code>create</code> 方法，创建一个文件输出流（FSDataOutputStream）对象；</li>
+<li>通过 DistributedFileSystem 对象与集群的 NameNode 进行一次 RPC 远程调用，在 HDFS 的 Namespace 中创建一个文件条目（Entry），此时该条目没有任何的 Block，NameNode 会返回该数据每个块需要拷贝的 DataNode 地址信息；</li>
+<li>通过 FSDataOutputStream 对象，开始向 DataNode 写入数据，数据首先被写入 FSDataOutputStream 对象内部的数据队列中，数据队列由 DataStreamer 使用，它通过选择合适的 DataNode 列表来存储副本，从而要求 NameNode 分配新的 block；</li>
+<li>DataStreamer 将数据包以流式传输的方式传输到分配的第一个 DataNode 中，该数据流将数据包存储到第一个 DataNode 中并将其转发到第二个 DataNode 中，接着第二个 DataNode 节点会将数据包转发到第三个 DataNode 节点；</li>
+<li>DataNode 确认数据传输完成，最后由第一个 DataNode 通知 client 数据写入成功；</li>
+<li>完成向文件写入数据，Client 在文件输出流（FSDataOutputStream）对象上调用 <code>close</code> 方法，完成文件写入；</li>
+<li>调用 DistributedFileSystem 对象的 complete 方法，通知 NameNode 文件写入成功，NameNode 会将相关结果记录到 editlog 中。</li>
+</ol>
+<h3 id="文件读取过程"><a href="#文件读取过程" class="headerlink" title="文件读取过程"></a>文件读取过程</h3><p>相对于文件写入，文件的读取就简单一些，流程如下图所示：</p>
+<p><img src="/images/hadoop/hdfs-read-flow.png" alt="HDFS 文件读取过程"></p>
+<p>其具体过程总结如下（简单总结一下）：</p>
+<ol>
+<li>Client 通过 DistributedFileSystem 对象与集群的 NameNode 进行一次 RPC 远程调用，获取文件 block 位置信息；</li>
+<li>NameNode 返回存储的每个块的 DataNode 列表；</li>
+<li>Client 将连接到列表中最近的 DataNode；</li>
+<li>Client 开始从 DataNode 并行读取数据；</li>
+<li>一旦 Client 获得了所有必须的 block，它就会将这些 block 组合起来形成一个文件。</li>
+</ol>
+<p>在处理 Client 的读取请求时，HDFS 会利用机架感知选举最接近 Client 位置的副本，这将会减少读取延迟和带宽消耗。</p>
+<h2 id="HDFS-1-0-的问题"><a href="#HDFS-1-0-的问题" class="headerlink" title="HDFS 1.0 的问题"></a>HDFS 1.0 的问题</h2><p>在前面的介绍中，关于 HDFS1.0 的架构，首先都会看到 NameNode 的单点问题，这个在生产环境中是非常要命的问题，早期的 HDFS 由于规模较小，有些问题就被隐藏了，但自从进入了移动互联网时代，很多公司都开始进入了 PB 级的大数据时代，HDFS 1.0的设计缺陷已经无法满足生产的需求，最致命的问题有以下两点：</p>
+<ul>
+<li>NameNode 的单点问题，如果 NameNode 挂掉了，数据读写都会受到影响，HDFS 整体将变得不可用，这在生产环境中是不可接受的；</li>
+<li>水平扩展问题，随着集群规模的扩大，1.0 时集群规模达到3000时，会导致整个集群管理的文件数目达到上限（因为 NameNode 要管理整个集群 block 元信息、数据目录信息等）。</li>
+</ul>
+<p>为了解决上面的两个问题，Hadoop2.0 提供一套统一的解决方案：</p>
+<ol>
+<li>HA（High Availability 高可用方案）：这个是为了解决 NameNode 单点问题；</li>
+<li>NameNode Federation：是用来解决 HDFS 集群的线性扩展能力。</li>
+</ol>
+<h2 id="HDFS-2-0-的-HA-实现"><a href="#HDFS-2-0-的-HA-实现" class="headerlink" title="HDFS 2.0 的 HA 实现"></a>HDFS 2.0 的 HA 实现</h2><p>关于 HDFS 高可用方案，非常推荐这篇文章：<a href="https://www.ibm.com/developerworks/cn/opensource/os-cn-hadoop-name-node/" target="_blank" rel="external">Hadoop NameNode 高可用 (High Availability) 实现解析</a>，IBM 博客的质量确实很高，这部分我这里也是主要根据这篇文章做一个总结，这里会从问题的原因、如何解决的角度去总结，并不会深入源码的实现细节，想有更深入了解还是推荐上面文章。</p>
+<p>这里先看下 HDFS 高可用解决方案的架构设计，如下图（下图来自上面的文章）所示：</p>
+<p><img src="/images/hadoop/hdfs-ha.png" alt="HDFS HA 架构实现"></p>
+<p>这里与前面 1.0 的架构已经有很大变化，简单介绍一下上面的组件：</p>
+<ol>
+<li>Active NameNode 和 Standby NameNode：两台 NameNode 形成互备，一台处于 Active 状态，为主 NameNode，另外一台处于 Standby 状态，为备 NameNode，只有主 NameNode 才能对外提供读写服务；</li>
+<li>ZKFailoverController（主备切换控制器，FC）：ZKFailoverController 作为独立的进程运行，对 NameNode 的主备切换进行总体控制。ZKFailoverController 能及时检测到 NameNode 的健康状况，在主 NameNode 故障时借助 Zookeeper 实现自动的主备选举和切换（当然 NameNode 目前也支持不依赖于 Zookeeper 的手动主备切换）；</li>
+<li>Zookeeper 集群：为主备切换控制器提供主备选举支持；</li>
+<li>共享存储系统：共享存储系统是实现 NameNode 的高可用最为关键的部分，共享存储系统保存了 NameNode 在运行过程中所产生的 HDFS 的元数据。主 NameNode 和备 NameNode 通过共享存储系统实现元数据同步。在进行主备切换的时候，新的主 NameNode 在<strong>确认元数据完全同步之后才能继续对外提供服务</strong>。</li>
+<li>DataNode 节点：因为主 NameNode 和备 NameNode 需要共享 HDFS 的数据块和 DataNode 之间的映射关系，为了使故障切换能够快速进行，DataNode 会同时向主 NameNode 和备 NameNode 上报数据块的位置信息。</li>
+</ol>
+<h3 id="FailoverController"><a href="#FailoverController" class="headerlink" title="FailoverController"></a>FailoverController</h3><p>FC 最初的目的是为了实现 SNN 和 ANN 之间故障自动切换，FC 是独立与 NN 之外的故障切换控制器，ZKFC 作为 NameNode 机器上一个独立的进程启动 ，它启动的时候会创建 HealthMonitor 和 ActiveStandbyElector 这两个主要的内部组件，其中：</p>
+<ol>
+<li>HealthMonitor：主要负责检测 NameNode 的健康状态，如果检测到 NameNode 的状态发生变化，会回调 ZKFailoverController 的相应方法进行自动的主备选举；</li>
+<li>ActiveStandbyElector：主要负责完成自动的主备选举，内部封装了 Zookeeper 的处理逻辑，一旦 Zookeeper 主备选举完成，会回调 ZKFailoverController 的相应方法来进行 NameNode 的主备状态切换。</li>
+</ol>
+<h3 id="自动触发主备选举"><a href="#自动触发主备选举" class="headerlink" title="自动触发主备选举"></a>自动触发主备选举</h3><p>NameNode 在选举成功后，会在 zk 上创建了一个 <code>/hadoop-ha/${dfs.nameservices}/ActiveStandbyElectorLock</code> 节点，而没有选举成功的备 NameNode 会监控这个节点，通过 Watcher 来监听这个节点的状态变化事件，ZKFC 的 ActiveStandbyElector 主要关注这个节点的 NodeDeleted 事件（这部分实现跟 Kafka 中 Controller 的选举一样）。</p>
+<p>如果 Active NameNode 对应的 HealthMonitor 检测到 NameNode 的状态异常时， ZKFailoverController 会主动删除当前在 Zookeeper 上建立的临时节点 /hadoop-ha/${dfs.nameservices}/ActiveStandbyElectorLock，这样处于 Standby 状态的 NameNode 的 ActiveStandbyElector 注册的监听器就会收到这个节点的 NodeDeleted 事件。收到这个事件之后，会马上再次进入到创建 /hadoop-ha/${dfs.nameservices}/ActiveStandbyElectorLock  节点的流程，如果创建成功，这个本来处于 Standby 状态的 NameNode 就选举为主 NameNode 并随后开始切换为 Active 状态。</p>
+<p>当然，如果是 Active 状态的 NameNode 所在的机器整个宕掉的话，那么根据 Zookeeper 的临时节点特性，/hadoop-ha/${dfs.nameservices}/ActiveStandbyElectorLock 节点会自动被删除，从而也会自动进行一次主备切换。</p>
+<h3 id="HDFS-脑裂问题"><a href="#HDFS-脑裂问题" class="headerlink" title="HDFS 脑裂问题"></a>HDFS 脑裂问题</h3><p>在实际中，NameNode 可能会出现这种情况，NameNode 在垃圾回收（GC）时，可能会在长时间内整个系统无响应，因此，也就无法向 zk 写入心跳信息，这样的话可能会导致临时节点掉线，备 NameNode 会切换到 Active 状态，这种情况，可能会导致整个集群会有同时有两个 NameNode，这就是脑裂问题。</p>
+<p>脑裂问题的解决方案是隔离（Fencing），主要是在以下三处采用隔离措施：</p>
+<ol>
+<li>第三方共享存储：任一时刻，只有一个 NN 可以写入；</li>
+<li>DataNode：需要保证只有一个 NN 发出与管理数据副本有关的删除命令；</li>
+<li>Client：需要保证同一时刻只有一个 NN 能够对 Client 的请求发出正确的响应。</li>
+</ol>
+<p>关于这个问题目前解决方案的实现如下：</p>
+<ol>
+<li>ActiveStandbyElector 为了实现 fencing，会在成功创建 Zookeeper 节点 hadoop-ha/${dfs.nameservices}/ActiveStandbyElectorLock 从而成为 Active NameNode 之后，创建另外一个路径为 <strong>/hadoop-ha/${dfs.nameservices}/ActiveBreadCrumb</strong> 的持久节点，这个节点里面保存了这个 Active NameNode 的地址信息；</li>
+<li>Active NameNode 的 ActiveStandbyElector 在正常的状态下关闭 Zookeeper Session 的时候，会一起删除这个持久节点；</li>
+<li>但如果 ActiveStandbyElector 在异常的状态下 Zookeeper Session 关闭 (比如前述的 Zookeeper 假死)，那么由于 /hadoop-ha/${dfs.nameservices}/ActiveBreadCrumb 是持久节点，会一直保留下来，后面当另一个 NameNode 选主成功之后，会注意到上一个 Active NameNode 遗留下来的这个节点，从而会回调 ZKFailoverController 的方法对旧的 Active NameNode 进行 fencing。</li>
+</ol>
+<p>在进行 fencing 的时候，会执行以下的操作：</p>
+<ol>
+<li>首先尝试调用这个旧 Active NameNode 的 HAServiceProtocol RPC 接口的 <code>transitionToStandby</code> 方法，看能不能把它转换为 Standby 状态；</li>
+<li>如果 <code>transitionToStandby</code> 方法调用失败，那么就执行 Hadoop 配置文件之中预定义的隔离措施。</li>
+</ol>
+<p>Hadoop 目前主要提供两种隔离措施，通常会选择第一种：</p>
+<ol>
+<li>sshfence：通过 SSH 登录到目标机器上，执行命令 fuser 将对应的进程杀死；</li>
+<li>shellfence：执行一个用户自定义的 shell 脚本来将对应的进程隔离。</li>
+</ol>
+<p>只有在成功地执行完成 fencing 之后，选主成功的 ActiveStandbyElector 才会回调 ZKFailoverController 的 <code>becomeActive</code> 方法将对应的 NameNode 转换为 Active 状态，开始对外提供服务。</p>
+<p>NameNode 选举的实现机制与 Kafka 的 Controller 类似，那么 Kafka 是如何避免脑裂问题的呢？</p>
+<ol>
+<li>Controller 给 Broker 发送的请求中，都会携带 controller epoch 信息，如果 broker 发现当前请求的 epoch 小于缓存中的值，那么就证明这是来自旧 Controller 的请求，就会决绝这个请求，正常情况下是没什么问题的；</li>
+<li>但是异常情况下呢？如果 Broker 先收到异常 Controller 的请求进行处理呢？现在看 Kafka 在这一部分并没有适合的方案；</li>
+<li>正常情况下，Kafka 新的 Controller 选举出来之后，Controller 会向全局所有 broker 发送一个 metadata 请求，这样全局所有 Broker 都可以知道当前最新的 controller epoch，但是并不能保证可以完全避免上面这个问题，还是有出现这个问题的几率的，只不过非常小，而且即使出现了由于 Kafka 的高可靠架构，影响也非常有限，至少从目前看，这个问题并不是严重的问题。</li>
+</ol>
+<h3 id="第三方存储（共享存储）"><a href="#第三方存储（共享存储）" class="headerlink" title="第三方存储（共享存储）"></a>第三方存储（共享存储）</h3><p>上述 HA 方案还有一个明显缺点，那就是第三方存储节点有可能失效，之前有很多共享存储的实现方案，目前社区已经把由 Clouderea 公司实现的基于 QJM 的方案合并到 HDFS 的 trunk 之中并且作为默认的共享存储实现，本部分只针对基于 QJM 的共享存储方案的内部实现原理进行分析。</p>
+<p>QJM（Quorum Journal Manager）本质上是利用 Paxos 协议来实现的，QJM 在 <code>2F+1</code>  个 JournalNode 上存储 NN 的 editlog，每次写入操作都通过 Paxos 保证写入的一致性，它最多可以允许有 F 个 JournalNode 节点同时故障，其实现如下（图片来自：<a href="https://www.ibm.com/developerworks/cn/opensource/os-cn-hadoop-name-node/" target="_blank" rel="external">Hadoop NameNode 高可用 (High Availability) 实现解析</a> ）：</p>
+<p><img src="/images/hadoop/hdfs-ha-qjm.png" alt="基于 QJM 的共享存储的数据同步机制"></p>
+<p>Active NameNode 首先把 EditLog 提交到 JournalNode 集群，然后 Standby NameNode 再从 JournalNode 集群定时同步 EditLog。</p>
+<p>还有一点需要注意的是，在 2.0 中不再有 SNN 这个角色了，NameNode 在启动后，会先加载 FSImage 文件和共享目录上的 EditLog Segment 文件，之后 NameNode 会启动 EditLogTailer 线程和 StandbyCheckpointer 线程，正式进入 Standby 模式，其中：</p>
+<ol>
+<li>EditLogTailer 线程的作用是定时从 JournalNode 集群上同步 EditLog；</li>
+<li>StandbyCheckpointer 线程的作用其实是为了替代 Hadoop 1.x 版本之中的 Secondary NameNode 的功能，StandbyCheckpointer 线程会在 Standby NameNode 节点上定期进行 Checkpoint，将 Checkpoint 之后的 FSImage 文件上传到 Active NameNode 节点。</li>
+</ol>
+<h2 id="HDFS-2-0-Federation-实现"><a href="#HDFS-2-0-Federation-实现" class="headerlink" title="HDFS 2.0 Federation 实现"></a>HDFS 2.0 Federation 实现</h2><p>在 1.0 中，HDFS 的架构设计有以下缺点：</p>
+<ol>
+<li>namespace 扩展性差：在单一的 NN 情况下，因为所有 namespace 数据都需要加载到内存，所以物理机内存的大小限制了整个 HDFS 能够容纳文件的最大个数（namespace 指的是 HDFS 中树形目录和文件结构以及文件对应的 block 信息）；</li>
+<li>性能可扩展性差：由于所有请求都需要经过 NN，单一 NN 导致所有请求都由一台机器进行处理，很容易达到单台机器的吞吐；</li>
+<li>隔离性差：多租户的情况下，单一 NN 的架构无法在租户间进行隔离，会造成不可避免的相互影响。</li>
+</ol>
+<p>而 Federation 的设计就是为了解决这些问题，采用 Federation 的最主要原因是设计实现简单，而且还能解决问题。</p>
+<h3 id="Federation-架构"><a href="#Federation-架构" class="headerlink" title="Federation 架构"></a>Federation 架构</h3><p>Federation 的架构设计如下图所示（图片来自 <a href="http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-hdfs/Federation.html" target="_blank" rel="external">HDFS Federation</a>）：</p>
+<p><img src="/images/hadoop/hdfs-federation.gif" alt="HDFS Federation 架构实现"></p>
+<h3 id="Federation-的核心设计思想"><a href="#Federation-的核心设计思想" class="headerlink" title="Federation 的核心设计思想"></a>Federation 的核心设计思想</h3><p>Federation 的核心思想是将一个大的 namespace 划分多个子 namespace，并且每个 namespace 分别由单独的 NameNode 负责，这些 NameNode 之间互相独立，不会影响，不需要做任何协调工作（其实跟拆集群有一些相似），集群的所有 DataNode 会被多个 NameNode 共享。</p>
+<p>其中，每个子 namespace 和 DataNode 之间会由数据块管理层作为中介建立映射关系，数据块管理层由若干数据块池（Pool）构成，每个数据块只会唯一属于某个固定的数据块池，而一个子 namespace 可以对应多个数据块池。每个 DataNode 需要向集群中所有的 NameNode 注册，且周期性地向所有 NameNode 发送心跳和块报告，并执行来自所有 NameNode 的命令。</p>
+<ul>
+<li>一个 block pool 由属于同一个 namespace 的数据块组成，每个 DataNode 可能会存储集群中所有 block pool 的数据块；</li>
+<li>每个 block pool 内部自治，也就是说各自管理各自的 block，不会与其他 block pool 交流，如果一个 NameNode 挂掉了，不会影响其他 NameNode;</li>
+<li>某个 NameNode 上的 namespace 和它对应的 block pool 一起被称为 namespace volume，它是管理的基本单位。当一个 NameNode/namespace 被删除后，其所有 DataNode 上对应的 block pool 也会被删除，当集群升级时，每个 namespace volume 可以作为一个基本单元进行升级。</li>
+</ul>
+<p>到这里，基本对 HDFS 这部分总结完了，虽然文章的内容基本都来自下面的参考资料，但是自己在总结的过程中，也对 HDFS 的基本架构有一定的了解，后续结合公司 HDFS 团队的 CaseStudy 深入学习这部分的内容，工作中，也慢慢感觉到分布式系统，很多的设计实现与问题解决方案都很类似，只不过因为面对业务场景的不同而采用了不同的实现。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html" target="_blank" rel="external">HDFS Architecture</a>;</li>
+<li><a href="http://shiyanjun.cn/archives/942.html" target="_blank" rel="external">HDFS 写文件过程分析</a>;</li>
+<li><a href="https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HDFSRouterFederation.html" target="_blank" rel="external">HDFS Router-based Federation</a>；</li>
+<li><a href="https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HDFSHighAvailabilityWithQJM.html" target="_blank" rel="external">HDFS High Availability Using the Quorum Journal Manager</a>；</li>
+<li><a href="https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-hdfs/HDFSCommands.html" target="_blank" rel="external">HDFS Commands Guide</a>；</li>
+<li><a href="https://www.ibm.com/developerworks/cn/opensource/os-cn-hadoop-name-node/" target="_blank" rel="external">Hadoop NameNode 高可用 (High Availability) 实现解析</a></li>
+<li><a href="http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-hdfs/Federation.html" target="_blank" rel="external">HDFS Federation</a>；</li>
+<li><a href="http://dongxicheng.org/mapreduce/hdfs-federation-introduction/" target="_blank" rel="external">HDFS Federation设计动机与基本原理</a>；</li>
+<li><a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>；</li>
+<li><a href="https://tech.meituan.com/namenode-restart-optimization.html" target="_blank" rel="external">HDFS NameNode重启优化</a>；</li>
+<li><a href="https://tech.meituan.com/hdfs-federation.html" target="_blank" rel="external">HDFS Federation在美团点评的应用与改进</a>。</li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;HDFS（Hadoop Distributed File System）是一个分布式文件存储系统，几乎是离线存储领域的标准解决方案（有能力自研的大厂列外），业内应用非常广泛。近段抽时间，看一下 HDFS 的架构设计，虽然研究生也学习过相关内容，但是现在基本忘得差不多了，今天
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="hadoop" scheme="http://matt33.com/tags/hadoop/"/>
+    
+  </entry>
   
   <entry>
     <title>Kafka Controller Redesign 方案</title>
@@ -2615,102 +2778,6 @@
     
       &lt;p&gt;紧接着上篇文章，这篇文章讲述 Consumer 提供的两种 commit 机制和两种 partition 分配机制，具体如何使用是需要用户结合具体的场景进行选择，本文讲述一下其底层实现。&lt;/p&gt;
 &lt;h2 id=&quot;两种-commit-机制&quot;&gt;&lt;a href=&quot;#两种-comm
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Kafka 源码解析之 Consumer 两种订阅模式（八）</title>
-    <link href="http://matt33.com/2017/11/18/consumer-subscribe/"/>
-    <id>http://matt33.com/2017/11/18/consumer-subscribe/</id>
-    <published>2017-11-18T06:43:50.000Z</published>
-    <updated>2017-12-21T15:31:10.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这块的第三篇，本来计划是要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 Kafka Consumer 中都提供了两个不同的解决方案，但具体怎么去使用是需要用户根据自己的业务场景去配置，这里会讲述其底层的具体实现（但为了阅读得更为方便，本来计划的这篇文章将拆分为两篇来，第一篇先讲述第一点，后面两点放在一起讲述）。</p>
-<p>本篇文章讲述的这三点内容分别是：</p>
-<ol>
-<li>consumer 的两种订阅模式， <code>subscribe()</code>和<code>assign()</code> 模式，一种是 topic 粒度（使用 group 管理），一种是 topic-partition 粒度（用户自己去管理）；</li>
-<li>consumer 的两种 commit 实现，<code>commitAsync()</code>和<code>commitSync()</code>，即同步 commit 和异步 commit；</li>
-<li>consumer 提供的两种不同 <code>partition.assignment.strategy</code>，这是关于一个 group 订阅一些 topic 后，group 内各个 consumer 实例的 partition 分配策略。</li>
-</ol>
-<p>0.9.X 之前 Kafka Consumer 是支持两个不同的订阅模型 —— high level 和 simple level，这两种模型的最大区别是：第一个其 offset 管理是由 Kafka 来做，包括 rebalance 操作，第二个则是由使用者自己去做，自己去管理相关的 offset，以及自己去进行 rebalance。</p>
-<p>在新版的 consumer 中对 high level 和 simple level 的接口实现了统一，简化了相应的相应的编程模型。</p>
-<h2 id="订阅模式"><a href="#订阅模式" class="headerlink" title="订阅模式"></a>订阅模式</h2><p>在新版的 Consumer 中，high level 模型现在叫做订阅模式，KafkaConsumer 提供了三种 API，如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 订阅指定的 topic 列表,并且会自动进行动态 partition 订阅</span></div><div class="line"><span class="comment">// 当发生以下情况时,会进行 rebalance: 1.订阅的 topic 列表改变; 2.topic 被创建或删除; 3.consumer 线程 die; 4. 加一个新的 consumer 线程</span></div><div class="line"><span class="comment">// 当发生 rebalance 时，会唤醒 ConsumerRebalanceListener 线程</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">subscribe</span><span class="params">(Collection&lt;String&gt; topics, ConsumerRebalanceListener listener)</span></span>&#123;&#125;</div><div class="line"><span class="comment">// 同上，但是这里没有设置 listener</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">subscribe</span><span class="params">(Collection&lt;String&gt; topics)</span> </span>&#123;&#125;</div><div class="line"><span class="comment">//note: 订阅那些满足一定规则(pattern)的 topic</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">subscribe</span><span class="params">(Pattern pattern, ConsumerRebalanceListener listener)</span></span>&#123;&#125;</div></pre></td></tr></table></figure>
-<p>以上三种 API 都是按照 topic 级别去订阅，可以动态地获取其分配的 topic-partition，这是使用 <strong>Group 动态管理</strong>，它不能与手动 partition 管理一起使用。当监控到发生下面的事件时，Group 将会触发 rebalance 操作：</p>
-<ol>
-<li>订阅的 topic 列表变化；</li>
-<li>topic 被创建或删除；</li>
-<li>consumer group 的某个 consumer 实例挂掉；</li>
-<li>一个新的 consumer 实例通过 <code>join</code> 方法加入到一个 group 中。</li>
-</ol>
-<p>在这种模式下，当 KafkaConsumer 调用 pollOnce 方法时，第一步会首先加入到一个 group 中，并获取其分配的 topic-partition 列表（见<a href="http://matt33.com/2017/10/22/consumer-join-group/">Kafka 源码解析之 Consumer 如何加入一个 Group（六）</a>），前面两篇文章都是以这种情况来讲述的。</p>
-<p>这里介绍一下当调用 <code>subscribe()</code> 方法之后，Consumer 所做的事情，分两种情况介绍，一种按 topic 列表订阅，一种是按 pattern 模式订阅：</p>
-<ol>
-<li>topic 列表订阅<ol>
-<li>更新 SubscriptionState 中记录的 <code>subscription</code>（记录的是订阅的 topic 列表），将 SubscriptionType 类型设置为 <strong>AUTO_TOPICS</strong>；</li>
-<li>更新 metadata 中的 topic 列表（<code>topics</code> 变量），并请求更新 metadata；</li>
-</ol>
-</li>
-<li>pattern 模式订阅<ol>
-<li>更新 SubscriptionState 中记录的 <code>subscribedPattern</code>，设置为 pattern，将 SubscriptionType 类型设置为 <strong>AUTO_PATTERN</strong>；</li>
-<li>设置 Metadata 的 needMetadataForAllTopics 为 true，即在请求 metadata 时，需要更新所有 topic 的 metadata 信息，设置后再请求更新 metadata；</li>
-<li>调用 <code>coordinator.updatePatternSubscription()</code> 方法，遍历所有 topic 的 metadata，找到所有满足 pattern 的 topic 列表，更新到 SubscriptionState 的 <code>subscriptions</code> 和 Metadata 的 <code>topics</code> 中；</li>
-<li>通过在 ConsumerCoordinator 中调用 <code>addMetadataListener()</code> 方法在 Metadata 中添加 listener 当每次 metadata update 时就调用第三步的方法更新，但是只有当本地缓存的 topic 列表与现在要订阅的 topic 列表不同时，才会触发 rebalance 操作。</li>
-</ol>
-</li>
-</ol>
-<p>其他部分，两者基本一样，只是 pattern 模型在每次更新 topic-metadata 时，获取全局的 topic 列表，如果发现有新加入的符合条件的 topic，就立马去订阅，其他的地方，包括 Group 管理、topic-partition 的分配都是一样的。</p>
-<h2 id="分配模式"><a href="#分配模式" class="headerlink" title="分配模式"></a>分配模式</h2><p>下面来看一下 Consumer 提供的分配模式，熟悉 0.8.X 版本的人，可能会把这种方法称为 simple consumer 的接口，当调用 <code>assign()</code> 方法手动分配 topic-partition 列表时，是不会使用 consumer 的 Group 管理机制，也即是当 consumer group member 变化或 topic 的 metadata 信息变化时是不会触发 rebalance 操作的。比如：当 topic 的 partition 增加时，这里是无法感知，需要用户进行相应的处理，Apache Flink 就是使用的这种方式，后续我会写篇文章介绍 Flink 是如何实现这种机制的。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//note: 手动向 consumer 分配一些 topic-partition 列表，并且这个接口不允许增加分配的 topic-partition 列表，将会覆盖之前分配的 topic-partition 列表，如果给定的 topic-partition 列表为空，它的作用将会与 unsubscribe() 方法一样。</span></div><div class="line"><span class="comment">//note: 这种手动 topic 分配是不会使用 consumer 的 group 管理，当 group 的 member 变化或 topic 的 metadata 变化也不会触发 rebalance 操作。</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">assign</span><span class="params">(Collection&lt;TopicPartition&gt; partitions)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
-<p>这里来看一下 Kafka 提供的 Group 管理到底是什么？</p>
-<p>如果有印象的话，在<a href="http://matt33.com/2017/10/22/consumer-join-group/">Kafka 源码解析之 Consumer 如何加入一个 Group（六）</a>中介绍 Poll 模型的第一步中，详细介绍了 <code>ConsumerCoordinator.poll()</code> 方法，我们再来看一下这个方法：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// note: 它确保了这个 group 的 coordinator 是已知的,并且这个 consumer 是已经加入到了 group 中,也用于 offset 周期性的 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">poll</span><span class="params">(<span class="keyword">long</span> now)</span> </span>&#123;</div><div class="line">    invokeCompletedOffsetCommitCallbacks();<span class="comment">// note: 用于测试</span></div><div class="line"></div><div class="line">    <span class="comment">// note: Step1 通过 subscribe() 方法订阅 topic,并且 coordinator 未知,初始化 Consumer Coordinator</span></div><div class="line">    <span class="keyword">if</span> (subscriptions.partitionsAutoAssigned() &amp;&amp; coordinatorUnknown()) &#123;</div><div class="line">        <span class="comment">// note: 获取 GroupCoordinator 地址,并且建立连接</span></div><div class="line">        ensureCoordinatorReady();</div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="comment">// note: Step2 判断是否需要重新加入 group,如果订阅的 partition 变化或则分配的 partition 变化时,需要 rejoin</span></div><div class="line">    <span class="comment">// note: 如果订阅模式不是 AUTO_TOPICS 或 AUTO_PATTERN,直接跳过</span></div><div class="line">    <span class="keyword">if</span> (needRejoin()) &#123;</div><div class="line">        <span class="comment">// note: rejoin group 之前先刷新一下 metadata（对于 AUTO_PATTERN 而言）</span></div><div class="line">        <span class="keyword">if</span> (subscriptions.hasPatternSubscription())</div><div class="line">            client.ensureFreshMetadata();</div><div class="line"></div><div class="line">        <span class="comment">// note: 确保 group 是 active; 加入 group; 分配订阅的 partition</span></div><div class="line">        ensureActiveGroup();</div><div class="line">        now = time.milliseconds();</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="comment">// note: Step3 检查心跳线程运行是否正常,如果心跳线程失败,则抛出异常,反之更新 poll 调用的时间</span></div><div class="line">    <span class="comment">// note: 发送心跳请求是在 ensureCoordinatorReady() 中调用的</span></div><div class="line">    pollHeartbeat(now);</div><div class="line">    <span class="comment">// note: Step4 自动 commit 时,当定时达到时,进行自动 commit</span></div><div class="line">    maybeAutoCommitOffsetsAsync(now);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>如果使用的是 assign 模式，也即是非 AUTO_TOPICS 或 AUTO_PATTERN 模式时，Consumer 实例在调用 poll 方法时，是不会向 GroupCoordinator 发送 join-group/sync-group/heartbeat 请求的，也就是说 GroupCoordinator 是拿不到这个 Consumer 实例的相关信息，也不会去维护这个 member 是否存活，这种情况下就需要用户自己管理自己的处理程序。但是在这种模式是可以进行 offset commit的。</p>
-<h3 id="commit-offset-请求处理"><a href="#commit-offset-请求处理" class="headerlink" title="commit offset 请求处理"></a>commit offset 请求处理</h3><p>当 Kafka Serve 端受到来自 client 端的 Offset Commit 请求时，其处理逻辑如下所示，是在 <code>kafka.coordinator.GroupCoordinator</code> 中实现的。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div><div class="line">61</div><div class="line">62</div><div class="line">63</div><div class="line">64</div><div class="line">65</div><div class="line">66</div><div class="line">67</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// kafka.coordinator.GroupCoordinator</span></div><div class="line"><span class="comment">//note: GroupCoordinator 处理 Offset Commit 请求</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">handleCommitOffsets</span></span>(groupId: <span class="type">String</span>,</div><div class="line">                        memberId: <span class="type">String</span>,</div><div class="line">                        generationId: <span class="type">Int</span>,</div><div class="line">                        offsetMetadata: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">OffsetAndMetadata</span>],</div><div class="line">                        responseCallback: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">Short</span>] =&gt; <span class="type">Unit</span>) &#123;</div><div class="line">  <span class="keyword">if</span> (!isActive.get) &#123;</div><div class="line">    responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">GROUP_COORDINATOR_NOT_AVAILABLE</span>.code))</div><div class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!isCoordinatorForGroup(groupId)) &#123;</div><div class="line">    responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">NOT_COORDINATOR_FOR_GROUP</span>.code))</div><div class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isCoordinatorLoadingInProgress(groupId)) &#123;</div><div class="line">    responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">GROUP_LOAD_IN_PROGRESS</span>.code))</div><div class="line">  &#125; <span class="keyword">else</span> &#123;</div><div class="line">    groupManager.getGroup(groupId) <span class="keyword">match</span> &#123;</div><div class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt;</div><div class="line">        <span class="keyword">if</span> (generationId &lt; <span class="number">0</span>) &#123;</div><div class="line">          <span class="comment">// the group is not relying on Kafka for group management, so allow the commit</span></div><div class="line">          <span class="comment">//note: 不使用 group-coordinator 管理的情况</span></div><div class="line">          <span class="comment">//note: 如果 groupID不存在,就新建一个 GroupMetadata, 其group 状态为 Empty,否则就返回已有的 groupid</span></div><div class="line">          <span class="comment">//note: 如果 simple 的 groupId 与一个 active 的 group 重复了,这里就有可能被覆盖掉了</span></div><div class="line">          <span class="keyword">val</span> group = groupManager.addGroup(<span class="keyword">new</span> <span class="type">GroupMetadata</span>(groupId))</div><div class="line">          doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)</div><div class="line">        &#125; <span class="keyword">else</span> &#123;</div><div class="line">          <span class="comment">// or this is a request coming from an older generation. either way, reject the commit</span></div><div class="line">          <span class="comment">//note: 过期的 offset-commit</span></div><div class="line">          responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">ILLEGAL_GENERATION</span>.code))</div><div class="line">        &#125;</div><div class="line"></div><div class="line">      <span class="keyword">case</span> <span class="type">Some</span>(group) =&gt;</div><div class="line">        doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">//note: 真正的处理逻辑</span></div><div class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">doCommitOffsets</span></span>(group: <span class="type">GroupMetadata</span>,</div><div class="line">                    memberId: <span class="type">String</span>,</div><div class="line">                    generationId: <span class="type">Int</span>,</div><div class="line">                    offsetMetadata: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">OffsetAndMetadata</span>],</div><div class="line">                    responseCallback: immutable.<span class="type">Map</span>[<span class="type">TopicPartition</span>, <span class="type">Short</span>] =&gt; <span class="type">Unit</span>) &#123;</div><div class="line">  <span class="keyword">var</span> delayedOffsetStore: <span class="type">Option</span>[<span class="type">DelayedStore</span>] = <span class="type">None</span></div><div class="line"></div><div class="line">  group synchronized &#123;</div><div class="line">    <span class="keyword">if</span> (group.is(<span class="type">Dead</span>)) &#123;</div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">UNKNOWN_MEMBER_ID</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (generationId &lt; <span class="number">0</span> &amp;&amp; group.is(<span class="type">Empty</span>)) &#123;<span class="comment">//note: 来自 assign 的情况</span></div><div class="line">      <span class="comment">// the group is only using Kafka to store offsets</span></div><div class="line">      delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,</div><div class="line">        offsetMetadata, responseCallback)</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (group.is(<span class="type">AwaitingSync</span>)) &#123;</div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">REBALANCE_IN_PROGRESS</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!group.has(memberId)) &#123;<span class="comment">//note: 有可能 simple 与 high level 的冲突了,这里就直接拒绝相应的请求</span></div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">UNKNOWN_MEMBER_ID</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (generationId != group.generationId) &#123;</div><div class="line">      responseCallback(offsetMetadata.mapValues(_ =&gt; <span class="type">Errors</span>.<span class="type">ILLEGAL_GENERATION</span>.code))</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">      <span class="keyword">val</span> member = group.get(memberId)</div><div class="line">      completeAndScheduleNextHeartbeatExpiration(group, member)<span class="comment">//note: 更新下次需要的心跳时间</span></div><div class="line">      delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,</div><div class="line">        offsetMetadata, responseCallback)</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line"></div><div class="line">  <span class="comment">// store the offsets without holding the group lock</span></div><div class="line">  delayedOffsetStore.foreach(groupManager.store)</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>处理过程如下：</p>
-<ol>
-<li>如果这个 group 还不存在（groupManager没有这个 group 信息），并且 generation 为 -1（一般情况下应该都是这样），就新建一个 GroupMetadata, 其 Group 状态为 Empty；</li>
-<li>现在 group 已经存在，就调用 <code>doCommitOffsets()</code> 提交 offset；</li>
-<li>如果是来自 assign 模式的请求，并且其对应的 group 的状态为 Empty（generationId &lt; 0 &amp;&amp; group.is(Empty)），那么就记录这个 offset；</li>
-<li>如果是来自 assign 模式的请求，但这个 group 的状态不为 Empty（!group.has(memberId)），也就是说，这个 group 已经处在活跃状态，assign 模式下的 group 是不会处于的活跃状态的，可以认为是 assign 模式使用的 group.id 与 subscribe 模式下使用的 group 相同，这种情况下就会拒绝 assign 模式下的这个 offset commit 请求。</li>
-</ol>
-<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>根据上面的讲述，这里做一下小节，如下图所示：</p>
-<p><img src="/images/kafka/two-subscribe.png" alt="两种订阅模式"></p>
-<p>简单做一下总结：</p>
-<table>
-<thead>
-<tr>
-<th>模式</th>
-<th>不同之处</th>
-<th>相同之处</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>subscribe()</td>
-<td>使用 Kafka Group 管理，自动进行 rebalance 操作</td>
-<td>可以在 Kafka 保存 offset</td>
-</tr>
-<tr>
-<td>assign()</td>
-<td>用户自己进行相关的处理</td>
-<td>也可以进行 offset commit，但是尽量保证 group.id 唯一性，如果使用一个与上面模式一样的 group，offset commit 请求将会被拒绝</td>
-</tr>
-</tbody>
-</table>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;在前面两篇 Kafka Consumer 的文章中，Consumer Poll 模型这部分基本上已经完整结束，Consumer 这块的文章计划是要写五篇，这篇是 Consumer 这块的第三篇，本来计划是要从其中的三个小块细节内容着手，这三个地方有一个相同之处，那就是在 K
     
     </summary>
     
