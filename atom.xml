@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-07-15T15:46:56.000Z</updated>
+  <updated>2018-07-29T04:20:43.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,146 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>JVM 之 ParNew 和 CMS 日志分析</title>
+    <link href="http://matt33.com/2018/07/28/jvm-cms/"/>
+    <id>http://matt33.com/2018/07/28/jvm-cms/</id>
+    <published>2018-07-28T11:53:04.000Z</published>
+    <updated>2018-07-29T04:20:43.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>在两年前的文章 <a href="http://matt33.com/2016/09/18/jvm-basic2/">JVM 学习——垃圾收集器与内存分配策略</a> 中，已经对 GC 算法的原理以及常用的垃圾收集器做了相应的总结。今天这篇文章主要是对生产环境中（Java7）常用的两种垃圾收集器（ParNew：年轻代，CMS：老年代）从日志信息上进行分析，做一下总结，这样当我们在排查相应的问题时，看到 GC 的日志信息，不会再那么陌生，能清楚地知道这些日志是什么意思，GC 线程当前处在哪个阶段，正在做什么事情等。</p>
+<h2 id="ParNew-收集器"><a href="#ParNew-收集器" class="headerlink" title="ParNew 收集器"></a>ParNew 收集器</h2><p><a href="http://matt33.com/2016/09/18/jvm-basic2/#ParNew-%E6%94%B6%E9%9B%86%E5%99%A8">ParNew 收集器</a>是年轻代常用的垃圾收集器，它采用的是复制算法，youngGC 时一个典型的日志信息如下所示：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.134+0800: 15578.050: [GC2018-04-12T13:48:26.135+0800: 15578.050: [ParNew: 3412467K-&gt;59681K(3774912K), 0.0971990 secs] 9702786K-&gt;6354533K(24746432K), 0.0974940 secs] [Times: user=0.95 sys=0.00, real=0.09 secs]</div></pre></td></tr></table></figure>
+<p>依次分析一下上面日志信息的含义：</p>
+<ul>
+<li><code>2018-04-12T13:48:26.134+0800</code>：Mirror GC 发生的时间；</li>
+<li><code>15578.050</code>：GC 开始时，相对 JVM 启动的相对时间，单位时秒，这里是4h+；</li>
+<li><code>ParNew</code>：收集器名称，这里是 ParNew 收集器，它使用的是并行的 mark-copy 算法，GC 过程也会 Stop the World；</li>
+<li><code>3412467K-&gt;59681K</code>：收集前后年轻代的使用情况，这里是 3.25G-&gt;58.28M；</li>
+<li><code>3774912K</code>：整个年轻代的容量，这里是 3.6G；</li>
+<li><code>0.0971990 secs</code>：Duration for the collection w/o final cleanup.</li>
+<li><code>9702786K-&gt;6354533K</code>：收集前后整个堆的使用情况，这里是 9.25G-&gt;6.06G;</li>
+<li><code>24746432K</code>：整个堆的容量，这里是 23.6G；</li>
+<li><code>0.0974940 secs</code>：ParNew 收集器标记和复制年轻代活着的对象所花费的时间（包括和老年代通信的开销、对象晋升到老年代开销、垃圾收集周期结束一些最后的清理对象等的花销）；</li>
+</ul>
+<p>对于 <code>[Times: user=0.95 sys=0.00, real=0.09 secs]</code>，这里面涉及到三种时间类型，含义如下：</p>
+<ul>
+<li>user：GC 线程在垃圾收集期间所使用的 CPU 总时间；</li>
+<li>sys：系统调用或者等待系统事件花费的时间；</li>
+<li>real：应用被暂停的时钟时间，由于 GC 线程是多线程的，导致了 real 小于 (user+real)，如果是 gc 线程是单线程的话，real 是接近于 (user+real) 时间。</li>
+</ul>
+<h2 id="CMS-收集器"><a href="#CMS-收集器" class="headerlink" title="CMS 收集器"></a>CMS 收集器</h2><p><a href="http://matt33.com/2016/09/18/jvm-basic2/#CMS-%E6%94%B6%E9%9B%86%E5%99%A8">CMS 收集器</a>是老年代经常使用的收集器，它采用的是标记-清楚算法，应用程序在发生一次 Full GC 时，典型的 GC 日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.233+0800: 15578.148: [GC [1 CMS-initial-mark: 6294851K(20971520K)] 6354687K(24746432K), 0.0466580 secs] [Times: user=0.04 sys=0.00, real=0.04 secs]</div><div class="line">2018-04-12T13:48:26.280+0800: 15578.195: [CMS-concurrent-mark-start]</div><div class="line">2018-04-12T13:48:26.418+0800: 15578.333: [CMS-concurrent-mark: 0.138/0.138 secs] [Times: user=1.01 sys=0.21, real=0.14 secs]</div><div class="line">2018-04-12T13:48:26.418+0800: 15578.334: [CMS-concurrent-preclean-start]</div><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-preclean: 0.056/0.057 secs] [Times: user=0.20 sys=0.12, real=0.06 secs]</div><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-abortable-preclean-start]</div><div class="line">2018-04-12T13:48:29.989+0800: 15581.905: [CMS-concurrent-abortable-preclean: 3.506/3.514 secs] [Times: user=11.93 sys=6.77, real=3.51 secs]</div><div class="line">2018-04-12T13:48:29.991+0800: 15581.906: [GC[YG occupancy: 1805641 K (3774912 K)]2018-04-12T13:48:29.991+0800: 15581.906: [GC2018-04-12T13:48:29.991+0800: 15581.906: [ParNew: 1805641K-&gt;48395K(3774912K), 0.0826620 secs] 8100493K-&gt;6348225K(24746432K), 0.0829480 secs] [Times: user=0.81 sys=0.00, real=0.09 secs]2018-04-12T13:48:30.074+0800: 15581.989: [Rescan (parallel) , 0.0429390 secs]2018-04-12T13:48:30.117+0800: 15582.032: [weak refs processing, 0.0027800 secs]2018-04-12T13:48:30.119+0800: 15582.035: [class unloading, 0.0033120 secs]2018-04-12T13:48:30.123+0800: 15582.038: [scrub symbol table, 0.0016780 secs]2018-04-12T13:48:30.124+0800: 15582.040: [scrub string table, 0.0004780 secs] [1 CMS-remark: 6299829K(20971520K)] 6348225K(24746432K), 0.1365130 secs] [Times: user=1.24 sys=0.00, real=0.14 secs]</div><div class="line">2018-04-12T13:48:30.128+0800: 15582.043: [CMS-concurrent-sweep-start]</div><div class="line">2018-04-12T13:48:36.638+0800: 15588.553: [GC2018-04-12T13:48:36.638+0800: 15588.554: [ParNew: 3403915K-&gt;52142K(3774912K), 0.0874610 secs] 4836483K-&gt;1489601K(24746432K), 0.0877490 secs] [Times: user=0.84 sys=0.00, real=0.09 secs]</div><div class="line">2018-04-12T13:48:38.412+0800: 15590.327: [CMS-concurrent-sweep: 8.193/8.284 secs] [Times: user=30.34 sys=16.44, real=8.28 secs]</div><div class="line">2018-04-12T13:48:38.419+0800: 15590.334: [CMS-concurrent-reset-start]</div><div class="line">2018-04-12T13:48:38.462+0800: 15590.377: [CMS-concurrent-reset: 0.044/0.044 secs] [Times: user=0.15 sys=0.10, real=0.04 secs]</div></pre></td></tr></table></figure>
+<p>CMS Full GC 拆分开来，涉及的阶段比较多，下面分别来介绍各个阶段的情况。</p>
+<h3 id="阶段1：Initial-Mark"><a href="#阶段1：Initial-Mark" class="headerlink" title="阶段1：Initial Mark"></a>阶段1：Initial Mark</h3><p>这个是 CMS 两次 stop-the-wolrd 事件的其中一次，这个阶段的目标是：标记那些直接被 GC root 引用或者被年轻代存活对象所引用的所有对象，标记后示例如下所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>）：</p>
+<p><img src="/images/java/cms-1.png" alt="CMS 初始标记阶段"></p>
+<p>上述例子对应的日志信息为：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.233+0800: 15578.148: [GC [1 CMS-initial-mark: 6294851K(20971520K)] 6354687K(24746432K), 0.0466580 secs] [Times: user=0.04 sys=0.00, real=0.04 secs]</div></pre></td></tr></table></figure>
+<p>逐行介绍上面日志的含义：</p>
+<ol>
+<li><code>2018-04-12T13:48:26.233+0800: 15578.148</code>：GC 开始的时间，以及相对于 JVM 启动的相对时间（单位是秒，这里大概是4.33h），与前面 ParNew 类似，下面的分析中就直接跳过这个了；</li>
+<li><code>CMS-initial-mark</code>：初始标记阶段，它会收集所有 GC Roots 以及其直接引用的对象；</li>
+<li><code>6294851K</code>：当前老年代使用的容量，这里是 6G；</li>
+<li><code>(20971520K)</code>：老年代可用的最大容量，这里是 20G；</li>
+<li><code>6354687K</code>：整个堆目前使用的容量，这里是 6.06G；</li>
+<li><code>(24746432K)</code>：堆可用的容量，这里是 23.6G；</li>
+<li><code>0.0466580 secs</code>：这个阶段的持续时间；</li>
+<li><code>[Times: user=0.04 sys=0.00, real=0.04 secs]</code>：与前面的类似，这里是相应 user、system and real 的时间统计。</li>
+</ol>
+<h3 id="阶段2：并发标记"><a href="#阶段2：并发标记" class="headerlink" title="阶段2：并发标记"></a>阶段2：并发标记</h3><p>在这个阶段 Garbage Collector 会遍历老年代，然后标记所有存活的对象，它会根据上个阶段找到的 GC Roots 遍历查找。并发标记阶段，它会与用户的应用程序并发运行。并不是老年代所有的存活对象都会被标记，因为在标记期间用户的程序可能会改变一些引用，如下图所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>）：</p>
+<p><img src="/images/java/cms-2.png" alt="CMS 并发标记阶段"></p>
+<p>在上面的图中，与阶段1的图进行对比，就会发现有一个对象的引用已经发生了变化，这个阶段相应的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.280+0800: 15578.195: [CMS-concurrent-mark-start]</div><div class="line">2018-04-12T13:48:26.418+0800: 15578.333: [CMS-concurrent-mark: 0.138/0.138 secs] [Times: user=1.01 sys=0.21, real=0.14 secs]</div></pre></td></tr></table></figure>
+<p>这里详细对上面的日志解释，如下所示：</p>
+<ol>
+<li><code>CMS-concurrent-mark</code>：并发收集阶段，这个阶段会遍历老年代，并标记所有存活的对象；</li>
+<li><code>0.138/0.138 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=1.01 sys=0.21, real=0.14 secs]</code>：如前面所示，但是这部的时间，其实意义不大，因为它是从并发标记的开始时间开始计算，这期间因为是并发进行，不仅仅包含 GC 线程的工作。</li>
+</ol>
+<h3 id="阶段3：Concurrent-Preclean"><a href="#阶段3：Concurrent-Preclean" class="headerlink" title="阶段3：Concurrent Preclean"></a>阶段3：Concurrent Preclean</h3><p>Concurrent Preclean：这也是一个并发阶段，与应用的线程并发运行，并不会 stop 应用的线程。在并发运行的过程中，一些对象的引用可能会发生变化，但是这种情况发生时，JVM 会将包含这个对象的区域（Card）标记为 Dirty，这也就是 Card Marking。如下图所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>：</p>
+<p><img src="/images/java/cms-3.png" alt="Concurrent Preclean 1"></p>
+<p>在pre-clean阶段，那些能够从 Dirty 对象到达的对象也会被标记，这个标记做完之后，dirty card 标记就会被清除了，如下（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>：</p>
+<p><img src="/images/java/cms-4.png" alt="Concurrent Preclean 2"></p>
+<p>这个阶段相应的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.418+0800: 15578.334: [CMS-concurrent-preclean-start]</div><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-preclean: 0.056/0.057 secs] [Times: user=0.20 sys=0.12, real=0.06 secs]</div></pre></td></tr></table></figure>
+<p>其含义为：</p>
+<ol>
+<li><code>CMS-concurrent-preclean</code>：Concurrent Preclean 阶段，对在前面并发标记阶段中引用发生变化的对象进行标记；</li>
+<li><code>0.056/0.057 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=0.20 sys=0.12, real=0.06 secs]</code>：同并发标记阶段中的含义。</li>
+</ol>
+<h3 id="阶段4：Concurrent-Abortable-Preclean"><a href="#阶段4：Concurrent-Abortable-Preclean" class="headerlink" title="阶段4：Concurrent Abortable Preclean"></a>阶段4：Concurrent Abortable Preclean</h3><p>这也是一个并发阶段，但是同样不会影响影响用户的应用线程，这个阶段是为了尽量承担 STW（stop-the-world）中最终标记阶段的工作。这个阶段持续时间依赖于很多的因素，由于这个阶段是在重复做很多相同的工作，直接满足一些条件（比如：重复迭代的次数、完成的工作量或者时钟时间等）。这个阶段的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-abortable-preclean-start]</div><div class="line">2018-04-12T13:48:29.989+0800: 15581.905: [CMS-concurrent-abortable-preclean: 3.506/3.514 secs] [Times: user=11.93 sys=6.77, real=3.51 secs]</div></pre></td></tr></table></figure>
+<ol>
+<li><code>CMS-concurrent-abortable-preclean</code>：Concurrent Abortable Preclean 阶段；</li>
+<li><code>3.506/3.514 secs</code>：这个阶段的持续时间与时钟时间，本质上，这里的 gc 线程会在 STW 之前做更多的工作，通常会持续 5s 左右；</li>
+<li><code>[Times: user=11.93 sys=6.77, real=3.51 secs]</code>：同前面。</li>
+</ol>
+<h3 id="阶段5：Final-Remark"><a href="#阶段5：Final-Remark" class="headerlink" title="阶段5：Final Remark"></a>阶段5：Final Remark</h3><p>这是第二个 STW 阶段，也是 CMS 中的最后一个，这个阶段的目标是标记所有老年代所有的存活对象，由于之前的阶段是并发执行的，gc 线程可能跟不上应用程序的变化，为了完成标记老年代所有存活对象的目标，STW 就非常有必要了。</p>
+<p>通常 CMS 的 Final Remark 阶段会在年轻代尽可能干净的时候运行，目的是为了减少连续 STW 发生的可能性（年轻代存活对象过多的话，也会导致老年代涉及的存活对象会很多）。这个阶段会比前面的几个阶段更复杂一些，相关日志如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:29.991+0800: 15581.906: [GC[YG occupancy: 1805641 K (3774912 K)]2018-04-12T13:48:29.991+0800: 15581.906: [GC2018-04-12T13:48:29.991+0800: 15581.906: [ParNew: 1805641K-&gt;48395K(3774912K), 0.0826620 secs] 8100493K-&gt;6348225K(24746432K), 0.0829480 secs] [Times: user=0.81 sys=0.00, real=0.09 secs]2018-04-12T13:48:30.074+0800: 15581.989: [Rescan (parallel) , 0.0429390 secs]2018-04-12T13:48:30.117+0800: 15582.032: [weak refs processing, 0.0027800 secs]2018-04-12T13:48:30.119+0800: 15582.035: [class unloading, 0.0033120 secs]2018-04-12T13:48:30.123+0800: 15582.038: [scrub symbol table, 0.0016780 secs]2018-04-12T13:48:30.124+0800: 15582.040: [scrub string table, 0.0004780 secs] [1 CMS-remark: 6299829K(20971520K)] 6348225K(24746432K), 0.1365130 secs] [Times: user=1.24 sys=0.00, real=0.14 secs]</div></pre></td></tr></table></figure>
+<p>对上面的日志进行分析：</p>
+<ol>
+<li><code>YG occupancy: 1805641 K (3774912 K)</code>：年轻代当前占用量及容量，这里分别是 1.71G 和 3.6G；</li>
+<li><code>ParNew:...</code>：触发了一次 young GC，这里触发的原因是为了减少年轻代的存活对象，尽量使年轻代更干净一些；</li>
+<li><code>[Rescan (parallel) , 0.0429390 secs]</code>：这个 Rescan 是当应用暂停的情况下完成对所有存活对象的标记，这个阶段是并行处理的，这里花费了  0.0429390s；</li>
+<li><code>[weak refs processing, 0.0027800 secs]</code>：第一个子阶段，它的工作是处理弱引用；</li>
+<li><code>[class unloading, 0.0033120 secs]</code>：第二个子阶段，它的工作是：unloading the unused classes；</li>
+<li><code>[scrub symbol table, 0.0016780 secs] ... [scrub string table, 0.0004780 secs]</code>：最后一个子阶段，它的目的是：cleaning up symbol and string tables which hold class-level metadata and internalized string respectively，时钟的暂停也包含在这里；</li>
+<li><code>6299829K(20971520K)</code>：这个阶段之后，老年代的使用量与总量，这里分别是 6G 和 20G；</li>
+<li><code>6348225K(24746432K)</code>：这个阶段之后，堆的使用量与总量（包括年轻代，年轻代在前面发生过 GC），这里分别是 6.05G 和 23.6G；</li>
+<li><code>0.1365130 secs</code>：这个阶段的持续时间；</li>
+<li><code>[Times: user=1.24 sys=0.00, real=0.14 secs]</code>：对应的时间信息。</li>
+</ol>
+<p>经历过这五个阶段之后，老年代所有存活的对象都被标记过了，现在可以通过清除算法去清理那些老年代不再使用的对象。</p>
+<h3 id="阶段6：Concurrent-Sweep"><a href="#阶段6：Concurrent-Sweep" class="headerlink" title="阶段6：Concurrent Sweep"></a>阶段6：Concurrent Sweep</h3><p>这里不需要 STW，它是与用户的应用程序并发运行，这个阶段是：清除那些不再使用的对象，回收它们的占用空间为将来使用。如下图所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>：<br>）：</p>
+<p><img src="/images/java/cms-5.png" alt="CMS Concurrent Sweep 阶段"></p>
+<p>这个阶段对应的日志信息如下（这中间又发生了一次 Young GC）：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:30.128+0800: 15582.043: [CMS-concurrent-sweep-start]</div><div class="line">2018-04-12T13:48:36.638+0800: 15588.553: [GC2018-04-12T13:48:36.638+0800: 15588.554: [ParNew: 3403915K-&gt;52142K(3774912K), 0.0874610 secs] 4836483K-&gt;1489601K(24746432K), 0.0877490 secs] [Times: user=0.84 sys=0.00, real=0.09 secs]</div><div class="line">2018-04-12T13:48:38.412+0800: 15590.327: [CMS-concurrent-sweep: 8.193/8.284 secs] [Times: user=30.34 sys=16.44, real=8.28 secs]</div></pre></td></tr></table></figure>
+<p>分别介绍一下：</p>
+<ol>
+<li><code>CMS-concurrent-sweep</code>：这个阶段主要是清除那些没有被标记的对象，回收它们的占用空间；</li>
+<li><code>8.193/8.284 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=30.34 sys=16.44, real=8.28 secs]</code>：同前面；</li>
+</ol>
+<h3 id="阶段7：Concurrent-Reset"><a href="#阶段7：Concurrent-Reset" class="headerlink" title="阶段7：Concurrent Reset."></a>阶段7：Concurrent Reset.</h3><p>这个阶段也是并发执行的，它会重设 CMS 内部的数据结构，为下次的 GC 做准备，对应的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:38.419+0800: 15590.334: [CMS-concurrent-reset-start]</div><div class="line">2018-04-12T13:48:38.462+0800: 15590.377: [CMS-concurrent-reset: 0.044/0.044 secs] [Times: user=0.15 sys=0.10, real=0.04 secs]</div></pre></td></tr></table></figure>
+<p>日志详情分别如下：</p>
+<ol>
+<li><code>CMS-concurrent-reset</code>：这个阶段的开始，目的如前面所述；</li>
+<li><code>0.044/0.044 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=0.15 sys=0.10, real=0.04 secs]</code>：同前面。</li>
+</ol>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>CMS 通过将大量工作分散到并发处理阶段来在减少 STW 时间，在这块做得非常优秀，但是 CMS 也有一些其他的问题：</p>
+<ol>
+<li>CMS 收集器无法处理浮动垃圾（ Floating Garbage），可能出现 “Concurrnet Mode Failure” 失败而导致另一次 Full GC 的产生，可能引发串行 Full GC；</li>
+<li>空间碎片，导致无法分配大对象，CMS 收集器提供了一个 <code>-XX:+UseCMSCompactAtFullCollection</code> 开关参数（默认就是开启的），用于在 CMS 收集器顶不住要进行 Full GC 时开启内存碎片的合并整理过程，内存整理的过程是无法并发的，空间碎片问题没有了，但停顿时间不得不变长；</li>
+<li>对于堆比较大的应用上，GC 的时间难以预估。</li>
+</ol>
+<p>CMS 的一些缺陷也是 G1 收集器兴起的原因。</p>
+<p>参考：</p>
+<ul>
+<li><a href="https://t.hao0.me/jvm/2016/03/15/jvm-gc-log.html" target="_blank" rel="external">JVM各类GC日志剖析</a>；</li>
+<li><a href="http://www.cnblogs.com/zhangxiaoguang/p/5792468.html" target="_blank" rel="external">GC之详解CMS收集过程和日志分析</a>；</li>
+<li><a href="http://www.oracle.com/technetwork/tutorials/tutorials-1876574.html" target="_blank" rel="external">Getting Started with the G1 Garbage Collector</a>；</li>
+<li><a href="http://ifeve.com/useful-jvm-flags-part-7-cms-collector/" target="_blank" rel="external">JVM实用参数（七）CMS收集器</a>；</li>
+<li><a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>；</li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;在两年前的文章 &lt;a href=&quot;http://matt33.com/2016/09/18/jvm-basic2/&quot;&gt;JVM 学习——垃圾收集器与内存分配策略&lt;/a&gt; 中，已经对 GC 算法的原理以及常用的垃圾收集器做了相应的总结。今天这篇文章主要是对生产环境中（Java7
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="jvm" scheme="http://matt33.com/tags/jvm/"/>
+    
+  </entry>
   
   <entry>
     <title>HDFS 架构学习总结</title>
@@ -2618,166 +2758,6 @@
     <summary type="html">
     
       &lt;p&gt;突然发现距离上一篇文章，已经过去两个多月了，有两个月没有写博客了，之前定的是年前把这个系列写完，现在看来只能往后拖了，后面估计还有五篇文章左右，尽量在春节前完成吧。继续之前的内容开始讲解，这篇文章，主要是想把 GroupCoordinator 的内容总结一下，也算是开始了 
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Kafka 源码解析之 Consumer 两种 commit 机制和 partition 分配机制（九）</title>
-    <link href="http://matt33.com/2017/11/19/consumer-two-summary/"/>
-    <id>http://matt33.com/2017/11/19/consumer-two-summary/</id>
-    <published>2017-11-19T07:15:32.000Z</published>
-    <updated>2017-11-19T11:44:18.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>紧接着上篇文章，这篇文章讲述 Consumer 提供的两种 commit 机制和两种 partition 分配机制，具体如何使用是需要用户结合具体的场景进行选择，本文讲述一下其底层实现。</p>
-<h2 id="两种-commit-机制"><a href="#两种-commit-机制" class="headerlink" title="两种 commit 机制"></a>两种 commit 机制</h2><p>先看下两种不同的 commit 机制，一种是同步 commit，一种是异步 commit，既然其作用都是 offset commit，应该不难猜到它们底层使用接口都是一样的，其调用流程如下图所示：</p>
-<p><img src="/images/kafka/two-commit.png" alt="两种 commit 机制"></p>
-<h3 id="同步-commit"><a href="#同步-commit" class="headerlink" title="同步 commit"></a>同步 commit</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 对 poll() 中返回的所有 topics 和 partition 列表进行 commit</span></div><div class="line"><span class="comment">// 这个方法只能将 offset 提交 Kafka 中，Kafka 将会在每次 rebalance 之后的第一次拉取或启动时使用同步 commit</span></div><div class="line"><span class="comment">// 这是同步 commit，它将会阻塞进程，直到 commit 成功或者遇到一些错误</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitSync</span><span class="params">()</span> </span>&#123;&#125;</div><div class="line"><span class="comment">// 只对指定的 topic-partition 列表进行 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitSync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
-<p>其实，从上图中，就已经可以看出，同步 commit 的实现方式，<code>client.poll()</code> 方法会阻塞直到这个request 完成或超时才会返回。</p>
-<h3 id="异步-commit"><a href="#异步-commit" class="headerlink" title="异步 commit"></a>异步 commit</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line"><span class="comment">// 异步 commit</span></div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">()</span> </span>&#123;&#125;</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">(OffsetCommitCallback callback)</span> </span>&#123;&#125;</div><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">commitAsync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets, OffsetCommitCallback callback)</span> </span>&#123;&#125;</div></pre></td></tr></table></figure>
-<p>而对于异步的 commit，最后调用的都是 <code>doCommitOffsetsAsync</code> 方法，其具体实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div></pre></td><td class="code"><pre><div class="line"><span class="comment">//org.apache.kafka.clients.consumer.internals.ConsumerCoordinator</span></div><div class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">doCommitOffsetsAsync</span><span class="params">(<span class="keyword">final</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets, <span class="keyword">final</span> OffsetCommitCallback callback)</span> </span>&#123;</div><div class="line">    <span class="keyword">this</span>.subscriptions.needRefreshCommits();</div><div class="line">    RequestFuture&lt;Void&gt; future = sendOffsetCommitRequest(offsets);<span class="comment">//note: 发送 offset-commit 请求</span></div><div class="line">    <span class="keyword">final</span> OffsetCommitCallback cb = callback == <span class="keyword">null</span> ? defaultOffsetCommitCallback : callback;</div><div class="line">    future.addListener(<span class="keyword">new</span> RequestFutureListener&lt;Void&gt;() &#123;</div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onSuccess</span><span class="params">(Void value)</span> </span>&#123;</div><div class="line">            <span class="keyword">if</span> (interceptors != <span class="keyword">null</span>)</div><div class="line">                interceptors.onCommit(offsets);</div><div class="line"></div><div class="line">            <span class="comment">//note: 添加成功的请求,以唤醒相应的回调函数</span></div><div class="line">            completedOffsetCommits.add(<span class="keyword">new</span> OffsetCommitCompletion(cb, offsets, <span class="keyword">null</span>));</div><div class="line">        &#125;</div><div class="line"></div><div class="line">        <span class="meta">@Override</span></div><div class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onFailure</span><span class="params">(RuntimeException e)</span> </span>&#123;</div><div class="line">            Exception commitException = e;</div><div class="line"></div><div class="line">            <span class="keyword">if</span> (e <span class="keyword">instanceof</span> RetriableException)</div><div class="line">                commitException = <span class="keyword">new</span> RetriableCommitFailedException(e);</div><div class="line"></div><div class="line">            <span class="comment">//note: 添加失败的请求,以唤醒相应的回调函数</span></div><div class="line">            completedOffsetCommits.add(<span class="keyword">new</span> OffsetCommitCompletion(cb, offsets, commitException));</div><div class="line">        &#125;</div><div class="line">    &#125;);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>在异步 commit 中，可以添加相应的回调函数，如果 request 处理成功或处理失败，ConsumerCoordinator 会通过 <code>invokeCompletedOffsetCommitCallbacks()</code> 方法唤醒相应的回调函数。</p>
-<p>关于 offset commit 请求的处理见上一篇文章中的<a href="http://matt33.com/2017/11/18/consumer-subscribe/#commit-offset-请求处理">Offset Commit 请求处理</a>，对于提交的 offset，GroupCoordinator 会记录在 GroupMetadata 对象中。</p>
-<h2 id="两种-partition-分配机制"><a href="#两种-partition-分配机制" class="headerlink" title="两种 partition 分配机制"></a>两种 partition 分配机制</h2><p>consumer 提供的两种不同 partition 分配策略，可以通过 <code>partition.assignment.strategy</code> 参数进行配置，默认情况下使用的是 <code>org.apache.kafka.clients.consumer.RangeAssignor</code>，Kafka 中提供另一种 partition 的分配策略 <code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>，它们关系如下图所示：</p>
-<p><img src="/images/kafka/PartitionAssignor.png" alt="Kafka 系统内置的两种 partition 分配机制"></p>
-<p>通过上图可以看出，用户可以自定义相应的 partition 分配机制，只需要继承这个 <code>AbstractPartitionAssignor</code> 抽象类即可。</p>
-<h3 id="AbstractPartitionAssignor"><a href="#AbstractPartitionAssignor" class="headerlink" title="AbstractPartitionAssignor"></a>AbstractPartitionAssignor</h3><p>AbstractPartitionAssignor 有一个抽象方法，如下所示：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="comment">/**</span></div><div class="line"> * Perform the group assignment given the partition counts and member subscriptions</div><div class="line"> * <span class="doctag">@param</span> partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded</div><div class="line"> *                           from this map.</div><div class="line"> * <span class="doctag">@param</span> subscriptions Map from the memberId to their respective topic subscription</div><div class="line"> * <span class="doctag">@return</span> Map from each member to the list of partitions assigned to them.</div><div class="line"> */</div><div class="line"><span class="comment">//<span class="doctag">NOTE:</span> 根据 partitionsPerTopic 和 subscriptions 进行分配,具体的实现会在子类中实现（不同的子类的实现各异）</span></div><div class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,Map&lt;String, List&lt;String&gt;&gt; subscriptions);</div></pre></td></tr></table></figure>
-<p><code>assign()</code> 这个方法，有两个参数：</p>
-<ul>
-<li><code>partitionsPerTopic</code>：所订阅的每个 topic 与其 partition 数的对应关系，metadata 没有的 topic 将会被移除；</li>
-<li><code>subscriptions</code>：每个 consumerId 与其所订阅的 topic 列表的关系。</li>
-</ul>
-<p><code>RangeAssignor</code> 和 <code>RoundRobinAssignor</code> 通过这个方法 <code>assign()</code> 的实现，来进行相应的 partition 分配。</p>
-<h3 id="RangeAssignor-分配模式"><a href="#RangeAssignor-分配模式" class="headerlink" title="RangeAssignor 分配模式"></a>RangeAssignor 分配模式</h3><p>直接看一下这个方法的实现：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">public</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,</div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    Map&lt;String, List&lt;String&gt;&gt; consumersPerTopic = consumersPerTopic(subscriptions);<span class="comment">//note: (topic, List&lt;consumerId&gt;)</span></div><div class="line">    Map&lt;String, List&lt;TopicPartition&gt;&gt; assignment = <span class="keyword">new</span> HashMap&lt;&gt;();</div><div class="line">    <span class="keyword">for</span> (String memberId : subscriptions.keySet())</div><div class="line">        assignment.put(memberId, <span class="keyword">new</span> ArrayList&lt;TopicPartition&gt;());<span class="comment">//note: 初始化</span></div><div class="line"></div><div class="line">    <span class="keyword">for</span> (Map.Entry&lt;String, List&lt;String&gt;&gt; topicEntry : consumersPerTopic.entrySet()) &#123;</div><div class="line">        String topic = topicEntry.getKey();</div><div class="line">        List&lt;String&gt; consumersForTopic = topicEntry.getValue();</div><div class="line"></div><div class="line">        Integer numPartitionsForTopic = partitionsPerTopic.get(topic);</div><div class="line">        <span class="keyword">if</span> (numPartitionsForTopic == <span class="keyword">null</span>)</div><div class="line">            <span class="keyword">continue</span>;</div><div class="line"></div><div class="line">        Collections.sort(consumersForTopic);</div><div class="line"></div><div class="line">        <span class="comment">//note: 假设 partition 有 7个,consumer 有5个</span></div><div class="line">        <span class="keyword">int</span> numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();<span class="comment">//note: 1</span></div><div class="line">        <span class="keyword">int</span> consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();<span class="comment">//note: 2</span></div><div class="line"></div><div class="line">        List&lt;TopicPartition&gt; partitions = AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic);</div><div class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>, n = consumersForTopic.size(); i &lt; n; i++) &#123;</div><div class="line">            <span class="comment">//note: i=0, start: 0, length: 2, topic-partition: p0,p1</span></div><div class="line">            <span class="comment">//note: i=1, start: 2, length: 2, topic-partition: p2,p3</span></div><div class="line">            <span class="comment">//note: i=2, start: 4, length: 1, topic-partition: p4</span></div><div class="line">            <span class="comment">//note: i=3, start: 5, length: 1, topic-partition: p5</span></div><div class="line">            <span class="comment">//note: i=4, start: 6, length: 1, topic-partition: p6</span></div><div class="line">            <span class="keyword">int</span> start = numPartitionsPerConsumer * i + Math.min(i, consumersWithExtraPartition);</div><div class="line">            <span class="keyword">int</span> length = numPartitionsPerConsumer + (i + <span class="number">1</span> &gt; consumersWithExtraPartition ? <span class="number">0</span> : <span class="number">1</span>);</div><div class="line">            assignment.get(consumersForTopic.get(i)).addAll(partitions.subList(start, start + length));</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> assignment;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>假设 topic 的 partition 数为 numPartitionsForTopic，group 中订阅这个 topic 的 member 数为 <code>consumersForTopic.size()</code>，首先需要算出两个值：</p>
-<ul>
-<li><code>numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size()</code>：表示平均每个 consumer 会分配到几个 partition；    </li>
-<li><code>consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size()</code>：表示平均分配后还剩下多少个 partition 未分配。</li>
-</ul>
-<p>分配的规则是：对于剩下的那些 partition 分配到前 consumersWithExtraPartition 个 consumer 上，也就是前 consumersWithExtraPartition 个 consumer 获得 topic-partition 列表会比后面多一个。</p>
-<p>在上述的程序中，举了一个例子，假设有一个 topic 有 7 个 partition，group 有5个 consumer，这个5个 consumer 都订阅这个 topic，那么 range 的分配方式如下：</p>
-<ul>
-<li>consumer 0：start: 0, length: 2, topic-partition: p0,p1；</li>
-<li>consumer 1：start: 2, length: 2, topic-partition: p2,p3；</li>
-<li>consumer 2：start: 4, length: 1, topic-partition: p4；</li>
-<li>consumer 3：start: 5, length: 1, topic-partition: p5；</li>
-<li>consumer 4：start: 6, length: 1, topic-partition: p6</li>
-</ul>
-<p>而如果 group 中有 consumer 没有订阅这个 topic，那么这个 consumer 将不会参与分配。下面再举个例子，将有两个 topic，一个 partition 有5个，一个 partition 有7个，group 有5个 consumer，但是只有前3个订阅第一个 topic，而另一个 topic 是所有 consumer 都订阅了，那么其分配结果如下：</p>
-<table>
-<thead>
-<tr>
-<th>consumer</th>
-<th>订阅的 topic1 的列表</th>
-<th>订阅的 topic2 的列表</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>consumer 0</td>
-<td>t1p0, t1p1</td>
-<td>t2p0, t2p1</td>
-</tr>
-<tr>
-<td>consumer 1</td>
-<td>t1p2, t1p3</td>
-<td>t2p2, t2p3</td>
-</tr>
-<tr>
-<td>consumer 2</td>
-<td>t1p4</td>
-<td>t2p4</td>
-</tr>
-<tr>
-<td>consumer 3</td>
-<td></td>
-<td>t2p5</td>
-</tr>
-<tr>
-<td>consumer 4</td>
-<td></td>
-<td>t2p6</td>
-</tr>
-</tbody>
-</table>
-<h3 id="RoundRobinAssignor"><a href="#RoundRobinAssignor" class="headerlink" title="RoundRobinAssignor"></a>RoundRobinAssignor</h3><p>这个是 roundrobin 的实现，其实现方法如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div></pre></td><td class="code"><pre><div class="line"><span class="meta">@Override</span></div><div class="line"><span class="keyword">public</span> Map&lt;String, List&lt;TopicPartition&gt;&gt; assign(Map&lt;String, Integer&gt; partitionsPerTopic,</div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    Map&lt;String, List&lt;TopicPartition&gt;&gt; assignment = <span class="keyword">new</span> HashMap&lt;&gt;();</div><div class="line">    <span class="keyword">for</span> (String memberId : subscriptions.keySet())</div><div class="line">        assignment.put(memberId, <span class="keyword">new</span> ArrayList&lt;TopicPartition&gt;());</div><div class="line"></div><div class="line">    CircularIterator&lt;String&gt; assigner = <span class="keyword">new</span> CircularIterator&lt;&gt;(Utils.sorted(subscriptions.keySet()));<span class="comment">//note: 环行迭代</span></div><div class="line">    <span class="keyword">for</span> (TopicPartition partition : allPartitionsSorted(partitionsPerTopic, subscriptions)) &#123;</div><div class="line">        <span class="keyword">final</span> String topic = partition.topic();</div><div class="line">        <span class="keyword">while</span> (!subscriptions.get(assigner.peek()).contains(topic))<span class="comment">//note: 遍历直到找到订阅这个 topic 的 partition</span></div><div class="line">            assigner.next();</div><div class="line">        assignment.get(assigner.next()).add(partition);</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> assignment;</div><div class="line">&#125;</div><div class="line"></div><div class="line"></div><div class="line"><span class="function"><span class="keyword">public</span> List&lt;TopicPartition&gt; <span class="title">allPartitionsSorted</span><span class="params">(Map&lt;String, Integer&gt; partitionsPerTopic,</span></span></div><div class="line">                                                Map&lt;String, List&lt;String&gt;&gt; subscriptions) &#123;</div><div class="line">    SortedSet&lt;String&gt; topics = <span class="keyword">new</span> TreeSet&lt;&gt;();<span class="comment">//<span class="doctag">NOTE:</span> 所有的 topics（有序）</span></div><div class="line">    <span class="keyword">for</span> (List&lt;String&gt; subscription : subscriptions.values())</div><div class="line">        topics.addAll(subscription);</div><div class="line"></div><div class="line">    List&lt;TopicPartition&gt; allPartitions = <span class="keyword">new</span> ArrayList&lt;&gt;();<span class="comment">//<span class="doctag">NOTE:</span> 订阅的 Topic的所有的 TopicPartition 集合</span></div><div class="line">    <span class="keyword">for</span> (String topic : topics) &#123;</div><div class="line">        Integer numPartitionsForTopic = partitionsPerTopic.get(topic);</div><div class="line">        <span class="keyword">if</span> (numPartitionsForTopic != <span class="keyword">null</span>)</div><div class="line">            <span class="comment">//note: topic 的所有 partition 都添加进去</span></div><div class="line">            allPartitions.addAll(AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic));</div><div class="line">    &#125;</div><div class="line">    <span class="keyword">return</span> allPartitions;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
-<p>roundrobin 的实现原则，简单来说就是：列出所有 topic-partition 和列出所有的 consumer member，然后开始分配，一轮之后继续下一轮，假设有有一个 topic，它有7个 partition，group 有3个 consumer 都订阅了这个 topic，那么其分配方式为：</p>
-<table>
-<thead>
-<tr>
-<th>consumer</th>
-<th>分配列表</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>consumer 0</td>
-<td>tp0, tp3, tp6</td>
-</tr>
-<tr>
-<td>consumer 1</td>
-<td>tp1, tp4</td>
-</tr>
-<tr>
-<td>consumer 2</td>
-<td>tp2, tp5</td>
-</tr>
-</tbody>
-</table>
-<p>对于多个 topic 的订阅，将有两个 topic，一个 partition 有5个，一个 partition 有7个，group 有5个 consumer，但是只有前3个订阅第一个 topic，而另一个 topic 是所有 consumer 都订阅了，那么其分配结果如下：</p>
-<table>
-<thead>
-<tr>
-<th>consumer</th>
-<th>订阅的 topic1 的列表</th>
-<th>订阅的 topic2 的列表</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>consumer 0</td>
-<td>t1p0, t1p3</td>
-<td>t2p0, t2p5</td>
-</tr>
-<tr>
-<td>consumer 1</td>
-<td>t1p1, t1p4</td>
-<td>t2p1, t2p6</td>
-</tr>
-<tr>
-<td>consumer 2</td>
-<td>t1p2</td>
-<td>t2p2</td>
-</tr>
-<tr>
-<td>consumer 3</td>
-<td></td>
-<td>t2p3</td>
-</tr>
-<tr>
-<td>consumer 4</td>
-<td></td>
-<td>t2p4</td>
-</tr>
-</tbody>
-</table>
-<p>roundrobin 分配方式与 range 的分配方式还是略有不同。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;紧接着上篇文章，这篇文章讲述 Consumer 提供的两种 commit 机制和两种 partition 分配机制，具体如何使用是需要用户结合具体的场景进行选择，本文讲述一下其底层实现。&lt;/p&gt;
-&lt;h2 id=&quot;两种-commit-机制&quot;&gt;&lt;a href=&quot;#两种-comm
     
     </summary>
     

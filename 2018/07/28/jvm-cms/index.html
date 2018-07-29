@@ -1,0 +1,157 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>JVM 之 ParNew 和 CMS 日志分析 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">JVM 之 ParNew 和 CMS 日志分析</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">王蒙</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">JVM 之 ParNew 和 CMS 日志分析</h1><div class="post-meta">Jul 28, 2018<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">3,729</span><span> 字</span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2018/07/28/jvm-cms/" href="/2018/07/28/jvm-cms/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ParNew-收集器"><span class="toc-number">1.</span> <span class="toc-text">ParNew 收集器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CMS-收集器"><span class="toc-number">2.</span> <span class="toc-text">CMS 收集器</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#阶段1：Initial-Mark"><span class="toc-number">2.1.</span> <span class="toc-text">阶段1：Initial Mark</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#阶段2：并发标记"><span class="toc-number">2.2.</span> <span class="toc-text">阶段2：并发标记</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#阶段3：Concurrent-Preclean"><span class="toc-number">2.3.</span> <span class="toc-text">阶段3：Concurrent Preclean</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#阶段4：Concurrent-Abortable-Preclean"><span class="toc-number">2.4.</span> <span class="toc-text">阶段4：Concurrent Abortable Preclean</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#阶段5：Final-Remark"><span class="toc-number">2.5.</span> <span class="toc-text">阶段5：Final Remark</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#阶段6：Concurrent-Sweep"><span class="toc-number">2.6.</span> <span class="toc-text">阶段6：Concurrent Sweep</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#阶段7：Concurrent-Reset"><span class="toc-number">2.7.</span> <span class="toc-text">阶段7：Concurrent Reset.</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#总结"><span class="toc-number">2.8.</span> <span class="toc-text">总结</span></a></li></ol></li></ol></div></div><div class="post-content"><p>在两年前的文章 <a href="http://matt33.com/2016/09/18/jvm-basic2/">JVM 学习——垃圾收集器与内存分配策略</a> 中，已经对 GC 算法的原理以及常用的垃圾收集器做了相应的总结。今天这篇文章主要是对生产环境中（Java7）常用的两种垃圾收集器（ParNew：年轻代，CMS：老年代）从日志信息上进行分析，做一下总结，这样当我们在排查相应的问题时，看到 GC 的日志信息，不会再那么陌生，能清楚地知道这些日志是什么意思，GC 线程当前处在哪个阶段，正在做什么事情等。</p>
+<h2 id="ParNew-收集器"><a href="#ParNew-收集器" class="headerlink" title="ParNew 收集器"></a>ParNew 收集器</h2><p><a href="http://matt33.com/2016/09/18/jvm-basic2/#ParNew-%E6%94%B6%E9%9B%86%E5%99%A8">ParNew 收集器</a>是年轻代常用的垃圾收集器，它采用的是复制算法，youngGC 时一个典型的日志信息如下所示：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.134+0800: 15578.050: [GC2018-04-12T13:48:26.135+0800: 15578.050: [ParNew: 3412467K-&gt;59681K(3774912K), 0.0971990 secs] 9702786K-&gt;6354533K(24746432K), 0.0974940 secs] [Times: user=0.95 sys=0.00, real=0.09 secs]</div></pre></td></tr></table></figure>
+<p>依次分析一下上面日志信息的含义：</p>
+<ul>
+<li><code>2018-04-12T13:48:26.134+0800</code>：Mirror GC 发生的时间；</li>
+<li><code>15578.050</code>：GC 开始时，相对 JVM 启动的相对时间，单位时秒，这里是4h+；</li>
+<li><code>ParNew</code>：收集器名称，这里是 ParNew 收集器，它使用的是并行的 mark-copy 算法，GC 过程也会 Stop the World；</li>
+<li><code>3412467K-&gt;59681K</code>：收集前后年轻代的使用情况，这里是 3.25G-&gt;58.28M；</li>
+<li><code>3774912K</code>：整个年轻代的容量，这里是 3.6G；</li>
+<li><code>0.0971990 secs</code>：Duration for the collection w/o final cleanup.</li>
+<li><code>9702786K-&gt;6354533K</code>：收集前后整个堆的使用情况，这里是 9.25G-&gt;6.06G;</li>
+<li><code>24746432K</code>：整个堆的容量，这里是 23.6G；</li>
+<li><code>0.0974940 secs</code>：ParNew 收集器标记和复制年轻代活着的对象所花费的时间（包括和老年代通信的开销、对象晋升到老年代开销、垃圾收集周期结束一些最后的清理对象等的花销）；</li>
+</ul>
+<p>对于 <code>[Times: user=0.95 sys=0.00, real=0.09 secs]</code>，这里面涉及到三种时间类型，含义如下：</p>
+<ul>
+<li>user：GC 线程在垃圾收集期间所使用的 CPU 总时间；</li>
+<li>sys：系统调用或者等待系统事件花费的时间；</li>
+<li>real：应用被暂停的时钟时间，由于 GC 线程是多线程的，导致了 real 小于 (user+real)，如果是 gc 线程是单线程的话，real 是接近于 (user+real) 时间。</li>
+</ul>
+<h2 id="CMS-收集器"><a href="#CMS-收集器" class="headerlink" title="CMS 收集器"></a>CMS 收集器</h2><p><a href="http://matt33.com/2016/09/18/jvm-basic2/#CMS-%E6%94%B6%E9%9B%86%E5%99%A8">CMS 收集器</a>是老年代经常使用的收集器，它采用的是标记-清楚算法，应用程序在发生一次 Full GC 时，典型的 GC 日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.233+0800: 15578.148: [GC [1 CMS-initial-mark: 6294851K(20971520K)] 6354687K(24746432K), 0.0466580 secs] [Times: user=0.04 sys=0.00, real=0.04 secs]</div><div class="line">2018-04-12T13:48:26.280+0800: 15578.195: [CMS-concurrent-mark-start]</div><div class="line">2018-04-12T13:48:26.418+0800: 15578.333: [CMS-concurrent-mark: 0.138/0.138 secs] [Times: user=1.01 sys=0.21, real=0.14 secs]</div><div class="line">2018-04-12T13:48:26.418+0800: 15578.334: [CMS-concurrent-preclean-start]</div><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-preclean: 0.056/0.057 secs] [Times: user=0.20 sys=0.12, real=0.06 secs]</div><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-abortable-preclean-start]</div><div class="line">2018-04-12T13:48:29.989+0800: 15581.905: [CMS-concurrent-abortable-preclean: 3.506/3.514 secs] [Times: user=11.93 sys=6.77, real=3.51 secs]</div><div class="line">2018-04-12T13:48:29.991+0800: 15581.906: [GC[YG occupancy: 1805641 K (3774912 K)]2018-04-12T13:48:29.991+0800: 15581.906: [GC2018-04-12T13:48:29.991+0800: 15581.906: [ParNew: 1805641K-&gt;48395K(3774912K), 0.0826620 secs] 8100493K-&gt;6348225K(24746432K), 0.0829480 secs] [Times: user=0.81 sys=0.00, real=0.09 secs]2018-04-12T13:48:30.074+0800: 15581.989: [Rescan (parallel) , 0.0429390 secs]2018-04-12T13:48:30.117+0800: 15582.032: [weak refs processing, 0.0027800 secs]2018-04-12T13:48:30.119+0800: 15582.035: [class unloading, 0.0033120 secs]2018-04-12T13:48:30.123+0800: 15582.038: [scrub symbol table, 0.0016780 secs]2018-04-12T13:48:30.124+0800: 15582.040: [scrub string table, 0.0004780 secs] [1 CMS-remark: 6299829K(20971520K)] 6348225K(24746432K), 0.1365130 secs] [Times: user=1.24 sys=0.00, real=0.14 secs]</div><div class="line">2018-04-12T13:48:30.128+0800: 15582.043: [CMS-concurrent-sweep-start]</div><div class="line">2018-04-12T13:48:36.638+0800: 15588.553: [GC2018-04-12T13:48:36.638+0800: 15588.554: [ParNew: 3403915K-&gt;52142K(3774912K), 0.0874610 secs] 4836483K-&gt;1489601K(24746432K), 0.0877490 secs] [Times: user=0.84 sys=0.00, real=0.09 secs]</div><div class="line">2018-04-12T13:48:38.412+0800: 15590.327: [CMS-concurrent-sweep: 8.193/8.284 secs] [Times: user=30.34 sys=16.44, real=8.28 secs]</div><div class="line">2018-04-12T13:48:38.419+0800: 15590.334: [CMS-concurrent-reset-start]</div><div class="line">2018-04-12T13:48:38.462+0800: 15590.377: [CMS-concurrent-reset: 0.044/0.044 secs] [Times: user=0.15 sys=0.10, real=0.04 secs]</div></pre></td></tr></table></figure>
+<p>CMS Full GC 拆分开来，涉及的阶段比较多，下面分别来介绍各个阶段的情况。</p>
+<h3 id="阶段1：Initial-Mark"><a href="#阶段1：Initial-Mark" class="headerlink" title="阶段1：Initial Mark"></a>阶段1：Initial Mark</h3><p>这个是 CMS 两次 stop-the-wolrd 事件的其中一次，这个阶段的目标是：标记那些直接被 GC root 引用或者被年轻代存活对象所引用的所有对象，标记后示例如下所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>）：</p>
+<p><img src="/images/java/cms-1.png" alt="CMS 初始标记阶段"></p>
+<p>上述例子对应的日志信息为：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.233+0800: 15578.148: [GC [1 CMS-initial-mark: 6294851K(20971520K)] 6354687K(24746432K), 0.0466580 secs] [Times: user=0.04 sys=0.00, real=0.04 secs]</div></pre></td></tr></table></figure>
+<p>逐行介绍上面日志的含义：</p>
+<ol>
+<li><code>2018-04-12T13:48:26.233+0800: 15578.148</code>：GC 开始的时间，以及相对于 JVM 启动的相对时间（单位是秒，这里大概是4.33h），与前面 ParNew 类似，下面的分析中就直接跳过这个了；</li>
+<li><code>CMS-initial-mark</code>：初始标记阶段，它会收集所有 GC Roots 以及其直接引用的对象；</li>
+<li><code>6294851K</code>：当前老年代使用的容量，这里是 6G；</li>
+<li><code>(20971520K)</code>：老年代可用的最大容量，这里是 20G；</li>
+<li><code>6354687K</code>：整个堆目前使用的容量，这里是 6.06G；</li>
+<li><code>(24746432K)</code>：堆可用的容量，这里是 23.6G；</li>
+<li><code>0.0466580 secs</code>：这个阶段的持续时间；</li>
+<li><code>[Times: user=0.04 sys=0.00, real=0.04 secs]</code>：与前面的类似，这里是相应 user、system and real 的时间统计。</li>
+</ol>
+<h3 id="阶段2：并发标记"><a href="#阶段2：并发标记" class="headerlink" title="阶段2：并发标记"></a>阶段2：并发标记</h3><p>在这个阶段 Garbage Collector 会遍历老年代，然后标记所有存活的对象，它会根据上个阶段找到的 GC Roots 遍历查找。并发标记阶段，它会与用户的应用程序并发运行。并不是老年代所有的存活对象都会被标记，因为在标记期间用户的程序可能会改变一些引用，如下图所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>）：</p>
+<p><img src="/images/java/cms-2.png" alt="CMS 并发标记阶段"></p>
+<p>在上面的图中，与阶段1的图进行对比，就会发现有一个对象的引用已经发生了变化，这个阶段相应的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.280+0800: 15578.195: [CMS-concurrent-mark-start]</div><div class="line">2018-04-12T13:48:26.418+0800: 15578.333: [CMS-concurrent-mark: 0.138/0.138 secs] [Times: user=1.01 sys=0.21, real=0.14 secs]</div></pre></td></tr></table></figure>
+<p>这里详细对上面的日志解释，如下所示：</p>
+<ol>
+<li><code>CMS-concurrent-mark</code>：并发收集阶段，这个阶段会遍历老年代，并标记所有存活的对象；</li>
+<li><code>0.138/0.138 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=1.01 sys=0.21, real=0.14 secs]</code>：如前面所示，但是这部的时间，其实意义不大，因为它是从并发标记的开始时间开始计算，这期间因为是并发进行，不仅仅包含 GC 线程的工作。</li>
+</ol>
+<h3 id="阶段3：Concurrent-Preclean"><a href="#阶段3：Concurrent-Preclean" class="headerlink" title="阶段3：Concurrent Preclean"></a>阶段3：Concurrent Preclean</h3><p>Concurrent Preclean：这也是一个并发阶段，与应用的线程并发运行，并不会 stop 应用的线程。在并发运行的过程中，一些对象的引用可能会发生变化，但是这种情况发生时，JVM 会将包含这个对象的区域（Card）标记为 Dirty，这也就是 Card Marking。如下图所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>：</p>
+<p><img src="/images/java/cms-3.png" alt="Concurrent Preclean 1"></p>
+<p>在pre-clean阶段，那些能够从 Dirty 对象到达的对象也会被标记，这个标记做完之后，dirty card 标记就会被清除了，如下（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>：</p>
+<p><img src="/images/java/cms-4.png" alt="Concurrent Preclean 2"></p>
+<p>这个阶段相应的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.418+0800: 15578.334: [CMS-concurrent-preclean-start]</div><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-preclean: 0.056/0.057 secs] [Times: user=0.20 sys=0.12, real=0.06 secs]</div></pre></td></tr></table></figure>
+<p>其含义为：</p>
+<ol>
+<li><code>CMS-concurrent-preclean</code>：Concurrent Preclean 阶段，对在前面并发标记阶段中引用发生变化的对象进行标记；</li>
+<li><code>0.056/0.057 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=0.20 sys=0.12, real=0.06 secs]</code>：同并发标记阶段中的含义。</li>
+</ol>
+<h3 id="阶段4：Concurrent-Abortable-Preclean"><a href="#阶段4：Concurrent-Abortable-Preclean" class="headerlink" title="阶段4：Concurrent Abortable Preclean"></a>阶段4：Concurrent Abortable Preclean</h3><p>这也是一个并发阶段，但是同样不会影响影响用户的应用线程，这个阶段是为了尽量承担 STW（stop-the-world）中最终标记阶段的工作。这个阶段持续时间依赖于很多的因素，由于这个阶段是在重复做很多相同的工作，直接满足一些条件（比如：重复迭代的次数、完成的工作量或者时钟时间等）。这个阶段的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:26.476+0800: 15578.391: [CMS-concurrent-abortable-preclean-start]</div><div class="line">2018-04-12T13:48:29.989+0800: 15581.905: [CMS-concurrent-abortable-preclean: 3.506/3.514 secs] [Times: user=11.93 sys=6.77, real=3.51 secs]</div></pre></td></tr></table></figure>
+<ol>
+<li><code>CMS-concurrent-abortable-preclean</code>：Concurrent Abortable Preclean 阶段；</li>
+<li><code>3.506/3.514 secs</code>：这个阶段的持续时间与时钟时间，本质上，这里的 gc 线程会在 STW 之前做更多的工作，通常会持续 5s 左右；</li>
+<li><code>[Times: user=11.93 sys=6.77, real=3.51 secs]</code>：同前面。</li>
+</ol>
+<h3 id="阶段5：Final-Remark"><a href="#阶段5：Final-Remark" class="headerlink" title="阶段5：Final Remark"></a>阶段5：Final Remark</h3><p>这是第二个 STW 阶段，也是 CMS 中的最后一个，这个阶段的目标是标记所有老年代所有的存活对象，由于之前的阶段是并发执行的，gc 线程可能跟不上应用程序的变化，为了完成标记老年代所有存活对象的目标，STW 就非常有必要了。</p>
+<p>通常 CMS 的 Final Remark 阶段会在年轻代尽可能干净的时候运行，目的是为了减少连续 STW 发生的可能性（年轻代存活对象过多的话，也会导致老年代涉及的存活对象会很多）。这个阶段会比前面的几个阶段更复杂一些，相关日志如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:29.991+0800: 15581.906: [GC[YG occupancy: 1805641 K (3774912 K)]2018-04-12T13:48:29.991+0800: 15581.906: [GC2018-04-12T13:48:29.991+0800: 15581.906: [ParNew: 1805641K-&gt;48395K(3774912K), 0.0826620 secs] 8100493K-&gt;6348225K(24746432K), 0.0829480 secs] [Times: user=0.81 sys=0.00, real=0.09 secs]2018-04-12T13:48:30.074+0800: 15581.989: [Rescan (parallel) , 0.0429390 secs]2018-04-12T13:48:30.117+0800: 15582.032: [weak refs processing, 0.0027800 secs]2018-04-12T13:48:30.119+0800: 15582.035: [class unloading, 0.0033120 secs]2018-04-12T13:48:30.123+0800: 15582.038: [scrub symbol table, 0.0016780 secs]2018-04-12T13:48:30.124+0800: 15582.040: [scrub string table, 0.0004780 secs] [1 CMS-remark: 6299829K(20971520K)] 6348225K(24746432K), 0.1365130 secs] [Times: user=1.24 sys=0.00, real=0.14 secs]</div></pre></td></tr></table></figure>
+<p>对上面的日志进行分析：</p>
+<ol>
+<li><code>YG occupancy: 1805641 K (3774912 K)</code>：年轻代当前占用量及容量，这里分别是 1.71G 和 3.6G；</li>
+<li><code>ParNew:...</code>：触发了一次 young GC，这里触发的原因是为了减少年轻代的存活对象，尽量使年轻代更干净一些；</li>
+<li><code>[Rescan (parallel) , 0.0429390 secs]</code>：这个 Rescan 是当应用暂停的情况下完成对所有存活对象的标记，这个阶段是并行处理的，这里花费了  0.0429390s；</li>
+<li><code>[weak refs processing, 0.0027800 secs]</code>：第一个子阶段，它的工作是处理弱引用；</li>
+<li><code>[class unloading, 0.0033120 secs]</code>：第二个子阶段，它的工作是：unloading the unused classes；</li>
+<li><code>[scrub symbol table, 0.0016780 secs] ... [scrub string table, 0.0004780 secs]</code>：最后一个子阶段，它的目的是：cleaning up symbol and string tables which hold class-level metadata and internalized string respectively，时钟的暂停也包含在这里；</li>
+<li><code>6299829K(20971520K)</code>：这个阶段之后，老年代的使用量与总量，这里分别是 6G 和 20G；</li>
+<li><code>6348225K(24746432K)</code>：这个阶段之后，堆的使用量与总量（包括年轻代，年轻代在前面发生过 GC），这里分别是 6.05G 和 23.6G；</li>
+<li><code>0.1365130 secs</code>：这个阶段的持续时间；</li>
+<li><code>[Times: user=1.24 sys=0.00, real=0.14 secs]</code>：对应的时间信息。</li>
+</ol>
+<p>经历过这五个阶段之后，老年代所有存活的对象都被标记过了，现在可以通过清除算法去清理那些老年代不再使用的对象。</p>
+<h3 id="阶段6：Concurrent-Sweep"><a href="#阶段6：Concurrent-Sweep" class="headerlink" title="阶段6：Concurrent Sweep"></a>阶段6：Concurrent Sweep</h3><p>这里不需要 STW，它是与用户的应用程序并发运行，这个阶段是：清除那些不再使用的对象，回收它们的占用空间为将来使用。如下图所示（插图来自：<a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>：<br>）：</p>
+<p><img src="/images/java/cms-5.png" alt="CMS Concurrent Sweep 阶段"></p>
+<p>这个阶段对应的日志信息如下（这中间又发生了一次 Young GC）：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:30.128+0800: 15582.043: [CMS-concurrent-sweep-start]</div><div class="line">2018-04-12T13:48:36.638+0800: 15588.553: [GC2018-04-12T13:48:36.638+0800: 15588.554: [ParNew: 3403915K-&gt;52142K(3774912K), 0.0874610 secs] 4836483K-&gt;1489601K(24746432K), 0.0877490 secs] [Times: user=0.84 sys=0.00, real=0.09 secs]</div><div class="line">2018-04-12T13:48:38.412+0800: 15590.327: [CMS-concurrent-sweep: 8.193/8.284 secs] [Times: user=30.34 sys=16.44, real=8.28 secs]</div></pre></td></tr></table></figure>
+<p>分别介绍一下：</p>
+<ol>
+<li><code>CMS-concurrent-sweep</code>：这个阶段主要是清除那些没有被标记的对象，回收它们的占用空间；</li>
+<li><code>8.193/8.284 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=30.34 sys=16.44, real=8.28 secs]</code>：同前面；</li>
+</ol>
+<h3 id="阶段7：Concurrent-Reset"><a href="#阶段7：Concurrent-Reset" class="headerlink" title="阶段7：Concurrent Reset."></a>阶段7：Concurrent Reset.</h3><p>这个阶段也是并发执行的，它会重设 CMS 内部的数据结构，为下次的 GC 做准备，对应的日志信息如下：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">2018-04-12T13:48:38.419+0800: 15590.334: [CMS-concurrent-reset-start]</div><div class="line">2018-04-12T13:48:38.462+0800: 15590.377: [CMS-concurrent-reset: 0.044/0.044 secs] [Times: user=0.15 sys=0.10, real=0.04 secs]</div></pre></td></tr></table></figure>
+<p>日志详情分别如下：</p>
+<ol>
+<li><code>CMS-concurrent-reset</code>：这个阶段的开始，目的如前面所述；</li>
+<li><code>0.044/0.044 secs</code>：这个阶段的持续时间与时钟时间；</li>
+<li><code>[Times: user=0.15 sys=0.10, real=0.04 secs]</code>：同前面。</li>
+</ol>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>CMS 通过将大量工作分散到并发处理阶段来在减少 STW 时间，在这块做得非常优秀，但是 CMS 也有一些其他的问题：</p>
+<ol>
+<li>CMS 收集器无法处理浮动垃圾（ Floating Garbage），可能出现 “Concurrnet Mode Failure” 失败而导致另一次 Full GC 的产生，可能引发串行 Full GC；</li>
+<li>空间碎片，导致无法分配大对象，CMS 收集器提供了一个 <code>-XX:+UseCMSCompactAtFullCollection</code> 开关参数（默认就是开启的），用于在 CMS 收集器顶不住要进行 Full GC 时开启内存碎片的合并整理过程，内存整理的过程是无法并发的，空间碎片问题没有了，但停顿时间不得不变长；</li>
+<li>对于堆比较大的应用上，GC 的时间难以预估。</li>
+</ol>
+<p>CMS 的一些缺陷也是 G1 收集器兴起的原因。</p>
+<p>参考：</p>
+<ul>
+<li><a href="https://t.hao0.me/jvm/2016/03/15/jvm-gc-log.html" target="_blank" rel="external">JVM各类GC日志剖析</a>；</li>
+<li><a href="http://www.cnblogs.com/zhangxiaoguang/p/5792468.html" target="_blank" rel="external">GC之详解CMS收集过程和日志分析</a>；</li>
+<li><a href="http://www.oracle.com/technetwork/tutorials/tutorials-1876574.html" target="_blank" rel="external">Getting Started with the G1 Garbage Collector</a>；</li>
+<li><a href="http://ifeve.com/useful-jvm-flags-part-7-cms-collector/" target="_blank" rel="external">JVM实用参数（七）CMS收集器</a>；</li>
+<li><a href="https://plumbr.io/handbook/garbage-collection-algorithms-implementations#concurrent-mark-and-sweep" target="_blank" rel="external">GC Algorithms：Implementations —— Concurrent Mark and Sweep —— Full GC</a>；</li>
+</ul>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2018/07/28/jvm-cms/" data-id="cjk6a3md0009150ag1rbu1znt" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/jvm/">jvm</a></div><div class="post-nav"><a href="/2018/07/15/hdfs-architecture-learn/" class="next">HDFS 架构学习总结</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2018/07/28/jvm-cms/';
+var disqus_title = 'JVM 之 ParNew 和 CMS 日志分析';
+var disqus_url = 'http://matt33.com/2018/07/28/jvm-cms/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-weibo"> 微博</i></div><iframe width="100%" height="90" class="share_self"  frameborder="0" scrolling="no" src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=100&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=0&isFans=0&uid=2650396571&verifier=f2f0e397&colors=D8D8D8,ffffff,666666,0082cb,ecfbfd&dpc=1"></iframe></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2018/07/28/jvm-cms/">JVM 之 ParNew 和 CMS 日志分析</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/15/hdfs-architecture-learn/">HDFS 架构学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/14/kafka-controller-redesign/">Kafka Controller Redesign 方案</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/08/distribute-system-consistency-protocol/">分布式系统的一致性协议之 2PC 和 3PC</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/07/java-daemon-thread/">Java 守护线程</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/27/kafka-server-process-model/">Kafka 源码解析之 Server 1+N+M 网络处理模型（二十三）</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/25/leaderAndIsr-process/">Kafka 源码解析之 LeaderAndIsr 请求的处理（二十二）</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/23/controller-request-model/">Kafka 源码解析之 Controller 发送模型（二十一）</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/18/topic-create-alter-delete/">Kafka 源码解析之 Topic 的新建/扩容/删除（二十）</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/17/broker-online-offline/">Kafka 源码解析之 Broker 上线下线（十九）</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
