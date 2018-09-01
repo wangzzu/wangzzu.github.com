@@ -1,0 +1,211 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>YANR 架构学习总结 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">YANR 架构学习总结</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">王蒙</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">YANR 架构学习总结</h1><div class="post-meta">Sep 1, 2018<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">6,993</span><span> 字</span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2018/09/01/yarn-architecture-learn/" href="/2018/09/01/yarn-architecture-learn/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Yarn-背景"><span class="toc-number">1.</span> <span class="toc-text">Yarn 背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Yarn-架构"><span class="toc-number">2.</span> <span class="toc-text">Yarn 架构</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#ResourceManager（RM）"><span class="toc-number">2.1.</span> <span class="toc-text">ResourceManager（RM）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#调度器"><span class="toc-number">2.1.1.</span> <span class="toc-text">调度器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#应用程序管理器"><span class="toc-number">2.1.2.</span> <span class="toc-text">应用程序管理器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#NodeManager（NM）"><span class="toc-number">2.2.</span> <span class="toc-text">NodeManager（NM）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ApplicationMaster（AM）"><span class="toc-number">2.3.</span> <span class="toc-text">ApplicationMaster（AM）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Container"><span class="toc-number">2.4.</span> <span class="toc-text">Container</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#YARN-作业提交流程"><span class="toc-number">3.</span> <span class="toc-text">YARN 作业提交流程</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#调度器-1"><span class="toc-number">4.</span> <span class="toc-text">调度器</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#FIFO-Scheduler"><span class="toc-number">4.1.</span> <span class="toc-text">FIFO Scheduler</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#公平调度器（Fair-Scheduler）"><span class="toc-number">4.2.</span> <span class="toc-text">公平调度器（Fair Scheduler）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#能力调度器（Capacity-Scheduler）"><span class="toc-number">4.3.</span> <span class="toc-text">能力调度器（Capacity Scheduler）</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Yarn-容错"><span class="toc-number">5.</span> <span class="toc-text">Yarn 容错</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#ResourceManager-HA"><span class="toc-number">5.1.</span> <span class="toc-text">ResourceManager HA</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#分布式调度器总结"><span class="toc-number">6.</span> <span class="toc-text">分布式调度器总结</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#调度系统设计遇到的基本问题"><span class="toc-number">6.1.</span> <span class="toc-text">调度系统设计遇到的基本问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#资源异构性与工作负载异构性"><span class="toc-number">6.1.1.</span> <span class="toc-text">资源异构性与工作负载异构性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#数据局部性（Data-Locality）"><span class="toc-number">6.1.2.</span> <span class="toc-text">数据局部性（Data Locality）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#抢占式调度与非抢占式调度"><span class="toc-number">6.1.3.</span> <span class="toc-text">抢占式调度与非抢占式调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#资源分配粒度（Allocation-Granularity）"><span class="toc-number">6.1.4.</span> <span class="toc-text">资源分配粒度（Allocation Granularity）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#饿死（Starvation）与死锁（Dead-Lock）问题"><span class="toc-number">6.1.5.</span> <span class="toc-text">饿死（Starvation）与死锁（Dead Lock）问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#资源隔离方法"><span class="toc-number">6.1.6.</span> <span class="toc-text">资源隔离方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#调度器模型"><span class="toc-number">6.2.</span> <span class="toc-text">调度器模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#集中式调度器"><span class="toc-number">6.2.1.</span> <span class="toc-text">集中式调度器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#两级调度器"><span class="toc-number">6.2.2.</span> <span class="toc-text">两级调度器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#状态共享调度器"><span class="toc-number">6.2.3.</span> <span class="toc-text">状态共享调度器</span></a></li></ol></li></ol></li></ol></div></div><div class="post-content"><p>关于 Hadoop 的介绍，这里就不再多说，可以简答来说 Hadoop 的出现真正让更多的互联网公司开始有能力解决大数据场景下的问题，其中的 HDFS 和 YARN 已经成为大数据场景下存储和资源调度的统一解决方案（MR 现在正在被 Spark 所取代，Spark 在计算这块的地位也开始受到其他框架的冲击，流计算上有 Flink，AI 上有 Tensorflow，两面夹击，但是 Spark 的生态建设得很好，其他框架想要在生产环境立马取代还有很长的路要走）。本片文章就是关于 YARN 框架学习的简单总结，目的是希望自己能对分布式调度这块有更深入的了解，当然也希望也这篇文章能够对初学者有所帮助，文章的主要内容来自 <a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a> 和 <a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>。</p>
+<h1 id="Yarn-背景"><a href="#Yarn-背景" class="headerlink" title="Yarn 背景"></a>Yarn 背景</h1><p>关于 YARN 出现的背景，还是得从 Hadoop1.0 说起，在 Hadoop1.0 中，MR 作业的调度还是有两个重要的组件：JobTracker 和 TaskTracker，其基础的架构如下图所示，从下图中可以大概看出原 MR 作业启动流程：</p>
+<ol>
+<li>首先用户程序 (Client) 提交了一个 job，job 的信息会发送到 JobTracker 中，JobTracker 是 Map-Reduce 框架的中心，它需要与集群中的机器定时通信 (心跳：heartbeat), 需要管理哪些程序应该跑在哪些机器上，需要管理<strong>所有 job</strong> 失败、重启等操作；</li>
+<li>TaskTracker 是 Map-Reduce 集群中每台机器都有的一个组件，它做的事情主要是监视自己所在机器的资源使用情况；</li>
+<li>TaskTracker 同时监视当前机器的 tasks 运行状况。TaskTracker 需要把这些信息通过 heartbeat 发送给 JobTracker，JobTracker 会搜集这些信息以便处理新提交的 job，来决定其应该分配运行在哪些机器上。</li>
+</ol>
+<p><img src="/images/hadoop/yarn10.png" alt="Hadoop 1.0 调度的架构图"></p>
+<p>可以看出原来的调度框架实现非常简答明了，在 Hadoop 推出的最初几年，也获得业界的认可，但是随着集群规模的增大，很多的弊端开始显露出来，主要有以下几点：</p>
+<ol>
+<li>JobTracker 是 Map-Reduce 的集中处理点，存在<strong>单点故障</strong>；</li>
+<li>JobTracker 赋予的功能太多，导致负载过重，1.0 时未将资源管理与作业控制（包括：作业监控、容错等）分开，导致负载重而且无法支撑更多的计算框架，当集群的作业非常多时，会有很大的内存开销，潜在来说，也增加了 JobTracker fail 的风险，这也是业界普遍总结出 Hadoop1.0 的 Map-Reduce 只能支持 4000 节点主机上限的原因；</li>
+<li>在 TaskTracker 端，以 map/reduce task 的数目作为资源的表示过于简单，没有考虑到 cpu/ 内存的占用情况，如果两个大内存消耗的 task 被调度到了一个节点上，很容易出现 OOM；</li>
+<li>在 TaskTracker 端，把资源强制划分为 map task slot 和 reduce task slot, 如果当系统中只有 map task 或者只有 reduce task 的时候，会造成资源的浪费，也就是前面提过的集群资源利用的问题。</li>
+</ol>
+<p>Hadoop 2.0 中下一代 MR 框架的基本设计思想就是将 JobTracker 的两个主要功能，资源管理和作业控制（包括作业监控、容错等），分拆成两个独立的进程。资源管理与具体的应用程序无关，它负责整个集群的资源（内存、CPU、磁盘等）管理，而作业控制进程则是直接与应用程序相关的模块，且每个作业控制进程只负责管理一个作业，这样就是 YARN 诞生的背景，它是在 MapReduce 框架上衍生出的一个资源统一的管理平台。</p>
+<h1 id="Yarn-架构"><a href="#Yarn-架构" class="headerlink" title="Yarn 架构"></a>Yarn 架构</h1><p>YARN 的全称是 Yet Another Resource Negotiator，YARN 整体上是 Master/Slave 结构，在整个框架中，ResourceManager 为 Master，NodeManager 为 Slave，如下图所示：</p>
+<p><img src="/images/hadoop/yarn20.gif" alt="YARN 基本架构"></p>
+<h2 id="ResourceManager（RM）"><a href="#ResourceManager（RM）" class="headerlink" title="ResourceManager（RM）"></a>ResourceManager（RM）</h2><p>RM 是一个全局的资源管理器，负责整个系统的资源管理和分配，它主要有两个组件构成：</p>
+<ol>
+<li>调度器：Scheduler；</li>
+<li>应用程序管理器：Applications Manager，ASM。</li>
+</ol>
+<h3 id="调度器"><a href="#调度器" class="headerlink" title="调度器"></a>调度器</h3><p>调度器根据容量、􏳴队列等限制条件（如某个队列分配一定的资源，最多执行一定数量的作业等），将系统中的资源分配给各个正在运行的应用程序。􏰣要注意的是，该调度器是一个纯调度器，它不再从事任何与应用程序有关的工作，比如不负责重新启动（因应用程序失败或者硬件故障导致的失败），这些均交由应用程序相关的 ApplicationMaster 完成。调度器仅根据各个应用程序的资源需求进行资源分配，而资源分配单位用一个抽象概念 <strong>资源容器(Resource Container，也即 Container)</strong>，Container 是一个动态资源分配单位，它将内存、CPU、磁盘、网络等资源封装在一起，从而限定每个任务使用的资源量。此外，该调度器是一个可插拔的组件，用户可根据自己的需求设计新的调度器，YARN 提供了多种直接可用的调度器，比如 Fair Scheduler 和 Capacity Schedule 等。</p>
+<h3 id="应用程序管理器"><a href="#应用程序管理器" class="headerlink" title="应用程序管理器"></a>应用程序管理器</h3><p>应用程序管理器负责管理整个系统中所有应用程序，包括应用程序提交、与调度器协商资源以 AM、监控 AM 运行状态并在失败时重新启动它等。</p>
+<h2 id="NodeManager（NM）"><a href="#NodeManager（NM）" class="headerlink" title="NodeManager（NM）"></a>NodeManager（NM）</h2><p>NM 是每个节点上运行的资源和任务管理器，一方面，它会定时向 RM 汇报本节点上的资源使用情况和各个 Container 的运行状态；另一方面，它接收并处理来自 AM 的 Container 启动/停止等各种请求。</p>
+<h2 id="ApplicationMaster（AM）"><a href="#ApplicationMaster（AM）" class="headerlink" title="ApplicationMaster（AM）"></a>ApplicationMaster（AM）</h2><p>提交的每个作业都会包含一个 AM，主要功能包括：</p>
+<ol>
+<li>与 RM 协商以获取资源（用 container 表示）；</li>
+<li>将得到的任务进一步分配给内部的任务；</li>
+<li>与 NM 通信以启动/停止任务；</li>
+<li>监控所有任务的运行状态，当任务有失败时，重新为任务申请资源并重启任务。</li>
+</ol>
+<p>MapReduce 就是原生支持 on YARN 的一种框架，可以在 YARN 上运行 MapReduce 作业。有很多分布式应用都开发了对应的应用程序框架，用于在 YARN 上运行任务，例如 Spark，Storm、Flink 等。</p>
+<h2 id="Container"><a href="#Container" class="headerlink" title="Container"></a>Container</h2><p>Container 是 YARN 中的资源抽象，它封装了某个节点上的多维度资源，如内存、CPU、磁盘、网络等，当 AM 向 RM 申请资源时，RM 为 AM 返回的资源便是用 Container 表示的。 YARN 会为每个任务分配一个 Container 且该任务只能使用该 Container 中描述的资源。</p>
+<h1 id="YARN-作业提交流程"><a href="#YARN-作业提交流程" class="headerlink" title="YARN 作业提交流程"></a>YARN 作业提交流程</h1><p>当用户向 YARN 中提交一个应用程序后，YARN 将分两个阶段运行该应用程序：第一个阶段是启动 ApplicationMaster；第二个阶段是由 ApplicationMaster 创建应用程序，为它申请资源，并监控它的整个运行过程，直到运行完成，如下图所示（此图来自<a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a>）：</p>
+<p><img src="/images/hadoop/yarn-flow.png" alt="YARN 工作流程"></p>
+<p>上图所示的 YARN 工作流程分为以下几个步骤：</p>
+<ol>
+<li>用户向 YARN 提交应用程序，其中包括 ApplicationMaster 程序，启动 ApplicationMaster 命令、用户程序等；</li>
+<li>RM 为该应用程序分配第一个 Container，并与对应的 NM 通信，要求它在这个 Container 中启动应用程序的 ApplicationMaster；</li>
+<li>ApplicationMaster 首先向 RM 注册，这样用户可以直接通过 NM 查看应用程序的运行状态，然后它将为各个任务申请资源，并监控它的运行状态，直到运行结束，一直重复下面的 4-7 步；</li>
+<li>ApplicationMaster 采用轮询的方式通过 RPC 协议向 RM 申请和领取资源；</li>
+<li>一旦 ApplicationMaster 申请到资源后，便与对应的 NM 通信，要求它启动任务；</li>
+<li>NM 为任务设置好运行环境（包括环境变量、jar 包等）后，将任务启动命令写到一个脚本中，并通过运行该脚本启动任务；</li>
+<li>各个任务通过某个 RPC 协议向 ApplicationMaster 汇报自己的状态和进度，以让 ApplicationMaster 随时掌握各个任务的运行状态，从而可以在任务失败时重新启动任务；</li>
+<li>应用程序运行完成后，ApplicationMaster 向 RM 注销并关闭自己（当然像 Storm、Flink 这种常驻应用程序列外）。</li>
+</ol>
+<h1 id="调度器-1"><a href="#调度器-1" class="headerlink" title="调度器"></a>调度器</h1><p>YARN 的调度器是一个可插拔的组件，目前社区已经提供了 FIFO Scheduler（先进先出调度器）、Capacity Scheduler（能力调度器）、Fair Scheduler（公平调度器），用户也可以继承 ResourceScheduler 的接口实现自定义的调度器，就像 app on yarn 流程一样，不同的应用可以自己去实现，这里只是简单讲述上述三种调度器的基本原理。</p>
+<h2 id="FIFO-Scheduler"><a href="#FIFO-Scheduler" class="headerlink" title="FIFO Scheduler"></a>FIFO Scheduler</h2><p>FIFO 是最简单的资源调度策略，提交的作业按照提交时间先后顺序或者根据优先级次序将其放入线性队列相应的位置，在资源调度时，<strong>按照队列的先后顺序、先进先出地进行调度和资源分配</strong>。</p>
+<p>很明显这种调度器过于简单，在实际的生产中，应用不是很多，毕竟需要调度的作业是有不同的优先级的。</p>
+<h2 id="公平调度器（Fair-Scheduler）"><a href="#公平调度器（Fair-Scheduler）" class="headerlink" title="公平调度器（Fair Scheduler）"></a>公平调度器（Fair Scheduler）</h2><p>公平调度器先将用户的任务分配到多个资源池（Pool）中，每个资源池设定资源分配最低保障和最高上限，管理员也可以指定资源池的优先级，优先级高的资源池将会被分配更多的资源，当一个资源池有剩余时，可以临时将剩余资源共享给其他资源池。公平调度器的调度过程如下：</p>
+<ol>
+<li>根据每个资源池的最小资源保障，将系统中的部分资源分配给各个资源池；</li>
+<li>根据资源池的指定优先级讲剩余资源按照比例分配给各个资源池；</li>
+<li>在各个资源池中，按照作业的优先级或者根据公平策略将资源分配给各个作业；</li>
+</ol>
+<p>公平调度器有以下几个特点：</p>
+<ol>
+<li><strong>支持抢占式调度</strong>，即如果某个资源池长时间未能被分配到公平共享量的资源，则调度器可以杀死过多分配资源的资源池的任务，以空出资源供这个资源池使用；</li>
+<li><strong>强调作业之间的公平性</strong>：在每个资源池中，公平调度器默认使用公平策略来实现资源分配，这种公平策略是最大最小公平算法的一种具体实现，可以尽可能保证作业间的资源分配公平性；</li>
+<li><strong>负载均衡</strong>：公平调度器提供了一个基于任务数目的负载均衡机制，该机制尽可能将系统中的任务均匀分配到给各个节点上；</li>
+<li><strong>调度策略配置灵活</strong>：允许管理员为每个队列单独设置调度策略；</li>
+<li><strong>提高小应用程序响应时间</strong>：由于采用了最大最小公平算法，小作业可以快速获得资源并运行完成。</li>
+</ol>
+<h2 id="能力调度器（Capacity-Scheduler）"><a href="#能力调度器（Capacity-Scheduler）" class="headerlink" title="能力调度器（Capacity Scheduler）"></a>能力调度器（Capacity Scheduler）</h2><p>能力调度器是 Yahool 为 Hadoop 开发的多用户调度器，应用于用户量众多的应用场景，与公平调度器相比，其更强调资源在用户之间而非作业之间的公平性。</p>
+<p>它将用户和任务组织成多个队列，每个队列可以设定资源最低保障和使用上限，当一个队列的资源有剩余时，可以将剩余资源暂时分享给其他队列。调度器在调度时，优先将资源分配给资源使用率最低的队列（即队列已使用资源量占分配给队列的资源量比例最小的队列）；在队列内部，则按照作业优先级的先后顺序遵循 FIFO 策略进行调度。</p>
+<p>能力调度器有以下几点特点：</p>
+<ol>
+<li><strong>容量保证</strong>：管理员可为每个队列设置资源最低保证和资源使用上限，而所有提交到该队列的应用程序共享这些资源；</li>
+<li><strong>灵活性</strong>：如果一个队列资源有剩余，可以暂时共享给那些需要资源的队列，而一旦该队列有新的应用程序提交，则其他队列释放的资源会归还给该队列；</li>
+<li><strong>多重租赁</strong>：支持多用户共享集群和多应用程序同时运行，为防止单个应用程序、用户或者队列独占集群中的资源，管理员可为之增多多重约束；</li>
+<li><strong>安全保证</strong>：每个队列有严格的 ACL 列表规定它访问用户，每个用户可指定哪些用户允许查看自己应用程序的运行状态或者控制应用程序；</li>
+<li><strong>动态更新配置文件</strong>：管理可以根据需要动态修改各种配置参数。</li>
+</ol>
+<h1 id="Yarn-容错"><a href="#Yarn-容错" class="headerlink" title="Yarn 容错"></a>Yarn 容错</h1><p>对于分布式系统，不论是调度系统还是其他系统，容错机制都是非常必要的，这里我们简单看下 YARN 的容错机制，YARN 需要做容错的地方，有以下四个地方：</p>
+<ol>
+<li>ApplicationMaster 容错：ResourceManager 会和 ApplicationMaster 保持通信，一旦发现 ApplicationMaster 失败或者超时，会为其重新分配资源并重启。重启后 ApplicationMaster 的运行状态需要自己恢复，比如 MRAppMaster 会把相关的状态记录到 HDFS 上，重启后从 HDFS 读取运行状态恢复；</li>
+<li>NodeManager 容错：NodeManager 如果超时，则 ResourceManager 会认为它失败，将其上的所有 container 标记为失败并通知相应的 ApplicationMaster，由 AM 决定如何处理（可以重新分配任务，可以整个作业失败，重新拉起）；</li>
+<li>container 容错：如果 ApplicationMaster 在一定时间内未启动分配的 container，RM 会将其收回，如果 Container 运行失败，RM 会告诉对应的 AM 由其处理；</li>
+<li>RM 容错：RM 采用 HA 机制，这里详细讲述一下。</li>
+</ol>
+<h2 id="ResourceManager-HA"><a href="#ResourceManager-HA" class="headerlink" title="ResourceManager HA"></a>ResourceManager HA</h2><p>因为 RM 是 YARN 架构中的一个单点，所以他的容错很难做，一般是采用 HA 的方式，有一个 active master 和一个 standby master（可参考：<a href="https://hadoop.apache.org/docs/r2.7.1/hadoop-yarn/hadoop-yarn-site/ResourceManagerHA.html" target="_blank" rel="external">ResourceManager High Availability</a>），HA 的架构方案如下图所示：</p>
+<p><img src="/images/hadoop/rm-ha-overview.png" alt="YARN RM HA 机制"></p>
+<p>关于 YARN 的 RM 的 HA 机制，其实现与 HDFS 的很像，可以参考前面关于 HDFS 文章的讲述 <a href="http://matt33.com/2018/07/15/hdfs-architecture-learn/#HDFS-2-0-%E7%9A%84-HA-%E5%AE%9E%E7%8E%B0">HDFS NN HA 实现</a>。</p>
+<h1 id="分布式调度器总结"><a href="#分布式调度器总结" class="headerlink" title="分布式调度器总结"></a>分布式调度器总结</h1><p>上面基本已经把 YARN 的相关内容总结完了，这个小节主要讲述一下分布式调度系统的一些内容（调度框架只是具体的一种实现方案），主要讲述分布式调度系统要解决的一些问题和分布式调度系统的调度模型。</p>
+<h2 id="调度系统设计遇到的基本问题"><a href="#调度系统设计遇到的基本问题" class="headerlink" title="调度系统设计遇到的基本问题"></a>调度系统设计遇到的基本问题</h2><p>对于分布式调度系统，在实际的生产环境中，遇到的问题很相似，这个小节就是看下调度系统主要面对的问题。</p>
+<h3 id="资源异构性与工作负载异构性"><a href="#资源异构性与工作负载异构性" class="headerlink" title="资源异构性与工作负载异构性"></a>资源异构性与工作负载异构性</h3><p>在资源管理与调度场景下，有两类异质性需要考虑：</p>
+<ol>
+<li>资源异质性：这个是从系统拥有资源的角度来看，对于数据中心来说非常常见，数据中心的机器很难保证完全一样的配置，有的配置会高一些，有的会低一些；</li>
+<li>工作负载异质性：在大型互联网公司中很常见，因为各种服务和功能特性各异，对资源的需求千差万别。</li>
+</ol>
+<h3 id="数据局部性（Data-Locality）"><a href="#数据局部性（Data-Locality）" class="headerlink" title="数据局部性（Data Locality）"></a>数据局部性（Data Locality）</h3><p>在大数据场景下，还有一个基本的共识：将计算任务推送到数据所在地进行而不是反过来。因为数据的移动会产生大量低效的数据网络传输开销，而计算代码相比而言数据小得多，所以将计算任务推动到数据所在地是非常常见的，这就是<strong>数据局部性</strong>，在资源调度中，有三种类型的数据局部性，分别是：</p>
+<ol>
+<li>节点局部性（Node Locality）：计算任务分配到数据所在机器节点，无需任务网络传输；</li>
+<li>机架局部性（Rack Locality）：虽然计算任务与数据分布在不同的节点，但这两个节点在同一个机架中，这也是效率较高的一种数据性；</li>
+<li>全局局部性（Global Locality）：需要跨机架的传输，会产生较大的网络传输开销。</li>
+</ol>
+<h3 id="抢占式调度与非抢占式调度"><a href="#抢占式调度与非抢占式调度" class="headerlink" title="抢占式调度与非抢占式调度"></a>抢占式调度与非抢占式调度</h3><p>在多用户场景下，面对已经分配的资源，资源管理调度系统可以有两种不同类型的调度方式：</p>
+<ol>
+<li>抢占式调度：对于某个计算任务来说，如果空闲资源不足或者出现不同任务共同竞争同一资源，调度系统可以从比当前计算任务优先级低的其他任务中获取已经分配资源，而被抢占资源的计算任务则需要出让资源停止计算；</li>
+<li>非抢占式调度：只允许从空闲资源中进行分配，如果当前空闲资源不足，则须等待其他任务释放资源后才能进行。</li>
+</ol>
+<h3 id="资源分配粒度（Allocation-Granularity）"><a href="#资源分配粒度（Allocation-Granularity）" class="headerlink" title="资源分配粒度（Allocation Granularity）"></a>资源分配粒度（Allocation Granularity）</h3><p>大数据场景下的计算任务往往由两层结构构成：作业级（Job）和任务级（Task），一个作业由多个并发任务构成，任务之间的依赖关系往往形成有向无环图（DAG），比如：MR 作业，关于作业资源分配的粒度，常见的有两种模式：</p>
+<ol>
+<li>群体分配（全分或不分）：需要将作业的所有所需资源一次性分配完成；</li>
+<li>增量满足式分配策略：对于某个作业，只要分配部分资源就能启动一些任务开始运行，随着空闲资源的不断出现，可以逐步增量式分配给作业的其他任务以维护作业不断向后进行。</li>
+</ol>
+<p>还有一种策略是 <strong>资源储备策略</strong>，它指的是只有分配到一定量的资源资源才能启动，但是在未获得足够资源的时候，作业可以先持有目前已经分配的资源，并等待其他作业释放资源，这样从调度系统不断获取新资源并进行储备和累积，直到分配到的资源量达到最低标准后开始运行。</p>
+<h3 id="饿死（Starvation）与死锁（Dead-Lock）问题"><a href="#饿死（Starvation）与死锁（Dead-Lock）问题" class="headerlink" title="饿死（Starvation）与死锁（Dead Lock）问题"></a>饿死（Starvation）与死锁（Dead Lock）问题</h3><p>饿死和死锁是一个合理的资源调度系统需要避免的两个问题：</p>
+<ol>
+<li>饿死：指的是这个计算任务持续上时间无法获得开始执行所需的最少资源量，导致一直处于等待执行的状态，比如在资源紧张的情形下，有些低优先级的任务始终无法获得资源分配机会，如果不断出现新提交的高优先级任务，则这些低优先级任务就会出现饿死现象；</li>
+<li>死锁：指的是由于资源调度不当导致整个调度无法继续正常执行，比如前面提高的资源储备策略就有可能导致调度系统进入死锁状态，多个作业占有一定作业的情况下，都在等待新的资源释放。</li>
+</ol>
+<h3 id="资源隔离方法"><a href="#资源隔离方法" class="headerlink" title="资源隔离方法"></a>资源隔离方法</h3><p>目前对于资源隔离最常用的手段是 Linux 容器（Linux Container，LXC，可以参考<a href="https://www.redhat.com/zh/topics/containers/whats-a-linux-container" target="_blank" rel="external">什么是 Linux 容器？</a>），YARN 和 Mesos 都是采用了这种方式来实现资源隔离。LXC 是一种轻量级的内核虚拟化技术，可以用来进行资源和进程运行的隔离，通过 LXC 可以在一台物理机上隔离出多个互相隔离的容器。LXC 在资源管理方面依赖于 Linux 内核的 cgroups 子系统，cgroups 子系统是 Linux 内核提供的一个基于进程组的资源管理的框架，可以为特定的进程组限定可以使用的资源。</p>
+<h2 id="调度器模型"><a href="#调度器模型" class="headerlink" title="调度器模型"></a>调度器模型</h2><p>关于资源管理与调度功能的实际功能，分布式调度器根据运行机制的不同进行分类，可以归纳为三种资源管理与调度系统泛型：</p>
+<ol>
+<li>集中式调度器；</li>
+<li>两级调度器；</li>
+<li>状态共享调度器。</li>
+</ol>
+<p>它们的区别与联系如下图所示：</p>
+<p><img src="/images/hadoop/scheduler.png" alt="三种调度模型"></p>
+<h3 id="集中式调度器"><a href="#集中式调度器" class="headerlink" title="集中式调度器"></a>集中式调度器</h3><p>集中式调度器在整个系统中只运行一个全局的中央调度器实例，所有之上的框架或者计算任务的资源请求全部经由中央调度器来满足（也就是说：资源的使用及任务的执行状态都由中央调度器管理），因此，整个调度系统缺乏并发性且所有调度逻辑全部由中央调度器来完成。集中式调度器有以下这些特点：</p>
+<ol>
+<li>适合批处理任务和吞吐量较大、运行时间较长的任务；</li>
+<li>调度逻辑全部融入到了中央调度器，实现逻辑复杂，灵活性和策略的可扩展性不高；</li>
+<li>并发性能较差，比较适合小规模的集群系统；</li>
+<li>状态同步比较容易且稳定，这是因为资源使用和任务执行的状态被统一管理，降低了状态同步和并发控制的难度。</li>
+</ol>
+<h3 id="两级调度器"><a href="#两级调度器" class="headerlink" title="两级调度器"></a>两级调度器</h3><p>对于集中式调度器的不足之处，两级调度器是一个很好的解决方案，它可以看做一种策略下放的机制，它将整个系统的调度工作分为两个级别：</p>
+<ol>
+<li>中央调度器：中央调度器可以看到集群中所有机器的可用资源并管理其状态，它可以按照一定策略将集群中的所有资源更配各个计算框架，中央调度器级别的资源调度是一种粗粒度的资源调度方式；</li>
+<li>框架调度器：各个计算框架在接收到所需资源后，可以根据自身计算任务的特性，使用自身的调度策略来进一步细粒度地分配从中央调度器获得的各种资源。</li>
+</ol>
+<p>在这种两级调度器架构中，只有中央调度器能够观察到所有集群资源的状态，而每个框架并无全局资源概念（不知道整个集群资源使用情况），只能看到由中央调度器分配给自己的资源，Mesos、YARN 和 Hadoop on Demand 系统是3个典型的两级调度器。两级调度的缺点也非常明显：</p>
+<ol>
+<li><strong>各个框架无法知道整个集群的实时资源使用情况</strong>：很多框架不需要知道整个集群的实时资源使用情况就可以运行得很顺畅，但是对于其他一些应用，为之提供实时资源使用情况可以挖掘潜在的优化空间；</li>
+<li><strong>采用悲观锁，并发粒度小</strong>：悲观锁通常采用锁机制控制并发，这会大大降低性能。</li>
+</ol>
+<h3 id="状态共享调度器"><a href="#状态共享调度器" class="headerlink" title="状态共享调度器"></a>状态共享调度器</h3><p>通过前面两种模型的介绍，可以发现集群中需要管理的状态主要包括以下两种：</p>
+<ol>
+<li>系统中资源分配和使用的状态；</li>
+<li>系统中任务调度和执行的状态</li>
+</ol>
+<p>在集中式调度器中，这两个状态都由中心调度器管理，并且一并集成了调度等功能；而在双层调度器中，这两个状态分别由中央调度器和框架调度器管理。集中式调度器可以容易地保证全局状态的一致性，但是可扩展性不够；双层调度器对共享状态的管理较难达到好的一致性保证，也不容易检测资源竞争和死锁。</p>
+<p>这也就催生出了另一种调度器 —— 状态共享调度器（Shared-State Scheduler），它是 Google 的 Omega 调度系统提出的一种调度器模型。在这种调度器中，每个计算框架可以看到整个集群中的所有资源，并采用互相竞争的方式去获取自己所需的资源，根据自身特性采取不同的具体资源调整策略，同时系统采用了乐观并发控制手段解决不同框架在资源竞争过程中出现的需求冲突。这样，状态共享调度器在一下两个方面对两级调度器做了相应的优化：</p>
+<ol>
+<li><strong>乐观并发控制增加了系统的并发性能</strong>；</li>
+<li>每个计算框架都可以获得全局的资源使用状况；</li>
+</ol>
+<p>与两级调度器对比，两者的根本区别在于 <strong>中央调度器功能的强弱不同</strong>，两级调度器依赖中央调度器来进行第一次资源分配，而 Omega 则严重弱化中央调度器的功能，只是维护一份可恢复的集群资源状态信息的主副本，这份数据被称为 <strong>单元状态（Cell State）</strong></p>
+<ol>
+<li>每个框架在自身内部会维护 单元状态 的一份私有并不断更新的副本信息，而框架对资源的需求则直接在这份副本信息上进行；</li>
+<li>只要框架具有特定的优先级，就可以在这份副本信息上申请相应的闲置资源，也可以抢夺已经分配给其他比自身优先级低的计算任务的资源；</li>
+<li>一旦框架做出资源决策，则可以改变私有 单元状态 信息并将其同步到全局的 单元状态 信息中区，这样就完成了资源申请并使得这种变化让其他框架可见；</li>
+<li>上述资源竞争过程通过 <strong>事务操作</strong> 来进行，保证了操作的原子性。</li>
+</ol>
+<p>如果两个框架竞争同一份资源，因其决策过程都是在各自私有数据上做出的，并通过原子事务进行提交，系统保证此种情形下只有一个竞争胜出者，而失败者可以后续继续重新申请资源，这是一种乐观并发控制手段，可以增加系统的整体并发性能。</p>
+<p>从上面的过程，可以看出，这种架构是一种 <strong>以效率优先，不太考虑资源分配公平性</strong> 的策略，很明显高优先级的任务总是能够在资源竞争过程中获胜，而低优先级的任务存在由于长时间无法竞争到所需资源而被【饿死】的风险。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a>;</li>
+<li><a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>；</li>
+<li><a href="https://hadoop.apache.org/docs/r2.7.1/hadoop-yarn/hadoop-yarn-site/YARN.html" target="_blank" rel="external">Hadoop Yarn</a>；</li>
+<li><a href="https://www.ibm.com/developerworks/cn/opensource/os-cn-hadoop-yarn/" target="_blank" rel="external">Hadoop 新 MapReduce 框架 Yarn 详解</a>；</li>
+<li><a href="http://shiyanjun.cn/archives/1119.html" target="_blank" rel="external">Hadoop YARN架构设计要点</a>；</li>
+<li><a href="https://www.ibm.com/developerworks/cn/data/library/bd-yarn-intro/index.html" target="_blank" rel="external">YARN 简介</a>；</li>
+<li><a href="https://blog.csdn.net/bingduanlbd/article/details/51880019" target="_blank" rel="external">理解Hadoop YARN架构</a>；</li>
+<li><a href="https://dbaplus.cn/news-141-2004-1.html" target="_blank" rel="external">这里有7种主流案例，告诉你调度器架构设计通用法则</a>；</li>
+</ul>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2018/09/01/yarn-architecture-learn/" data-id="cjljjcvpz009atbagzjawn4d7" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/hadoop/">hadoop</a></div><div class="post-nav"><a href="/2018/08/01/system-learn-summary/" class="next">如何学习开源项目</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2018/09/01/yarn-architecture-learn/';
+var disqus_title = 'YANR 架构学习总结';
+var disqus_url = 'http://matt33.com/2018/09/01/yarn-architecture-learn/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-weibo"> 微博</i></div><iframe width="100%" height="90" class="share_self"  frameborder="0" scrolling="no" src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=100&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=0&isFans=0&uid=2650396571&verifier=f2f0e397&colors=D8D8D8,ffffff,666666,0082cb,ecfbfd&dpc=1"></iframe></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2018/09/01/yarn-architecture-learn/">YANR 架构学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/08/01/system-learn-summary/">如何学习开源项目</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/28/jvm-cms/">JVM 之 ParNew 和 CMS 日志分析</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/15/hdfs-architecture-learn/">HDFS 架构学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/14/kafka-controller-redesign/">Kafka Controller Redesign 方案</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/08/distribute-system-consistency-protocol/">分布式系统的一致性协议之 2PC 和 3PC</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/07/java-daemon-thread/">Java 守护线程</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/27/kafka-server-process-model/">Kafka 源码解析之 Server 1+N+M 网络处理模型（二十三）</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/25/leaderAndIsr-process/">Kafka 源码解析之 LeaderAndIsr 请求的处理（二十二）</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/06/23/controller-request-model/">Kafka 源码解析之 Controller 发送模型（二十一）</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
