@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-09-01T15:36:04.000Z</updated>
+  <updated>2018-09-01T15:57:17.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -16,11 +16,11 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
-    <title>YANR 架构学习总结</title>
+    <title>YARN 架构学习总结</title>
     <link href="http://matt33.com/2018/09/01/yarn-architecture-learn/"/>
     <id>http://matt33.com/2018/09/01/yarn-architecture-learn/</id>
     <published>2018-09-01T14:39:47.000Z</published>
-    <updated>2018-09-01T15:36:04.000Z</updated>
+    <updated>2018-09-01T15:57:17.000Z</updated>
     
     <content type="html"><![CDATA[<p>关于 Hadoop 的介绍，这里就不再多说，可以简答来说 Hadoop 的出现真正让更多的互联网公司开始有能力解决大数据场景下的问题，其中的 HDFS 和 YARN 已经成为大数据场景下存储和资源调度的统一解决方案（MR 现在正在被 Spark 所取代，Spark 在计算这块的地位也开始受到其他框架的冲击，流计算上有 Flink，AI 上有 Tensorflow，两面夹击，但是 Spark 的生态建设得很好，其他框架想要在生产环境立马取代还有很长的路要走）。本片文章就是关于 YARN 框架学习的简单总结，目的是希望自己能对分布式调度这块有更深入的了解，当然也希望也这篇文章能够对初学者有所帮助，文章的主要内容来自 <a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a> 和 <a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>。</p>
 <h1 id="Yarn-背景"><a href="#Yarn-背景" class="headerlink" title="Yarn 背景"></a>Yarn 背景</h1><p>关于 YARN 出现的背景，还是得从 Hadoop1.0 说起，在 Hadoop1.0 中，MR 作业的调度还是有两个重要的组件：JobTracker 和 TaskTracker，其基础的架构如下图所示，从下图中可以大概看出原 MR 作业启动流程：</p>
