@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2018-09-01T15:23:43.000Z</updated>
+  <updated>2018-09-01T15:36:04.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,7 +20,7 @@
     <link href="http://matt33.com/2018/09/01/yarn-architecture-learn/"/>
     <id>http://matt33.com/2018/09/01/yarn-architecture-learn/</id>
     <published>2018-09-01T14:39:47.000Z</published>
-    <updated>2018-09-01T15:23:43.000Z</updated>
+    <updated>2018-09-01T15:36:04.000Z</updated>
     
     <content type="html"><![CDATA[<p>关于 Hadoop 的介绍，这里就不再多说，可以简答来说 Hadoop 的出现真正让更多的互联网公司开始有能力解决大数据场景下的问题，其中的 HDFS 和 YARN 已经成为大数据场景下存储和资源调度的统一解决方案（MR 现在正在被 Spark 所取代，Spark 在计算这块的地位也开始受到其他框架的冲击，流计算上有 Flink，AI 上有 Tensorflow，两面夹击，但是 Spark 的生态建设得很好，其他框架想要在生产环境立马取代还有很长的路要走）。本片文章就是关于 YARN 框架学习的简单总结，目的是希望自己能对分布式调度这块有更深入的了解，当然也希望也这篇文章能够对初学者有所帮助，文章的主要内容来自 <a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a> 和 <a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>。</p>
 <h1 id="Yarn-背景"><a href="#Yarn-背景" class="headerlink" title="Yarn 背景"></a>Yarn 背景</h1><p>关于 YARN 出现的背景，还是得从 Hadoop1.0 说起，在 Hadoop1.0 中，MR 作业的调度还是有两个重要的组件：JobTracker 和 TaskTracker，其基础的架构如下图所示，从下图中可以大概看出原 MR 作业启动流程：</p>
@@ -55,7 +55,7 @@
 <li>与 NM 通信以启动/停止任务；</li>
 <li>监控所有任务的运行状态，当任务有失败时，重新为任务申请资源并重启任务。</li>
 </ol>
-<p>MapReduce 就是原生支持 on YARN 的一种框架，可以在 YARN 上运行 MapReduce 作业。有很多分布式应用都开发了对应的应用程序框架，用于在 YARN 上运行任务，例如 Spark，Storm、Flink 等。</p>
+<p>MapReduce 就是原生支持 ON YARN 的一种框架，可以在 YARN 上运行 MapReduce 作业。有很多分布式应用都开发了对应的应用程序框架，用于在 YARN 上运行任务，例如 Spark，Storm、Flink 等。</p>
 <h2 id="Container"><a href="#Container" class="headerlink" title="Container"></a>Container</h2><p>Container 是 YARN 中的资源抽象，它封装了某个节点上的多维度资源，如内存、CPU、磁盘、网络等，当 AM 向 RM 申请资源时，RM 为 AM 返回的资源便是用 Container 表示的。 YARN 会为每个任务分配一个 Container 且该任务只能使用该 Container 中描述的资源。</p>
 <h1 id="YARN-作业提交流程"><a href="#YARN-作业提交流程" class="headerlink" title="YARN 作业提交流程"></a>YARN 作业提交流程</h1><p>当用户向 YARN 中提交一个应用程序后，YARN 将分两个阶段运行该应用程序：第一个阶段是启动 ApplicationMaster；第二个阶段是由 ApplicationMaster 创建应用程序，为它申请资源，并监控它的整个运行过程，直到运行完成，如下图所示（此图来自<a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a>）：</p>
 <p><img src="/images/hadoop/yarn-flow.png" alt="YARN 工作流程"></p>

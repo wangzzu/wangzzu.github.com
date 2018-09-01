@@ -31,7 +31,7 @@
 <li>与 NM 通信以启动/停止任务；</li>
 <li>监控所有任务的运行状态，当任务有失败时，重新为任务申请资源并重启任务。</li>
 </ol>
-<p>MapReduce 就是原生支持 on YARN 的一种框架，可以在 YARN 上运行 MapReduce 作业。有很多分布式应用都开发了对应的应用程序框架，用于在 YARN 上运行任务，例如 Spark，Storm、Flink 等。</p>
+<p>MapReduce 就是原生支持 ON YARN 的一种框架，可以在 YARN 上运行 MapReduce 作业。有很多分布式应用都开发了对应的应用程序框架，用于在 YARN 上运行任务，例如 Spark，Storm、Flink 等。</p>
 <h2 id="Container"><a href="#Container" class="headerlink" title="Container"></a>Container</h2><p>Container 是 YARN 中的资源抽象，它封装了某个节点上的多维度资源，如内存、CPU、磁盘、网络等，当 AM 向 RM 申请资源时，RM 为 AM 返回的资源便是用 Container 表示的。 YARN 会为每个任务分配一个 Container 且该任务只能使用该 Container 中描述的资源。</p>
 <h1 id="YARN-作业提交流程"><a href="#YARN-作业提交流程" class="headerlink" title="YARN 作业提交流程"></a>YARN 作业提交流程</h1><p>当用户向 YARN 中提交一个应用程序后，YARN 将分两个阶段运行该应用程序：第一个阶段是启动 ApplicationMaster；第二个阶段是由 ApplicationMaster 创建应用程序，为它申请资源，并监控它的整个运行过程，直到运行完成，如下图所示（此图来自<a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a>）：</p>
 <p><img src="/images/hadoop/yarn-flow.png" alt="YARN 工作流程"></p>
