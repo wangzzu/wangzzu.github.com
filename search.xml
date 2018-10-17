@@ -12005,6 +12005,12 @@
 <p>如果不想自己编译源文件，也可以通过下面的地址直接下载，<a href="http://pan.baidu.com/s/1kTtFpGV" target="_blank" rel="external">kafka-manager-1.0-SNAPSHOT.zip下载地址</a></p>
 <h1 id="Kafka-web-console"><a href="#Kafka-web-console" class="headerlink" title="Kafka-web-console"></a>Kafka-web-console</h1><p><a href="https://github.com/claudemamo/kafka-web-console" target="_blank" rel="external">源码地址</a></p>
 <p>不过这个项目好像不再进行更新了，想了解这个项目的话可以进入github主页去研究研究。</p>
+<h1 id="Kafka-Eagle"><a href="#Kafka-Eagle" class="headerlink" title="Kafka Eagle"></a>Kafka Eagle</h1><p>kafka-eagle 是最近新开源的一个 Kafka 监控系统，做得也挺不错的，这里介绍不再详述，感兴趣的同学可以参考以下文章：</p>
+<ul>
+<li><a href="https://github.com/smartloli/kafka-eagle" target="_blank" rel="external">Github 主页：smartloli/kafka-eagle</a>；</li>
+<li><a href="https://blog.csdn.net/whg18526080015/article/details/73642241" target="_blank" rel="external">kafka eagle安装与使用</a>；</li>
+<li><a href="https://www.cnblogs.com/smartloli/p/5829395.html" target="_blank" rel="external">Kafka 消息监控 - Kafka Eagle</a></li>
+</ul>
 ]]></content>
     </entry>
     
