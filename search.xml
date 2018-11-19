@@ -4,7 +4,7 @@
   
     
     <entry>
-      <title><![CDATA[Kafka EOS 之事务性实现]]></title>
+      <title><![CDATA[Kafka Exactly-Once 之事务性实现]]></title>
       <url>http://matt33.com/2018/11/04/kafka-transaction/</url>
       <content type="html"><![CDATA[<p>这篇文章是 Kafka Exactly-Once 实现系列的第二篇，主要讲述 Kafka 事务性的实现，这部分的实现要比幂等性的实现复杂一些，幂等性实现是事务性实现的基础，幂等性提供了单会话单 Partition Exactly-Once 语义的实现，正是因为 Idempotent Producer 不提供跨多个 Partition 和跨会话场景下的保证，因此，我们是需要一种更强的事务保证，能够原子处理多个 Partition 的写入操作，数据要么全部写入成功，要么全部失败，不期望出现中间状态。这就是 Kafka Transactions 希望解决的问题，简单来说就是能够实现 <code>atomic writes across partitions</code>，本文以 Apache Kafka 2.0.0 代码实现为例，深入分析一下 Kafka 是如何实现这一机制的。</p>
 <p>Apache Kafka 在 Exactly-Once Semantics（EOS）上三种粒度的保证如下（来自 <a href="https://www.slideshare.net/ConfluentInc/exactlyonce-semantics-in-apache-kafka" target="_blank" rel="external">Exactly-once Semantics in Apache Kafka</a>）：</p>
@@ -869,6 +869,9 @@
 <p>通常情况下，以上 5 个步骤的前 3 个步骤，不管是已经成为架构师的技术人员，还是立志成为架构师的技术人员，在研究开源项目的时候都必不可少；第四步可以在准备采用开源项目的时候才实施，第五步可以根据你的时间来进行灵活安排。这里的“灵活安排”不是说省略不去做，而是在自己有一定时间和精力的时候做，因为只有这样才能真正理解和学到具体的技术。</p>
 <p>如果感觉自己时间和精力不够，与其蜻蜓点水每个开源项目都去简单了解一下，还不如集中精力将一个开源项目研究通透，就算是每个季度只学习一个开源项目，积累几年后这个数量也是很客观的；而且一旦你将一个项目研究透以后，再去研究其他类似项目，你会发现自己学习的非常快，因为共性的部分你已经都掌握了，只需要掌握新项目差异的部分即可。</p>
 <p>这里个人的感想是，对于初中级工程师，最好还是要有2-3项目或者2-3个方向需要走到第五步，毕竟我们是靠这个吃饭的，对于其他的项目（目前业界统一的解决方案，比如 hdfs、hbase、spark 等），至少需要走到第四步，这样与这方面的专业人士沟通交流时，至少让自己不至于处在懵逼状态。当然对于这些项目的核心代码，也是可以深入学习，比如 spark 的 shuffle 在代码上是如何实现的等。在一个项目上深入之后，再去看同一个领域的其他项目时，当看到其他的架构时，其实我们基本上就可以清楚这架构设计的原因、要解决的问题以及这种设计带来的其他问题，每种设计都有其应用场景，比如对 Kafka 有了深入了解后，再看 RocketMQ、phxqueue 时，看到它们的架构方案基本上就明白要解决的问题以及其特定的应用场景，当然对一些独特的特性，还是需要深入到代码层面去学习的，比如 RocketMQ 的延迟队列实现。这是一些个人的感想，并不一定对，大家可以共同交流，总之，是感觉李运华老师这篇文章是值得总结分享的，希望自己在后面学习开源项目时，能够静下心、认真坚持学下去。</p>
+<hr>
+<p>最后，非常推荐极客时间李运华老师的《从0开始学架构》的专栏，里面涉猎的内容很多，讲得也都比较深入，如果能结合这个专栏去学习，是非常能开阔自己的技术视野，需要的同学可以通过下面的连接购买，会有一定的优惠。</p>
+<p><img src="/images/share/learn-the-design-of-architecture.jpeg" alt="Apache BookKeeper 架构图"></p>
 ]]></content>
     </entry>
     
