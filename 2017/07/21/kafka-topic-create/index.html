@@ -21,7 +21,7 @@
 <p>上图只是列出一些主要的方法调用，具体内容下面会详细讲述（在看下面的内容时，最后配合上面这张图来看）。</p>
 <h2 id="topic-介绍"><a href="#topic-介绍" class="headerlink" title="topic 介绍"></a>topic 介绍</h2><p>topic 是 Kafka 中的一个消息队列的标识，也可以认为是消息队列的一个 id，用于区分不同的消息队列，一个 topic 由多个 partition 组成，这些 partition 是通常是分布在不同的多台 Broker 上的，为了保证数据的可靠性，一个 partition 又会设置为多个副本（replica），通常会设置两副本或三副本。如下图所示，这个一个名为『topic』的 topic，它由三个 partition 组成，两副本，假设 Kafka 集群有三台 Broker（replica 0_1 代表 partition 0 的第一个副本）。</p>
 <p><img src="/images/kafka/topic-replicas.png" alt="Kafka Topic 的组成"></p>
-<p>在设置副本时，副本数是必须大于集群的 Broker 数的，副本只有设置在不同的机器上才有作用。</p>
+<p>在设置副本时，副本数是必须小于集群的 Broker 数的，副本只有设置在不同的机器上才有作用。</p>
 <h2 id="topic-如何创建"><a href="#topic-如何创建" class="headerlink" title="topic 如何创建"></a>topic 如何创建</h2><p>topic 在创建时有两种方式：</p>
 <ol>
 <li>通过 <code>kafka-topics.sh</code> 创建一个 topic，可以设置相应的副本数让 Server 端自动进行 replica 分配，也可以直接指定手动 replica 的分配；</li>
