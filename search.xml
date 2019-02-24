@@ -9866,6 +9866,12 @@
 <h2 id="PyCharm"><a href="#PyCharm" class="headerlink" title="PyCharm"></a>PyCharm</h2><h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><p><a href="https://www.jetbrains.com/pycharm/download/" target="_blank" rel="external">PyCharm下载地址</a></p>
 <p>2016版的可以使用<a href="http://blog.csdn.net/jiang314/article/details/51680072" target="_blank" rel="external">注册码</a>进行破解，不过推荐购买正版。</p>
 <h1 id="其他常用命令安装"><a href="#其他常用命令安装" class="headerlink" title="其他常用命令安装"></a>其他常用命令安装</h1><h2 id="tree命令安装"><a href="#tree命令安装" class="headerlink" title="tree命令安装"></a>tree命令安装</h2><figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 需要先安装HomeBrew</span></div><div class="line">brew install tree</div></pre></td></tr></table></figure>
+<h2 id="Sublime-Text-3"><a href="#Sublime-Text-3" class="headerlink" title="Sublime Text 3"></a>Sublime Text 3</h2><p>参考下面的文章：</p>
+<ol>
+<li><a href="https://blog.csdn.net/javaexploreroooo/article/details/77989993" target="_blank" rel="external">最新版本sublime text3注册码</a>；</li>
+<li><a href="https://jingyan.baidu.com/article/4f7d5712d707161a21192773.html" target="_blank" rel="external">Sublime Text 3 Mac版怎么安装插件</a>；</li>
+<li><a href="https://www.jianshu.com/p/aa30cc25c91b" target="_blank" rel="external">Sublime插件：Markdown篇</a>，文章下面有Sublime的其他使用的系列文章；</li>
+</ol>
 <h1 id="Mac下遇到的其他问题"><a href="#Mac下遇到的其他问题" class="headerlink" title="Mac下遇到的其他问题"></a>Mac下遇到的其他问题</h1><h2 id="bashrc每次打开iterm都要重新加载"><a href="#bashrc每次打开iterm都要重新加载" class="headerlink" title="~/.bashrc每次打开iterm都要重新加载"></a>~/.bashrc每次打开iterm都要重新加载</h2><p>参考<a href="http://www.zhihu.com/question/29653438" target="_blank" rel="external">文章</a></p>
 <p>原因：使用的zsh，而不是bash，所以zsh没有义务去加载<code>~/.bashrc</code>文件，zsh下别名一般放置到<code>~/.zshrc</code>文件中。</p>
 <p>解决办法：在<code>~/.zshrc</code>文件的最后添加<code>source ~/.bashrc</code>.</p>
@@ -11458,8 +11464,11 @@
 <li>Wget: <code>$ wget -qO- https://raw.github.com/creationix/nvm/master/install.sh | sh</code>;</li>
 </ul>
 <p>安装完成后，重启终端并执行下列命令即可安装 Node.js。（<code>$</code>代表在当前普通用户下执行命令）</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ nvm install 4</div></pre></td></tr></table></figure>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ nvm install stable</div></pre></td></tr></table></figure>
 <p>当然也可以通过<a href="https://nodejs.org/en/download/" target="_blank" rel="external">下载</a>安装。</p>
+<blockquote>
+<p>如果遇到 node 版本问题可以参考 <a href="https://stackoverflow.com/questions/11107594/nodejs-update-leaves-old-version-as-current" target="_blank" rel="external">Nodejs Update leaves old version as current</a>，直接输入 <code>nvm</code> 可以查看相应命令方法。</p>
+</blockquote>
 <h4 id="Hexo-1"><a href="#Hexo-1" class="headerlink" title="Hexo"></a>Hexo</h4><p>所有必备的应用程序安装完成后，即可使用 npm 安装 Hexo。</p>
 <figure class="highlight sh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ npm install -g hexo-cli</div></pre></td></tr></table></figure>
 <p>到这里Hexo已经安装完毕了，下面讲一下如何使用。</p>
