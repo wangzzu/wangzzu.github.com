@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2019-03-17T07:47:39.646Z</updated>
+  <updated>2019-03-19T13:04:02.074Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,7 +20,7 @@
     <link href="http://matt33.com/2019/03/17/apache-calcite-planner/"/>
     <id>http://matt33.com/2019/03/17/apache-calcite-planner/</id>
     <published>2019-03-17T12:41:35.000Z</published>
-    <updated>2019-03-17T07:47:39.646Z</updated>
+    <updated>2019-03-19T13:04:02.074Z</updated>
     
     <content type="html"><![CDATA[<p>紧接上篇文章<a href="http://matt33.com/2019/03/07/apache-calcite-process-flow/">Apache Calcite 处理流程详解（一）</a>，这里是 Calcite 系列文章的第二篇，后面还会有文章讲述 Calcite 的实践（包括：如何开发用于 SQL 优化的 Rule）。本篇文章主要介绍 Apache Calcite 优化器部分的内容，会先简单介绍一下 RBO 和 CBO 模型，之后详细讲述 Calcite 关于这两个优化器的实现 —— HepPlanner 和 VolcanoPlanner，文章内容都是个人的一些理解，由于也是刚接触这块，理解有偏差的地方，欢迎指正。</p>
 <h1 id="什么是查询优化器"><a href="#什么是查询优化器" class="headerlink" title="什么是查询优化器"></a>什么是查询优化器</h1><p>查询优化器是传统数据库的核心模块，也是大数据计算引擎的核心模块，开源大数据引擎如 Impala、Presto、Drill、HAWQ、 Spark、Hive 等都有自己的查询优化器。Calcite 就是从 Hive 的优化器演化而来的。</p>
@@ -59,7 +59,8 @@
 <p>前面提到过像calcite这类查询优化器最核心的两个问题之一是怎么把优化规则应用到关系代数相关的RelNode Tree上。所以在阅读calicite的代码时就得带着这个问题去看看它的实现过程，然后才能判断它的代码实现得是否优雅。<br>calcite的每种规则实现类(RelOptRule的子类)都会声明自己应用在哪种RelNode子类上，每个RelNode子类其实都可以看成是一种operator(中文常翻译成算子)。<br>VolcanoPlanner就是优化器，用的是动态规划算法，在创建VolcanoPlanner的实例后，通过calcite的标准jdbc接口执行sql时，默认会给这个VolcanoPlanner的实例注册将近90条优化规则(还不算常量折叠这种最常见的优化)，所以看代码时，知道什么时候注册可用的优化规则是第一步(调用VolcanoPlanner.addRule实现)，这一步比较简单。<br>接下来就是如何筛选规则了，当把语法树转成RelNode Tree后是没有必要把前面注册的90条优化规则都用上的，所以需要有个筛选的过程，因为每种规则是有应用范围的，按RelNode Tree的不同节点类型就可以筛选出实际需要用到的优化规则了。这一步说起来很简单，但在calcite的代码实现里是相当复杂的，也是非常关键的一步，是从调用VolcanoPlanner.setRoot方法开始间接触发的，如果只是静态的看代码不跑起来跟踪调试多半摸不清它的核心流程的。筛选出来的优化规则会封装成VolcanoRuleMatch，然后扔到RuleQueue里，而这个RuleQueue正是接下来执行动态规划算法要用到的核心类。筛选规则这一步的代码实现很晦涩。<br>第三步才到VolcanoPlanner.findBestExp，本质上就是一个动态规划算法的实现，但是最值得关注的还是怎么用第二步筛选出来的规则对RelNode Tree进行变换，变换后的形式还是一棵RelNode Tree，最常见的是把LogicalXXX开头的RelNode子类换成了EnumerableXXX或BindableXXX，总而言之，看看具体优化规则的实现就对了，都是繁琐的体力活。<br>一个优化器，理解了上面所说的三步基本上就抓住重点了。<br>—— 来自【zhh-4096 】的微博</p>
 </blockquote>
 <p>下面详细讲述一下这两种 planner 在 Calcite 内部的具体实现。</p>
-<h2 id="HepPlanner"><a href="#HepPlanner" class="headerlink" title="HepPlanner"></a>HepPlanner</h2><h3 id="HepPlanner-中的基本概念"><a href="#HepPlanner-中的基本概念" class="headerlink" title="HepPlanner 中的基本概念"></a>HepPlanner 中的基本概念</h3><p>这里先看下 HepPlanner 的一些基本概念，对于后面的理解很有帮助。</p>
+<h2 id="HepPlanner"><a href="#HepPlanner" class="headerlink" title="HepPlanner"></a>HepPlanner</h2><p>使用 HepPlanner 实现的完整代码见 <a href="https://github.com/wangzzu/program-example/blob/master/calcite-example/src/main/java/com/matt/test/calcite/sql/SqlHepTest.java" target="_blank" rel="external">SqlHepTest</a>。</p>
+<h3 id="HepPlanner-中的基本概念"><a href="#HepPlanner-中的基本概念" class="headerlink" title="HepPlanner 中的基本概念"></a>HepPlanner 中的基本概念</h3><p>这里先看下 HepPlanner 的一些基本概念，对于后面的理解很有帮助。</p>
 <h4 id="HepRelVertex"><a href="#HepRelVertex" class="headerlink" title="HepRelVertex"></a>HepRelVertex</h4><p>HepRelVertex 是对 RelNode 进行了简单封装。HepPlanner 中的所有节点都是 HepRelVertex，每个 HepRelVertex 都指向了一个真正的 RelNode 节点。</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// org.apache.calcite.plan.hep.HepRelVertex</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * HepRelVertex wraps a real &#123;<span class="doctag">@link</span> RelNode&#125; as a vertex in a DAG representing</span></span><br><span class="line"><span class="comment"> * the entire query expression.</span></span><br><span class="line"><span class="comment"> * note：HepRelVertex 将一个 RelNode 封装为一个 DAG 中的 vertex（DAG 代表整个 query expression）</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HepRelVertex</span> <span class="keyword">extends</span> <span class="title">AbstractRelNode</span> </span>&#123;</span><br><span class="line">  <span class="comment">//~ Instance fields --------------------------------------------------------</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Wrapped rel currently chosen for implementation of expression.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="keyword">private</span> RelNode currentRel;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <h4 id="HepInstruction"><a href="#HepInstruction" class="headerlink" title="HepInstruction"></a>HepInstruction</h4><p>HepInstruction 是 HepPlanner 对一些内容的封装，具体的子类实现比较多，其中 RuleInstance 是 HepPlanner 中对 Rule 的一个封装，注册的 Rule 最后都会转换为这种形式。</p>
@@ -116,6 +117,7 @@
 <li>Iterate for fixed iterations or until cost doesn’t change：进行相应的迭代，直到 cost 不再变化或者 Rule Match Queue 中 rule match 已经全部应用完成；</li>
 <li>Match importance based on cost of RelNode and height：Rule Match 的 importance 依赖于 RelNode 的 cost 和深度。</li>
 </ol>
+<p>使用 VolcanoPlanner 实现的完整代码见 <a href="https://github.com/wangzzu/program-example/blob/master/calcite-example/src/main/java/com/matt/test/calcite/sql/SqlVolcanoTest.java" target="_blank" rel="external">SqlVolcanoTest</a>。</p>
 <p>下面来看下 VolcanoPlanner 实现具体的细节。</p>
 <h3 id="VolcanoPlanner-中的基本概念"><a href="#VolcanoPlanner-中的基本概念" class="headerlink" title="VolcanoPlanner 中的基本概念"></a>VolcanoPlanner 中的基本概念</h3><p>VolcanoPlanner 在实现中引入了一些基本概念，先明白这些概念对于理解 VolcanoPlanner 的实现非常有帮助。</p>
 <h4 id="RelSet"><a href="#RelSet" class="headerlink" title="RelSet"></a>RelSet</h4><p>关于 RelSet，源码中介绍如下：</p>
