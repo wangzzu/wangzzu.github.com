@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2019-03-19T13:04:02.074Z</updated>
+  <updated>2019-05-03T15:33:51.164Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,7 +20,7 @@
     <link href="http://matt33.com/2019/03/17/apache-calcite-planner/"/>
     <id>http://matt33.com/2019/03/17/apache-calcite-planner/</id>
     <published>2019-03-17T12:41:35.000Z</published>
-    <updated>2019-03-19T13:04:02.074Z</updated>
+    <updated>2019-05-03T15:33:51.164Z</updated>
     
     <content type="html"><![CDATA[<p>紧接上篇文章<a href="http://matt33.com/2019/03/07/apache-calcite-process-flow/">Apache Calcite 处理流程详解（一）</a>，这里是 Calcite 系列文章的第二篇，后面还会有文章讲述 Calcite 的实践（包括：如何开发用于 SQL 优化的 Rule）。本篇文章主要介绍 Apache Calcite 优化器部分的内容，会先简单介绍一下 RBO 和 CBO 模型，之后详细讲述 Calcite 关于这两个优化器的实现 —— HepPlanner 和 VolcanoPlanner，文章内容都是个人的一些理解，由于也是刚接触这块，理解有偏差的地方，欢迎指正。</p>
 <h1 id="什么是查询优化器"><a href="#什么是查询优化器" class="headerlink" title="什么是查询优化器"></a>什么是查询优化器</h1><p>查询优化器是传统数据库的核心模块，也是大数据计算引擎的核心模块，开源大数据引擎如 Impala、Presto、Drill、HAWQ、 Spark、Hive 等都有自己的查询优化器。Calcite 就是从 Hive 的优化器演化而来的。</p>
@@ -596,11 +596,200 @@
   </entry>
   
   <entry>
+    <title>BookKeeper 原理浅谈</title>
+    <link href="http://matt33.com/2019/01/28/bk-store-realize/"/>
+    <id>http://matt33.com/2019/01/28/bk-store-realize/</id>
+    <published>2019-01-28T15:23:35.000Z</published>
+    <updated>2019-05-03T16:49:32.137Z</updated>
+    
+    <content type="html"><![CDATA[<p>接着之前的一篇文章 <a href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/">BookKeeper 集群搭建及使用</a>，本文是 BookKeeper 系列的第二篇，短期来看应该也是最后一篇，本篇文章主要聚焦于 BookKeeper 内核的实现机制上，会从 BookKeeper 的基本概念、架构、读写一致性实现、读写分离实现、容错机制等方面来讲述，因为我并没有看过 BookKeeper 的源码，所以这里的讲述主要还是从原理、方案实现上来介绍，具体如何从解决方案落地到具体的代码实现，有兴趣的可以去看下 BookKeeper 的源码实现。</p>
+<h2 id="BookKeeper-基础"><a href="#BookKeeper-基础" class="headerlink" title="BookKeeper 基础"></a>BookKeeper 基础</h2><p>正如 Apache BookKeeper 官网介绍的一样：A scalable, fault-tolerant, and low-latency storage service optimized for real-time workloads。BookKeeper 的定位是一个可用于实时场景下的高扩展性、强容错、低延迟的存储服务。<a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming - 示说网</a> 中也做了一个简单总结：</p>
+<ol>
+<li>低延迟多副本复制：Quorum Parallel Replication；</li>
+<li>持久化：所有操作保证在刷盘后才 ack；</li>
+<li>强一致性：可重复读的一致性（Repeatable Read Consistency）;</li>
+<li>读写高可用；</li>
+<li>读写分离。</li>
+</ol>
+<h3 id="BookKeeper-基本概念"><a href="#BookKeeper-基本概念" class="headerlink" title="BookKeeper 基本概念"></a>BookKeeper 基本概念</h3><p><a href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/#BookKeeper-%E7%AE%80%E4%BB%8B">BookKeeper 简介</a> 部分已经对 BookKeeper 的基本概念做了一些讲解，这里再重新回顾一下，只有明白这些概念之后才能对更好地理解后面的内容，如下图所示，一个 Log/Stream/Topic 可以由下面的部分组成（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）。</p>
+<p><img src="/images/bookkeeper/bk5.png" alt="BookKeeper 中的基本概念"></p>
+<p>其中：</p>
+<ol>
+<li>Ledger：它是 BK 的一个基本存储单元（本质上还是一种抽象），BK Client 的读写操作也都是以 Ledger 为粒度的；</li>
+<li>Fragment：BK 的最小分布单元（实际上也是物理上的最小存储单元），也是 Ledger 的组成单位，默认情况下一个 Ledger 会对应的一个 Fragment（一个 Ledger 也可能由多个 Fragment 组成）；</li>
+<li>Entry：每条日志都是一个 Entry，它代表一个 record，每条 record 都会有一个对应的 entry id；</li>
+</ol>
+<p>关于 Fragment，它是 Ledger 的物理组成单元，也是最小的物理存储单元，在以下两种情况下会创建新的 Fragment：</p>
+<ol>
+<li>当创建新的 Ledger 时；</li>
+<li>当前 Fragment 使用的 Bookies 发生写入错误或超时，系统会在剩下的 Bookie 中新建 Fragment，但这时并不会新建 Ledger，因为 Ledger 的创建和关闭是由 Client 控制的，这里只是新建了 Fragment（需要注意的是：<strong>这两个 Fragment 对应的 Ensemble Bookie 已经不一样了</strong>，但它们都属于一个 Ledger，这里并不一定是一个 Ensemble Change 操作）。</li>
+</ol>
+<h3 id="BookKeeper-架构设计"><a href="#BookKeeper-架构设计" class="headerlink" title="BookKeeper 架构设计"></a>BookKeeper 架构设计</h3><p>Apache BookKeeper 的架构如下图所示，它主要由三个组件构成：客户端 (client)、数据存储节点 (Bookie) 和元数据存储 Service Discovery（ZooKeeper），Bookies 在启动的时候向 ZooKeeper 注册节点，Client 通过 ZooKeeper 发现可用的 Bookie。</p>
+<p><img src="/images/bookkeeper/bk-articture.png" alt="Apache BookKeeper 架构"></p>
+<p>这里，我们可以看到 BookKeeper 架构属于典型的 slave-slave 架构，zk 存储其集群的 meta 信息（zk 虽是单点，但 zk 目前的高可用还是很有保障的），这种模式的好处显而易见，server 端变得非常简单，所有节点都是一样的角色和处理逻辑，能够这样设计的主要原因是其副本没有 leader 和 follower 之分，这是它与一些常见 mq（如：kafka、RocketMQ）系统的典型区别，每种设计都有其 trade-off，BeekKeeper 从设计之初就是为了高可靠而设计。</p>
+<h2 id="BookKeeper-存储层实现"><a href="#BookKeeper-存储层实现" class="headerlink" title="BookKeeper 存储层实现"></a>BookKeeper 存储层实现</h2><p>Apache BookKeeper 是一个高可靠的分布式存储系统，存储层的实现是其核心，对一个存储系统来说，关键的几点实现，无非是：一致性如何保证、IO 如何优化、高可用如何实现等，这小节就让我们揭开其神秘面纱。</p>
+<h3 id="新建-Ledger"><a href="#新建-Ledger" class="headerlink" title="新建 Ledger"></a>新建 Ledger</h3><p>Ledger 是 BookKeeper 的基本存储抽象单元，这里先看下一个 Ledger 是如何创建的，这里会介绍一些关于 Ledger 存储层的一些重要概念（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）。</p>
+<p><img src="/images/bookkeeper/bk2.png" alt="BookKeeper Ledger 的创建"></p>
+<p>Ledger 是一组追加有序的记录，它是由 Client 创建的，然后由其进行追加写操作。每个 Ledger 在创建时会被赋予全局唯一的 ID，其他的 Client 可以根据 Ledger ID，对其进行读取操作。创建 Ledger 及 Entry 写入的相关过程如下：</p>
+<ol>
+<li>Client 在创建 Ledger 的时候，从 Bookie Pool 里面按照指定的数据放置策略挑选出一定数量的 Bookie，构成一个 Ensemble；</li>
+<li>每条 Entry 会被并行地发送给 Ensemble 里面的部分 Bookies（每条 Entry 发送多少个 Bookie 是由 Write Quorum size 设置、具体发送哪些 Bookie 是由 Round Robin 算法来计算），并且所有 Entry 的发送以流水线的方式进行，也就是意味着发送第 N + 1 条记录的写请求不需要等待发送第 N 条记录的写请求返回；</li>
+<li>对于每条 Entry 的写操作而言，当它收到 Ensemble 里面大多数 Bookie 的确认后（这个由 Ack Quorum size 来设置），Client 认为这条记录已经持久化到这个 Ensemble 中，并且有大多数副本。</li>
+</ol>
+<p><img src="/images/bookkeeper/bk3.png" alt="BookKeeper Ledger 多副本复制"></p>
+<p>这里引入了三个重要的概念，它们也是 BookKeeper 一致性的基础：</p>
+<ol>
+<li>Ensemble size(E)：Set of Bookies across which a ledger is striped，一个 Ledger 所涉及的 Bookie 集合；</li>
+<li>Write Quorum Size（Qw）：Number of replicas，副本数；</li>
+<li>Ack Quorum Size（Qa）：Number of responses needed before client’s write is satisfied。</li>
+</ol>
+<p>从上面 Ensemble、Qw、Qa 的概念可以得到以下这些推论：</p>
+<ol>
+<li>Ensemble：可以控制一个 Ledger 的读写带宽；</li>
+<li>Write Quorum：控制一条记录的复本数；</li>
+<li>Ack Quorum：写每条记录需要等待的 Ack 数 ，控制时延； </li>
+<li>增加 Ensemble，可以增加读写带宽（增加了可写的机器数）；</li>
+<li>减少 Ack Quorum，可以减长尾时延。</li>
+</ol>
+<h3 id="一致性"><a href="#一致性" class="headerlink" title="一致性"></a>一致性</h3><p>对于分布式存储系统，为了高可用，多副本是其通用的解决方案，但也带来了一致性的问题，这里就看下 Apache BookKeeper 是如何解决其带来的一致性问题的。</p>
+<h4 id="一致性模型"><a href="#一致性模型" class="headerlink" title="一致性模型"></a>一致性模型</h4><p>在介绍其读写一致性之前，先看下 BK 的一致性模型（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
+<p><img src="/images/bookkeeper/bk-consistency1.png" alt="BookKeeper 一致性模型-开始时的状态"></p>
+<p>对于 Write 操作而言，writer 不断添加记录，每条记录会被 writer 赋予一个严格递增的 id，所有的追加操作都是异步的，也就是说：第二条记录不用等待第一条记录返回结果。所有写成功的操作都会按照 id 递增顺序返回 ack 给 writer。（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
+<p><img src="/images/bookkeeper/bk-consistency2.png" alt="BookKeeper 一致性模型-追加数据时的中间状态"></p>
+<p>伴随着写成功的 ack，writer 不断地更新一个指针叫做 <strong>Last-Add-Confirm（LAC）</strong>，所有 Entry id 小于等于 LAC 的记录保证持久化并复制到大多数副本上，而 LAC 与 <strong>LAP（Last-Add-Pushed）</strong>之间的记录就是已经发送到 Bookie 上但还未被 ack 的数据。</p>
+<h4 id="读的一致性"><a href="#读的一致性" class="headerlink" title="读的一致性"></a>读的一致性</h4><p>所有的 Reader 都可以安全读取 Entry ID 小于或者等于 LAC 的记录，从而保证 reader 不会读取未确认的数据，从而保证了 reader 之间的一致性（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
+<p><img src="/images/bookkeeper/bk-consistency3.png" alt="BookKeeper 一致性模型-读的一致性"></p>
+<h4 id="写的一致性"><a href="#写的一致性" class="headerlink" title="写的一致性"></a>写的一致性</h4><p>从上面的介绍中，也可以看出，对于 BK 的多个副本，其并没有 leader 和 follower 之分，因此，BK 并不会进行相应的选主（leader election）操作，并且限制<strong>每个 Ledger 只能被一个 Writer 写，BK 通过 Fencing 机制来防止出现多个 Writer 的状态</strong>，从而保证写的一致性。</p>
+<h3 id="读写分离"><a href="#读写分离" class="headerlink" title="读写分离"></a>读写分离</h3><p>下面来看下 BK 存储层一个很重要的设计，那就是读写分离机制。在论文 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a> 中，关于读写分离机制的介绍如下所示（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
+<p><img src="/images/bookkeeper/bk7.png" alt="BookKeeper 读写分离"></p>
+<p>A bookie uses two devices, ideally in separate physical disks: </p>
+<ol>
+<li><strong>The journal device</strong> is a write-ahead log and stores synchronously and sequentially all updates the bookie executes. </li>
+<li><strong>The ledger device</strong> contains an indexed copy of a ledger fragment, which a bookie uses to respond to read requests. </li>
+</ol>
+<p>上面是论文中关于 BK 读写分离机制实现的介绍，我当时在看完上面的记录之后，脑海中有以下疑问：</p>
+<ol>
+<li>一个写请求是怎么处理？什么时候数据被认为是 ack 了；</li>
+<li>数据肯定先写到 Journal Device 中的，那么数据是如何到 Ledger Device 中的？</li>
+<li>Ledger Device 中的顺序写跟随机读是什么意思？难道跟 RocketMQ 的存储结构一样？</li>
+<li>Ledger Device 底层是怎么切分实际的物理文件的？</li>
+<li>数据在什么时候才能可见？</li>
+<li>在从 Ledger Device 读数据时，它是通过什么机制提高查询速度的？</li>
+</ol>
+<p>带着这些疑问，接下来来分析其实现（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）：</p>
+<p><img src="/images/bookkeeper/bk1.png" alt="BookKeeper 读写分离"></p>
+<p>Journal Device 分析：</p>
+<ul>
+<li>处理写入请求时，如果 Journal 是在专用的磁盘上，由于是顺序写入刷盘，性能会很高；</li>
+</ul>
+<p>Ledger Device 的实现：</p>
+<ul>
+<li>Bookie 最初的设计方案是每个 Ledger 对应一个物理文件，但这样会极大消耗写性能，所以 Bookie 当前的设计方案是所有 Ledger 都写一个单独的文件中，这个文件又叫 entry log；</li>
+<li>写入时，不但会写入到 Journal 中还会写入到缓存（memtable）中，定期会做刷盘（<strong>刷盘前会做排序</strong>，通过 <strong>聚合+排序</strong> 优化读取性能）；</li>
+<li>优化查找：Ledger Device 中会维护一个索引结构，存储在 RocksDB 中，它会<strong>将 (LedgerId，EntryId) 映射到(EntryLogId，文件中的偏移量)</strong>。</li>
+</ul>
+<h3 id="读写流程"><a href="#读写流程" class="headerlink" title="读写流程"></a>读写流程</h3><p>了解完 BK 的一致性模型和读写分离机制之后，这里来看下 BK 的读写流程。</p>
+<h4 id="Entry-写入流程"><a href="#Entry-写入流程" class="headerlink" title="Entry 写入流程"></a>Entry 写入流程</h4><p>这里以一个例子来说明，假设 E 是3，Qw 和 Qa 是2，那么 Entry 写入如下图（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
+<p><img src="/images/bookkeeper/bk8.png" alt="BookKeeper Entry 写入流程"></p>
+<ol>
+<li>Writer 会先分配对应的 id，然后按照 round-robin 算法从3个 Bookie 中选取2个 Bookie；</li>
+<li>Writer 会向两个 Bookie 发送写入请求，因为 Qa 设置为2，只有收到两个 ack 响应后，才会认为这条 Entry 写入成功；</li>
+</ol>
+<p><strong>如果写入过程中有一台 Bookie 挂了怎么办？</strong></p>
+<ol>
+<li>那么只能向另外2台 Bookie 写入数据；</li>
+<li>这时候这个 Ledger 会新建一个 Fragment，假设挂的是A，之前 Ensemble 是 A、B、C，现在的是 B、C；</li>
+<li>这个变化会更新到 zk 中这个 Ledger 的 meta 中。</li>
+</ol>
+<p><strong>如果写入过程中有两个 Bookie 挂了怎么办？</strong></p>
+<ol>
+<li>Ensemble 里面的存活的 Bookies 不能满足 Qw 的要求；</li>
+<li>Client 会进行一个 <strong>Ensemble Change</strong> 操作；</li>
+<li>Ensemble Change 将从 Bookie Pool 中根据数据放置策略挑选出额外的 Bookie 用来取代那些不存活的 Bookie 。</li>
+</ol>
+<h4 id="Entry-读取流程"><a href="#Entry-读取流程" class="headerlink" title="Entry 读取流程"></a>Entry 读取流程</h4><p>这里依然以一个例子做说明，例子是紧接着上面的示例，如下图所示（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
+<p><img src="/images/bookkeeper/bk9.png" alt="BookKeeper Entry 读取流程"></p>
+<p>如何想要读取 id 为1的那条 Entry 应该怎么做？</p>
+<ul>
+<li>在读取会选择最优的 Bookie，有了 Entry 的 id 和 Ledger 的 Ensemble 就可以根据 round-robin 计算出其所在 Bookie 信息，会选择向其中一个 Bookie 发送读请求。</li>
+</ul>
+<p>这种机制会导致，读取数据时可能需要从多个 Bookie 获取数据，需要并发访问多个 Bookie，性能会变差，极端情况会有这个问题。</p>
+<ul>
+<li>BK 有一个优化策略：读取时一般是选择读一段数据，如果 entries 在同一台机器上，会从同一个 Bookie 把这批 Entry 全部读取。</li>
+</ul>
+<p>BK 怎么处理长尾效应的问题（长尾效应指的是某台机器上某段或者某条数据读取得比较慢，进而影响了整体的效率）？</p>
+<ul>
+<li>Client 可以向任意一个副本读取相应的 Entry，但为了保证低延时，这里使用了一个叫 <strong>Speculative Read</strong> 的机制。读请求首先发送给第一个副本后，如果在指定的时间内没有收到 reponse，则发送读请求给第二个副本，然后同时等待第一个和第二个副本。谁第一个返回，即读取成功。通过有效的 Speculative read，可以很大程度减少长尾效应。</li>
+</ul>
+<h2 id="BookKeeper-容错机制"><a href="#BookKeeper-容错机制" class="headerlink" title="BookKeeper 容错机制"></a>BookKeeper 容错机制</h2><p>这里来简单来看下 BookKeeper 容错机制的实现。</p>
+<h3 id="Fencing-机制"><a href="#Fencing-机制" class="headerlink" title="Fencing 机制"></a>Fencing 机制</h3><p>Fencing 机制在前面已经简单介绍过了，它目的主要是为了保证写的一致性，<strong>严格保证一个 Ledger 只能被一个 Writer 来写</strong>。</p>
+<p>Fencing 怎么触发呢？</p>
+<ul>
+<li>如果一个 Writer 打开一个 Ledger，发现这个 Ledger 存在，并且没有 close，这种情况下，就会触发 Fencing 策略，并且触发 Ledger Recovery。</li>
+</ul>
+<h3 id="Log-Recovery-机制"><a href="#Log-Recovery-机制" class="headerlink" title="Log Recovery 机制"></a>Log Recovery 机制</h3><p>一个 Ledger 正常关闭后，会在其 Metadata 中存储 the last entry 的信息，所以正常关闭一个 Ledger 是非常重要的（<strong>Ledger 一旦关闭，其就是不可变的</strong>，读取的时候可以从任意一个 Bookie 上读取，而不需要再取 care 这个 Ledger 的 LAC 信息），否则可能会出现这样一种情况：</p>
+<p>由于 Writer 挂了（Ledger 未正常关闭），导致部分数据写入成功，实际上这个条消息并不满足 Qw（可能满足了 Qa），会导致不同 Reader 读取的结果不一致！如下图所示：</p>
+<p><img src="/images/bookkeeper/bk10.png" alt="不同 Reader 读取不一致的情况"></p>
+<p>解决方案就是： <strong>Log Recovery</strong>，正常关闭这个 Ledger，并将 The Last Entry 及状态更新到 metadata 中。</p>
+<p>Log Recovery 怎么实现呢？通常有两种方案：</p>
+<ol>
+<li>遍历这个 Ledger 所有 Entry 进行恢复；</li>
+<li>利用 LAC 机制可以加速 recovery：恢复前，先获取每个 Ledger 的 LAC 信息，然后从 LAC 开始恢复；</li>
+</ol>
+<p>很明显，第二种方案是比较合理的恢复速度更快。</p>
+<h3 id="Bookie-容错"><a href="#Bookie-容错" class="headerlink" title="Bookie 容错"></a>Bookie 容错</h3><p>当一个 Bookie 故障时：</p>
+<ul>
+<li>所有在这个 Bookie 上的 Ledgers 都处于 under-replica 状态，恢复就是复制 Fragment （Ledger 的组成单位）的过程，以确保每个 Ledger 维护的副本数打到 Qw。</li>
+</ul>
+<p>Bk 提供自动和手动两种方式：两种方式的复制协议是一样的；自动恢复是 BK 内部自动触发，手动过程需要手动干预，这里重点介绍自动过程：</p>
+<ol>
+<li>自动恢复是在 Bookie 上运行 <strong>AutoRecoveryMain 线程</strong>来实现，它会首先通过 zk 选举一个 Auditor；</li>
+<li>Auditor 的作用是<strong>检查不可用的 Bookie</strong>，然后做下面的操作：读取 zk 上完整的 Ledgers 信息，找到失败的 Ledgers（副本不满足条件的）；然后在 zk 的 <code>/underreplicated</code> znode 节点创建重新复制任务；</li>
+<li>AutoRecoveryMain 还有 Replicator Worker 线程会复制相应的 Fragment 到自己的 Ledger 上，如果复制后满足 Fully Replicated，那么就从 zk 的节点中删除这个任务；</li>
+</ol>
+<p><img src="/images/bookkeeper/bk11.png" alt="Bookie 容错机制"></p>
+<p>每个 Bookie 在发现任务时会尝试锁定，如果无法锁定就会执行后面的任务。如果获得锁，那么：</p>
+<ol>
+<li>扫描 Ledgers，查找不属于当前 Bookie 的 Fragment；</li>
+<li>对于每个匹配的 Fragment，它将另一个 Bookie 的数据复制到它自己的 Bookie，用新的集合更新 Zookeeper 并将 Fragment 标识为 Fully Replicated。</li>
+</ol>
+<p>如果 Ledgers 仍然存在副本数不足的 Fragment，则释放锁。如果所有 Fragment 都已经Fully Replicated，则从 <code>/underreplicated</code> 删除重复复制任务。</p>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>到这里，关于 BK 内核实现的主要部分已经介绍完毕，这篇文章的主要内容来自之前在团队的一次分享，一直想整理成博客的，但一直拖到了现在（因为并没有去看代码实现，主要是跟 bk 的论文及相关资料来整理的，有问题的地方欢迎指正）。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>;</li>
+<li><a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>；</li>
+<li><a href="https://bookkeeper.apache.org/docs/4.8.0/overview/overview/" target="_blank" rel="external">Apache BookKeeper Documentation</a>;</li>
+<li><a href="https://streaml.io/blog/intro-to-bookkeeper" target="_blank" rel="external">Introduction to Apache BookKeeper</a>;</li>
+<li><a href="https://streaml.io/blog/why-apache-bookkeeper" target="_blank" rel="external">Why Apache BookKeeper? Part 1: consistency, durability, availability</a>;</li>
+<li><a href="https://streaml.io/blog/why-bookkeeper-part-2" target="_blank" rel="external">Why Apache Bookkeeper? Part 2</a>；</li>
+<li><a href="https://jack-vanlightly.com/blog/2018/10/2/understanding-how-apache-pulsar-works?from=timeline" target="_blank" rel="external">Understanding How Apache Pulsar Works</a>；</li>
+<li><a href="https://jack-vanlightly.com/blog/2018/9/10/how-to-lose-messages-on-a-rabbitmq-cluster" target="_blank" rel="external">How to Lose Messages on a RabbitMQ Cluster</a>；</li>
+<li><a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming - 示说网</a>；</li>
+<li><a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>；</li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;接着之前的一篇文章 &lt;a href=&quot;http://matt33.com/2018/10/19/bk-cluster-install-and-use/&quot;&gt;BookKeeper 集群搭建及使用&lt;/a&gt;，本文是 BookKeeper 系列的第二篇，短期来看应该也是最后一篇，本篇
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="bk" scheme="http://matt33.com/tags/bk/"/>
+    
+  </entry>
+  
+  <entry>
     <title>如何高效学习</title>
     <link href="http://matt33.com/2018/11/21/effective-learning/"/>
     <id>http://matt33.com/2018/11/21/effective-learning/</id>
     <published>2018-11-21T02:12:51.000Z</published>
-    <updated>2019-03-17T07:47:01.546Z</updated>
+    <updated>2019-02-24T02:29:01.556Z</updated>
     
     <content type="html"><![CDATA[<p>在这个知识爆炸、科技日新月异的时代，技术的变化远比我们想象的要快很多，这就对工程师的要求就提高了很多，特别是对于那些在技术上有所追求的工程师而言。对于一些互联网大厂，学习能力也成了面试中重点考察的内容。如何快速学习、掌握一门新的技术，如何提高自己的学习效率，对于有一定工作经验的人来说，可能每个人都有一个自己的学习方法论，但是我们也需要去学习借鉴别人（特别是那些有一定技术影响力的技术大咖）的经验，来不断更新和完善自己的方法轮。今天这篇《高效学习》，就是与大家一起探讨技术学习的方法论，本文的内容主要来自耗子叔的《左耳听风 —— 高效学习篇》，中间会穿插个人的一些经验，算是对这个系列的一个总结。如果想看原文内容，欢迎订阅耗子叔的这个专栏，这个专栏质量还是非常高的，耗子叔推荐了很多优秀的学习资源（通过文章末尾处的二维码链接购买）。</p>
 <h2 id="端正学习态度"><a href="#端正学习态度" class="headerlink" title="端正学习态度"></a>端正学习态度</h2><p>对于大多数人来说，我们并不是那种天赋异禀的天才，所以那些速成的学习方法并不适合我们，因为，<strong>对于非天才的我们来说，学习是不可能速成的</strong>，学习本来就是一件【逆人性】的事，就像锻炼身体一样，<strong>需要人持续付出，会让人感到痛苦，并随时想找理由放弃，实际上，痛苦是成长的必经阶段</strong>。</p>
@@ -780,7 +969,7 @@
     <link href="http://matt33.com/2018/11/04/kafka-transaction/"/>
     <id>http://matt33.com/2018/11/04/kafka-transaction/</id>
     <published>2018-11-04T12:36:34.000Z</published>
-    <updated>2019-03-17T07:47:01.546Z</updated>
+    <updated>2019-02-24T02:29:01.556Z</updated>
     
     <content type="html"><![CDATA[<p>这篇文章是 Kafka Exactly-Once 实现系列的第二篇，主要讲述 Kafka 事务性的实现，这部分的实现要比幂等性的实现复杂一些，幂等性实现是事务性实现的基础，幂等性提供了单会话单 Partition Exactly-Once 语义的实现，正是因为 Idempotent Producer 不提供跨多个 Partition 和跨会话场景下的保证，因此，我们是需要一种更强的事务保证，能够原子处理多个 Partition 的写入操作，数据要么全部写入成功，要么全部失败，不期望出现中间状态。这就是 Kafka Transactions 希望解决的问题，简单来说就是能够实现 <code>atomic writes across partitions</code>，本文以 Apache Kafka 2.0.0 代码实现为例，深入分析一下 Kafka 是如何实现这一机制的。</p>
 <p>Apache Kafka 在 Exactly-Once Semantics（EOS）上三种粒度的保证如下（来自 <a href="https://www.slideshare.net/ConfluentInc/exactlyonce-semantics-in-apache-kafka" target="_blank" rel="external">Exactly-once Semantics in Apache Kafka</a>）：</p>
@@ -1152,7 +1341,7 @@
     <link href="http://matt33.com/2018/10/24/kafka-idempotent/"/>
     <id>http://matt33.com/2018/10/24/kafka-idempotent/</id>
     <published>2018-10-24T06:11:25.000Z</published>
-    <updated>2019-03-17T07:47:01.545Z</updated>
+    <updated>2019-02-24T02:29:01.555Z</updated>
     
     <content type="html"><![CDATA[<p>Apache Kafka 从 0.11.0 开始，支持了一个非常大的 feature，就是对事务性的支持，在 Kafka 中关于事务性，是有三种层面上的含义：一是幂等性的支持；二是事务性的支持；三是 Kafka Streams 的 exactly once 的实现，关于 Kafka 事务性系列的文章我们只重点关注前两种层面上的事务性，与 Kafka Streams 相关的内容暂时不做讨论。社区从开始讨论事务性，前后持续近半年时间，相关的设计文档有六十几页（参考 <a href="https://docs.google.com/document/d/11Jqy_GjUGtdXJK94XGsEIK7CP1SnQGdp2eF0wSw9ra8/edit" target="_blank" rel="external">Exactly Once Delivery and Transactional Messaging in Kafka</a>）。事务性这部分的实现也是非常复杂的，之前 Producer 端的代码实现其实是非常简单的，增加事务性的逻辑之后，这部分代码复杂度提高了很多，本篇及后面几篇关于事务性的文章会以 2.0.0 版的代码实现为例，对这部分做了一下分析，计划分为五篇文章：</p>
 <ol>
@@ -1316,7 +1505,7 @@
     <link href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/"/>
     <id>http://matt33.com/2018/10/19/bk-cluster-install-and-use/</id>
     <published>2018-10-19T15:23:35.000Z</published>
-    <updated>2019-03-17T07:47:01.544Z</updated>
+    <updated>2019-02-24T02:29:01.555Z</updated>
     
     <content type="html"><![CDATA[<p>随着 Apache Pulsar 成为 Apache 的顶级开源项目，其存储层的解决方案 Apache BookKeeper 再次受到业界广泛关注。BookKeeper 在 Pulsar 之前也有很多成功的应用，比如使用 BookKeeper 实现了 HDFS NameNode 的 HA 机制（可能大部分公司使用的还是 Quorum Journal Manage 方案）、Twitter 开源的 DistributedLog 系统（可参考<a href="http://www.infoq.com/cn/news/2016/05/Twitter-Github-DistributedLog" target="_blank" rel="external">Twitter开源分布式高性能日志复制服务</a>），BookKeeper 作为一个高扩展、强容错、低延迟的存储服务（A scalable, fault-tolerant, and low-latency storage service optimized for real-time workloads），它相当于把底层的存储层系统服务化（BookKeeper 是更底层的存储服务，类似于 Kafka 的存储层）。这样可以使得依赖于 BookKeeper 实现的分布式存储系统（包括分布式消息队列）在设计时可以只关注其应用层和功能层的内容，存储层比较难解决的问题像一致性、容错等，BookKeeper 已经实现了，从这个层面看，BookKeeper 确实解决业内的一些问题，而且 BookKeeper （Ledger 化，Ledger 相当于 Kafka segment）天生适合云上部署，未来还是有很大潜力的。近段对 BookKeeper 做了一些相应的调研，做了一些总结，本文将会主要从集群部署和使用角度来介绍一下 Apache BookKeeper，后面准备再写一篇文章来深入讲述其架构设计及实现原理。</p>
 <h2 id="BookKeeper-简介"><a href="#BookKeeper-简介" class="headerlink" title="BookKeeper 简介"></a>BookKeeper 简介</h2><p>这里先对 BookKeeper 的基本概念做一下介绍，下图是 BookKeeper 的架构图（图片来自 <a href="https://www.slideshare.net/streamlio/introduction-to-apache-bookkeeper-distributed-storage?qid=3cbd6bbf-9e04-4e38-9ab6-4619e4d8f61e&amp;v=&amp;b=&amp;from_search=1" target="_blank" rel="external">Introduction to Apache BookKeeper</a>）：</p>
@@ -1444,7 +1633,7 @@
     <link href="http://matt33.com/2018/09/01/yarn-architecture-learn/"/>
     <id>http://matt33.com/2018/09/01/yarn-architecture-learn/</id>
     <published>2018-09-01T14:39:47.000Z</published>
-    <updated>2019-03-17T07:47:01.544Z</updated>
+    <updated>2019-02-24T02:29:01.554Z</updated>
     
     <content type="html"><![CDATA[<p>关于 Hadoop 的介绍，这里就不再多说，可以简答来说 Hadoop 的出现真正让更多的互联网公司开始有能力解决大数据场景下的问题，其中的 HDFS 和 YARN 已经成为大数据场景下存储和资源调度的统一解决方案（MR 现在正在被 Spark 所取代，Spark 在计算这块的地位也开始受到其他框架的冲击，流计算上有 Flink，AI 上有 Tensorflow，两面夹击，但是 Spark 的生态建设得很好，其他框架想要在生产环境立马取代还有很长的路要走）。本片文章就是关于 YARN 框架学习的简单总结，目的是希望自己能对分布式调度这块有更深入的了解，当然也希望也这篇文章能够对初学者有所帮助，文章的主要内容来自 <a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a> 和 <a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>。</p>
 <h1 id="Yarn-背景"><a href="#Yarn-背景" class="headerlink" title="Yarn 背景"></a>Yarn 背景</h1><p>关于 YARN 出现的背景，还是得从 Hadoop1.0 说起，在 Hadoop1.0 中，MR 作业的调度还是有两个重要的组件：JobTracker 和 TaskTracker，其基础的架构如下图所示，从下图中可以大概看出原 MR 作业启动流程：</p>
@@ -1638,7 +1827,7 @@
     <link href="http://matt33.com/2018/08/01/system-learn-summary/"/>
     <id>http://matt33.com/2018/08/01/system-learn-summary/</id>
     <published>2018-08-01T06:55:11.000Z</published>
-    <updated>2019-03-17T07:47:01.543Z</updated>
+    <updated>2019-02-24T02:29:01.554Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章的方法论内容基本来自订阅的极客时间-李运华老师的《从0开始学架构》中的一篇文章，会结合自己的学习经验、加上以 Flink 为例来做一个总结，也为了让自己再学习其他开源项目时能够按照这样的一个方法论高效的深入学习。先简单说一下开源项目，开源项目最早从上个世纪开始，我知道最早的是 linux 项目（其他的不是很了解），再到近几年大数据领域，发展非常迅速，开源给本公司带来的好处，首先是提高这家在技术界的影响力，然后如果这个项目比较受大家认可，那么这家公司的这个技术可能会成为业界的统一解决方案，就像 Hadoop、Kafka 等。对其他公司的好处是，节省成本、可以快速应用来解决业务中的问题。</p>
 <p>但是对于公司技术员工不好的地方是，作为这些项目的维护者，以后真的可能变成运维工程师，社区这些项目发展一般都很快，小厂很难有足够的人力、能力在这上面做太多的研发，一般都是跟着社区升级，可能发展到最后的结果是: 项目的研发由社区（或者背后主导的公司）来负责，其他公司融入这一生态，做好运维工作或产品化的东西就可以了，稳定性、可靠性、新功能交给社区，随着项目逐渐庞大，到最后可能其他公司很少有人能对这些项目有较强的掌控力，研发完全依赖于社区。这些开源项目的接口变得越来越简单、内部越来越复杂时，虽然降低了开发者、维护者的门槛，但也降低对开发者、维护者的要求，这是一把双刃剑，对于在技术上对自己有一定要求的工程师，不应该仅限于使用、原理等。</p>
@@ -1732,7 +1921,7 @@
     <link href="http://matt33.com/2018/07/28/jvm-cms/"/>
     <id>http://matt33.com/2018/07/28/jvm-cms/</id>
     <published>2018-07-28T11:53:04.000Z</published>
-    <updated>2019-03-17T07:47:01.543Z</updated>
+    <updated>2019-02-24T02:29:01.554Z</updated>
     
     <content type="html"><![CDATA[<p>在两年前的文章 <a href="http://matt33.com/2016/09/18/jvm-basic2/">JVM 学习——垃圾收集器与内存分配策略</a> 中，已经对 GC 算法的原理以及常用的垃圾收集器做了相应的总结。今天这篇文章主要是对生产环境中（Java7）常用的两种垃圾收集器（ParNew：年轻代，CMS：老年代）从日志信息上进行分析，做一下总结，这样当我们在排查相应的问题时，看到 GC 的日志信息，不会再那么陌生，能清楚地知道这些日志是什么意思，GC 线程当前处在哪个阶段，正在做什么事情等。</p>
 <h2 id="ParNew-收集器"><a href="#ParNew-收集器" class="headerlink" title="ParNew 收集器"></a>ParNew 收集器</h2><p><a href="http://matt33.com/2016/09/18/jvm-basic2/#ParNew-%E6%94%B6%E9%9B%86%E5%99%A8">ParNew 收集器</a>是年轻代常用的垃圾收集器，它采用的是复制算法，youngGC 时一个典型的日志信息如下所示：</p>
@@ -1872,7 +2061,7 @@
     <link href="http://matt33.com/2018/07/15/hdfs-architecture-learn/"/>
     <id>http://matt33.com/2018/07/15/hdfs-architecture-learn/</id>
     <published>2018-07-15T15:46:45.000Z</published>
-    <updated>2019-03-17T07:47:01.542Z</updated>
+    <updated>2019-02-24T02:29:01.554Z</updated>
     
     <content type="html"><![CDATA[<p>HDFS（Hadoop Distributed File System）是一个分布式文件存储系统，几乎是离线存储领域的标准解决方案（有能力自研的大厂列外），业内应用非常广泛。近段抽时间，看一下 HDFS 的架构设计，虽然研究生也学习过相关内容，但是现在基本忘得差不多了，今天抽空对这块做了一个简单的总结，也算是再温习了一下这块的内容，这样后续再看 HDFS 方面的文章时，不至于处于懵逼状态。</p>
 <h2 id="HDFS-1-0-架构"><a href="#HDFS-1-0-架构" class="headerlink" title="HDFS 1.0 架构"></a>HDFS 1.0 架构</h2><p>HDFS 采用的是 Master/Slave 架构，一个 HDFS 集群包含一个单独的 NameNode 和多个 DataNode 节点，如下图所示（这个图是 HDFS1.0的架构图，经典的架构图）：</p>
@@ -2035,7 +2224,7 @@
     <link href="http://matt33.com/2018/07/14/kafka-controller-redesign/"/>
     <id>http://matt33.com/2018/07/14/kafka-controller-redesign/</id>
     <published>2018-07-14T15:13:56.000Z</published>
-    <updated>2019-03-17T07:47:01.542Z</updated>
+    <updated>2019-02-24T02:29:01.553Z</updated>
     
     <content type="html"><![CDATA[<p>Kafka Controller 是 Kafka 的核心组件，在前面的文章中，已经详细讲述过 Controller 部分的内容。在过去的几年根据大家在生产环境中应用的反馈，Controller 也积累了一些比较大的问题，而针对这些问题的修复，代码的改动量都是非常大的，无疑是一次重构，因此，社区准备在新版的系统里对 Controller 做一些相应的优化（0.11.0及以后的版本），相应的设计方案见：<a href="https://docs.google.com/document/d/1rLDmzDOGQQeSiMANP0rC2RYp_L7nUGHzFD9MQISgXYM/edit#heading=h.pxfjarumuhko" target="_blank" rel="external">Kafka Controller Redesign</a>，本文的内容就是结合这篇文章做一个简单的总结。</p>
 <h2 id="Controller-功能"><a href="#Controller-功能" class="headerlink" title="Controller 功能"></a>Controller 功能</h2><p>在一个 Kafka 中，Controller 要处理的事情总结如下表所示：</p>
@@ -2207,7 +2396,7 @@
     <link href="http://matt33.com/2018/07/08/distribute-system-consistency-protocol/"/>
     <id>http://matt33.com/2018/07/08/distribute-system-consistency-protocol/</id>
     <published>2018-07-08T15:21:34.000Z</published>
-    <updated>2019-03-17T07:47:01.542Z</updated>
+    <updated>2019-02-24T02:29:01.553Z</updated>
     
     <content type="html"><![CDATA[<p>在分布式系统领域，有一个理论，对于分布式系统的设计影响非常大，那就是 CAP 理论，即对于一个分布式系统而言，它是无法同时满足 Consistency(强一致性)、Availability(可用性) 和  Partition tolerance(分区容忍性) 这三个条件的，最多只能满足其中两个。但在实际中，由于网络环境是不可信的，所以分区容忍性几乎是必不可选的，设计者基本就是在一致性和可用性之间做选择，当然大部分情况下，大家都会选择牺牲一部分的一致性来保证可用性（可用性较差的系统非常影响用户体验的，但是对另一些场景，比如支付场景，强一致性是必须要满足）。但是分布式系统又无法彻底放弃一致性（Consistency），如果真的放弃一致性，那么就说明这个系统中的数据根本不可信，数据也就没有意义，那么这个系统也就没有任何价值可言。</p>
 <h2 id="CAP-理论"><a href="#CAP-理论" class="headerlink" title="CAP 理论"></a>CAP 理论</h2><p>CAP 理论三个特性的详细含义如下：</p>
@@ -2412,7 +2601,7 @@
     <link href="http://matt33.com/2018/07/07/java-daemon-thread/"/>
     <id>http://matt33.com/2018/07/07/java-daemon-thread/</id>
     <published>2018-07-07T13:43:21.000Z</published>
-    <updated>2019-03-17T07:47:01.541Z</updated>
+    <updated>2019-02-24T02:29:01.553Z</updated>
     
     <content type="html"><![CDATA[<p>在 Java 并发编程实践或看涉及到 Java 并发相关的代码时，经常会遇到一些线程（比如做 metrics 统计的线程等）会通过 <code>setDaemon()</code> 方法设置将该线程的 daemon 变量设置为 True，也就是将这个线程设置为了<strong>守护线程(daemon thread)</strong>，那么什么是守护线程呢？或者说守护线程与非守护线程（普通线程）的区别在什么地方呢？这个就是本文主要讲述的内容。</p>
 <h2 id="守护线程"><a href="#守护线程" class="headerlink" title="守护线程"></a>守护线程</h2><p>一般来说，Java 中的线程可以分为两种：守护线程和普通线程。在 JVM 刚启动时，它创建的所有线程，除了主线程（main thread）外，其他的线程都是守护线程（比如：垃圾收集器、以及其他执行辅助操作的线程）。</p>
@@ -2452,7 +2641,7 @@
     <link href="http://matt33.com/2018/06/27/kafka-server-process-model/"/>
     <id>http://matt33.com/2018/06/27/kafka-server-process-model/</id>
     <published>2018-06-27T15:18:01.000Z</published>
-    <updated>2019-03-17T07:47:01.541Z</updated>
+    <updated>2019-02-24T02:29:01.553Z</updated>
     
     <content type="html"><![CDATA[<p>前面7篇对 Kafka Controller 的内容做了相应的总结，Controller 这部分的总结算是暂时告一段落，本节会讲述 Kafka 源码分析系列中最后一节的内容，是关于 Server 端对不同类型请求处理的网络模型。在前面的文章中也讲述过几种不同类型的请求处理实现，如果还有印象，就会知道它们都是通过 KafkaApis 对象处理的，但是前面并没有详细讲述 Server 端是如何监听到相应的请求、请求是如何交给 KafkaApis 对象进行处理，以及处理后是如何返回给请求者（请求者可以是 client 也可以是 server），这些都属于 Server 的网络处理模型，也是本文讲述的主要内容。</p>
 <h2 id="Server-网络模型整体流程"><a href="#Server-网络模型整体流程" class="headerlink" title="Server 网络模型整体流程"></a>Server 网络模型整体流程</h2><p>Kafka Server 启动后，会通过 KafkaServer 的 <code>startup()</code> 方法初始化涉及到网络模型的相关对象，如下所示：</p>
@@ -2552,7 +2741,7 @@
     <link href="http://matt33.com/2018/06/25/leaderAndIsr-process/"/>
     <id>http://matt33.com/2018/06/25/leaderAndIsr-process/</id>
     <published>2018-06-25T01:01:12.000Z</published>
-    <updated>2019-03-17T07:47:01.541Z</updated>
+    <updated>2019-02-24T02:29:01.552Z</updated>
     
     <content type="html"><![CDATA[<p>本篇算是 Controller 部分的最后一篇，在前面讲述 ReplicaManager 时，留一个地方没有讲解，是关于 Broker 对 Controller 发送的 LeaderAndIsr 请求的处理，这个请求的处理实现会稍微复杂一些，本篇文章主要就是讲述 Kafka Server 是如何处理 LeaderAndIsr 请求的。</p>
 <h2 id="LeaderAndIsr-请求"><a href="#LeaderAndIsr-请求" class="headerlink" title="LeaderAndIsr 请求"></a>LeaderAndIsr 请求</h2><p>LeaderAndIsr 请求是在一个 Topic Partition 的 leader、isr、assignment replicas 变动时，Controller 向 Broker 发送的一种请求，有时候是向这个 Topic Partition 的所有副本发送，有时候是其中的某个副本，跟具体的触发情况有关系。在一个 LeaderAndIsr 请求中，会封装多个 Topic Partition 的信息，每个 Topic Partition 会对应一个 PartitionState 对象，这个对象主要成员变量如下：</p>
@@ -2669,7 +2858,7 @@
     <link href="http://matt33.com/2018/06/23/controller-request-model/"/>
     <id>http://matt33.com/2018/06/23/controller-request-model/</id>
     <published>2018-06-23T05:26:38.000Z</published>
-    <updated>2019-03-17T07:47:01.540Z</updated>
+    <updated>2019-02-24T02:29:01.552Z</updated>
     
     <content type="html"><![CDATA[<p>本篇主要讲述 Controller 向各个 Broker 发送请求的模型，算是对 <a href="http://matt33.com/2018/06/15/kafka-controller-start/#Controller-Channel-Manager">Controller Channel Manager</a> 部分的一个补充，在这篇文章中，将会看到 Controller 在处理 leader 切换、ShutDown 请求时如何向 Broker 发送相应的请求。</p>
 <p>Kafka Controller 向 Broker 发送的请求类型主要分为三种：LeaderAndIsr、UpdateMetadata、StopReplica 请求，正如  <a href="http://matt33.com/2018/06/15/kafka-controller-start/#Controller-Channel-Manager">Controller Channel Manager</a> 这里介绍的，Controller 会为每台 Broker 初始化为一个 ControllerBrokerStateInfo 对象，该对象主要包含以下四个内容：</p>
@@ -2750,7 +2939,7 @@
     <link href="http://matt33.com/2018/06/18/topic-create-alter-delete/"/>
     <id>http://matt33.com/2018/06/18/topic-create-alter-delete/</id>
     <published>2018-06-18T09:24:21.000Z</published>
-    <updated>2019-03-17T07:47:01.540Z</updated>
+    <updated>2019-02-24T02:29:01.552Z</updated>
     
     <content type="html"><![CDATA[<p>本篇接着讲述 Controller 的功能方面的内容，在 Kafka 中，一个 Topic 的新建、扩容或者删除都是由 Controller 来操作的，本篇文章也是主要聚焦在 Topic 的操作处理上（新建、扩容、删除），实际上 Topic 的创建在 <a href="http://matt33.com/2017/07/21/kafka-topic-create/">Kafka 源码解析之 topic 创建过程（三）</a> 中已经讲述过了，本篇与前面不同的是，本篇主要是从 Controller 角度来讲述，而且是把新建、扩容、删除这三个 Topic 级别的操作放在一起做一个总结。</p>
 <h2 id="Topic-新建与扩容"><a href="#Topic-新建与扩容" class="headerlink" title="Topic 新建与扩容"></a>Topic 新建与扩容</h2><p>这里把 Topic 新建与扩容放在一起讲解，主要是因为无论 Topic 是新建还是扩容，在 Kafka 内部其实都是 Partition 的新建，底层的实现机制是一样的，Topic 的新建与扩容的整体流程如下图所示：</p>
@@ -2880,7 +3069,7 @@
     <link href="http://matt33.com/2018/06/17/broker-online-offline/"/>
     <id>http://matt33.com/2018/06/17/broker-online-offline/</id>
     <published>2018-06-17T07:04:21.000Z</published>
-    <updated>2019-03-17T07:47:01.540Z</updated>
+    <updated>2019-02-24T02:29:01.552Z</updated>
     
     <content type="html"><![CDATA[<p>本篇接着讲述 Controller 对于监听器的处理内容 —— Broker 节点上下线的处理流程。每台 Broker 在上线时，都会与 ZK 建立一个建立一个 session，并在 <code>/brokers/ids</code> 下注册一个节点，节点名字就是 broker id，这个节点是临时节点，该节点内部会有这个 Broker 的详细节点信息。Controller 会监听 <code>/brokers/ids</code> 这个路径下的所有子节点，如果有新的节点出现，那么就代表有新的 Broker 上线，如果有节点消失，就代表有 broker 下线，Controller 会进行相应的处理，Kafka 就是利用 ZK 的这种 watch 机制及临时节点的特性来完成集群 Broker 的上下线，本文将会深入讲解这一过程。</p>
 <h2 id="BrokerChangeListener"><a href="#BrokerChangeListener" class="headerlink" title="BrokerChangeListener"></a>BrokerChangeListener</h2><p>KafkaController 在启动时，会通过副本状态机注册一个监控 broker 上下线的监听器，通过 ReplicaStateMachine 的 <code>registerListeners()</code> 方法实现的，该方法的实现如下：</p>
@@ -2969,7 +3158,7 @@
     <link href="http://matt33.com/2018/06/16/partition-reassignment/"/>
     <id>http://matt33.com/2018/06/16/partition-reassignment/</id>
     <published>2018-06-16T15:40:00.000Z</published>
-    <updated>2019-03-17T07:47:01.539Z</updated>
+    <updated>2019-02-24T02:29:01.551Z</updated>
     
     <content type="html"><![CDATA[<p>前面两篇关于 Controller 的内容分别讲述了 Controller 选举和启动，以及副本状态机和分区状态机的内容，从本文开始会详细讲述 Controller 的一些其他功能，主要是 Controller 的对不同类型监听器的处理，这部分预计分三篇左右的文章讲述。Controller 在初始化时，会利用 ZK 的 watch 机制注册很多不同类型的监听器，当监听的事件被触发时，Controller 就会触发相应的操作。</p>
 <p>Controller 在初始化时，会注册多种类型的监听器，主要有以下6种：</p>
@@ -3053,345 +3242,6 @@
     <summary type="html">
     
       &lt;p&gt;前面两篇关于 Controller 的内容分别讲述了 Controller 选举和启动，以及副本状态机和分区状态机的内容，从本文开始会详细讲述 Controller 的一些其他功能，主要是 Controller 的对不同类型监听器的处理，这部分预计分三篇左右的文章讲述。Co
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="kafka" scheme="http://matt33.com/tags/kafka/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Kafka 源码解析之副本状态机与分区状态机（十七）</title>
-    <link href="http://matt33.com/2018/06/16/controller-state-machine/"/>
-    <id>http://matt33.com/2018/06/16/controller-state-machine/</id>
-    <published>2018-06-16T03:04:14.000Z</published>
-    <updated>2019-03-17T07:47:01.538Z</updated>
-    
-    <content type="html"><![CDATA[<p>上篇讲述了 KafkaController 的启动流程，但是关于分区状态机和副本状态机的初始化并没有触及，分区状态机和副本状态机的内容将在本篇文章深入讲述。分区状态机记录着当前集群所有 Partition 的状态信息以及如何对 Partition 状态转移进行相应的处理；副本状态机则是记录着当前集群所有 Replica 的状态信息以及如何对 Replica 状态转变进行相应的处理。</p>
-<h2 id="ReplicaStateMachine"><a href="#ReplicaStateMachine" class="headerlink" title="ReplicaStateMachine"></a>ReplicaStateMachine</h2><p>ReplicaStateMachine 记录着集群所有 Replica 的状态信息，它决定着一个 replica 处在什么状态以及它在什么状态下可以转变为什么状态，Kafka 中副本的状态总共有以下七种类型：</p>
-<ol>
-<li>NewReplica：这种状态下 Controller 可以创建这个 Replica，这种状态下该 Replica 只能作为 follower，它可以是 Replica 删除后的一个临时状态，它有效的前置状态是 NonExistentReplica；</li>
-<li>OnlineReplica：一旦这个 Replica 被分配到指定的 Partition 上，并且 Replica 创建完成，那么它将会被置为这个状态，在这个状态下，这个 Replica 既可以作为 leader 也可以作为 follower，它有效的前置状态是  NewReplica、OnlineReplica 或 OfflineReplica；</li>
-<li>OfflineReplica：如果一个 Replica 挂掉（所在的节点宕机或者其他情况），该 Replica 将会被转换到这个状态，它有的效前置状态是 NewReplica、OfflineReplica 或者 OnlineReplica；</li>
-<li>ReplicaDeletionStarted：Replica 开始删除时被置为的状态，它有效的前置状态是 OfflineReplica；</li>
-<li>ReplicaDeletionSuccessful：如果 Replica 在删除时没有遇到任何错误信息，它将被置为这个状态，这个状态代表该 Replica 的数据已经从节点上清除了，它有效的前置状态是 ReplicaDeletionStarted；</li>
-<li>ReplicaDeletionIneligible：如果 Replica 删除失败，它将会转移到这个状态，这个状态意思是非法删除，也就是删除是无法成功的，它有效的前置状态是 ReplicaDeletionStarted；</li>
-<li>NonExistentReplica：如果 Replica 删除成功，它将被转移到这个状态，它有效的前置状态是：ReplicaDeletionSuccessful。</li>
-</ol>
-<p>上面的状态中其中后面4是专门为 Replica 删除而服务的，副本状态机转移图如下所示：</p>
-<p><img src="/images/kafka/replica_state.png" alt="副本状态机"></p>
-<p>这张图是副本状态机的核心，在下面会详细讲述，接下来先看下 KafkaController 在启动时，调用 ReplicaStateMachine 的 <code>startup()</code> 方法初始化的处理过程。</p>
-<h3 id="ReplicaStateMachine-初始化"><a href="#ReplicaStateMachine-初始化" class="headerlink" title="ReplicaStateMachine 初始化"></a>ReplicaStateMachine 初始化</h3><p>副本状态机初始化的过程如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: Controller 重新选举后触发的操作</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">startup</span></span>() &#123;</span><br><span class="line">  <span class="comment">// initialize replica state</span></span><br><span class="line">  <span class="comment">//note: 初始化 zk 上所有的 Replica 状态信息（replica 存活的话设置为 Online,不存活的设置为 ReplicaDeletionIneligible）</span></span><br><span class="line">  initializeReplicaState()</span><br><span class="line">  <span class="comment">// set started flag</span></span><br><span class="line">  hasStarted.set(<span class="literal">true</span>)</span><br><span class="line">  <span class="comment">// move all Online replicas to Online</span></span><br><span class="line">  <span class="comment">//note: 将存活的副本状态转变为 OnlineReplica</span></span><br><span class="line">  handleStateChanges(controllerContext.allLiveReplicas(), <span class="type">OnlineReplica</span>)</span><br><span class="line"></span><br><span class="line">  info(<span class="string">"Started replica state machine with initial state -&gt; "</span> + replicaState.toString())</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在这个方法中，ReplicaStateMachine 先调用 <code>initializeReplicaState()</code> 方法初始化集群中所有 Replica 的状态信息，如果 Replica 所在机器是 alive 的，那么将其状态设置为 OnlineReplica，否则设置为 ReplicaDeletionIneligible 状态，这里只是将 Replica 的状态信息更新副本状态机的缓存 <code>replicaState</code> 中，并没有真正进行状态转移的操作。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 初始化所有副本的状态信息</span></span><br><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">initializeReplicaState</span></span>() &#123;</span><br><span class="line">  <span class="keyword">for</span>((topicPartition, assignedReplicas) &lt;- controllerContext.partitionReplicaAssignment) &#123;</span><br><span class="line">    <span class="keyword">val</span> topic = topicPartition.topic</span><br><span class="line">    <span class="keyword">val</span> partition = topicPartition.partition</span><br><span class="line">    assignedReplicas.foreach &#123; replicaId =&gt;</span><br><span class="line">      <span class="keyword">val</span> partitionAndReplica = <span class="type">PartitionAndReplica</span>(topic, partition, replicaId)</span><br><span class="line">      <span class="keyword">if</span> (controllerContext.liveBrokerIds.contains(replicaId)) <span class="comment">//note: 如果副本是存活,那么将状态都设置为 OnlineReplica</span></span><br><span class="line">        replicaState.put(partitionAndReplica, <span class="type">OnlineReplica</span>)</span><br><span class="line">      <span class="keyword">else</span></span><br><span class="line">        <span class="comment">// mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.</span></span><br><span class="line">        <span class="comment">// This is required during controller failover since during controller failover a broker can go down,</span></span><br><span class="line">        <span class="comment">// so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.</span></span><br><span class="line">        <span class="comment">//note: 将不存活的副本状态设置为 ReplicaDeletionIneligible</span></span><br><span class="line">        replicaState.put(partitionAndReplica, <span class="type">ReplicaDeletionIneligible</span>)</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>接着第二步调用 <code>handleStateChanges()</code> 将所有存活的副本状态转移为 OnlineReplica 状态，这里才是真正进行状态转移的地方，其具体实现如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 用于处理 Replica 状态的变化</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">handleStateChanges</span></span>(replicas: <span class="type">Set</span>[<span class="type">PartitionAndReplica</span>], targetState: <span class="type">ReplicaState</span>,</span><br><span class="line">                       callbacks: <span class="type">Callbacks</span> = (<span class="keyword">new</span> <span class="type">CallbackBuilder</span>).build) &#123;</span><br><span class="line">  <span class="keyword">if</span>(replicas.nonEmpty) &#123;</span><br><span class="line">    info(<span class="string">"Invoking state change to %s for replicas %s"</span>.format(targetState, replicas.mkString(<span class="string">","</span>)))</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      brokerRequestBatch.newBatch()</span><br><span class="line">      <span class="comment">//note: 状态转变</span></span><br><span class="line">      replicas.foreach(r =&gt; handleStateChange(r, targetState, callbacks))</span><br><span class="line">      <span class="comment">//note: 向 broker 发送相应请求</span></span><br><span class="line">      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)</span><br><span class="line">    &#125;<span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">"Error while moving some replicas to %s state"</span>.format(targetState), e)</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里是副本状态机 <code>startup()</code> 方法的最后一步，它的目的是将所有 alive 的 Replica 状态转移到 OnlineReplica 状态，由于前面已经这些 alive replica 的状态设置成了 OnlineReplica，所以这里 Replica 的状态转移情况是：<strong>OnlineReplica –&gt; OnlineReplica</strong>，这个方法主要是做了两件事：</p>
-<ol>
-<li>状态转移（这个在下面详细讲述）；</li>
-<li>发送相应的请求。</li>
-</ol>
-<h3 id="副本的状态转移"><a href="#副本的状态转移" class="headerlink" title="副本的状态转移"></a>副本的状态转移</h3><p>这里以要转移的 TargetState 区分做详细详细讲解，当 TargetState 分别是 NewReplica、ReplicaDeletionStarted、ReplicaDeletionIneligible、ReplicaDeletionSuccessful、NonExistentReplica、OnlineReplica 或者 OfflineReplica 时，副本状态机所做的事情。</p>
-<h4 id="TargetState-NewReplica"><a href="#TargetState-NewReplica" class="headerlink" title="TargetState: NewReplica"></a>TargetState: NewReplica</h4><p>NewReplica 这个状态是 Replica 准备开始创建是的一个状态，其实现逻辑如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> currState = replicaState.getOrElseUpdate(partitionAndReplica, <span class="type">NonExistentReplica</span>)<span class="comment">//note: Replica 不存在的话,状态初始化为 NonExistentReplica</span></span><br><span class="line">assertValidPreviousStates(partitionAndReplica, <span class="type">List</span>(<span class="type">NonExistentReplica</span>), targetState)<span class="comment">//note: 验证</span></span><br><span class="line"><span class="comment">// start replica as a follower to the current leader for its partition</span></span><br><span class="line"><span class="comment">//note: 从 zk 获取 Partition 的 leaderAndIsr 信息</span></span><br><span class="line"><span class="keyword">val</span> leaderIsrAndControllerEpochOpt = <span class="type">ReplicationUtils</span>.getLeaderIsrAndEpochForPartition(zkUtils, topic, partition)</span><br><span class="line">leaderIsrAndControllerEpochOpt <span class="keyword">match</span> &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">Some</span>(leaderIsrAndControllerEpoch) =&gt;</span><br><span class="line">    <span class="keyword">if</span>(leaderIsrAndControllerEpoch.leaderAndIsr.leader == replicaId)<span class="comment">//note: 这个状态的 Replica 不能作为 leader</span></span><br><span class="line">      <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">StateChangeFailedException</span>(<span class="string">"Replica %d for partition %s cannot be moved to NewReplica"</span></span><br><span class="line">        .format(replicaId, topicAndPartition) + <span class="string">"state as it is being requested to become leader"</span>)</span><br><span class="line">    <span class="comment">//note: 向该 replicaId 发送 LeaderAndIsr 请求,这个方法同时也会向所有的 broker 发送 updateMeta 请求</span></span><br><span class="line">    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(<span class="type">List</span>(replicaId),</span><br><span class="line">                                                        topic, partition, leaderIsrAndControllerEpoch,</span><br><span class="line">                                                        replicaAssignment)</span><br><span class="line">  <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="comment">// new leader request will be sent to this replica when one gets elected</span></span><br><span class="line">&#125;</span><br><span class="line">replicaState.put(partitionAndReplica, <span class="type">NewReplica</span>)<span class="comment">//note: 缓存这个 replica 对象的状态</span></span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">                          .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState,</span><br><span class="line">                                  targetState))</span><br></pre></td></tr></table></figure>
-<p>当想要把 Replica 的状态转移为 NewReplica 时，副本状态机的处理逻辑如下：</p>
-<ol>
-<li>校验 Replica 的前置状态，只有处于 NonExistentReplica 状态的副本才能转移到 NewReplica 状态；</li>
-<li>从 zk 中获取该 Topic-Partition 的 LeaderIsrAndControllerEpoch 信息；</li>
-<li>如果获取不到上述信息，直接将该 Replica 的状态转移成 NewReplica，然后结束流程（对与新建的 Partition，处于这个状态时，该 Partition 是没有相应的 LeaderAndIsr 信息的）；</li>
-<li>获取到 Partition 的 LeaderIsrAndControllerEpoch 信息，如果发现该 Partition 的 leader 是当前副本，那么就抛出 StateChangeFailedException 异常，因为处在这个状态的 Replica 是不能被选举为 leader 的；</li>
-<li>获取到了 Partition 的 LeaderIsrAndControllerEpoch 信息，并且该 Partition 的 leader 不是当前 replica，那么向该 Partition 的所有 Replica 添加一个 LeaderAndIsr 请求（添加 LeaderAndIsr 请求时，实际上也会向所有的 Broker 都添加一个 Update-Metadata 请求）；</li>
-<li>最后将该 Replica 的状态转移成 NewReplica，然后结束流程。</li>
-</ol>
-<h4 id="TargetState-ReplicaDeletionStarted"><a href="#TargetState-ReplicaDeletionStarted" class="headerlink" title="TargetState: ReplicaDeletionStarted"></a>TargetState: ReplicaDeletionStarted</h4><p>这是 Replica 开始删除时的状态，Replica 转移到这种状态的处理实现如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">assertValidPreviousStates(partitionAndReplica, <span class="type">List</span>(<span class="type">OfflineReplica</span>), targetState)</span><br><span class="line">replicaState.put(partitionAndReplica, <span class="type">ReplicaDeletionStarted</span>)</span><br><span class="line"><span class="comment">// send stop replica command</span></span><br><span class="line"><span class="comment">//note: 发送 StopReplica 请求给该副本,并设置 deletePartition=true</span></span><br><span class="line">brokerRequestBatch.addStopReplicaRequestForBrokers(<span class="type">List</span>(replicaId), topic, partition, deletePartition = <span class="literal">true</span>,</span><br><span class="line">  callbacks.stopReplicaResponseCallback)</span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">  .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))</span><br></pre></td></tr></table></figure>
-<p>这部分的实现逻辑：</p>
-<ol>
-<li>校验其前置状态，Replica 只能是在 OfflineReplica 的情况下才能转移到这种状态；</li>
-<li>更新向该 Replica 的状态为 ReplicaDeletionStarted；</li>
-<li>向该 replica 发送 StopReplica 请求（deletePartition = true），收到这请求后，broker 会从物理存储上删除这个 Replica 的数据内容；</li>
-<li>如果请求返回的话会触发其回调函数（这部分会在 topic 删除部分讲解）。</li>
-</ol>
-<h4 id="TargetState-ReplicaDeletionIneligible"><a href="#TargetState-ReplicaDeletionIneligible" class="headerlink" title="TargetState: ReplicaDeletionIneligible"></a>TargetState: ReplicaDeletionIneligible</h4><p>ReplicaDeletionIneligible 是副本删除失败时的状态，Replica 转移到这种状态的处理实现如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">assertValidPreviousStates(partitionAndReplica, <span class="type">List</span>(<span class="type">ReplicaDeletionStarted</span>), targetState)</span><br><span class="line">replicaState.put(partitionAndReplica, <span class="type">ReplicaDeletionIneligible</span>)</span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">  .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))</span><br></pre></td></tr></table></figure>
-<p>实现逻辑：</p>
-<ol>
-<li>校验其前置状态，Replica 只能是在 ReplicaDeletionStarted 下才能转移这种状态；</li>
-<li>更新该 Replica 的状态为 ReplicaDeletionIneligible。</li>
-</ol>
-<h4 id="TargetState-ReplicaDeletionSuccessful"><a href="#TargetState-ReplicaDeletionSuccessful" class="headerlink" title="TargetState: ReplicaDeletionSuccessful"></a>TargetState: ReplicaDeletionSuccessful</h4><p>ReplicaDeletionSuccessful 是副本删除成功时的状态，Replica 转移到这种状态的处理实现如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">assertValidPreviousStates(partitionAndReplica, <span class="type">List</span>(<span class="type">ReplicaDeletionStarted</span>), targetState)</span><br><span class="line">replicaState.put(partitionAndReplica, <span class="type">ReplicaDeletionSuccessful</span>)</span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">  .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))</span><br></pre></td></tr></table></figure>
-<p>实现逻辑：</p>
-<ol>
-<li>检验其前置状态，Replica 只能是在 ReplicaDeletionStarted 下才能转移这种状态；</li>
-<li>更新该 Replica 的状态为 ReplicaDeletionSuccessful。</li>
-</ol>
-<h4 id="TargetState-NonExistentReplica"><a href="#TargetState-NonExistentReplica" class="headerlink" title="TargetState: NonExistentReplica"></a>TargetState: NonExistentReplica</h4><p>NonExistentReplica 是副本完全删除、不存在这个副本的状态，Replica 转移到这种状态的处理实现如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">assertValidPreviousStates(partitionAndReplica, <span class="type">List</span>(<span class="type">ReplicaDeletionSuccessful</span>), targetState)</span><br><span class="line"><span class="comment">// remove this replica from the assigned replicas list for its partition</span></span><br><span class="line"><span class="keyword">val</span> currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)</span><br><span class="line"><span class="comment">//note: 从 controller 和副本状态机的缓存中清除这个 Replica 的记录西溪</span></span><br><span class="line">controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas.filterNot(_ == replicaId))</span><br><span class="line">replicaState.remove(partitionAndReplica)</span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">  .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))</span><br></pre></td></tr></table></figure>
-<p>实现逻辑：</p>
-<ol>
-<li>检验其前置状态，Replica 只能是在 ReplicaDeletionSuccessful 下才能转移这种状态；</li>
-<li>在 controller 的 partitionReplicaAssignment 删除这个 Partition 对应的 replica 信息；</li>
-<li>从 Controller 和副本状态机中将这个 Topic 从缓存中删除。</li>
-</ol>
-<h4 id="TargetState-OnlineReplica"><a href="#TargetState-OnlineReplica" class="headerlink" title="TargetState: OnlineReplica"></a>TargetState: OnlineReplica</h4><p>OnlineReplica 是副本正常工作时的状态，此时的 Replica 既可以作为 leader 也可以作为 follower，Replica 转移到这种状态的处理实现如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">assertValidPreviousStates(partitionAndReplica,</span><br><span class="line">  <span class="type">List</span>(<span class="type">NewReplica</span>, <span class="type">OnlineReplica</span>, <span class="type">OfflineReplica</span>, <span class="type">ReplicaDeletionIneligible</span>), targetState)</span><br><span class="line">replicaState(partitionAndReplica) <span class="keyword">match</span> &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">NewReplica</span> =&gt; <span class="comment">//note: NewReplica --&gt; OnlineReplica</span></span><br><span class="line">    <span class="comment">// add this replica to the assigned replicas list for its partition</span></span><br><span class="line">    <span class="comment">//note: 向 the assigned replicas list 添加这个 replica（正常情况下这些 replicas 已经更新到 list 中了）</span></span><br><span class="line">    <span class="keyword">val</span> currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)</span><br><span class="line">    <span class="keyword">if</span>(!currentAssignedReplicas.contains(replicaId))</span><br><span class="line">      controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas :+ replicaId)</span><br><span class="line">    stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">                              .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState,</span><br><span class="line">                                      targetState))</span><br><span class="line">  <span class="keyword">case</span> _ =&gt; <span class="comment">//note: OnlineReplica/OfflineReplica/ReplicaDeletionIneligible --&gt; OnlineReplica</span></span><br><span class="line">    <span class="comment">// check if the leader for this partition ever existed</span></span><br><span class="line">    <span class="comment">//note: 如果该 Partition 的 LeaderIsrAndControllerEpoch 信息存在,那么就更新副本的状态,并发送相应的请求</span></span><br><span class="line">    controllerContext.partitionLeadershipInfo.get(topicAndPartition) <span class="keyword">match</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> <span class="type">Some</span>(leaderIsrAndControllerEpoch) =&gt;</span><br><span class="line">        brokerRequestBatch.addLeaderAndIsrRequestForBrokers(<span class="type">List</span>(replicaId), topic, partition, leaderIsrAndControllerEpoch,</span><br><span class="line">          replicaAssignment)</span><br><span class="line">        replicaState.put(partitionAndReplica, <span class="type">OnlineReplica</span>)</span><br><span class="line">        stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">          .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))</span><br><span class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt; <span class="comment">// that means the partition was never in OnlinePartition state, this means the broker never</span></span><br><span class="line">        <span class="comment">// started a log for that partition and does not have a high watermark value for this partition</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">replicaState.put(partitionAndReplica, <span class="type">OnlineReplica</span>)</span><br></pre></td></tr></table></figure>
-<p>从前面的状态转移图中可以看出，当 Replica 处在 NewReplica、OnlineReplica、OfflineReplica 或者 ReplicaDeletionIneligible 状态时，Replica 是可以转移到 OnlineReplica 状态的，下面分两种情况讲述：</p>
-<p><strong>NewReplica –&gt; OnlineReplica</strong> 的处理逻辑如下：</p>
-<ol>
-<li>从 Controller 的 partitionReplicaAssignment 中获取这个 Partition 的 AR；</li>
-<li>如果 Replica 不在 AR 中的话，那么就将其添加到 Partition 的 AR 中；</li>
-<li>最后将 Replica 的状态设置为 OnlineReplica 状态。</li>
-</ol>
-<p><strong>OnlineReplica/OfflineReplica/ReplicaDeletionIneligible –&gt; OnlineReplica</strong> 的处理逻辑如下：</p>
-<ol>
-<li>从 Controller 的 partitionLeadershipInfo 中获取 Partition 的 LeaderAndIsr 信息；</li>
-<li>如果该信息存在，那么就向这个 Replica 所在 broker 添加这个 Partition 的 LeaderAndIsr 请求，并将 Replica 的状态设置为 OnlineReplica 状态；</li>
-<li>否则不做任务处理；</li>
-<li>最后更新R Replica 的状态为 OnlineReplica。</li>
-</ol>
-<h4 id="TargetState-OfflineReplica"><a href="#TargetState-OfflineReplica" class="headerlink" title="TargetState: OfflineReplica"></a>TargetState: OfflineReplica</h4><p>OfflineReplica 是 Replica 所在 Broker 掉线时 Replica 的状态，转移到这种状态的处理逻辑如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">assertValidPreviousStates(partitionAndReplica,</span><br><span class="line">  <span class="type">List</span>(<span class="type">NewReplica</span>, <span class="type">OnlineReplica</span>, <span class="type">OfflineReplica</span>, <span class="type">ReplicaDeletionIneligible</span>), targetState)</span><br><span class="line"><span class="comment">// send stop replica command to the replica so that it stops fetching from the leader</span></span><br><span class="line"><span class="comment">//note: 发送 StopReplica 请求给该副本,先停止副本同步</span></span><br><span class="line">brokerRequestBatch.addStopReplicaRequestForBrokers(<span class="type">List</span>(replicaId), topic, partition, deletePartition = <span class="literal">false</span>)</span><br><span class="line"><span class="comment">// As an optimization, the controller removes dead replicas from the ISR</span></span><br><span class="line"><span class="keyword">val</span> leaderAndIsrIsEmpty: <span class="type">Boolean</span> =</span><br><span class="line">  controllerContext.partitionLeadershipInfo.get(topicAndPartition) <span class="keyword">match</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">Some</span>(_) =&gt;</span><br><span class="line">      controller.removeReplicaFromIsr(topic, partition, replicaId) <span class="keyword">match</span> &#123; <span class="comment">//note: 从 isr 中移除这个副本（前提是 ISR 有其他有效副本）</span></span><br><span class="line">        <span class="keyword">case</span> <span class="type">Some</span>(updatedLeaderIsrAndControllerEpoch) =&gt;</span><br><span class="line">          <span class="comment">// send the shrunk ISR state change request to all the remaining alive replicas of the partition.</span></span><br><span class="line">          <span class="comment">//note: 发送 LeaderAndIsr 请求给剩余的其他副本,因为 ISR 变动了</span></span><br><span class="line">          <span class="keyword">val</span> currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)</span><br><span class="line">          <span class="keyword">if</span> (!controller.deleteTopicManager.isPartitionToBeDeleted(topicAndPartition)) &#123;</span><br><span class="line">            brokerRequestBatch.addLeaderAndIsrRequestForBrokers(currentAssignedReplicas.filterNot(_ == replicaId),</span><br><span class="line">              topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)</span><br><span class="line">          &#125;</span><br><span class="line">          replicaState.put(partitionAndReplica, <span class="type">OfflineReplica</span>)</span><br><span class="line">          stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"</span></span><br><span class="line">            .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))</span><br><span class="line">          <span class="literal">false</span></span><br><span class="line">        <span class="keyword">case</span> <span class="type">None</span> =&gt;</span><br><span class="line">          <span class="literal">true</span></span><br><span class="line">      &#125;</span><br><span class="line">    <span class="keyword">case</span> <span class="type">None</span> =&gt;</span><br><span class="line">      <span class="literal">true</span></span><br><span class="line">  &#125;</span><br><span class="line"><span class="keyword">if</span> (leaderAndIsrIsEmpty &amp;&amp; !controller.deleteTopicManager.isPartitionToBeDeleted(topicAndPartition))</span><br><span class="line">  <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">StateChangeFailedException</span>(</span><br><span class="line">    <span class="string">"Failed to change state of replica %d for partition %s since the leader and isr path in zookeeper is empty"</span></span><br><span class="line">    .format(replicaId, topicAndPartition))</span><br></pre></td></tr></table></figure>
-<p>处理逻辑如下：</p>
-<ol>
-<li>校验其前置状态，只有 Replica 在 NewReplica、OnlineReplica、OfflineReplica 或者 ReplicaDeletionIneligible 状态时，才能转移到这种状态；</li>
-<li>向该 Replica 所在节点发送 StopReplica 请求（deletePartition = false）；</li>
-<li>调用 Controller 的 <code>removeReplicaFromIsr()</code> 方法将该 replica 从 Partition 的 isr 移除这个 replica（前提 isr 中还有其他有效副本），然后向该 Partition 的其他副本发送 LeaderAndIsr 请求；</li>
-<li>更新这个 Replica 的状态为 OfflineReplica。</li>
-</ol>
-<h3 id="状态转移触发的条件"><a href="#状态转移触发的条件" class="headerlink" title="状态转移触发的条件"></a>状态转移触发的条件</h3><p>这里主要是看一下上面 Replica 各种转移的触发的条件，整理的结果如下表所示，部分内容会在后续文章讲解。</p>
-<table>
-<thead>
-<tr>
-<th>TargetState</th>
-<th>触发方法</th>
-<th>作用</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>OnlineReplica</td>
-<td>KafkaController 的 onBrokerStartup()</td>
-<td>Broker 启动时，目的是将在该节点的 Replica 状态设置为 OnlineReplica</td>
-</tr>
-<tr>
-<td>OnlineReplica</td>
-<td>KafkaController 的 onNewPartitionCreation()</td>
-<td>新建 Partition 时，Replica 初始化及 Partition 状态变成 OnlinePartition 后，新创建的 Replica 状态也变为 OnlineReplica；</td>
-</tr>
-<tr>
-<td>OnlineReplica</td>
-<td>KafkaController 的 onPartitionReassignment()</td>
-<td>副本迁移完成后，RAR 中的副本设置为 OnlineReplica 状态</td>
-</tr>
-<tr>
-<td>OnlineReplica</td>
-<td>ReplicaStateMachine 的 startup()</td>
-<td>副本状态机刚初始化启动时，将存活的副本状态设置为 OnlineReplica</td>
-</tr>
-<tr>
-<td>OfflineReplica</td>
-<td>TopicDeletionManager 的  markTopicForDeletionRetry()</td>
-<td>将删除失败的 Replica 设置为 OfflineReplica，重新进行删除</td>
-</tr>
-<tr>
-<td>OfflineReplica</td>
-<td>TopicDeletionManager 的 startReplicaDeletion()</td>
-<td>开始副本删除时，先将副本设置为 OfflineReplica</td>
-</tr>
-<tr>
-<td>OfflineReplica</td>
-<td>KafkaController 的 shutdownBroker() 方法</td>
-<td>优雅关闭 broker 时，目的是把下线节点上的副本状态设置为 OfflineReplica</td>
-</tr>
-<tr>
-<td>OfflineReplica</td>
-<td>KafkaController 的 onBrokerFailure()</td>
-<td>broker 掉线时，目的是把下线节点上的副本状态设置为 OfflineReplica</td>
-</tr>
-<tr>
-<td>NewReplica</td>
-<td>KafkaController 的 onNewPartitionCreation()</td>
-<td>Partition 新建时，当 Partition 状态变为 NewPartition 后，副本的状态变为 NewReplica</td>
-</tr>
-<tr>
-<td>NewReplica</td>
-<td>KafkaController 的 startNewReplicasForReassignedPartition()</td>
-<td>Partition 副本迁移时，将新分配的副本状态设置为 NewReplica；</td>
-</tr>
-<tr>
-<td>ReplicaDeletionStarted</td>
-<td>TopicDeletionManager 的  startReplicaDeletion()</td>
-<td>下线副本时，将成功设置为 OfflineReplica 的 Replica 设置为 ReplicaDeletionStarted 状态，开始物理上删除副本数据（也是发送 StopReplica）</td>
-</tr>
-<tr>
-<td>ReplicaDeletionStarted</td>
-<td>KafkaController 的 stopOldReplicasOfReassignedPartition()</td>
-<td>Partition 的副本迁移时，目的是下线那些 old replica，新的 replica 已经迁移到新分配的副本上了</td>
-</tr>
-<tr>
-<td>ReplicaDeletionSuccessful</td>
-<td>TopicDeletionManager 的  completeReplicaDeletion()</td>
-<td>物理将数据成功删除的 Replica 状态会变为这个</td>
-</tr>
-<tr>
-<td>ReplicaDeletionSuccessful</td>
-<td>KafkaController 的 stopOldReplicasOfReassignedPartition()</td>
-<td>Partition 的副本迁移时，在下线那些旧 Replica 时的一个状态，删除成功</td>
-</tr>
-<tr>
-<td>ReplicaDeletionIneligible</td>
-<td>TopicDeletionManager 的  startReplicaDeletion()</td>
-<td>开始副本删除时，删除失败的副本会设置成这个状态</td>
-</tr>
-<tr>
-<td>ReplicaDeletionIneligible</td>
-<td>KafkaController 的 stopOldReplicasOfReassignedPartition()</td>
-<td>Partition 副本迁移时，在下线那些旧的 Replica 时的一个状态，删除失败</td>
-</tr>
-<tr>
-<td>NonExistentReplica</td>
-<td>TopicDeletionManager 的  completeReplicaDeletion()</td>
-<td>副本删除成功后（状态为 ReplicaDeletionSuccessful），从状态机和 Controller 的缓存中清除该副本的记录；</td>
-</tr>
-<tr>
-<td>NonExistentReplica</td>
-<td>KafkaController 的 stopOldReplicasOfReassignedPartition()</td>
-<td>Partition 的副本成功迁移、旧副本成功删除后，从状态机和 Controller 的缓存中清除旧副本的记录</td>
-</tr>
-</tbody>
-</table>
-<h2 id="PartitionStateMachine"><a href="#PartitionStateMachine" class="headerlink" title="PartitionStateMachine"></a>PartitionStateMachine</h2><p>PartitionStateMachine 记录着集群所有 Partition 的状态信息，它决定着一个 Partition 处在什么状态以及它在什么状态下可以转变为什么状态，Kafka 中 Partition 的状态总共有以下四种类型：</p>
-<ol>
-<li>NonExistentPartition：这个代表着这个 Partition 之前没有被创建过或者之前创建了现在又被删除了，它有效的前置状态是 OfflinePartition；</li>
-<li>NewPartition：Partition 创建后，它将处于这个状态，这个状态的 Partition 还没有 leader 和 isr，它有效的前置状态是 NonExistentPartition；</li>
-<li>OnlinePartition：一旦这个 Partition 的 leader 被选举出来了，它将处于这个状态，它有效的前置状态是 NewPartition、OnlinePartition、OfflinePartition；</li>
-<li>OfflinePartition：如果这个 Partition 的 leader 掉线，这个 Partition 将被转移到这个状态，它有效的前置状态是 NewPartition、OnlinePartition、OfflinePartition。</li>
-</ol>
-<p>分区状态机转移图如下所示：</p>
-<p><img src="/images/kafka/partition_state.png" alt="分区状态机"></p>
-<p>这张图是分区状态机的核心，在下面会详细讲述，接下来先看下 KafkaController 在启动时，调用 PartitionStateMachine 的 <code>startup()</code> 方法初始化的处理过程。</p>
-<h3 id="PartitionStateMachine-初始化"><a href="#PartitionStateMachine-初始化" class="headerlink" title="PartitionStateMachine 初始化"></a>PartitionStateMachine 初始化</h3><p>PartitionStateMachine 的初始化方法如下所示：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: Controller 启动时触发</span></span><br><span class="line"><span class="comment">//note: 初始化所有 Partition 的状态（从 zk 获取）, 然后对于 new/offline Partition 触发选主（选主成功的话,变为 OnlinePartition）</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">startup</span></span>() &#123;</span><br><span class="line">  <span class="comment">// initialize partition state</span></span><br><span class="line">  <span class="comment">//note: 初始化 partition 的状态,如果 leader 所在 broker 是 alive 的,那么状态为 OnlinePartition,否则为 OfflinePartition</span></span><br><span class="line">  initializePartitionState()</span><br><span class="line">  <span class="comment">// set started flag</span></span><br><span class="line">  hasStarted.set(<span class="literal">true</span>)</span><br><span class="line">  <span class="comment">// try to move partitions to online state</span></span><br><span class="line">  <span class="comment">//note: 为所有处理 NewPartition 或 OnlinePartition 状态 Partition 选举 leader</span></span><br><span class="line">  triggerOnlinePartitionStateChange()</span><br><span class="line"></span><br><span class="line">  info(<span class="string">"Started partition state machine with initial state -&gt; "</span> + partitionState.toString())</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在这个方法中，PartitionStateMachine 先调用 <code>initializePartitionState()</code> 方法初始化集群中所有 Partition 的状态信息：</p>
-<ol>
-<li>如果该 Partition 有 LeaderAndIsr 信息，那么如果 Partition leader 所在的机器是 alive 的，那么将其状态设置为 OnlinePartition，否则设置为 OfflinePartition 状态；</li>
-<li>如果该 Partition 没有 LeaderAndIsr 信息，那么将其状态设置为 NewPartition。</li>
-</ol>
-<p>这里只是将 Partition 的状态信息更新分区状态机的缓存 <code>partitionState</code> 中，并没有真正进行状态的转移。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 根据从 zk 获取的所有 Partition,进行状态初始化</span></span><br><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">initializePartitionState</span></span>() &#123;</span><br><span class="line">  <span class="keyword">for</span> (topicPartition &lt;- controllerContext.partitionReplicaAssignment.keys) &#123;</span><br><span class="line">    <span class="comment">// check if leader and isr path exists for partition. If not, then it is in NEW state</span></span><br><span class="line">    controllerContext.partitionLeadershipInfo.get(topicPartition) <span class="keyword">match</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> <span class="type">Some</span>(currentLeaderIsrAndEpoch) =&gt;</span><br><span class="line">        <span class="comment">// else, check if the leader for partition is alive. If yes, it is in Online state, else it is in Offline state</span></span><br><span class="line">        <span class="keyword">if</span> (controllerContext.liveBrokerIds.contains(currentLeaderIsrAndEpoch.leaderAndIsr.leader))</span><br><span class="line">          <span class="comment">// leader is alive</span></span><br><span class="line">          <span class="comment">//note: 有 LeaderAndIsr 信息,并且 leader 存活,设置为 OnlinePartition 状态</span></span><br><span class="line">          partitionState.put(topicPartition, <span class="type">OnlinePartition</span>)</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">          <span class="comment">//note: 有 LeaderAndIsr 信息,但是 leader 不存活,设置为 OfflinePartition 状态</span></span><br><span class="line">          partitionState.put(topicPartition, <span class="type">OfflinePartition</span>)</span><br><span class="line">      <span class="keyword">case</span> <span class="type">None</span> =&gt;</span><br><span class="line">        <span class="comment">//note: 没有 LeaderAndIsr 信息,设置为 NewPartition 状态（这个 Partition 还没有）</span></span><br><span class="line">        partitionState.put(topicPartition, <span class="type">NewPartition</span>)</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在初始化的第二步，将会调用 <code>triggerOnlinePartitionStateChange()</code> 方法，为所有的状态为 NewPartition/OnlinePartition 的 Partition 进行 leader 选举，选举成功后的话，其状态将会设置为 OnlinePartition，调用的 Leader 选举方法是 <a href="http://matt33.com/2018/06/15/kafka-controller-start/#OfflinePartitionLeaderSelector">OfflinePartitionLeaderSelector</a>（具体实现参考链接）。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 这个方法是在 controller 选举后或 broker 上线或下线时时触发的</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">triggerOnlinePartitionStateChange</span></span>() &#123;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    brokerRequestBatch.newBatch()</span><br><span class="line">    <span class="comment">// try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions</span></span><br><span class="line">    <span class="comment">// that belong to topics to be deleted</span></span><br><span class="line">    <span class="comment">//note: 开始为所有状态在 NewPartition or OfflinePartition 状态的 partition 更新状态（除去将要被删除的 topic）</span></span><br><span class="line">    <span class="keyword">for</span>((topicAndPartition, partitionState) &lt;- partitionState</span><br><span class="line">        <span class="keyword">if</span> !controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic)) &#123;</span><br><span class="line">      <span class="keyword">if</span>(partitionState.equals(<span class="type">OfflinePartition</span>) || partitionState.equals(<span class="type">NewPartition</span>))</span><br><span class="line">        <span class="comment">//note: 尝试为处在 OfflinePartition 或 NewPartition 状态的 Partition 选主,成功后转换为 OnlinePartition</span></span><br><span class="line">        handleStateChange(topicAndPartition.topic, topicAndPartition.partition, <span class="type">OnlinePartition</span>, controller.offlinePartitionSelector,</span><br><span class="line">                          (<span class="keyword">new</span> <span class="type">CallbackBuilder</span>).build)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//note: 发送请求给所有的 broker,包括 LeaderAndIsr 请求和 UpdateMetadata 请求（这里只是添加到 Broker 对应的 RequestQueue 中,后台有线程去发送）</span></span><br><span class="line">    brokerRequestBatch.sendRequestsToBrokers(controller.epoch)</span><br><span class="line">  &#125; <span class="keyword">catch</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt; error(<span class="string">"Error while moving some partitions to the online state"</span>, e)</span><br><span class="line">    <span class="comment">// <span class="doctag">TODO:</span> It is not enough to bail out and log an error, it is important to trigger leader election for those partitions</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>上面方法的目的是为尝试将所有的状态为 NewPartition/OnlinePartition 的 Partition 状态转移到 OnlinePartition，这个方法主要是做了两件事：</p>
-<ol>
-<li>状态转移（这个在下面详细讲述）；</li>
-<li>发送相应的请求。</li>
-</ol>
-<h3 id="分区的状态转移"><a href="#分区的状态转移" class="headerlink" title="分区的状态转移"></a>分区的状态转移</h3><p>这里以要转移的 TargetState 区分做详细详细讲解，当 TargetState 分别是 NewPartition、OfflinePartition、NonExistentPartition 或者 OnlinePartition 时，副本状态机所做的事情。</p>
-<h4 id="TargetState-NewPartition"><a href="#TargetState-NewPartition" class="headerlink" title="TargetState: NewPartition"></a>TargetState: NewPartition</h4><p>NewPartition 是 Partition 刚创建时的一个状态，其处理逻辑如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 如果该 Partition 的状态不存在,默认为 NonExistentPartition</span></span><br><span class="line"><span class="keyword">val</span> currState = partitionState.getOrElseUpdate(topicAndPartition, <span class="type">NonExistentPartition</span>)</span><br><span class="line"><span class="comment">// pre: partition did not exist before this</span></span><br><span class="line">assertValidPreviousStates(topicAndPartition, <span class="type">List</span>(<span class="type">NonExistentPartition</span>), <span class="type">NewPartition</span>)</span><br><span class="line">partitionState.put(topicAndPartition, <span class="type">NewPartition</span>) <span class="comment">//note: 缓存 partition 的状态</span></span><br><span class="line"><span class="keyword">val</span> assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).mkString(<span class="string">","</span>)</span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed partition %s state from %s to %s with assigned replicas %s"</span></span><br><span class="line">                          .format(controllerId, controller.epoch, topicAndPartition, currState, targetState,</span><br><span class="line">                                  assignedReplicas))</span><br></pre></td></tr></table></figure>
-<p>实现逻辑：</p>
-<ol>
-<li>校验其前置状态，它有效的前置状态为 NonExistentPartition；</li>
-<li>将该 Partition 的状态转移为 NewPartition 状态，并且更新到缓存中。</li>
-</ol>
-<h4 id="TargetState-OnlinePartition"><a href="#TargetState-OnlinePartition" class="headerlink" title="TargetState: OnlinePartition"></a>TargetState: OnlinePartition</h4><p>OnlinePartition 是一个 Partition 正常工作时的状态，这个状态下的 Partition 已经成功选举出了 leader 和 isr 信息，其实现逻辑如下：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 判断 Partition 之前的状态是否可以转换为目的状态</span></span><br><span class="line">assertValidPreviousStates(topicAndPartition, <span class="type">List</span>(<span class="type">NewPartition</span>, <span class="type">OnlinePartition</span>, <span class="type">OfflinePartition</span>), <span class="type">OnlinePartition</span>)</span><br><span class="line">partitionState(topicAndPartition) <span class="keyword">match</span> &#123;</span><br><span class="line">  <span class="keyword">case</span> <span class="type">NewPartition</span> =&gt; <span class="comment">//note: 新建的 Partition</span></span><br><span class="line">    <span class="comment">//note: 选举 leader 和 isr,更新到 zk 和 controller 中,如果没有存活的 replica,抛出异常</span></span><br><span class="line">    <span class="comment">// initialize leader and isr path for new partition</span></span><br><span class="line">    initializeLeaderAndIsrForPartition(topicAndPartition)</span><br><span class="line">  <span class="keyword">case</span> <span class="type">OfflinePartition</span> =&gt; <span class="comment">//note: leader 挂掉的 Partition</span></span><br><span class="line">    <span class="comment">//note: 进行 leader 选举,更新到 zk 及 controller 缓存中,失败的抛出异常</span></span><br><span class="line">    electLeaderForPartition(topic, partition, leaderSelector)</span><br><span class="line">  <span class="keyword">case</span> <span class="type">OnlinePartition</span> =&gt; <span class="comment">// invoked when the leader needs to be re-elected</span></span><br><span class="line">    <span class="comment">//note:这种只有在 leader 需要重新选举时才会触发</span></span><br><span class="line">    electLeaderForPartition(topic, partition, leaderSelector)</span><br><span class="line">  <span class="keyword">case</span> _ =&gt; <span class="comment">// should never come here since illegal previous states are checked above</span></span><br><span class="line">&#125;</span><br><span class="line">partitionState.put(topicAndPartition, <span class="type">OnlinePartition</span>)</span><br><span class="line"><span class="keyword">val</span> leader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader</span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed partition %s from %s to %s with leader %d"</span></span><br><span class="line">                          .format(controllerId, controller.epoch, topicAndPartition, currState, targetState, leader))</span><br></pre></td></tr></table></figure>
-<p>实现逻辑：</p>
-<ol>
-<li>校验这个 Partition 的前置状态，有效的前置状态是：NewPartition、OnlinePartition 或者 OfflinePartition；</li>
-<li>如果前置状态是 NewPartition，那么为该 Partition 选举 leader 和 isr，更新到 zk 和 controller 的缓存中，如果副本没有处于 alive 状态的话，就抛出异常；</li>
-<li>如果前置状态是 OnlinePartition，那么只是触发 leader 选举，在 OnlinePartition –&gt; OnlinePartition 这种状态转移时，需要传入 leader 选举的方法，触发该 Partition 的 leader 选举；</li>
-<li>如果前置状态是 OfflinePartition，同上，也是触发 leader 选举。</li>
-<li>更新 Partition 的状态为 OnlinePartition。</li>
-</ol>
-<p>对于以上这几种情况，无论前置状态是什么，最后都会触发这个 Partition 的 leader 选举，leader 成功后，都会触发向这个 Partition 的所有 replica 发送 LeaderAndIsr 请求。</p>
-<h4 id="TargetState-OfflinePartition"><a href="#TargetState-OfflinePartition" class="headerlink" title="TargetState: OfflinePartition"></a>TargetState: OfflinePartition</h4><p>OfflinePartition 是这个 Partition 的 leader 挂掉时转移的一个状态，如果 Partition 转移到这个状态，那么就意味着这个 Partition 没有了可用 leader。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// pre: partition should be in New or Online state</span></span><br><span class="line">assertValidPreviousStates(topicAndPartition, <span class="type">List</span>(<span class="type">NewPartition</span>, <span class="type">OnlinePartition</span>, <span class="type">OfflinePartition</span>), <span class="type">OfflinePartition</span>)</span><br><span class="line"><span class="comment">// should be called when the leader for a partition is no longer alive</span></span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed partition %s state from %s to %s"</span></span><br><span class="line">                          .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))</span><br><span class="line">partitionState.put(topicAndPartition, <span class="type">OfflinePartition</span>)</span><br><span class="line"><span class="comment">// post: partition has no alive leader</span></span><br></pre></td></tr></table></figure>
-<p>实现逻辑：</p>
-<ol>
-<li>校验其前置状态，它有效的前置状态为 NewPartition、OnlinePartition 或者 OfflinePartition；</li>
-<li>将该 Partition 的状态转移为 OfflinePartition 状态，并且更新到缓存中。</li>
-</ol>
-<h4 id="TargetState-NonExistentPartition"><a href="#TargetState-NonExistentPartition" class="headerlink" title="TargetState: NonExistentPartition"></a>TargetState: NonExistentPartition</h4><p>NonExistentPartition 代表了已经处于 OfflinePartition 状态的 Partition 已经从 metadata 和 zk 中删除后进入的状态。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"> <span class="comment">// pre: partition should be in Offline state</span></span><br><span class="line">assertValidPreviousStates(topicAndPartition, <span class="type">List</span>(<span class="type">OfflinePartition</span>), <span class="type">NonExistentPartition</span>)</span><br><span class="line">stateChangeLogger.trace(<span class="string">"Controller %d epoch %d changed partition %s state from %s to %s"</span></span><br><span class="line">                          .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))</span><br><span class="line">partitionState.put(topicAndPartition, <span class="type">NonExistentPartition</span>)</span><br><span class="line"><span class="comment">// post: partition state is deleted from all brokers and zookeeper</span></span><br></pre></td></tr></table></figure>
-<p>实现逻辑：</p>
-<ol>
-<li>校验其前置状态，它有效的前置状态为 OfflinePartition；</li>
-<li>将该 Partition 的状态转移为 NonExistentPartition 状态，并且更新到缓存中。</li>
-</ol>
-<h3 id="状态转移触发的条件-1"><a href="#状态转移触发的条件-1" class="headerlink" title="状态转移触发的条件"></a>状态转移触发的条件</h3><p>这里主要是看一下上面 Partition   各种转移的触发的条件，整理的结果如下表所示，部分内容会在后续文章讲解。</p>
-<table>
-<thead>
-<tr>
-<th>TargetState</th>
-<th>触发方法</th>
-<th>作用</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>OnlinePartition</td>
-<td>Controller 的 shutdownBroker()</td>
-<td>优雅关闭 Broker 时调用，因为要下线的节点是 leader，所以需要触发 leader 选举</td>
-</tr>
-<tr>
-<td>OnlinePartition</td>
-<td>Controller 的 onNewPartitionCreation()</td>
-<td>Partition 新建时，这个是在 Replica 已经变为 NewPartition 状态后进行的，为新建的 Partition 初始化 leader 和 isr</td>
-</tr>
-<tr>
-<td>OnlinePartition</td>
-<td>controller 的 onPreferredReplicaElection()</td>
-<td>对 Partition 进行最优 leader 选举，目的是触发 leader 选举</td>
-</tr>
-<tr>
-<td>OnlinePartition</td>
-<td>controller 的 moveReassignedPartitionLeaderIfRequired()</td>
-<td>分区副本迁移完成后，1. 当前的 leader 不在 RAR 中，需要触发 leader 选举；2. 当前 leader 在 RAR 但是掉线了，也需要触发 leader 选举</td>
-</tr>
-<tr>
-<td>OnlinePartition</td>
-<td>PartitionStateMachine 的 triggerOnlinePartitionStateChange()</td>
-<td>当 Controller 重新选举出来或 broker 有变化时，目的为了那些状态为 NewPartition/OfflinePartition 的 Partition 重新选举 leader，选举成功后状态变为 OnlinePartition</td>
-</tr>
-<tr>
-<td>OnlinePartition</td>
-<td>PartitionStateMachine 的 initializePartitionState()</td>
-<td>Controller 初始化时，遍历 zk 的所有的分区，如果有 LeaderAndIsr 信息并且 leader 在 alive broker 上，那么就将状态转为 OnlinePartition。</td>
-</tr>
-<tr>
-<td>OfflinePartition</td>
-<td>controller 的 onBrokerFailure()</td>
-<td>当有 broker 掉线时，将 leader 在这个机器上的 Partition 设置为 OfflinePartition</td>
-</tr>
-<tr>
-<td>OfflinePartition</td>
-<td>TopicDeletionManager 的 completeDeleteTopic()</td>
-<td>Topic 删除成功后，中间会将该 Partition 的状态先转变为 OfflinePartition</td>
-</tr>
-<tr>
-<td>NonExistentPartition</td>
-<td>TopicDeletionManager 的 completeDeleteTopic()</td>
-<td>Topic 删除成功后，最后会将该 Partition 的状态转移为 NonExistentPartition</td>
-</tr>
-<tr>
-<td>NewPartition</td>
-<td>Controller 的 onNewPartitionCreation()</td>
-<td>Partition 刚创建时的一个中间状态 ，此时还没选举 leader 和设置 isr 信息</td>
-</tr>
-</tbody>
-</table>
-<p>上面就是副本状态机与分区状态机的所有内容，这里只是单纯地讲述了一下这两种状态机，后续文章会开始介绍 Controller 一些其他内容，包括 Partition 迁移、Topic 新建、Topic 下线等，这些内容都会用到这篇文章讲述的内容。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;上篇讲述了 KafkaController 的启动流程，但是关于分区状态机和副本状态机的初始化并没有触及，分区状态机和副本状态机的内容将在本篇文章深入讲述。分区状态机记录着当前集群所有 Partition 的状态信息以及如何对 Partition 状态转移进行相应的处理；副
     
     </summary>
     

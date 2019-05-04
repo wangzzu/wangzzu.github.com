@@ -1,0 +1,206 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="application/x-javascript; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>BookKeeper 原理浅谈 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">BookKeeper 原理浅谈</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">王蒙</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">BookKeeper 原理浅谈</h1><div class="post-meta">Jan 28, 2019<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">4,010</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2019/01/28/bk-store-realize/" href="/2019/01/28/bk-store-realize/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#BookKeeper-基础"><span class="toc-number">1.</span> <span class="toc-text">BookKeeper 基础</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#BookKeeper-基本概念"><span class="toc-number">1.1.</span> <span class="toc-text">BookKeeper 基本概念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BookKeeper-架构设计"><span class="toc-number">1.2.</span> <span class="toc-text">BookKeeper 架构设计</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BookKeeper-存储层实现"><span class="toc-number">2.</span> <span class="toc-text">BookKeeper 存储层实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#新建-Ledger"><span class="toc-number">2.1.</span> <span class="toc-text">新建 Ledger</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#一致性"><span class="toc-number">2.2.</span> <span class="toc-text">一致性</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#一致性模型"><span class="toc-number">2.2.1.</span> <span class="toc-text">一致性模型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#读的一致性"><span class="toc-number">2.2.2.</span> <span class="toc-text">读的一致性</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#写的一致性"><span class="toc-number">2.2.3.</span> <span class="toc-text">写的一致性</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#读写分离"><span class="toc-number">2.3.</span> <span class="toc-text">读写分离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#读写流程"><span class="toc-number">2.4.</span> <span class="toc-text">读写流程</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Entry-写入流程"><span class="toc-number">2.4.1.</span> <span class="toc-text">Entry 写入流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Entry-读取流程"><span class="toc-number">2.4.2.</span> <span class="toc-text">Entry 读取流程</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BookKeeper-容错机制"><span class="toc-number">3.</span> <span class="toc-text">BookKeeper 容错机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Fencing-机制"><span class="toc-number">3.1.</span> <span class="toc-text">Fencing 机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Recovery-机制"><span class="toc-number">3.2.</span> <span class="toc-text">Log Recovery 机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Bookie-容错"><span class="toc-number">3.3.</span> <span class="toc-text">Bookie 容错</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#最后"><span class="toc-number">4.</span> <span class="toc-text">最后</span></a></li></ol></div></div><div class="post-content"><p>接着之前的一篇文章 <a href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/">BookKeeper 集群搭建及使用</a>，本文是 BookKeeper 系列的第二篇，短期来看应该也是最后一篇，本篇文章主要聚焦于 BookKeeper 内核的实现机制上，会从 BookKeeper 的基本概念、架构、读写一致性实现、读写分离实现、容错机制等方面来讲述，因为我并没有看过 BookKeeper 的源码，所以这里的讲述主要还是从原理、方案实现上来介绍，具体如何从解决方案落地到具体的代码实现，有兴趣的可以去看下 BookKeeper 的源码实现。</p>
+<h2 id="BookKeeper-基础"><a href="#BookKeeper-基础" class="headerlink" title="BookKeeper 基础"></a>BookKeeper 基础</h2><p>正如 Apache BookKeeper 官网介绍的一样：A scalable, fault-tolerant, and low-latency storage service optimized for real-time workloads。BookKeeper 的定位是一个可用于实时场景下的高扩展性、强容错、低延迟的存储服务。<a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming - 示说网</a> 中也做了一个简单总结：</p>
+<ol>
+<li>低延迟多副本复制：Quorum Parallel Replication；</li>
+<li>持久化：所有操作保证在刷盘后才 ack；</li>
+<li>强一致性：可重复读的一致性（Repeatable Read Consistency）;</li>
+<li>读写高可用；</li>
+<li>读写分离。</li>
+</ol>
+<h3 id="BookKeeper-基本概念"><a href="#BookKeeper-基本概念" class="headerlink" title="BookKeeper 基本概念"></a>BookKeeper 基本概念</h3><p><a href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/#BookKeeper-%E7%AE%80%E4%BB%8B">BookKeeper 简介</a> 部分已经对 BookKeeper 的基本概念做了一些讲解，这里再重新回顾一下，只有明白这些概念之后才能对更好地理解后面的内容，如下图所示，一个 Log/Stream/Topic 可以由下面的部分组成（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）。</p>
+<p><img src="/images/bookkeeper/bk5.png" alt="BookKeeper 中的基本概念"></p>
+<p>其中：</p>
+<ol>
+<li>Ledger：它是 BK 的一个基本存储单元（本质上还是一种抽象），BK Client 的读写操作也都是以 Ledger 为粒度的；</li>
+<li>Fragment：BK 的最小分布单元（实际上也是物理上的最小存储单元），也是 Ledger 的组成单位，默认情况下一个 Ledger 会对应的一个 Fragment（一个 Ledger 也可能由多个 Fragment 组成）；</li>
+<li>Entry：每条日志都是一个 Entry，它代表一个 record，每条 record 都会有一个对应的 entry id；</li>
+</ol>
+<p>关于 Fragment，它是 Ledger 的物理组成单元，也是最小的物理存储单元，在以下两种情况下会创建新的 Fragment：</p>
+<ol>
+<li>当创建新的 Ledger 时；</li>
+<li>当前 Fragment 使用的 Bookies 发生写入错误或超时，系统会在剩下的 Bookie 中新建 Fragment，但这时并不会新建 Ledger，因为 Ledger 的创建和关闭是由 Client 控制的，这里只是新建了 Fragment（需要注意的是：<strong>这两个 Fragment 对应的 Ensemble Bookie 已经不一样了</strong>，但它们都属于一个 Ledger，这里并不一定是一个 Ensemble Change 操作）。</li>
+</ol>
+<h3 id="BookKeeper-架构设计"><a href="#BookKeeper-架构设计" class="headerlink" title="BookKeeper 架构设计"></a>BookKeeper 架构设计</h3><p>Apache BookKeeper 的架构如下图所示，它主要由三个组件构成：客户端 (client)、数据存储节点 (Bookie) 和元数据存储 Service Discovery（ZooKeeper），Bookies 在启动的时候向 ZooKeeper 注册节点，Client 通过 ZooKeeper 发现可用的 Bookie。</p>
+<p><img src="/images/bookkeeper/bk-articture.png" alt="Apache BookKeeper 架构"></p>
+<p>这里，我们可以看到 BookKeeper 架构属于典型的 slave-slave 架构，zk 存储其集群的 meta 信息（zk 虽是单点，但 zk 目前的高可用还是很有保障的），这种模式的好处显而易见，server 端变得非常简单，所有节点都是一样的角色和处理逻辑，能够这样设计的主要原因是其副本没有 leader 和 follower 之分，这是它与一些常见 mq（如：kafka、RocketMQ）系统的典型区别，每种设计都有其 trade-off，BeekKeeper 从设计之初就是为了高可靠而设计。</p>
+<h2 id="BookKeeper-存储层实现"><a href="#BookKeeper-存储层实现" class="headerlink" title="BookKeeper 存储层实现"></a>BookKeeper 存储层实现</h2><p>Apache BookKeeper 是一个高可靠的分布式存储系统，存储层的实现是其核心，对一个存储系统来说，关键的几点实现，无非是：一致性如何保证、IO 如何优化、高可用如何实现等，这小节就让我们揭开其神秘面纱。</p>
+<h3 id="新建-Ledger"><a href="#新建-Ledger" class="headerlink" title="新建 Ledger"></a>新建 Ledger</h3><p>Ledger 是 BookKeeper 的基本存储抽象单元，这里先看下一个 Ledger 是如何创建的，这里会介绍一些关于 Ledger 存储层的一些重要概念（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）。</p>
+<p><img src="/images/bookkeeper/bk2.png" alt="BookKeeper Ledger 的创建"></p>
+<p>Ledger 是一组追加有序的记录，它是由 Client 创建的，然后由其进行追加写操作。每个 Ledger 在创建时会被赋予全局唯一的 ID，其他的 Client 可以根据 Ledger ID，对其进行读取操作。创建 Ledger 及 Entry 写入的相关过程如下：</p>
+<ol>
+<li>Client 在创建 Ledger 的时候，从 Bookie Pool 里面按照指定的数据放置策略挑选出一定数量的 Bookie，构成一个 Ensemble；</li>
+<li>每条 Entry 会被并行地发送给 Ensemble 里面的部分 Bookies（每条 Entry 发送多少个 Bookie 是由 Write Quorum size 设置、具体发送哪些 Bookie 是由 Round Robin 算法来计算），并且所有 Entry 的发送以流水线的方式进行，也就是意味着发送第 N + 1 条记录的写请求不需要等待发送第 N 条记录的写请求返回；</li>
+<li>对于每条 Entry 的写操作而言，当它收到 Ensemble 里面大多数 Bookie 的确认后（这个由 Ack Quorum size 来设置），Client 认为这条记录已经持久化到这个 Ensemble 中，并且有大多数副本。</li>
+</ol>
+<p><img src="/images/bookkeeper/bk3.png" alt="BookKeeper Ledger 多副本复制"></p>
+<p>这里引入了三个重要的概念，它们也是 BookKeeper 一致性的基础：</p>
+<ol>
+<li>Ensemble size(E)：Set of Bookies across which a ledger is striped，一个 Ledger 所涉及的 Bookie 集合；</li>
+<li>Write Quorum Size（Qw）：Number of replicas，副本数；</li>
+<li>Ack Quorum Size（Qa）：Number of responses needed before client’s write is satisfied。</li>
+</ol>
+<p>从上面 Ensemble、Qw、Qa 的概念可以得到以下这些推论：</p>
+<ol>
+<li>Ensemble：可以控制一个 Ledger 的读写带宽；</li>
+<li>Write Quorum：控制一条记录的复本数；</li>
+<li>Ack Quorum：写每条记录需要等待的 Ack 数 ，控制时延； </li>
+<li>增加 Ensemble，可以增加读写带宽（增加了可写的机器数）；</li>
+<li>减少 Ack Quorum，可以减长尾时延。</li>
+</ol>
+<h3 id="一致性"><a href="#一致性" class="headerlink" title="一致性"></a>一致性</h3><p>对于分布式存储系统，为了高可用，多副本是其通用的解决方案，但也带来了一致性的问题，这里就看下 Apache BookKeeper 是如何解决其带来的一致性问题的。</p>
+<h4 id="一致性模型"><a href="#一致性模型" class="headerlink" title="一致性模型"></a>一致性模型</h4><p>在介绍其读写一致性之前，先看下 BK 的一致性模型（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
+<p><img src="/images/bookkeeper/bk-consistency1.png" alt="BookKeeper 一致性模型-开始时的状态"></p>
+<p>对于 Write 操作而言，writer 不断添加记录，每条记录会被 writer 赋予一个严格递增的 id，所有的追加操作都是异步的，也就是说：第二条记录不用等待第一条记录返回结果。所有写成功的操作都会按照 id 递增顺序返回 ack 给 writer。（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
+<p><img src="/images/bookkeeper/bk-consistency2.png" alt="BookKeeper 一致性模型-追加数据时的中间状态"></p>
+<p>伴随着写成功的 ack，writer 不断地更新一个指针叫做 <strong>Last-Add-Confirm（LAC）</strong>，所有 Entry id 小于等于 LAC 的记录保证持久化并复制到大多数副本上，而 LAC 与 <strong>LAP（Last-Add-Pushed）</strong>之间的记录就是已经发送到 Bookie 上但还未被 ack 的数据。</p>
+<h4 id="读的一致性"><a href="#读的一致性" class="headerlink" title="读的一致性"></a>读的一致性</h4><p>所有的 Reader 都可以安全读取 Entry ID 小于或者等于 LAC 的记录，从而保证 reader 不会读取未确认的数据，从而保证了 reader 之间的一致性（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
+<p><img src="/images/bookkeeper/bk-consistency3.png" alt="BookKeeper 一致性模型-读的一致性"></p>
+<h4 id="写的一致性"><a href="#写的一致性" class="headerlink" title="写的一致性"></a>写的一致性</h4><p>从上面的介绍中，也可以看出，对于 BK 的多个副本，其并没有 leader 和 follower 之分，因此，BK 并不会进行相应的选主（leader election）操作，并且限制<strong>每个 Ledger 只能被一个 Writer 写，BK 通过 Fencing 机制来防止出现多个 Writer 的状态</strong>，从而保证写的一致性。</p>
+<h3 id="读写分离"><a href="#读写分离" class="headerlink" title="读写分离"></a>读写分离</h3><p>下面来看下 BK 存储层一个很重要的设计，那就是读写分离机制。在论文 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a> 中，关于读写分离机制的介绍如下所示（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
+<p><img src="/images/bookkeeper/bk7.png" alt="BookKeeper 读写分离"></p>
+<p>A bookie uses two devices, ideally in separate physical disks: </p>
+<ol>
+<li><strong>The journal device</strong> is a write-ahead log and stores synchronously and sequentially all updates the bookie executes. </li>
+<li><strong>The ledger device</strong> contains an indexed copy of a ledger fragment, which a bookie uses to respond to read requests. </li>
+</ol>
+<p>上面是论文中关于 BK 读写分离机制实现的介绍，我当时在看完上面的记录之后，脑海中有以下疑问：</p>
+<ol>
+<li>一个写请求是怎么处理？什么时候数据被认为是 ack 了；</li>
+<li>数据肯定先写到 Journal Device 中的，那么数据是如何到 Ledger Device 中的？</li>
+<li>Ledger Device 中的顺序写跟随机读是什么意思？难道跟 RocketMQ 的存储结构一样？</li>
+<li>Ledger Device 底层是怎么切分实际的物理文件的？</li>
+<li>数据在什么时候才能可见？</li>
+<li>在从 Ledger Device 读数据时，它是通过什么机制提高查询速度的？</li>
+</ol>
+<p>带着这些疑问，接下来来分析其实现（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）：</p>
+<p><img src="/images/bookkeeper/bk1.png" alt="BookKeeper 读写分离"></p>
+<p>Journal Device 分析：</p>
+<ul>
+<li>处理写入请求时，如果 Journal 是在专用的磁盘上，由于是顺序写入刷盘，性能会很高；</li>
+</ul>
+<p>Ledger Device 的实现：</p>
+<ul>
+<li>Bookie 最初的设计方案是每个 Ledger 对应一个物理文件，但这样会极大消耗写性能，所以 Bookie 当前的设计方案是所有 Ledger 都写一个单独的文件中，这个文件又叫 entry log；</li>
+<li>写入时，不但会写入到 Journal 中还会写入到缓存（memtable）中，定期会做刷盘（<strong>刷盘前会做排序</strong>，通过 <strong>聚合+排序</strong> 优化读取性能）；</li>
+<li>优化查找：Ledger Device 中会维护一个索引结构，存储在 RocksDB 中，它会<strong>将 (LedgerId，EntryId) 映射到(EntryLogId，文件中的偏移量)</strong>。</li>
+</ul>
+<h3 id="读写流程"><a href="#读写流程" class="headerlink" title="读写流程"></a>读写流程</h3><p>了解完 BK 的一致性模型和读写分离机制之后，这里来看下 BK 的读写流程。</p>
+<h4 id="Entry-写入流程"><a href="#Entry-写入流程" class="headerlink" title="Entry 写入流程"></a>Entry 写入流程</h4><p>这里以一个例子来说明，假设 E 是3，Qw 和 Qa 是2，那么 Entry 写入如下图（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
+<p><img src="/images/bookkeeper/bk8.png" alt="BookKeeper Entry 写入流程"></p>
+<ol>
+<li>Writer 会先分配对应的 id，然后按照 round-robin 算法从3个 Bookie 中选取2个 Bookie；</li>
+<li>Writer 会向两个 Bookie 发送写入请求，因为 Qa 设置为2，只有收到两个 ack 响应后，才会认为这条 Entry 写入成功；</li>
+</ol>
+<p><strong>如果写入过程中有一台 Bookie 挂了怎么办？</strong></p>
+<ol>
+<li>那么只能向另外2台 Bookie 写入数据；</li>
+<li>这时候这个 Ledger 会新建一个 Fragment，假设挂的是A，之前 Ensemble 是 A、B、C，现在的是 B、C；</li>
+<li>这个变化会更新到 zk 中这个 Ledger 的 meta 中。</li>
+</ol>
+<p><strong>如果写入过程中有两个 Bookie 挂了怎么办？</strong></p>
+<ol>
+<li>Ensemble 里面的存活的 Bookies 不能满足 Qw 的要求；</li>
+<li>Client 会进行一个 <strong>Ensemble Change</strong> 操作；</li>
+<li>Ensemble Change 将从 Bookie Pool 中根据数据放置策略挑选出额外的 Bookie 用来取代那些不存活的 Bookie 。</li>
+</ol>
+<h4 id="Entry-读取流程"><a href="#Entry-读取流程" class="headerlink" title="Entry 读取流程"></a>Entry 读取流程</h4><p>这里依然以一个例子做说明，例子是紧接着上面的示例，如下图所示（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
+<p><img src="/images/bookkeeper/bk9.png" alt="BookKeeper Entry 读取流程"></p>
+<p>如何想要读取 id 为1的那条 Entry 应该怎么做？</p>
+<ul>
+<li>在读取会选择最优的 Bookie，有了 Entry 的 id 和 Ledger 的 Ensemble 就可以根据 round-robin 计算出其所在 Bookie 信息，会选择向其中一个 Bookie 发送读请求。</li>
+</ul>
+<p>这种机制会导致，读取数据时可能需要从多个 Bookie 获取数据，需要并发访问多个 Bookie，性能会变差，极端情况会有这个问题。</p>
+<ul>
+<li>BK 有一个优化策略：读取时一般是选择读一段数据，如果 entries 在同一台机器上，会从同一个 Bookie 把这批 Entry 全部读取。</li>
+</ul>
+<p>BK 怎么处理长尾效应的问题（长尾效应指的是某台机器上某段或者某条数据读取得比较慢，进而影响了整体的效率）？</p>
+<ul>
+<li>Client 可以向任意一个副本读取相应的 Entry，但为了保证低延时，这里使用了一个叫 <strong>Speculative Read</strong> 的机制。读请求首先发送给第一个副本后，如果在指定的时间内没有收到 reponse，则发送读请求给第二个副本，然后同时等待第一个和第二个副本。谁第一个返回，即读取成功。通过有效的 Speculative read，可以很大程度减少长尾效应。</li>
+</ul>
+<h2 id="BookKeeper-容错机制"><a href="#BookKeeper-容错机制" class="headerlink" title="BookKeeper 容错机制"></a>BookKeeper 容错机制</h2><p>这里来简单来看下 BookKeeper 容错机制的实现。</p>
+<h3 id="Fencing-机制"><a href="#Fencing-机制" class="headerlink" title="Fencing 机制"></a>Fencing 机制</h3><p>Fencing 机制在前面已经简单介绍过了，它目的主要是为了保证写的一致性，<strong>严格保证一个 Ledger 只能被一个 Writer 来写</strong>。</p>
+<p>Fencing 怎么触发呢？</p>
+<ul>
+<li>如果一个 Writer 打开一个 Ledger，发现这个 Ledger 存在，并且没有 close，这种情况下，就会触发 Fencing 策略，并且触发 Ledger Recovery。</li>
+</ul>
+<h3 id="Log-Recovery-机制"><a href="#Log-Recovery-机制" class="headerlink" title="Log Recovery 机制"></a>Log Recovery 机制</h3><p>一个 Ledger 正常关闭后，会在其 Metadata 中存储 the last entry 的信息，所以正常关闭一个 Ledger 是非常重要的（<strong>Ledger 一旦关闭，其就是不可变的</strong>，读取的时候可以从任意一个 Bookie 上读取，而不需要再取 care 这个 Ledger 的 LAC 信息），否则可能会出现这样一种情况：</p>
+<p>由于 Writer 挂了（Ledger 未正常关闭），导致部分数据写入成功，实际上这个条消息并不满足 Qw（可能满足了 Qa），会导致不同 Reader 读取的结果不一致！如下图所示：</p>
+<p><img src="/images/bookkeeper/bk10.png" alt="不同 Reader 读取不一致的情况"></p>
+<p>解决方案就是： <strong>Log Recovery</strong>，正常关闭这个 Ledger，并将 The Last Entry 及状态更新到 metadata 中。</p>
+<p>Log Recovery 怎么实现呢？通常有两种方案：</p>
+<ol>
+<li>遍历这个 Ledger 所有 Entry 进行恢复；</li>
+<li>利用 LAC 机制可以加速 recovery：恢复前，先获取每个 Ledger 的 LAC 信息，然后从 LAC 开始恢复；</li>
+</ol>
+<p>很明显，第二种方案是比较合理的恢复速度更快。</p>
+<h3 id="Bookie-容错"><a href="#Bookie-容错" class="headerlink" title="Bookie 容错"></a>Bookie 容错</h3><p>当一个 Bookie 故障时：</p>
+<ul>
+<li>所有在这个 Bookie 上的 Ledgers 都处于 under-replica 状态，恢复就是复制 Fragment （Ledger 的组成单位）的过程，以确保每个 Ledger 维护的副本数打到 Qw。</li>
+</ul>
+<p>Bk 提供自动和手动两种方式：两种方式的复制协议是一样的；自动恢复是 BK 内部自动触发，手动过程需要手动干预，这里重点介绍自动过程：</p>
+<ol>
+<li>自动恢复是在 Bookie 上运行 <strong>AutoRecoveryMain 线程</strong>来实现，它会首先通过 zk 选举一个 Auditor；</li>
+<li>Auditor 的作用是<strong>检查不可用的 Bookie</strong>，然后做下面的操作：读取 zk 上完整的 Ledgers 信息，找到失败的 Ledgers（副本不满足条件的）；然后在 zk 的 <code>/underreplicated</code> znode 节点创建重新复制任务；</li>
+<li>AutoRecoveryMain 还有 Replicator Worker 线程会复制相应的 Fragment 到自己的 Ledger 上，如果复制后满足 Fully Replicated，那么就从 zk 的节点中删除这个任务；</li>
+</ol>
+<p><img src="/images/bookkeeper/bk11.png" alt="Bookie 容错机制"></p>
+<p>每个 Bookie 在发现任务时会尝试锁定，如果无法锁定就会执行后面的任务。如果获得锁，那么：</p>
+<ol>
+<li>扫描 Ledgers，查找不属于当前 Bookie 的 Fragment；</li>
+<li>对于每个匹配的 Fragment，它将另一个 Bookie 的数据复制到它自己的 Bookie，用新的集合更新 Zookeeper 并将 Fragment 标识为 Fully Replicated。</li>
+</ol>
+<p>如果 Ledgers 仍然存在副本数不足的 Fragment，则释放锁。如果所有 Fragment 都已经Fully Replicated，则从 <code>/underreplicated</code> 删除重复复制任务。</p>
+<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>到这里，关于 BK 内核实现的主要部分已经介绍完毕，这篇文章的主要内容来自之前在团队的一次分享，一直想整理成博客的，但一直拖到了现在（因为并没有去看代码实现，主要是跟 bk 的论文及相关资料来整理的，有问题的地方欢迎指正）。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>;</li>
+<li><a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>；</li>
+<li><a href="https://bookkeeper.apache.org/docs/4.8.0/overview/overview/" target="_blank" rel="external">Apache BookKeeper Documentation</a>;</li>
+<li><a href="https://streaml.io/blog/intro-to-bookkeeper" target="_blank" rel="external">Introduction to Apache BookKeeper</a>;</li>
+<li><a href="https://streaml.io/blog/why-apache-bookkeeper" target="_blank" rel="external">Why Apache BookKeeper? Part 1: consistency, durability, availability</a>;</li>
+<li><a href="https://streaml.io/blog/why-bookkeeper-part-2" target="_blank" rel="external">Why Apache Bookkeeper? Part 2</a>；</li>
+<li><a href="https://jack-vanlightly.com/blog/2018/10/2/understanding-how-apache-pulsar-works?from=timeline" target="_blank" rel="external">Understanding How Apache Pulsar Works</a>；</li>
+<li><a href="https://jack-vanlightly.com/blog/2018/9/10/how-to-lose-messages-on-a-rabbitmq-cluster" target="_blank" rel="external">How to Lose Messages on a RabbitMQ Cluster</a>；</li>
+<li><a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming - 示说网</a>；</li>
+<li><a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>；</li>
+</ul>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2019/01/28/bk-store-realize/" data-id="cjv8bavm0007cox9kkfnelu2t" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/bk/">bk</a></div><div class="post-nav"><a href="/2019/03/07/apache-calcite-process-flow/" class="pre">Apache Calcite 处理流程详解（一）</a><a href="/2018/11/21/effective-learning/" class="next">如何高效学习</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2019/01/28/bk-store-realize/';
+var disqus_title = 'BookKeeper 原理浅谈';
+var disqus_url = 'http://matt33.com/2019/01/28/bk-store-realize/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-weibo"> 微博</i></div><iframe width="100%" height="90" class="share_self"  frameborder="0" scrolling="no" src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=100&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=0&isFans=0&uid=2650396571&verifier=f2f0e397&colors=D8D8D8,ffffff,666666,0082cb,ecfbfd&dpc=1"></iframe></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2019/03/17/apache-calcite-planner/">Apache Calcite 优化器详解（二）</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/03/07/apache-calcite-process-flow/">Apache Calcite 处理流程详解（一）</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/01/28/bk-store-realize/">BookKeeper 原理浅谈</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/11/21/effective-learning/">如何高效学习</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/11/04/kafka-transaction/">Kafka Exactly-Once 之事务性实现</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/24/kafka-idempotent/">Kafka 事务性之幂等性实现</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/19/bk-cluster-install-and-use/">BookKeeper 集群搭建及使用</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/09/01/yarn-architecture-learn/">YARN 架构学习总结</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/08/01/system-learn-summary/">如何学习开源项目</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/07/28/jvm-cms/">JVM 之 ParNew 和 CMS 日志分析</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
