@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2019-10-20T17:01:59.517Z</updated>
+  <updated>2019-10-20T17:13:22.845Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,7 +20,7 @@
     <link href="http://matt33.com/2019/10/20/paper-flink-snapshot/"/>
     <id>http://matt33.com/2019/10/20/paper-flink-snapshot/</id>
     <published>2019-10-20T03:41:42.000Z</published>
-    <updated>2019-10-20T17:01:59.517Z</updated>
+    <updated>2019-10-20T17:13:22.845Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是对 <a href="https://arxiv.org/pdf/1506.08603.pdf" target="_blank" rel="external">Lightweight Asynchronous Snapshots for Distributed Dataflow</a> 的一个总结，从文章题目也可以看出文章的主题 —— 分布式 dataflow 的轻量级异步 snapshot 算法，它是 Flink 团队在 2015 年发表的论文，主要讲述了对于 Streaming System 如何做 snapshot 的，它选取的是 Chandy-Lamport 算法（论文见 <a href="https://www.microsoft.com/en-us/research/uploads/prod/2016/12/Determining-Global-States-of-a-Distributed-System.pdf" target="_blank" rel="external"> Distributed Snapshots: Determining Global States of Distributed Systems</a>），关于这个算法后面会单独一篇文章来总结。在 <a href="https://arxiv.org/pdf/1506.08603.pdf" target="_blank" rel="external">Lightweight Asynchronous Snapshots for Distributed Dataflow</a> 这篇论文中，作者更多向我们表达的是 Chandy-Lamport 算法如何在 Flink 中落地的以及如何解决分布式 dataflow 做 snapshot 时遇到的痛点。</p>
 <h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>分布式有状态的流处理允许在云上部署和执行大规模的流数据计算，并且要求低延迟和高吞吐。这种模式一个比较大的挑战，就是其容错能力，能够应对潜在的 failure。当前业内的方案都是依赖<strong>周期性地全局状态的 snapshot </strong> 做 failure recovery。但这种方案有两个非常大的缺陷：</p>
@@ -39,11 +39,11 @@
 <p>这个实现方案对吞吐和空间占用都有很大的影响，它并不是一个很好的方案。另一个实现方案，就是 Chandy-Lamport 算法，当前它已经应用在很多的系统中，<strong>它是异步地执行快照，并且要求上游数据源可以回溯</strong>（也就是要求数据源能够自己备份）。它是通过在数据流中发送 marker 来实现，marker 会触发 operator 和 state 的 snapshot。但这种算法还需要额外的存储空间用于上游数据量恢复，数据流的重新计算也会导致恢复时间较长（主要还是原生算法会对一些 record 也做相应的 snapshot，这会导致存储空间占用过高以及恢复时间过长）。本论文中提出的方案扩展了原生的 Chandy-Lamport 算法，但对于无环 graph 它不会备份未处理及通道中正在传输的 record，对于有环的 graph，它也只需要很少量的 record 备份。</p>
 <h2 id="解决方案：Asynchronous-Barrier-Snapshot（ABS）"><a href="#解决方案：Asynchronous-Barrier-Snapshot（ABS）" class="headerlink" title="解决方案：Asynchronous Barrier Snapshot（ABS）"></a>解决方案：Asynchronous Barrier Snapshot（ABS）</h2><p>因为这个算法的实现本身就是为了解决 <a href="https://flink.apache.org/" target="_blank" rel="external">Apache Flink</a> 的容错问题，论文中的描述也是以 Flink 系统为例，所以想要搞明白这个算法还是需要一些 Flink 的基础，本文中，我们就不再对 Flink 展开了。这里只简单介绍一下，有兴趣的可以看下官网资料，Flink 是一个可用于 Streaming 和 Batch 处理的大数据处理引擎，它本身的设计也是深受 Google DataFlow 模型的影响，可以说 Flink 是开源系统中最接近 DataFlow 思想的一个计算引擎。另外，Flink 的作业，在提交的时候都会被翻译成一个有向无环图（DAG），对于 Flink Master 来说，提交过来的作业都是一个 graph。</p>
 <h3 id="Problem-Definition"><a href="#Problem-Definition" class="headerlink" title="Problem Definition"></a>Problem Definition</h3><p>这里，我们这样定义一个 global snapshot（它需要包含所有的状态信息，这样才能保证 failover 之后能够正确恢复状态）：</p>
-<p>$$<br>G^<em> = (T^</em>, E^*)<br>$$</p>
-<p>它代表一个 execution graph $G = (T, E)$ 的一个全局快照，\(T^<em>\) 代表所有 task 状态的集合，$E^</em>$ 代表所有 edge 状态的集合。也就是说：</p>
+<p>$G^*=(T^*, E^*)$</p>
+<p>它代表一个 execution graph $G = (T, E)$ 的一个全局快照，$T^*$ 代表所有 task 状态的集合，$E^*$ 代表所有 edge 状态的集合。也就是说：</p>
 <ol>
 <li>$∀t ∈ T, s_t^∗ ∈ T^∗$，$T^*$ 会包含所有 Operator 的状态；</li>
-<li>$E^<em>$ 会包含所有 channel 状态的集合，$e^</em>$ 会包含 $e$ 中正在传输的所有 record。</li>
+<li>$E^*$ 会包含所有 channel 状态的集合，$e^*$ 会包含 $e$ 中正在传输的所有 record。</li>
 </ol>
 <p>为了能够保证 recovery 后正确恢复状态信息，对于每个 $G^*$，都需要保证以下两个特性：</p>
 <ol>
@@ -70,7 +70,7 @@
 <li>当从所有输入 channel 都接收到 barrier 之后，这个 task 会对当前状态做一个 snapshot，并且 broadcast 这个 barrier 到所有的输出端（如上图中的 c 子图以及代码第 12-13 行）；</li>
 <li>最后，这个 task 会 unblock 它所有的输入 channel，继续进行计算（如上图中的 d 子图以及代码第 15 行）。</li>
 </ol>
-<p>根据前面所示，我们知道，当前一个完整的 snapshot $G^<em> = (T^</em>, E^<em>)$，其 $E^</em> =0$，Operator 中的 state 信息就是完整的 snapshot。</p>
+<p>根据前面所示，我们知道，当前一个完整的 snapshot $G^* = (T^*, E^*)$，其 $E^* =0$，Operator 中的 state 信息就是完整的 snapshot。</p>
 <p>对于 Termination 要求，它依赖于 channel 的可靠性以及 graph 的无环性；对于 Feasibility 要求，它依赖于 channel 的 FIFO 特性。只要这些是可以满足的，那么这两个要求就是可以满足的。</p>
 <h3 id="ABS-for-Cyclic-Dataflows：有环-dataflow-中的-ABS-实现"><a href="#ABS-for-Cyclic-Dataflows：有环-dataflow-中的-ABS-实现" class="headerlink" title="ABS for Cyclic Dataflows：有环 dataflow 中的 ABS 实现"></a>ABS for Cyclic Dataflows：有环 dataflow 中的 ABS 实现</h3><p>前面分析完无环的情况，接下来再来看看有环的情况，当前的 ABS 算法稍微做些改造也是可以处理有环的情况。根据前面的介绍，有环带来的最大问题是：</p>
 <ol>
