@@ -15,8 +15,8 @@
 <p>这个实现方案对吞吐和空间占用都有很大的影响，它并不是一个很好的方案。另一个实现方案，就是 Chandy-Lamport 算法，当前它已经应用在很多的系统中，<strong>它是异步地执行快照，并且要求上游数据源可以回溯</strong>（也就是要求数据源能够自己备份）。它是通过在数据流中发送 marker 来实现，marker 会触发 operator 和 state 的 snapshot。但这种算法还需要额外的存储空间用于上游数据量恢复，数据流的重新计算也会导致恢复时间较长（主要还是原生算法会对一些 record 也做相应的 snapshot，这会导致存储空间占用过高以及恢复时间过长）。本论文中提出的方案扩展了原生的 Chandy-Lamport 算法，但对于无环 graph 它不会备份未处理及通道中正在传输的 record，对于有环的 graph，它也只需要很少量的 record 备份。</p>
 <h2 id="解决方案：Asynchronous-Barrier-Snapshot（ABS）"><a href="#解决方案：Asynchronous-Barrier-Snapshot（ABS）" class="headerlink" title="解决方案：Asynchronous Barrier Snapshot（ABS）"></a>解决方案：Asynchronous Barrier Snapshot（ABS）</h2><p>因为这个算法的实现本身就是为了解决 <a href="https://flink.apache.org/" target="_blank" rel="external">Apache Flink</a> 的容错问题，论文中的描述也是以 Flink 系统为例，所以想要搞明白这个算法还是需要一些 Flink 的基础，本文中，我们就不再对 Flink 展开了。这里只简单介绍一下，有兴趣的可以看下官网资料，Flink 是一个可用于 Streaming 和 Batch 处理的大数据处理引擎，它本身的设计也是深受 Google DataFlow 模型的影响，可以说 Flink 是开源系统中最接近 DataFlow 思想的一个计算引擎。另外，Flink 的作业，在提交的时候都会被翻译成一个有向无环图（DAG），对于 Flink Master 来说，提交过来的作业都是一个 graph。</p>
 <h3 id="Problem-Definition"><a href="#Problem-Definition" class="headerlink" title="Problem Definition"></a>Problem Definition</h3><p>这里，我们这样定义一个 global snapshot（它需要包含所有的状态信息，这样才能保证 failover 之后能够正确恢复状态）：</p>
-<p>$$G^<em> = (T^</em>, E^*)$$</p>
-<p>它代表一个 execution graph $G = (T, E)$ 的一个全局快照，$T^<em>$ 代表所有 task 状态的集合，$E^</em>$ 代表所有 edge 状态的集合。也就是说：</p>
+<p>$$<br>G^<em> = (T^</em>, E^*)<br>$$</p>
+<p>它代表一个 execution graph $G = (T, E)$ 的一个全局快照，\(T^<em>\) 代表所有 task 状态的集合，$E^</em>$ 代表所有 edge 状态的集合。也就是说：</p>
 <ol>
 <li>$∀t ∈ T, s_t^∗ ∈ T^∗$，$T^*$ 会包含所有 Operator 的状态；</li>
 <li>$E^<em>$ 会包含所有 channel 状态的集合，$e^</em>$ 会包含 $e$ 中正在传输的所有 record。</li>
