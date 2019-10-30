@@ -1,0 +1,208 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>Paper 阅读:  Distributed Snapshots: Determining Global States of Distributed Systems | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">Paper 阅读:  Distributed Snapshots: Determining Global States of Distributed Systems</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">王蒙</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">Paper 阅读:  Distributed Snapshots: Determining Global States of Distributed Systems</h1><div class="post-meta">Oct 27, 2019<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">6,217</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2019/10/27/paper-chandy-lamport/" href="/2019/10/27/paper-chandy-lamport/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#背景-amp-问题"><span class="toc-number">1.</span> <span class="toc-text">背景 & 问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#分布式系统模型"><span class="toc-number">2.</span> <span class="toc-text">分布式系统模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#global-state-模型"><span class="toc-number">2.1.</span> <span class="toc-text">global state 模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#示例"><span class="toc-number">2.2.</span> <span class="toc-text">示例</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Exmaple-1：Single-token-Conservation"><span class="toc-number">2.2.1.</span> <span class="toc-text">Exmaple 1：Single-token Conservation</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Example-2-非确定性计算"><span class="toc-number">2.2.2.</span> <span class="toc-text">Example 2: 非确定性计算</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Chandy-Lamport-算法"><span class="toc-number">3.</span> <span class="toc-text">Chandy-Lamport 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#算法的动机-由来"><span class="toc-number">3.1.</span> <span class="toc-text">算法的动机/由来</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#p-与-c-状态之间的关系"><span class="toc-number">3.1.1.</span> <span class="toc-text">p 与 c 状态之间的关系</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#q-与-c-状态之间的关系"><span class="toc-number">3.1.2.</span> <span class="toc-text">q 与 c 状态之间的关系</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#分析"><span class="toc-number">3.1.3.</span> <span class="toc-text">分析</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#算法概况"><span class="toc-number">3.1.4.</span> <span class="toc-text">算法概况</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#算法能够在有限时间结束的论证"><span class="toc-number">3.2.</span> <span class="toc-text">算法能够在有限时间结束的论证</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#算法证明"><span class="toc-number">4.</span> <span class="toc-text">算法证明</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#算法结论"><span class="toc-number">4.1.</span> <span class="toc-text">算法结论</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#结论证明"><span class="toc-number">4.2.</span> <span class="toc-text">结论证明</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><p>今天对分布式系统领域的一篇经典论文 —— Chandy-Lamport 算法做了一下总结，这篇论文对于分布式快照算法产生了非常巨大的影响，比如：Apache Flink、Apache Spark 的 Structured Streaming、Ray 等分布式计算引擎都是使用的这个算法做快照。这篇论文的其中一位作者 —— Lamport，他也是 Paxos 算法的提出者，2013 年图领奖得主（图领奖是计算机领域的诺贝尔奖，目前只有一位华裔 —— 姚期智院士获得过这个殊荣，没错，就是清华交叉学院姚班的姚院士）。这篇论文发表于 1985 年，算法的由来可以参考下面的小段子：</p>
+<blockquote>
+<p>The distributed snapshot algorithm described here came about when I visited Chandy, who was then at the University of Texas in Austin. He posed the problem to me over dinner, but we had both had too much wine to think about it right then. The next morning, in the shower, I came up with the solution. When I arrived at Chandy’s office, he was waiting for me with the same solution.</p>
+</blockquote>
+<p>另外，如果你只是想要明白这个算法是怎么做的，可以直接看这篇文章 —— <a href="https://zhuanlan.zhihu.com/p/53482103" target="_blank" rel="external">分布式快照算法: Chandy-Lamport 算法</a>，它讲得更通俗易懂，本文更多的是论文的角度来讲述，会详细介绍一下这个算法的数学证明。</p>
+<h2 id="背景-amp-问题"><a href="#背景-amp-问题" class="headerlink" title="背景 &amp; 问题"></a>背景 &amp; 问题</h2><p>分布式系统的很多问题都可以归结于获取 global states 的问题，比如：</p>
+<ol>
+<li>stable property detection（系统的一些稳定特性检测），一个 stable property 是不可变的，如：计算停止或完成了（不会自己恢复的）、系统死锁了（不会自己恢复），通过 global states，就可以检测到这些 stable property；</li>
+<li>用于 checkpoint。</li>
+</ol>
+<p>但是获取一个系统的 global states 并不是一件容易的事情，对于一个分布式系统而言，我们需要在同一个时间点记录下这个系统的全局状态，它包括每个 process 的状态以及相关 channel 的状态（一个计算是由有限的 process 和 channel 组成的一个 graph）。这就好比：在一个满是候鸟的天空大场景下，这个场景大到一张照片无法全部覆盖，摄影师不得不拍摄多张照片，然后把它们合并成一张全景，因为多张照片不能同时拍摄、在拍摄过程中候鸟也不会静止不动，所以如何保证合成的全景照片是有意义的（它可能少拍了某些鸟或者多拍了某些鸟）？这个就是分布式快照算法要解决的问题，因为没有全局统一的一把锁，所以不可能保证所有 process 能在同一时刻记录他们的状态信息。</p>
+<h2 id="分布式系统模型"><a href="#分布式系统模型" class="headerlink" title="分布式系统模型"></a>分布式系统模型</h2><p>一个分布式系统包含一个有限的 process 集合和有限的 channel 集合，它可以通过一个有向的 graph（顶点代表process、边代表 channel）来描述，如下图所示：</p>
+<p><img src="/images/paper/chandy-lamport-1.png" alt="一个分布式系统示例"> </p>
+<p><strong>Channel</strong>：这里为了便于解释，文章会假设一个 channel 有一个无限、零错误、有序传输的 buffer（否者还要考虑 buffer 是否 full 的情况），channel 中数据的延迟是任意的并且有限的。一个 channel 的 state 就是它从上游收到的 msg list 减去下游已经接收到的 msg list；</p>
+<p><strong>Process</strong>：它是由一组状态、一个初始状态和一组 event 来定义。process <code>p</code> 中的一个 event <code>e</code> 代表一个可能改变 <code>p</code> 本身状态和对应 channel <code>c</code> 状态（<code>c</code> 发送或接收数据都可能会改变其状态）的原子操作。</p>
+<p>一个 event <code>e</code> 被定义为 $&lt;p, s, s’, M, c&gt;$，其中：</p>
+<ol>
+<li>Process <code>p</code> 是 event 产生的地方；</li>
+<li>在处理 <code>e</code> 之前 <code>p</code> 的状态是 <code>s</code>；</li>
+<li>在处理 <code>e</code> 之后 <code>p</code> 的状态是 $s’$；</li>
+<li>Channel <code>c</code> 它的状态会被 <code>e</code> 所改变；</li>
+<li>M 是发向或发离 <code>c</code> 的 msg；</li>
+</ol>
+<p>如果 event 没有改变任何 channel 的状态，那么 M 和 <code>c</code> 则为 null，可能只改变了 <code>p</code> 的状态（这个概念很重要，需要好好理解，是后面论证的基础）。</p>
+<h3 id="global-state-模型"><a href="#global-state-模型" class="headerlink" title="global state 模型"></a>global state 模型</h3><p>有了前面的模型抽象，这里我们可以认为一个分布式系统的 global state 就是这批 process state 和 channel state 的集合。初始的 global state 就是每个 process 都是其对应的初始状态以及每个 channel 都是 empty 集合。</p>
+<p>一个 event <code>e</code> 可能会改变 global state（这里记为 <code>S</code>），这里定义另外一个函数：$next(S, e)$，它指的是 event <code>e</code> 发生在 global state <code>S</code> 之后的 global state，根据前面介绍的，<code>e</code> 处理后的 global state 变化是：<code>p</code> 的状态由 <code>s</code> 变为 <code>s&#39;</code>，Channel <code>c</code> 的状态是在原来的基础上加上（数据是发向 Channel <code>c</code> 的）或删除（数据是发离 Channel <code>c</code> 的） msg M。</p>
+<p>这里再定义一个 $seq = (e_i: 0 \leq i \leq n)$，它代表的是这个分布式系统将要处理的 event 序列，<strong>这个 $seq$ 实际上就是 <code>a computation of the system</code></strong>（这个 event 序列就代表了这个分布式计算），假设在 $e_i$ 处理前，系统的 global state 是 $S_i$（系统的初始状态时 $S_0$），那么可以得到下面公式：</p>
+<p>$S_{i+1} = next(S_i, e_i)$, for $0 \leq i \leq n$</p>
+<h3 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h3><p>论文中举了两个示例，这里也介绍一下，对于理解后面的论证是有帮助的。</p>
+<h4 id="Exmaple-1：Single-token-Conservation"><a href="#Exmaple-1：Single-token-Conservation" class="headerlink" title="Exmaple 1：Single-token Conservation"></a>Exmaple 1：Single-token Conservation</h4><p>先看一个最简单的计算系统，这个系统有两个 process <code>p</code> 和 <code>q</code>，有两个 Channel <code>c</code> 和 <code>c&#39;</code>（下面第二个示例也是这种基本模型），如下图所示：</p>
+<p><img src="/images/paper/chandy-lamport-2.png" alt="Single-token Conservation"> </p>
+<p>在这个系统中，有一个 <code>token</code> 它在两个 process 之间传输处理，每个 process 都有两种状态：$s_0$ 和 $s_1$，如果这个 process 不包含 <code>token</code>，它的状态就是 $s_0$，如果包含 <code>token</code> 的话，它的状态就是 $s_1$，<code>p</code> 的初始状态是 $s_1$，<code>q</code> 的初始状态是 $s_0$。而对每个 process 而言，都会有两种 event 类型（这里根据这个例子理解前面 event 的概念，如上面的图中所示）：</p>
+<ol>
+<li>发送 <code>token</code> 时，process 状态从 $s_1$ 转为 $s_0$；</li>
+<li>接收 <code>token</code> 时，process 状态从 $s_0$ 转为 $s_1$。</li>
+</ol>
+<p>对于 global state 而言，可能会出现四种不同的状态，如下图所示：</p>
+<p><img src="/images/paper/chandy-lamport-3.png" alt="Single-token Conservation 系统的 global state 转换"> </p>
+<p>在上面图中，四种状态实际是跟 <code>token</code> 所在的位置有关：<code>in-c</code>，<code>in-p</code>、<code>in-q</code>、<code>in-c&#39;</code>。这个示例比较简单，但它跟后面作者提出的算法来源的灵感有关。</p>
+<h4 id="Example-2-非确定性计算"><a href="#Example-2-非确定性计算" class="headerlink" title="Example 2: 非确定性计算"></a>Example 2: 非确定性计算</h4><p>这里依然是两个 process <code>p</code> 和 <code>q</code>，它们的状态转移图如下所示：</p>
+<p><img src="/images/paper/chandy-lamport-4.png" alt="两个进程的状态转移图"> </p>
+<p>Example 1 的示例比较比较简单，在每个 global state 中正好只有一个 event（一个状态转换），但是在真实的系统中，很多情况下是一些非确定性计算（nondeterministic computation），可能同时会有多个 event 一起转换，比如：<code>p</code> 发送 <code>M</code> 和 <code>q</code> 发送 <code>M&#39;</code> 这两个 event 同时发生（下面就是这两个 event 同时发生的情况，如下图的 global state $S_2$），那么得到的 global state 就会与预期的不同。下图是这个系统可能的一个 global state 转移情况：</p>
+<p><img src="/images/paper/chandy-lamport-5.png" alt="A computation"> </p>
+<p>Notice： 这个示例，我在看的时候，最开始一直没有搞明白，主要在 $S_2$ 这一步没有明白，后来仔细想了几次，算是明白了，这个示例举得的是一个非确定计算的示例，上面也只是系统可能出现中的一种状态，比如：<code>p</code> 在发送 <code>M</code> 之后，<code>M</code> 在 Channel <code>c</code> 中还没有被 <code>q</code> 接收到，<code>q</code> 就发送了 <code>M&#39;</code>。或者换成另一种理解方式，<code>p</code> 发送 <code>M</code> 和 <code>q</code> 发送 <code>M&#39;</code>  同时发送，上图只是把两个拆开了一下展示，于是就有了 global state S1 和 S2，再接着有可能发生的就是 S3 的情况，<code>p</code> 接收到了 <code>M&#39;</code>，状态发生了变化。这里，把这个示例当作一种在现实系统中的非确定性计算就好理解了。</p>
+<h2 id="Chandy-Lamport-算法"><a href="#Chandy-Lamport-算法" class="headerlink" title="Chandy-Lamport 算法"></a>Chandy-Lamport 算法</h2><p>下面开始进入到算法的核心部分，这里作者介绍了一下算法的由来，以及在数学上的证明。</p>
+<h3 id="算法的动机-由来"><a href="#算法的动机-由来" class="headerlink" title="算法的动机/由来"></a>算法的动机/由来</h3><p>Global state recording 算法工作过程如下：</p>
+<ul>
+<li>每个 process 记录自己的 state；</li>
+<li>process 之间的通道 Channel 也会记录自己的状态；</li>
+</ul>
+<p>因为没有一个全局的锁，所以我们无法保证，所有的 process 和 Channel 都是在同一时刻记录的。因此，我们需要保证记录的 process 和 Channel 状态能够组成 <strong>一个有意义的 global state</strong>。</p>
+<p>这个算法是与跟底层计算嵌套在一起，但是不会对计算产生改变、也不会影响底层的计算。这里通过一个示例来逐步引出我们的算法，假设我们是可以很自然地记录 Channel 的状态，Channel <code>c</code> 是 process <code>p</code> 和 <code>q</code> 的之间的传输通道，下面来分析一下它们之间的状态关系。</p>
+<h4 id="p-与-c-状态之间的关系"><a href="#p-与-c-状态之间的关系" class="headerlink" title="p 与 c 状态之间的关系"></a><code>p</code> 与 <code>c</code> 状态之间的关系</h4><p>这里以前面 Single-token Conservation 的示例来分析，假设 process <code>p</code> 的状态记录在 global state <code>in-p</code> 中，<code>p</code> 记录的状态显示 <code>token</code> 是在 <code>p</code> 中。现在假设 Channels <code>c</code> 和 <code>c&#39;</code> 以及 process <code>q</code> 的状态时记录在 global state <code>in-c</code> 中的，同样 <code>c</code> 中记录的状态也显示 <code>token</code> 在 <code>c</code> 中（因为无法保证它们在同一时刻记录，所以每个组件是有可能在不同的时刻记录）。组成的 global state 显示系统中有两个 <code>token</code>，一个是在 <code>p</code> 中、一个是在 <code>c</code>中。但是由于这个系统是 single-token，它是不可能同时出现两个 <code>token</code> 的，所以一定是哪里有问题了，这样组成的 global state 不是有意义的。先定义两个变量：</p>
+<ol>
+<li>$n$：在 <code>p</code> 的状态记录前，<code>p</code> 发往 Channel <code>c</code> 的 msg 数；</li>
+<li>$n’$：在 <code>c</code> 的状态记录前，<code>p</code> 发往 Channel <code>c</code> 的 msg 数；</li>
+</ol>
+<p>上面出现的情况就是 $n &lt; n’$.</p>
+<p>假设另一种情况，<code>c</code> 的状态记录在 <code>in-p</code> 中，而 <code>p</code>、<code>q</code>、<code>c&#39;</code> 的状态记录在 <code>in-c</code>，那么这样组成的 global state 会显示系统没有 <code>token</code>，这个组成的 global state 同样也是没有意义的，这就是 $n &gt; n’$ 的情况。</p>
+<p>从前面的分析中，可以得到：这里有个一致的全局状态要求</p>
+<p>$n = n’$ </p>
+<h4 id="q-与-c-状态之间的关系"><a href="#q-与-c-状态之间的关系" class="headerlink" title="q 与 c 状态之间的关系"></a><code>q</code> 与 <code>c</code> 状态之间的关系</h4><p>这里，再定义另外两个变量：</p>
+<ol>
+<li>$m$：在 <code>q</code> 的状态记录前，<code>q</code> 从 Channel <code>c</code> 中接收到的 msg 数；</li>
+<li>$m’$：在 <code>c</code> 的状态记录前，<code>q</code> 从 Channel <code>c</code> 中接收到的 msg 数；</li>
+</ol>
+<p>跟前面的分析类似，这里也会有一个一致性的要求：</p>
+<p>$m = m’$ </p>
+<h4 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h4><p>在任何一种状态下，都要求 Channel <code>c</code> 下游接收到的 msg 数不能超过 <code>p</code> 发送给 Channel 的 msg 条数，即：</p>
+<p>$n’ \geq m’$  以及  $n \geq m$</p>
+<p>现在来分析一下 <strong>Channel 的状态要记录什么数据？</strong> 一个 Channel 要记录的状态是，它 sender 记录自己状态之前它所接收到的 msg 列表，再减去 receiver 记录自己状态之前它已经收到的 msg 列表，减去的之后的数据列表就是还在通道中的数据列表，这个列表是需要 Channel 作为状态记录下来的。而如果 $n’ = m’$，那么 Channel <code>c</code> 中要记录的 msg 列表就是 empty 列表。如果 $n’ &gt; m’$，那么要记录的列表是 $(m’+1)st , … n’$ 对应的 msg 列表。</p>
+<p><strong>重点，重点，重点</strong>：分析到这里之后，就有了下面的一个灵感：那么 Channel <code>c</code> 状态要记录的 msg 列表是可以在 <code>q</code> 中记录的。那么具体怎么做的？就是在发送数据中插入一条特殊的数据 —— <code>marker</code> 数据，这条数据不会对计算有任何影响，那么 <code>c</code> 的状态就是 <code>q</code> 在记录自己状态之后并在收到 <code>marker</code> 之前接收到 msg 列表，另一种情况就是 <code>q</code> 收到 <code>marker</code> 之后，就必须要把自己的状态记录下来（伟大的算法就这样诞生了）。 </p>
+<h4 id="算法概况"><a href="#算法概况" class="headerlink" title="算法概况"></a>算法概况</h4><p>对于发送者来说：</p>
+<ul>
+<li>在 <code>p</code> 记录自己的状态之后它先向 Channel <code>c</code> 发送一条 <code>marker</code>，然后才会继续发送数据信息；</li>
+</ul>
+<p>对于接收者来说：</p>
+<ul>
+<li>如果 <code>q</code> 已经还没记录自己的 state，在收到 <code>marker</code> 之后，它会记录自己的状态，并且把 <code>c</code> 的状态设置为 empty；</li>
+<li>如果 <code>q</code> 已经记录自己的 state，它会把从 <code>c</code> 接收到的数据作为 msg 列表当作 <code>c</code> 的状态记录下来。</li>
+</ul>
+<h3 id="算法能够在有限时间结束的论证"><a href="#算法能够在有限时间结束的论证" class="headerlink" title="算法能够在有限时间结束的论证"></a>算法能够在有限时间结束的论证</h3><p>关于算法能够在有限时间内结束，是有两个前提的：</p>
+<ol>
+<li><code>marker</code> 数据不会在 Channel 阻塞永远发不出去的；</li>
+<li>Process 在根据一个初始状态记录自己的状态时，能够在有限的时间内完成。</li>
+</ol>
+<p>有了这两个前提，一个 graph 中每个 process 都会收到相应的 <code>marker</code>，然后都会记录自己的状态，所以这个是完全可以保证能够在有限的时间内完成。</p>
+<h2 id="算法证明"><a href="#算法证明" class="headerlink" title="算法证明"></a>算法证明</h2><p>事先说明，这里证明比较烧脑，我尽量描述清楚，最开始看论文也是看了好几遍、想好几遍把整个过程捋顺，当然如果理解有误，欢迎指正。</p>
+<p>以前面 Example 2 的示例来讲述，假设在 global state $S_0$ 时，<code>p</code> 记录下了自己的状态（<code>A</code>），然后 <code>p</code> 向 Channel <code>c</code> 发送一条 <code>marker</code> 数据（它是在 <code>M</code> 数据之前），假设这个时候系统在正常运行，已经经历 $S_1$、$S_2$，到了 $S_3$ 阶段，但是 <code>marker</code> 数据在传输中。<code>q</code> 在收到 <code>marker</code> 之后，它记录了一下自己的状态 <code>D</code>（对应 <code>c</code> 的状态为空），然后再发送一条 <code>marker</code> 数据给 Channel <code>c&#39;</code>。<code>p</code> 因为之前已经记录过自己的状态，所以在收到 <code>c&#39;</code> 传过来的 <code>M&#39;</code> 之后（<code>p</code> 先收到 <code>M&#39;</code> 然后才会收到 <code>q</code> 发送的 <code>marker</code> 消息），会把它作为 Channel <code>c&#39;</code> 的状态记录下来。</p>
+<p>整个流程下来，组合的 global state 是 $S_*$，如下如所示：</p>
+<p><img src="/images/paper/chandy-lamport-6.png" alt="记录的一个 global state"> </p>
+<p>可以看到这里算法得到的 global state $S_*$ 与真实环境下的 global state（$S_0$、$S_1$、$S_2$、$S_3$）都不相同。</p>
+<p>那么来考虑一个问？题：<strong>如果算法记录的状态，在真实环境中并没有实际存在过？那么这个 global state 有什么用呢？</strong>（或许大家之前都理解了这个算法，但很少有人会去思考深入这个问题）</p>
+<h3 id="算法结论"><a href="#算法结论" class="headerlink" title="算法结论"></a>算法结论</h3><p>假设 $seq = (e_i, 0 \leq i)$ 是一个分布式计算（是一个 computation），global state $S_i$ 是在 event $e_i$ 处理前系统当时的全局状态（这个是真实的那个时刻的状态）。假设算法在计算 global state 时是在 $S_t$ 时初始化，并且在 $S_ø$ 前终止的（算法在计算全局状态时会横跨多个 event），也就是 $0 \leq t \leq ø$，那么如果我们能证明下面的结论，基本上回答了上面的问题：</p>
+<ol>
+<li>$S_*$ 可以由 $S_t$ 得到；</li>
+<li>$S_ø$ 可以由 $S_*$ 得到；</li>
+</ol>
+<p>如果能证明这个，那就说明，算法得到的 global state 是可以由之前的 global state 得到，并且得到后面的 global state，从工程上来理解就是，<strong>算法得到的 global state 是可以完整正确得恢复计算作业的状态信息，让作业继续运行</strong>。</p>
+<p>前面的是结论，这里将证明转化为：存在一个序列 $seq’$，它可以满足以下条件：</p>
+<ol>
+<li>$seq’$ 是 $seq$ 集合的一种变形（元素列表相同、顺序不同）， $S_t$、$S_*$、$S_ø$ 都是发生在这个 $seq’$ 上面的 global state；</li>
+<li>$S_t$ 早于 $S_*$ 或者两者相等；</li>
+<li>$S_*$ 早于 $S_ø$ 或者两者相等。 </li>
+</ol>
+<p>一个更加数学化的描述（方便后面证明）：一定存在一个 computation $seq’ = (e’_i, 0 \leq i)$，它满足以下条件：</p>
+<ol>
+<li>对于所有的 $i$，当 $i &lt; t$ 或者 $i \geq ø$ 时，$e’_i = e_i$；</li>
+<li>$e’_i(t \leq i &lt; ø)$ 序列是 $e_i(t \leq i &lt; ø)$ 序列的一种变换（元素相同，顺序可能会有不同）；</li>
+<li>对于所有的 $i$，当 $i \leq t$ 或者 $i \geq ø$ 时，$S’_i = S_i$；</li>
+<li>并且存在一个 $k, t \leq k \leq ø$，使得 $S_* = S’_k$；</li>
+</ol>
+<p>这里实际要证明的是，找到这个 $seq’$，并且找到上面第四条要求的 $k$。</p>
+<h3 id="结论证明"><a href="#结论证明" class="headerlink" title="结论证明"></a>结论证明</h3><p>为了证明上面的结论，这里引入两个概念：</p>
+<ol>
+<li><strong>prerecording event</strong>（后面记为 preEvent）：对于 process <code>p</code> 中的 event $e_i$，如果 <code>p</code> 做 snapshot（记录自己的状态）发生在收到 $e_i$ 之后，那么这个 $e_i$ 就是 prerecording event（也就是说：做 snapshot 时这个 $e_i$ 已经处理过了）；</li>
+<li><strong>postrecording event</strong>（后面记为 postEvent）：对于 process <code>p</code> 中的 event $e_i$，如果 <code>p</code> 做 snapshot（记录自己的状态）发生在收到 $e_i$ 之前，那么这个 $e_i$ 就是 postrecording event（也就是说：这个 $e_i$ 是在做完 snapshot 后才处理的）；</li>
+</ol>
+<p>因此，对于 $e_i, (i &lt; t)$，都是 preEvent，对于 $e_i, (i \geq ø)$，都是 postEvent。</p>
+<p>对于一个真实的 computation，可能会出现一个 postEvent $e_{j-1}$ （$i &lt; j &lt; ø$）出现在 preEvent $e_j$ 之前，当然这种情况只可能是 $e_{j-1}$ 和 $e_j$ 出现在不同的节点上（大家可以反向思考一下：对于同一个节点来说，event 的处理会保证 FIFO，如果 $e_{j-1}$ 是 postEvent，那么 $e_j$ 必然也是 postEvent）。</p>
+<p>接下来，我们证明一下下面的结论：</p>
+<p><strong>对于一个 event 序列 $seq’$（$seq$ 序列的变形），在这个序列中，所有的 preEvent 都在 postEvent 之前，下面我们将要证明 $S_*$ 就是 $seq’$ 中处理完所有 preEvent 后的 global state。</strong></p>
+<p>这里假设有一个 postEvent $e_{j-1}$ （$i &lt; j &lt; ø$）出现在 preEvent $e_j$ 之前，这里我们将证明 <strong>交换 $e_{j-1}$ 和 $e_j$ 的位置之后得到的新 $seq’$ 序列依然是一个 computation</strong>（与原来的计算是保持一致的，只不过在中间某些时刻它们当时的状态不完全相同）。根据前面的叙述，这里的 event $e_{j-1}$ 和 $e_j$ 肯定是在两个不同的 process 上的。这里假设 $e_{j-1}$ 发生在 <code>p</code> 上，$e_j$ 发生在 <code>q</code> 上。</p>
+<p>首先经过分析可以得到：<strong>绝对不可能出现 $e_{j-1}$ 发送一条数据然后在 $e_j$ 中收到</strong>，通过反证法分析：</p>
+<ol>
+<li>如果当 $e_{j-1}$ 发生时，通过 Channel <code>c</code> 向 <code>q</code> 发送了一条数据，那么在发送数据前一定已经有了 <code>marker</code> 发送过去（因为 $e_{j-1}$ 是 postEvent）；</li>
+<li>当 $e_j$ 发生时，如果从 Channel <code>c</code> 中获得了这条数据，那么在这之前一定先收到了 <code>marker</code> 数据，这样的话，$e_j$ 也变成了 postEvent，所以这种情况是不可能存在的（这里不是很容易理解，可以换一种思路理解，它说明了 $e_{j-1}$ 和 $e_j$ 之间是没有因果关系的）。</li>
+</ol>
+<p>因为 $e_{j-1}$ 是发生在 <code>p</code> 中的，所以当 $e_{j-1}$ 发生时，<code>q</code> 的状态是不会改变的（可以回顾一下前面关于 event 的公式定义）。而假如 event $e_j$ 触发时，<code>q</code> 会从 Channel c 收到一条数据 <code>M</code>，那么 <code>M</code> 一定是在 Channel <code>c</code> 中队列的头部，并且是在 $e_{j-1}$ 之前，因为 $e_{j-1}$ 发出的数据是不可能会在 $e_j$ 中接收到的。因此，$e_j$ 可以出现在 global state $S_{j-1}$ 中（这个可以在回顾一下前面关于 $S_j$ 的定义，实际这段说明了 $e_j$ 可以出现在 $e_{j-1}$ 之前，因此也就有了这个结论）。 </p>
+<p>而且在 $e_j$ 发生时，<code>p</code> 的状态并没有改变，因此，$e_{j-1}$ 是发生在 $e_j$ 之后的。那么也就是说明 $e_1, e_2, … , e_{j-2}, e_j, e_{j-1}$ 也是一个 computation，而且在经过这个 $e_1, e_2, …, e_{j-2}, e_j, e_{j-1}$ 计算之后的 global state 也跟 $e_1, e_2, …, e_{j-1}, e_j$ 计算之后的 global state 是一致的（主要还是因为 $e_{j-1}$ 和 $e_j$ 之间是没有因果关系的）。 </p>
+<p>假设 $seq^*$ 也是 $seq$ 的序列的一个变形，它只是把交换了 $e_{j-1}$ 和 $e_j$ 的位置，假设 $\overline{S_i}$ 是 $seq^*$ 对应的瞬时（就是当时那一刻系统的真实状态，<code>i</code> 对应的是序列第几个 event）全局状态，则有下面的公式：</p>
+<p>$\overline{S_i} = S_i, i \neq j$</p>
+<p>如果将前面的 postEvent 与后面紧贴的 preEvent 的位置互换，将会存在一个 $seq’$（$seq$ 序列的一个变形），使得：</p>
+<ol>
+<li>所有 preEvent 都在 postEvent 前面；</li>
+<li>$seq’$ 是一个 computation（这个 computation，我理解它的意思是说这个变换后的序列列表依然是可以运行的计算逻辑）；</li>
+<li>当 $i &lt; t$ 或者 $i \geq ø $ 有 $e’_i = e_i$；</li>
+<li>当 $i \leq t$ 或者 $i \geq ø $ 有 $S’_i = S_i$；</li>
+</ol>
+<p>现在我们证明：<strong> 这个 $seq’$ 序列中所有 preEvent 处理完之后的 global state 就是 $S_*$ </strong>，只需要证明下面两点即可：</p>
+<ol>
+<li>$S_*$ 中的每个 <code>p</code> 的状态是与 <code>p</code> 处理完所有 preEvent 之后的状态相同的，这个并不用证明，因为 perEvent 的概念就是这样来的，它指的就是那些在 snapshot 前要处理的 event 列表；</li>
+<li>$S_*$ 中的每个 Channel <code>c</code> 的状态：所有 preEvent 发往 <code>c</code> 的数据列表，减去所有  preEvent 从 <code>c</code> 接收到数据列表。</li>
+</ol>
+<p>这里看下上面的第二点：假设 <code>c</code> 是 process <code>p</code> 和 <code>q</code> 之前的 Channel，$S_*$ 中关于 Channel <code>c</code> 的状态指的是，<code>q</code> 在记录自己的状态后在收到 <code>marker</code> 前从 <code>c</code> 收到的数据列表。而 <code>c</code> 在收到 <code>marker</code> 前接收到的数据列表都是 preEvent 发送过去的，所以上面第二点也就是完全得证了。</p>
+<p>到这里，整个证明就结束了，我在看原论文的时候，这个证明看得云里雾里，看了好几遍才理解这个证明逻辑，这里比较关键的点有两个：</p>
+<ol>
+<li>前面所说的 $e_{j-1}$ 和 $e_j$ 之间是没有因果关系的，所以他们可以交换位置，并不会对后面的计算产生什么影响；</li>
+<li>算法得到的 global state，作者找到了理论上的解释，就是处理完 preEvent 之后系统那个时刻的状态，虽然现实系统并不一定有这个状态，但它是有意义的，它可以完整、正确得恢复系统的状态，让系统继续后面的运行，并且恢复后的系统后面的运行情况跟正常情况是保持一致的。</li>
+</ol>
+<p>最后，作者给出了前面 Example 2 的解释，前面状态转移图中，发生的 event 事件列表如下：</p>
+<ol>
+<li>$e_0$：<code>p</code> 发送 <code>M</code>，并且将状态转移成 B（这是一个 postEvent，在这之前 <code>p</code> 已经记录了自己的状态）；</li>
+<li>$e_1$：<code>q</code> 发送 <code>M&#39;</code>，并且将状态转移成 D（这是一个 preEvent，因为它发送在 <code>q</code> 记录自己状态之前，根据前面的讲述，因为 <code>q</code> 是 global state $S_3$ 时收到的 <code>marker</code>，当然这里只是其中一种情况，这里就是解释前面的所述的情况）；</li>
+<li>$e_2$：<code>p</code> 接收到 <code>M&#39;</code>，并且将状态转移成 A（这是一个 postEvent，以为在这之前 <code>p</code> 已经记录了自己的状态）。</li>
+</ol>
+<p>根据上面的证明，这里的 $seq’$ 序列就是 $e_1、e_0、e_2$，而前面图中记录的 global state 就是系统在处理完 $e_1$ 之后的结果。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>这篇论文的思想还是比较容易理解的，比如 <a href="https://zhuanlan.zhihu.com/p/53482103" target="_blank" rel="external">分布式快照算法: Chandy-Lamport 算法</a> 这篇文章介绍得就很简洁清晰，在我前面的文章 <a href="http://matt33.com/2019/10/20/paper-flink-snapshot/">Paper 阅读: Lightweight Asynchronous Snapshots for Distributed Dataflow</a> 中也讲述了 Flink 是如何将这个算法在落地应用的，但是这个算法的证明，并不容易。在看这篇论文之前，我并没有想过这个算法应该怎么证明？因为我潜意识的认为这是一个很容易理解、很正确的算法，甚至感觉完全不需要证明，就像苹果就应该从树上落到地上一样。但是看完这篇论文之后，才不得不佩服 Lamport 大神的牛逼之处，它不但提出了这个算法，还给这个算法找到理论上的证明方法，虽然论文并不是那么容易理解，但看完看明白之后收获很大，再次向 Chandy 和 Lamport 致敬~</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://www.microsoft.com/en-us/research/uploads/prod/2016/12/Determining-Global-States-of-a-Distributed-System.pdf" target="_blank" rel="external">Distributed Snapshots: Determining Global States of Distributed Systems</a>；</li>
+<li><a href="https://zhuanlan.zhihu.com/p/53482103" target="_blank" rel="external">分布式快照算法: Chandy-Lamport 算法</a>；</li>
+<li><a href="http://liumx10.github.io/2016/04/06/Distributed-snapshot/" target="_blank" rel="external">Distributed snapshot</a>；</li>
+<li><a href="https://yq.aliyun.com/articles/448900?spm=5176.10695662.1996646101.searchclickresult.6be16eb62Y8vXL&amp;aly_as=Z_bQHupu" target="_blank" rel="external">分布式Snapshot和Flink Checkpointing简介</a>；</li>
+</ul>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2019/10/27/paper-chandy-lamport/" data-id="ck297nnc0002ygvjfmocmj23d" class="article-share-link">分享到</a><div class="copyright"><a href="http://matt33.com/copyright/">博客版权说明</a></div><div class="tags"><a href="/tags/paper/">paper</a></div><div class="post-nav"><a href="/2019/10/20/paper-flink-snapshot/" class="next">Paper 阅读: Lightweight Asynchronous Snapshots for Distributed Dataflow</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2019/10/27/paper-chandy-lamport/';
+var disqus_title = 'Paper 阅读:  Distributed Snapshots: Determining Global States of Distributed Systems';
+var disqus_url = 'http://matt33.com/2019/10/27/paper-chandy-lamport/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-weibo"> 微博</i></div><iframe width="100%" height="90" class="share_self"  frameborder="0" scrolling="no" src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=100&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=0&isFans=0&uid=2650396571&verifier=f2f0e397&colors=D8D8D8,ffffff,666666,0082cb,ecfbfd&dpc=1"></iframe></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2019/10/27/paper-chandy-lamport/">Paper 阅读:  Distributed Snapshots: Determining Global States of Distributed Systems</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/10/20/paper-flink-snapshot/">Paper 阅读: Lightweight Asynchronous Snapshots for Distributed Dataflow</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/10/19/paper-ray1/">Paper 阅读: Real-Time Machine Learning: The Missing Pieces</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/03/17/apache-calcite-planner/">Apache Calcite 优化器详解（二）</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/03/07/apache-calcite-process-flow/">Apache Calcite 处理流程详解（一）</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/01/28/bk-store-realize/">BookKeeper 原理浅谈</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/11/21/effective-learning/">如何高效学习</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/11/04/kafka-transaction/">Kafka Exactly-Once 之事务性实现</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/24/kafka-idempotent/">Kafka 事务性之幂等性实现</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/10/19/bk-cluster-install-and-use/">BookKeeper 集群搭建及使用</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/x-mathjax-config">MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+  });
+</script><script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML" async></script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
