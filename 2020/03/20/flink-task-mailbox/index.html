@@ -66,7 +66,7 @@
 <p>可以看到：</p>
 <ol>
 <li>LegacySourceFunctionThread 线程在启动时，会先通知一下 MailBox，这个就是上面说的那个状态检查，收到这个信号之后，MailBox 就会在 <code>processMail()</code> 中一直等待并且处理 <code>mail</code>，不会返回（也就是 MailBox 主线程一直在处理 <code>mail</code> 事件）；</li>
-<li>LegacySourceFunctionThread 线程就是专门成产数据的，跟 MailBox 这两个线程都在运行。</li>
+<li>LegacySourceFunctionThread 线程就是专门生产数据的，跟 MailBox 这两个线程都在运行。</li>
 </ol>
 <p>那么两个线程如何保证线程安全呢？如果仔细看上面的代码就会发现，在 SourceStreamTask 中还继续使用了 <code>getCheckpointLock()</code>，虽然这个方法现在已经被标注了将要被废弃，但 Source 没有改造完成之前，Source 的实现还是会继续依赖 checkpoint lock。</p>
 <h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>这里，总结一下 Flink 1.10 中 MailBox 模型的核心设计，如下图所示：</p>

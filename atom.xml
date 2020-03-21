@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2020-03-21T17:36:49.455Z</updated>
+  <updated>2020-03-21T17:43:20.646Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,7 +20,7 @@
     <link href="http://matt33.com/2020/03/20/flink-task-mailbox/"/>
     <id>http://matt33.com/2020/03/20/flink-task-mailbox/</id>
     <published>2020-03-20T15:46:37.000Z</published>
-    <updated>2020-03-21T17:36:49.455Z</updated>
+    <updated>2020-03-21T17:43:20.646Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第八篇，在介绍 TaskManager 第二部分之前，先来给介绍一下目前 StreamTask 中基于 MailBox 实现的线程模型，这个模型从 1.9 开始实现，在目前发布的 1.10 版本中，基本上已经改造完成，具体 issue 见 <a href="https://issues.apache.org/jira/browse/FLINK-12477" target="_blank" rel="external">FLINK-12477: Change threading-model in StreamTask to a mailbox-based approach</a>，其设计文档见 <a href="https://docs.google.com/document/d/1eDpsUKv2FqwZiS1Pm6gYO5eFHScBHfULKmH1-ZEWB4g/edit" target="_blank" rel="external">Change threading-model in StreamTask to a mailbox-based approach</a>，去年，vinoyang 也写了一篇关于它的介绍，见 <a href="https://mp.weixin.qq.com/s/MrQZS7-dEuNr442lzw3xYg" target="_blank" rel="external">重磅！Flink 将重构其核心线程模型</a>。因为 Flink 1.10 已经发布，本篇关于 MailBox 实现的介绍会基于 1.10 最新的代码来讲述（系列的其他篇，没有说明的话，默认还是以 1.9 的代码为例），这个功能在 1.9 中还并没有完全完成，所以本文以 1.10 代码为例讲述。</p>
 <h2 id="Motivation"><a href="#Motivation" class="headerlink" title="Motivation"></a>Motivation</h2><p>先来看下这个改造/改进最初的动机，在之前 Flink 的线程模型中，会有多个潜在的线程去并发访问其内部的状态，比如 event-processing 和 checkpoint triggering，它们都是通过一个全局锁（checkpoint lock）来保证线程安全，这种实现方案带来的问题是：</p>
@@ -90,7 +90,7 @@
 <p>可以看到：</p>
 <ol>
 <li>LegacySourceFunctionThread 线程在启动时，会先通知一下 MailBox，这个就是上面说的那个状态检查，收到这个信号之后，MailBox 就会在 <code>processMail()</code> 中一直等待并且处理 <code>mail</code>，不会返回（也就是 MailBox 主线程一直在处理 <code>mail</code> 事件）；</li>
-<li>LegacySourceFunctionThread 线程就是专门成产数据的，跟 MailBox 这两个线程都在运行。</li>
+<li>LegacySourceFunctionThread 线程就是专门生产数据的，跟 MailBox 这两个线程都在运行。</li>
 </ol>
 <p>那么两个线程如何保证线程安全呢？如果仔细看上面的代码就会发现，在 SourceStreamTask 中还继续使用了 <code>getCheckpointLock()</code>，虽然这个方法现在已经被标注了将要被废弃，但 Source 没有改造完成之前，Source 的实现还是会继续依赖 checkpoint lock。</p>
 <h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>这里，总结一下 Flink 1.10 中 MailBox 模型的核心设计，如下图所示：</p>
