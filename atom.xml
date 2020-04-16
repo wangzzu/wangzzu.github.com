@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2020-03-21T17:43:20.646Z</updated>
+  <updated>2020-04-16T03:07:38.039Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -16,11 +16,91 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
+    <title>浅谈 CPU 分支预测技术</title>
+    <link href="http://matt33.com/2020/04/16/cpu-branch-predictor/"/>
+    <id>http://matt33.com/2020/04/16/cpu-branch-predictor/</id>
+    <published>2020-04-15T16:33:56.000Z</published>
+    <updated>2020-04-16T03:07:38.039Z</updated>
+    
+    <content type="html"><![CDATA[<p>最近在看 SQL 优化之 Code Generation 相关的内容，我们知道 Code Generation 是 SQL 优化的大杀器之一，不管是在 Apache Spark 还是 Apache Flink 中都有比较深入的应用（特别是在 Spark 中），Code Generation 最开始是在数据库中应用的，Spark 将其引入到 Spark SQL 的中优化，后来的 Flink 也借鉴了这一思想。Code Generation 是要解决什么问题呢？相信大部分人应该有所了解，简单来说就是减少虚函数调用、尽可能利用 CPU 分支预测的能力（会在 Code Generation 部分详细介绍，这里只需要了解这一背景即可），那么什么是 CPU 分支预测（<a href="https://en.wikipedia.org/wiki/Branch_predictor" target="_blank" rel="external">Wikipedia: CPU Branch Predictor</a>）呢？为什么虚函数调用会极大消耗 CPU 性能呢？这就是本文将要给大家介绍的内容。</p>
+<h2 id="CPU-Instruction-pipelining"><a href="#CPU-Instruction-pipelining" class="headerlink" title="CPU Instruction pipelining"></a>CPU Instruction pipelining</h2><p>在介绍 CPU 分支预测机制之前，先来看下 CPU 的流水线机制（<a href="https://en.wikipedia.org/wiki/Instruction_pipelining" target="_blank" rel="external">Wikipedia: CPU Instruction pipelining</a>）。</p>
+<p>关于流水线（pipeline），这里举一个生活中的例子，比如在洗车时，当前面一辆车清洗完成进入擦洗阶段后，下一辆车就可以进入喷水阶段了，这就是一个典型的流水线场景（如下如所示），它不是说非要前面一辆车把清洗、擦洗全部完成后，下一辆车才能开始。</p>
+<p><img src="/images/system/cpu-pipeline2.png" alt="洗车中流水线"></p>
+<p>从这里也可以看出，流水线机制一个重要的特性就是 <strong>提高了系统的吞吐量</strong>，也就是单位时间内服务的总数，<strong>不过它会有一个轻微的延迟</strong>，对于上面的例子就是，一辆汽车在洗完之后需要开到擦洗的地方擦洗。在 CPU 的设计中，也有类似流水线化的机制，这个汽车就是指令，每个阶段完成执行执行的一部分。</p>
+<h3 id="CPU-中计算的流水线化"><a href="#CPU-中计算的流水线化" class="headerlink" title="CPU 中计算的流水线化"></a>CPU 中计算的流水线化</h3><p>下面举一个示例，这里将系统执行分为三个阶段（A、B 和 C），如下图所示，每个阶段需要 100ps（picosecond，皮秒，也就是微微秒，即 $10^{-12}$），中间加载寄存器（也可以叫做流水线寄存器，pipeline register）需要 20ps。对于图 b，时间从左往右流动，对于指令 I1，三个方框分别代表三个阶段（图片来自 <a href="https://book.douban.com/subject/26912767/" target="_blank" rel="external">《深入理解计算机系统 第三版》</a> 中插图）。</p>
+<p><img src="/images/system/cpu-pipeline3.png" alt="三阶段流水线化的计算硬件"></p>
+<p>这样，每条指令都会按照三步经过这个系统，从头到尾需要三个完整的时钟周期，如上图所示，只要 <code>I1</code> 从 A 进入 B，就可以让 <code>I2</code> 进入 A 阶段了，以此类推。在稳定状态下，三个阶段都应该是活动的，每个时钟周期，一条指令离开系统，一条新的指令进入。在这个系统中，时钟周期设为 <code>100+20=120ps</code>，得到的吞吐量大约为 <code>8.33GIPS</code>，但是因为处理一条指令需要 3 个时钟周期，所以这条流水线的延迟就是 <code>3*120=360ps</code>，它相当于 一阶段 的系统，吞吐量提高了 2.67 倍，代价是增加了一些硬件以及延迟的增加（寄存器变多带来的延迟）。</p>
+<h3 id="流水线的局限"><a href="#流水线的局限" class="headerlink" title="流水线的局限"></a>流水线的局限</h3><p>在上面的三阶段系统中，它是一个比较理想的情况，在这个系统中，我们可以将计算分成三个独立的阶段，每个阶段需要的时间是原来逻辑需要时间的三分之一，但是在实际生产中，会出现一些其他的因素，降低流水线的效率。</p>
+<h4 id="情况-1：阶段不一致的划分"><a href="#情况-1：阶段不一致的划分" class="headerlink" title="情况 1：阶段不一致的划分"></a>情况 1：阶段不一致的划分</h4><p>在前面的例子划分的阶段中，每个阶段执行都是 100ps，但是实际中并不一定是这样的，假如 A 阶段是 50ps，B 阶段是 150ps，C 阶段是 100ps，在这种情况下，系统必须将时钟周期设置为 170ps（由最慢的来决定），这样的话，其吞吐量就变成了 <code>5.88GIPS</code>，由于时钟减慢，也导致了延迟增加到了 510ps。</p>
+<p>因此，在 CPU 硬件设计时，将系统计算设计分为一组具有相同延迟的阶段将是一个严峻的挑战。</p>
+<h4 id="情况-2：流水线过深，收益反而下降"><a href="#情况-2：流水线过深，收益反而下降" class="headerlink" title="情况 2：流水线过深，收益反而下降"></a>情况 2：流水线过深，收益反而下降</h4><p>如果流水线过深，中间使用到的寄存器将会变多，寄存器使用带来的延迟在指令运行总延迟中的比重将会增大。一方面，在设计时，为了提高时钟频率，现代处理器会采用很深的流水线，另一方面，由于流水线过深，指令运行延迟会变长。所以，在实际设计时，电路设计师如何设计流水线寄存器，使其延迟尽可能减少，是高速微处理器面临重大挑战之一。</p>
+<h2 id="CPU-Branch-Predictor"><a href="#CPU-Branch-Predictor" class="headerlink" title="CPU Branch Predictor"></a>CPU Branch Predictor</h2><p>在开始介绍 CPU 分支预测技术之前，可以先看下 StackOverflow 上一个非常有名的问题（现在有 3w+ 人认同第一个回答） —— <a href="https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array#11227902" target="_blank" rel="external">Why is processing a sorted array faster than processing an unsorted array?</a>，问题的大概是，对一个数组中的每个元素，先做判断，如果大于某个值，就做累加，就是这样一个简单的操作，发现一个有意思的现象，如果用 C++ 写这段代码，对于有序数组和无序数组分别做这个操作，性能大概相差五倍多，在 Java 中，差距小一点，大概是 1 倍。为什么会出现这个问题呢？</p>
+<p>背后的原因就是 <strong>CPU 流水线下，CPU 采用分支预测技术</strong>，对于有序数组可以很好地 CPU 这一特性，而无序数组会使得分支预测手足无措。</p>
+<h3 id="什么是分支预测"><a href="#什么是分支预测" class="headerlink" title="什么是分支预测"></a>什么是分支预测</h3><p>在前面，我们了解到 CPU 为了提高吞吐量采用了流水线机制，比如下图中的 4 级流水线（图片来自 <a href="https://en.wikipedia.org/wiki/Instruction_pipelining" target="_blank" rel="external">Wikipedia: CPU Instruction pipelining</a>）：</p>
+<p><img src="/images/system/cpu-pipeline1.png" alt="CPU 4 级流水线"></p>
+<p>上图中的 CPU pipeline 有四个执行阶段:</p>
+<ol>
+<li>读取指令(Fetch)；</li>
+<li>指令解码(Decode)；</li>
+<li>运行指令(Execute)；</li>
+<li>回写(Write-back)。</li>
+</ol>
+<p>假设有三条指令，在上面这个四级流水线构架下（每个阶段都会花费一个时钟周期），pipeline 执行流程如下图所示：</p>
+<p><img src="/images/system/cpu-pipeline4.png" alt="4 级流水线示例"></p>
+<p>我们知道：如果没有流水线机制，一条指令大概会花费 4 个时钟周期，而如果采用流水线机制，当第一条指令完成<code>Fetch</code>后，第二条指令就可以进行<code>Fetch</code>了，极大提高了指令的执行效率。</p>
+<p>上面是我们的期待的理想情况，而在现实环境中，如果遇到的指令是 <strong>条件跳转指令</strong>，只要当前面的指令运行到执行阶段，才能知道要选择的分支，显然这种 <strong>停顿</strong> 对于 CPU 的 pipeline 机制是非常不友好的。而 <strong>分支预测技术</strong> 正是为了解决上述问题而诞生的，CPU 会根据分支预测的结果，选择下一条指令进入流水线。待跳转指令执行完成，如果预测正确，则流水线继续执行，不会受到跳转指令的影响。如果分支预测失败，那么便需要清空流水线，重新加载正确的分支（实际上目前市面上所有处理器都采用了类似的技术）。</p>
+<h3 id="分支预测技术"><a href="#分支预测技术" class="headerlink" title="分支预测技术"></a>分支预测技术</h3><p>这里看下常见的分支预测技术，主要有：静态分支预测、动态分支预测 和 协同分支预测 三种，有兴趣的可以看下下面的几篇文章：</p>
+<ol>
+<li><a href="https://zhuanlan.zhihu.com/p/22469702" target="_blank" rel="external">深入理解CPU的分支预测(Branch Prediction)模型</a>；</li>
+<li><a href="http://djs66256.github.io/2019/01/29/2019-01-29-CPU%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/" target="_blank" rel="external">CPU分支预测</a>；</li>
+</ol>
+<p>关于这三种技术，这里就不再展开了，简单总结一下。</p>
+<ol>
+<li>静态分支预测：实现起来很简单、成本低，而且在生产中，这种预测正确率的波动范围很大；</li>
+<li>动态分支预测：根据指令的不同及历史信息（存储在一张分支历史表中 —— Branch History Table）作出相应的预测，常见的有 1-bit/n-bit 动态预测；</li>
+<li>协同分支预测：利用代码中分支跳转指令之间的关联关系，提高分支预测的准确率。</li>
+</ol>
+<h2 id="Java-中的虚函数调用"><a href="#Java-中的虚函数调用" class="headerlink" title="Java 中的虚函数调用"></a>Java 中的虚函数调用</h2><p>Java 本身没有虚函数的概念，它在 C++ 中是最常见的。在 C++ 中，虚函数通过 <code>virtual</code> 关键字定义，实现在类的继承当中，编译器通过判断对象的类型，在调用函数时，执行对应的函数。Java 中并没有显式去定义虚函数的概念，Java 中实际上每个函数都默认是一个虚函数（声明 <code>final</code> 关键字的函数除外），比如下面示例中 <code>eat()</code> 方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Animal</span> </span>&#123;</span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">eat</span><span class="params">()</span> </span>&#123; System.out.println(<span class="string">"I eat like a generic Animal."</span>); </span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Dog</span> <span class="keyword">extends</span> <span class="title">Animal</span> </span>&#123;</span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">eat</span><span class="params">()</span> </span>&#123; System.out.println(<span class="string">"I eat like a dog!"</span>); &#125;</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Cat</span> <span class="keyword">extends</span> <span class="title">Animal</span> </span>&#123;</span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">eat</span><span class="params">()</span> </span>&#123; System.out.println(<span class="string">"I eat like a cat!"</span>); &#125;</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">      List&lt;Animal&gt; animals = <span class="keyword">new</span> LinkedList&lt;Animal&gt;();</span><br><span class="line"></span><br><span class="line">      animals.add(<span class="keyword">new</span> Animal());</span><br><span class="line">      animals.add(<span class="keyword">new</span> Dog());</span><br><span class="line">      animals.add(<span class="keyword">new</span> Cat());</span><br><span class="line">      <span class="keyword">for</span> (Animal currentAnimal : animals) &#123;</span><br><span class="line">         currentAnimal.eat();</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>虚函数存在的意义就是为了实现多态，Java 通过 <strong>动态绑定</strong>，不仅实现了虚函数的功能，也使得代码逻辑更为简洁。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>到这里，相信大家已经对 CPU 的流水线机制及 CPU 的分支预测技术有了一定的了解。回到 code<br>上，如果代码里充满着各种不可预知的条件跳转指令，将会极大影响 CPU 的执行效率，数据库中采用的 Volcano-style execution engine（火山执行引擎）在代码中充满着各种虚函数调用（详细机制在后面内容中再介绍），在编译器中，虚函数需要调用查找虚函数表，并且虚函数调用是一个非直接跳转逻辑，在这个逻辑中，最大的代价是可能导致错误的 CPU 分支预测，一次错误的分支预测会导致需要 10 几个周期的系统开销。</p>
+<hr>
+<p>参考：</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Branch_predictor" target="_blank" rel="external">Wikipedia: CPU Branch predictor</a>；</li>
+<li><a href="https://en.wikipedia.org/wiki/Instruction_pipelining" target="_blank" rel="external">Wikipedia: CPU Instruction pipelining</a>；</li>
+<li><a href="https://www.computerhope.com/jargon/b/branch-prediction.htm" target="_blank" rel="external">CPU Branch prediction</a>；</li>
+<li><a href="https://danluu.com/branch-prediction/" target="_blank" rel="external">Branch prediction</a>；</li>
+<li><a href="https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array#11227902" target="_blank" rel="external">Why is processing a sorted array faster than processing an unsorted array?</a>；</li>
+<li><a href="https://book.douban.com/subject/26912767/" target="_blank" rel="external">《深入理解计算机系统 第三版》</a>；</li>
+<li><a href="http://hengyunabc.github.io/optimization-tip-if-vs-switch/" target="_blank" rel="external">优化技巧：提前if判断帮助CPU分支预测</a>；</li>
+<li><a href="https://ericfu.me/code-gen-of-expression/" target="_blank" rel="external">JIT 代码生成技术（一）表达式编译</a>；</li>
+<li><a href="https://ericfu.me/code-gen-of-query/" target="_blank" rel="external">JIT 代码生成技术（二）查询编译执行</a>；</li>
+<li><a href="http://irootlee.com/juicer_vtable/" target="_blank" rel="external">C++性能榨汁机之虚函数的开销</a>；</li>
+<li><a href="https://www.techbelife.com/post/Talk-about-Java-virtual-functions.html#toc_2" target="_blank" rel="external">浅谈Java中的”虚函数”</a>；</li>
+<li><a href="https://juejin.im/post/5c983bd46fb9a0710a1bd3e1" target="_blank" rel="external">Java 和操作系统交互细节</a>；</li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;最近在看 SQL 优化之 Code Generation 相关的内容，我们知道 Code Generation 是 SQL 优化的大杀器之一，不管是在 Apache Spark 还是 Apache Flink 中都有比较深入的应用（特别是在 Spark 中），Code Ge
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="system" scheme="http://matt33.com/tags/system/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Flink 基于 MailBox 实现的 StreamTask 线程模型</title>
     <link href="http://matt33.com/2020/03/20/flink-task-mailbox/"/>
     <id>http://matt33.com/2020/03/20/flink-task-mailbox/</id>
     <published>2020-03-20T15:46:37.000Z</published>
-    <updated>2020-03-21T17:43:20.646Z</updated>
+    <updated>2020-03-21T17:44:07.911Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第八篇，在介绍 TaskManager 第二部分之前，先来给介绍一下目前 StreamTask 中基于 MailBox 实现的线程模型，这个模型从 1.9 开始实现，在目前发布的 1.10 版本中，基本上已经改造完成，具体 issue 见 <a href="https://issues.apache.org/jira/browse/FLINK-12477" target="_blank" rel="external">FLINK-12477: Change threading-model in StreamTask to a mailbox-based approach</a>，其设计文档见 <a href="https://docs.google.com/document/d/1eDpsUKv2FqwZiS1Pm6gYO5eFHScBHfULKmH1-ZEWB4g/edit" target="_blank" rel="external">Change threading-model in StreamTask to a mailbox-based approach</a>，去年，vinoyang 也写了一篇关于它的介绍，见 <a href="https://mp.weixin.qq.com/s/MrQZS7-dEuNr442lzw3xYg" target="_blank" rel="external">重磅！Flink 将重构其核心线程模型</a>。因为 Flink 1.10 已经发布，本篇关于 MailBox 实现的介绍会基于 1.10 最新的代码来讲述（系列的其他篇，没有说明的话，默认还是以 1.9 的代码为例），这个功能在 1.9 中还并没有完全完成，所以本文以 1.10 代码为例讲述。</p>
 <h2 id="Motivation"><a href="#Motivation" class="headerlink" title="Motivation"></a>Motivation</h2><p>先来看下这个改造/改进最初的动机，在之前 Flink 的线程模型中，会有多个潜在的线程去并发访问其内部的状态，比如 event-processing 和 checkpoint triggering，它们都是通过一个全局锁（checkpoint lock）来保证线程安全，这种实现方案带来的问题是：</p>
@@ -3055,200 +3135,6 @@
     
     
       <category term="bk" scheme="http://matt33.com/tags/bk/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>YARN 架构学习总结</title>
-    <link href="http://matt33.com/2018/09/01/yarn-architecture-learn/"/>
-    <id>http://matt33.com/2018/09/01/yarn-architecture-learn/</id>
-    <published>2018-09-01T14:39:47.000Z</published>
-    <updated>2020-02-04T01:33:53.449Z</updated>
-    
-    <content type="html"><![CDATA[<p>关于 Hadoop 的介绍，这里就不再多说，可以简答来说 Hadoop 的出现真正让更多的互联网公司开始有能力解决大数据场景下的问题，其中的 HDFS 和 YARN 已经成为大数据场景下存储和资源调度的统一解决方案（MR 现在正在被 Spark 所取代，Spark 在计算这块的地位也开始受到其他框架的冲击，流计算上有 Flink，AI 上有 Tensorflow，两面夹击，但是 Spark 的生态建设得很好，其他框架想要在生产环境立马取代还有很长的路要走）。本篇文章就是关于 YARN 框架学习的简单总结，目的是希望自己能对分布式调度这块有更深入的了解，当然也希望也这篇文章能够对初学者有所帮助，文章的主要内容来自 <a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a> 和 <a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>。</p>
-<h1 id="Yarn-背景"><a href="#Yarn-背景" class="headerlink" title="Yarn 背景"></a>Yarn 背景</h1><p>关于 YARN 出现的背景，还是得从 Hadoop1.0 说起，在 Hadoop1.0 中，MR 作业的调度还是有两个重要的组件：JobTracker 和 TaskTracker，其基础的架构如下图所示，从下图中可以大概看出原 MR 作业启动流程：</p>
-<ol>
-<li>首先用户程序 (Client) 提交了一个 job，job 的信息会发送到 JobTracker 中，JobTracker 是 Map-Reduce 框架的中心，它需要与集群中的机器定时通信 (心跳：heartbeat), 需要管理哪些程序应该跑在哪些机器上，需要管理<strong>所有 job</strong> 失败、重启等操作；</li>
-<li>TaskTracker 是 Map-Reduce 集群中每台机器都有的一个组件，它做的事情主要是监视自己所在机器的资源使用情况；</li>
-<li>TaskTracker 同时监视当前机器的 tasks 运行状况。TaskTracker 需要把这些信息通过 heartbeat 发送给 JobTracker，JobTracker 会搜集这些信息以便处理新提交的 job，来决定其应该分配运行在哪些机器上。</li>
-</ol>
-<p><img src="/images/hadoop/yarn10.png" alt="Hadoop 1.0 调度的架构图"></p>
-<p>可以看出原来的调度框架实现非常简答明了，在 Hadoop 推出的最初几年，也获得业界的认可，但是随着集群规模的增大，很多的弊端开始显露出来，主要有以下几点：</p>
-<ol>
-<li>JobTracker 是 Map-Reduce 的集中处理点，存在<strong>单点故障</strong>；</li>
-<li>JobTracker 赋予的功能太多，导致负载过重，1.0 时未将资源管理与作业控制（包括：作业监控、容错等）分开，导致负载重而且无法支撑更多的计算框架，当集群的作业非常多时，会有很大的内存开销，潜在来说，也增加了 JobTracker fail 的风险，这也是业界普遍总结出 Hadoop1.0 的 Map-Reduce 只能支持 4000 节点主机上限的原因；</li>
-<li>在 TaskTracker 端，以 map/reduce task 的数目作为资源的表示过于简单，没有考虑到 cpu/ 内存的占用情况，如果两个大内存消耗的 task 被调度到了一个节点上，很容易出现 OOM；</li>
-<li>在 TaskTracker 端，把资源强制划分为 map task slot 和 reduce task slot, 如果当系统中只有 map task 或者只有 reduce task 的时候，会造成资源的浪费，也就是前面提过的集群资源利用的问题。</li>
-</ol>
-<p>Hadoop 2.0 中下一代 MR 框架的基本设计思想就是将 JobTracker 的两个主要功能，资源管理和作业控制（包括作业监控、容错等），分拆成两个独立的进程。资源管理与具体的应用程序无关，它负责整个集群的资源（内存、CPU、磁盘等）管理，而作业控制进程则是直接与应用程序相关的模块，且每个作业控制进程只负责管理一个作业，这样就是 YARN 诞生的背景，它是在 MapReduce 框架上衍生出的一个资源统一的管理平台。</p>
-<h1 id="Yarn-架构"><a href="#Yarn-架构" class="headerlink" title="Yarn 架构"></a>Yarn 架构</h1><p>YARN 的全称是 Yet Another Resource Negotiator，YARN 整体上是 Master/Slave 结构，在整个框架中，ResourceManager 为 Master，NodeManager 为 Slave，如下图所示：</p>
-<p><img src="/images/hadoop/yarn20.gif" alt="YARN 基本架构"></p>
-<h2 id="ResourceManager（RM）"><a href="#ResourceManager（RM）" class="headerlink" title="ResourceManager（RM）"></a>ResourceManager（RM）</h2><p>RM 是一个全局的资源管理器，负责整个系统的资源管理和分配，它主要有两个组件构成：</p>
-<ol>
-<li>调度器：Scheduler；</li>
-<li>应用程序管理器：Applications Manager，ASM。</li>
-</ol>
-<h3 id="调度器"><a href="#调度器" class="headerlink" title="调度器"></a>调度器</h3><p>调度器根据容量、􏳴队列等限制条件（如某个队列分配一定的资源，最多执行一定数量的作业等），将系统中的资源分配给各个正在运行的应用程序。􏰣要注意的是，该调度器是一个纯调度器，它不再从事任何与应用程序有关的工作，比如不负责重新启动（因应用程序失败或者硬件故障导致的失败），这些均交由应用程序相关的 ApplicationMaster 完成。调度器仅根据各个应用程序的资源需求进行资源分配，而资源分配单位用一个抽象概念 <strong>资源容器(Resource Container，也即 Container)</strong>，Container 是一个动态资源分配单位，它将内存、CPU、磁盘、网络等资源封装在一起，从而限定每个任务使用的资源量。此外，该调度器是一个可插拔的组件，用户可根据自己的需求设计新的调度器，YARN 提供了多种直接可用的调度器，比如 Fair Scheduler 和 Capacity Schedule 等。</p>
-<h3 id="应用程序管理器"><a href="#应用程序管理器" class="headerlink" title="应用程序管理器"></a>应用程序管理器</h3><p>应用程序管理器负责管理整个系统中所有应用程序，包括应用程序提交、与调度器协商资源以 AM、监控 AM 运行状态并在失败时重新启动它等。</p>
-<h2 id="NodeManager（NM）"><a href="#NodeManager（NM）" class="headerlink" title="NodeManager（NM）"></a>NodeManager（NM）</h2><p>NM 是每个节点上运行的资源和任务管理器，一方面，它会定时向 RM 汇报本节点上的资源使用情况和各个 Container 的运行状态；另一方面，它接收并处理来自 AM 的 Container 启动/停止等各种请求。</p>
-<h2 id="ApplicationMaster（AM）"><a href="#ApplicationMaster（AM）" class="headerlink" title="ApplicationMaster（AM）"></a>ApplicationMaster（AM）</h2><p>提交的每个作业都会包含一个 AM，主要功能包括：</p>
-<ol>
-<li>与 RM 协商以获取资源（用 container 表示）；</li>
-<li>将得到的任务进一步分配给内部的任务；</li>
-<li>与 NM 通信以启动/停止任务；</li>
-<li>监控所有任务的运行状态，当任务有失败时，重新为任务申请资源并重启任务。</li>
-</ol>
-<p>MapReduce 就是原生支持 ON YARN 的一种框架，可以在 YARN 上运行 MapReduce 作业。有很多分布式应用都开发了对应的应用程序框架，用于在 YARN 上运行任务，例如 Spark，Storm、Flink 等。</p>
-<h2 id="Container"><a href="#Container" class="headerlink" title="Container"></a>Container</h2><p>Container 是 YARN 中的资源抽象，它封装了某个节点上的多维度资源，如内存、CPU、磁盘、网络等，当 AM 向 RM 申请资源时，RM 为 AM 返回的资源便是用 Container 表示的。 YARN 会为每个任务分配一个 Container 且该任务只能使用该 Container 中描述的资源。</p>
-<h1 id="YARN-作业提交流程"><a href="#YARN-作业提交流程" class="headerlink" title="YARN 作业提交流程"></a>YARN 作业提交流程</h1><p>当用户向 YARN 中提交一个应用程序后，YARN 将分两个阶段运行该应用程序：第一个阶段是启动 ApplicationMaster；第二个阶段是由 ApplicationMaster 创建应用程序，为它申请资源，并监控它的整个运行过程，直到运行完成，如下图所示（此图来自<a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a>）：</p>
-<p><img src="/images/hadoop/yarn-flow.png" alt="YARN 工作流程"></p>
-<p>上图所示的 YARN 工作流程分为以下几个步骤：</p>
-<ol>
-<li>用户向 YARN 提交应用程序，其中包括 ApplicationMaster 程序，启动 ApplicationMaster 命令、用户程序等；</li>
-<li>RM 为该应用程序分配第一个 Container，并与对应的 NM 通信，要求它在这个 Container 中启动应用程序的 ApplicationMaster；</li>
-<li>ApplicationMaster 首先向 RM 注册，这样用户可以直接通过 NM 查看应用程序的运行状态，然后它将为各个任务申请资源，并监控它的运行状态，直到运行结束，一直重复下面的 4-7 步；</li>
-<li>ApplicationMaster 采用轮询的方式通过 RPC 协议向 RM 申请和领取资源；</li>
-<li>一旦 ApplicationMaster 申请到资源后，便与对应的 NM 通信，要求它启动任务；</li>
-<li>NM 为任务设置好运行环境（包括环境变量、jar 包等）后，将任务启动命令写到一个脚本中，并通过运行该脚本启动任务；</li>
-<li>各个任务通过某个 RPC 协议向 ApplicationMaster 汇报自己的状态和进度，以让 ApplicationMaster 随时掌握各个任务的运行状态，从而可以在任务失败时重新启动任务；</li>
-<li>应用程序运行完成后，ApplicationMaster 向 RM 注销并关闭自己（当然像 Storm、Flink 这种常驻应用程序列外）。</li>
-</ol>
-<h1 id="调度器-1"><a href="#调度器-1" class="headerlink" title="调度器"></a>调度器</h1><p>YARN 的调度器是一个可插拔的组件，目前社区已经提供了 FIFO Scheduler（先进先出调度器）、Capacity Scheduler（能力调度器）、Fair Scheduler（公平调度器），用户也可以继承 ResourceScheduler 的接口实现自定义的调度器，就像 app on yarn 流程一样，不同的应用可以自己去实现，这里只是简单讲述上述三种调度器的基本原理。</p>
-<h2 id="FIFO-Scheduler"><a href="#FIFO-Scheduler" class="headerlink" title="FIFO Scheduler"></a>FIFO Scheduler</h2><p>FIFO 是最简单的资源调度策略，提交的作业按照提交时间先后顺序或者根据优先级次序将其放入线性队列相应的位置，在资源调度时，<strong>按照队列的先后顺序、先进先出地进行调度和资源分配</strong>。</p>
-<p>很明显这种调度器过于简单，在实际的生产中，应用不是很多，毕竟需要调度的作业是有不同的优先级的。</p>
-<h2 id="公平调度器（Fair-Scheduler）"><a href="#公平调度器（Fair-Scheduler）" class="headerlink" title="公平调度器（Fair Scheduler）"></a>公平调度器（Fair Scheduler）</h2><p>公平调度器先将用户的任务分配到多个资源池（Pool）中，每个资源池设定资源分配最低保障和最高上限，管理员也可以指定资源池的优先级，优先级高的资源池将会被分配更多的资源，当一个资源池有剩余时，可以临时将剩余资源共享给其他资源池。公平调度器的调度过程如下：</p>
-<ol>
-<li>根据每个资源池的最小资源保障，将系统中的部分资源分配给各个资源池；</li>
-<li>根据资源池的指定优先级将剩余资源按照比例分配给各个资源池；</li>
-<li>在各个资源池中，按照作业的优先级或者根据公平策略将资源分配给各个作业；</li>
-</ol>
-<p>公平调度器有以下几个特点：</p>
-<ol>
-<li><strong>支持抢占式调度</strong>，即如果某个资源池长时间未能被分配到公平共享量的资源，则调度器可以杀死过多分配资源的资源池的任务，以空出资源供这个资源池使用；</li>
-<li><strong>强调作业之间的公平性</strong>：在每个资源池中，公平调度器默认使用公平策略来实现资源分配，这种公平策略是最大最小公平算法的一种具体实现，可以尽可能保证作业间的资源分配公平性；</li>
-<li><strong>负载均衡</strong>：公平调度器提供了一个基于任务数目的负载均衡机制，该机制尽可能将系统中的任务均匀分配到给各个节点上；</li>
-<li><strong>调度策略配置灵活</strong>：允许管理员为每个队列单独设置调度策略；</li>
-<li><strong>提高小应用程序响应时间</strong>：由于采用了最大最小公平算法，小作业可以快速获得资源并运行完成。</li>
-</ol>
-<h2 id="能力调度器（Capacity-Scheduler）"><a href="#能力调度器（Capacity-Scheduler）" class="headerlink" title="能力调度器（Capacity Scheduler）"></a>能力调度器（Capacity Scheduler）</h2><p>能力调度器是 Yahool 为 Hadoop 开发的多用户调度器，应用于用户量众多的应用场景，与公平调度器相比，其更强调资源在用户之间而非作业之间的公平性。</p>
-<p>它将用户和任务组织成多个队列，每个队列可以设定资源最低保障和使用上限，当一个队列的资源有剩余时，可以将剩余资源暂时分享给其他队列。调度器在调度时，优先将资源分配给资源使用率最低的队列（即队列已使用资源量占分配给队列的资源量比例最小的队列）；在队列内部，则按照作业优先级的先后顺序遵循 FIFO 策略进行调度。</p>
-<p>能力调度器有以下几点特点：</p>
-<ol>
-<li><strong>容量保证</strong>：管理员可为每个队列设置资源最低保证和资源使用上限，而所有提交到该队列的应用程序共享这些资源；</li>
-<li><strong>灵活性</strong>：如果一个队列资源有剩余，可以暂时共享给那些需要资源的队列，而一旦该队列有新的应用程序提交，则其他队列释放的资源会归还给该队列；</li>
-<li><strong>多重租赁</strong>：支持多用户共享集群和多应用程序同时运行，为防止单个应用程序、用户或者队列独占集群中的资源，管理员可为之增多多重约束；</li>
-<li><strong>安全保证</strong>：每个队列有严格的 ACL 列表规定它访问用户，每个用户可指定哪些用户允许查看自己应用程序的运行状态或者控制应用程序；</li>
-<li><strong>动态更新配置文件</strong>：管理可以根据需要动态修改各种配置参数。</li>
-</ol>
-<h1 id="Yarn-容错"><a href="#Yarn-容错" class="headerlink" title="Yarn 容错"></a>Yarn 容错</h1><p>对于分布式系统，不论是调度系统还是其他系统，容错机制都是非常必要的，这里我们简单看下 YARN 的容错机制，YARN 需要做容错的地方，有以下四个地方：</p>
-<ol>
-<li>ApplicationMaster 容错：ResourceManager 会和 ApplicationMaster 保持通信，一旦发现 ApplicationMaster 失败或者超时，会为其重新分配资源并重启。重启后 ApplicationMaster 的运行状态需要自己恢复，比如 MRAppMaster 会把相关的状态记录到 HDFS 上，重启后从 HDFS 读取运行状态恢复；</li>
-<li>NodeManager 容错：NodeManager 如果超时，则 ResourceManager 会认为它失败，将其上的所有 container 标记为失败并通知相应的 ApplicationMaster，由 AM 决定如何处理（可以重新分配任务，可以整个作业失败，重新拉起）；</li>
-<li>container 容错：如果 ApplicationMaster 在一定时间内未启动分配的 container，RM 会将其收回，如果 Container 运行失败，RM 会告诉对应的 AM 由其处理；</li>
-<li>RM 容错：RM 采用 HA 机制，这里详细讲述一下。</li>
-</ol>
-<h2 id="ResourceManager-HA"><a href="#ResourceManager-HA" class="headerlink" title="ResourceManager HA"></a>ResourceManager HA</h2><p>因为 RM 是 YARN 架构中的一个单点，所以他的容错很难做，一般是采用 HA 的方式，有一个 active master 和一个 standby master（可参考：<a href="https://hadoop.apache.org/docs/r2.7.1/hadoop-yarn/hadoop-yarn-site/ResourceManagerHA.html" target="_blank" rel="external">ResourceManager High Availability</a>），HA 的架构方案如下图所示：</p>
-<p><img src="/images/hadoop/rm-ha-overview.png" alt="YARN RM HA 机制"></p>
-<p>关于 YARN 的 RM 的 HA 机制，其实现与 HDFS 的很像，可以参考前面关于 HDFS 文章的讲述 <a href="http://matt33.com/2018/07/15/hdfs-architecture-learn/#HDFS-2-0-%E7%9A%84-HA-%E5%AE%9E%E7%8E%B0">HDFS NN HA 实现</a>。</p>
-<h1 id="分布式调度器总结"><a href="#分布式调度器总结" class="headerlink" title="分布式调度器总结"></a>分布式调度器总结</h1><p>上面基本已经把 YARN 的相关内容总结完了，这个小节主要讲述一下分布式调度系统的一些内容（调度框架只是具体的一种实现方案），主要讲述分布式调度系统要解决的一些问题和分布式调度系统的调度模型。</p>
-<h2 id="调度系统设计遇到的基本问题"><a href="#调度系统设计遇到的基本问题" class="headerlink" title="调度系统设计遇到的基本问题"></a>调度系统设计遇到的基本问题</h2><p>对于分布式调度系统，在实际的生产环境中，遇到的问题很相似，这个小节就是看下调度系统主要面对的问题。</p>
-<h3 id="资源异构性与工作负载异构性"><a href="#资源异构性与工作负载异构性" class="headerlink" title="资源异构性与工作负载异构性"></a>资源异构性与工作负载异构性</h3><p>在资源管理与调度场景下，有两类异质性需要考虑：</p>
-<ol>
-<li>资源异质性：这个是从系统拥有资源的角度来看，对于数据中心来说非常常见，数据中心的机器很难保证完全一样的配置，有的配置会高一些，有的会低一些；</li>
-<li>工作负载异质性：在大型互联网公司中很常见，因为各种服务和功能特性各异，对资源的需求千差万别。</li>
-</ol>
-<h3 id="数据局部性（Data-Locality）"><a href="#数据局部性（Data-Locality）" class="headerlink" title="数据局部性（Data Locality）"></a>数据局部性（Data Locality）</h3><p>在大数据场景下，还有一个基本的共识：将计算任务推送到数据所在地进行而不是反过来。因为数据的移动会产生大量低效的数据网络传输开销，而计算代码相比而言数据小得多，所以将计算任务推动到数据所在地是非常常见的，这就是<strong>数据局部性</strong>，在资源调度中，有三种类型的数据局部性，分别是：</p>
-<ol>
-<li>节点局部性（Node Locality）：计算任务分配到数据所在机器节点，无需任务网络传输；</li>
-<li>机架局部性（Rack Locality）：虽然计算任务与数据分布在不同的节点，但这两个节点在同一个机架中，这也是效率较高的一种数据性；</li>
-<li>全局局部性（Global Locality）：需要跨机架的传输，会产生较大的网络传输开销。</li>
-</ol>
-<h3 id="抢占式调度与非抢占式调度"><a href="#抢占式调度与非抢占式调度" class="headerlink" title="抢占式调度与非抢占式调度"></a>抢占式调度与非抢占式调度</h3><p>在多用户场景下，面对已经分配的资源，资源管理调度系统可以有两种不同类型的调度方式：</p>
-<ol>
-<li>抢占式调度：对于某个计算任务来说，如果空闲资源不足或者出现不同任务共同竞争同一资源，调度系统可以从比当前计算任务优先级低的其他任务中获取已经分配资源，而被抢占资源的计算任务则需要出让资源停止计算；</li>
-<li>非抢占式调度：只允许从空闲资源中进行分配，如果当前空闲资源不足，则须等待其他任务释放资源后才能进行。</li>
-</ol>
-<h3 id="资源分配粒度（Allocation-Granularity）"><a href="#资源分配粒度（Allocation-Granularity）" class="headerlink" title="资源分配粒度（Allocation Granularity）"></a>资源分配粒度（Allocation Granularity）</h3><p>大数据场景下的计算任务往往由两层结构构成：作业级（Job）和任务级（Task），一个作业由多个并发任务构成，任务之间的依赖关系往往形成有向无环图（DAG），比如：MR 作业，关于作业资源分配的粒度，常见的有两种模式：</p>
-<ol>
-<li>群体分配（全分或不分）：需要将作业的所有所需资源一次性分配完成；</li>
-<li>增量满足式分配策略：对于某个作业，只要分配部分资源就能启动一些任务开始运行，随着空闲资源的不断出现，可以逐步增量式分配给作业的其他任务以维护作业不断向后进行。</li>
-</ol>
-<p>还有一种策略是 <strong>资源储备策略</strong>，它指的是只有分配到一定量的资源资源才能启动，但是在未获得足够资源的时候，作业可以先持有目前已经分配的资源，并等待其他作业释放资源，这样从调度系统不断获取新资源并进行储备和累积，直到分配到的资源量达到最低标准后开始运行。</p>
-<h3 id="饿死（Starvation）与死锁（Dead-Lock）问题"><a href="#饿死（Starvation）与死锁（Dead-Lock）问题" class="headerlink" title="饿死（Starvation）与死锁（Dead Lock）问题"></a>饿死（Starvation）与死锁（Dead Lock）问题</h3><p>饿死和死锁是一个合理的资源调度系统需要避免的两个问题：</p>
-<ol>
-<li>饿死：指的是这个计算任务持续上时间无法获得开始执行所需的最少资源量，导致一直处于等待执行的状态，比如在资源紧张的情形下，有些低优先级的任务始终无法获得资源分配机会，如果不断出现新提交的高优先级任务，则这些低优先级任务就会出现饿死现象；</li>
-<li>死锁：指的是由于资源调度不当导致整个调度无法继续正常执行，比如前面提高的资源储备策略就有可能导致调度系统进入死锁状态，多个作业占有一定作业的情况下，都在等待新的资源释放。</li>
-</ol>
-<h3 id="资源隔离方法"><a href="#资源隔离方法" class="headerlink" title="资源隔离方法"></a>资源隔离方法</h3><p>目前对于资源隔离最常用的手段是 Linux 容器（Linux Container，LXC，可以参考<a href="https://www.redhat.com/zh/topics/containers/whats-a-linux-container" target="_blank" rel="external">什么是 Linux 容器？</a>），YARN 和 Mesos 都是采用了这种方式来实现资源隔离。LXC 是一种轻量级的内核虚拟化技术，可以用来进行资源和进程运行的隔离，通过 LXC 可以在一台物理机上隔离出多个互相隔离的容器。LXC 在资源管理方面依赖于 Linux 内核的 cgroups 子系统，cgroups 子系统是 Linux 内核提供的一个基于进程组的资源管理的框架，可以为特定的进程组限定可以使用的资源。</p>
-<h2 id="调度器模型"><a href="#调度器模型" class="headerlink" title="调度器模型"></a>调度器模型</h2><p>关于资源管理与调度功能的实际功能，分布式调度器根据运行机制的不同进行分类，可以归纳为三种资源管理与调度系统泛型：</p>
-<ol>
-<li>集中式调度器；</li>
-<li>两级调度器；</li>
-<li>状态共享调度器。</li>
-</ol>
-<p>它们的区别与联系如下图所示：</p>
-<p><img src="/images/hadoop/scheduler.png" alt="三种调度模型"></p>
-<h3 id="集中式调度器"><a href="#集中式调度器" class="headerlink" title="集中式调度器"></a>集中式调度器</h3><p>集中式调度器在整个系统中只运行一个全局的中央调度器实例，所有之上的框架或者计算任务的资源请求全部经由中央调度器来满足（也就是说：资源的使用及任务的执行状态都由中央调度器管理），因此，整个调度系统缺乏并发性且所有调度逻辑全部由中央调度器来完成。集中式调度器有以下这些特点：</p>
-<ol>
-<li>适合批处理任务和吞吐量较大、运行时间较长的任务；</li>
-<li>调度逻辑全部融入到了中央调度器，实现逻辑复杂，灵活性和策略的可扩展性不高；</li>
-<li>并发性能较差，比较适合小规模的集群系统；</li>
-<li>状态同步比较容易且稳定，这是因为资源使用和任务执行的状态被统一管理，降低了状态同步和并发控制的难度。</li>
-</ol>
-<h3 id="两级调度器"><a href="#两级调度器" class="headerlink" title="两级调度器"></a>两级调度器</h3><p>对于集中式调度器的不足之处，两级调度器是一个很好的解决方案，它可以看做一种策略下放的机制，它将整个系统的调度工作分为两个级别：</p>
-<ol>
-<li>中央调度器：中央调度器可以看到集群中所有机器的可用资源并管理其状态，它可以按照一定策略将集群中的所有资源更配各个计算框架，中央调度器级别的资源调度是一种粗粒度的资源调度方式；</li>
-<li>框架调度器：各个计算框架在接收到所需资源后，可以根据自身计算任务的特性，使用自身的调度策略来进一步细粒度地分配从中央调度器获得的各种资源。</li>
-</ol>
-<p>在这种两级调度器架构中，只有中央调度器能够观察到所有集群资源的状态，而每个框架并无全局资源概念（不知道整个集群资源使用情况），只能看到由中央调度器分配给自己的资源，Mesos、YARN 和 Hadoop on Demand 系统是3个典型的两级调度器。两级调度的缺点也非常明显：</p>
-<ol>
-<li><strong>各个框架无法知道整个集群的实时资源使用情况</strong>：很多框架不需要知道整个集群的实时资源使用情况就可以运行得很顺畅，但是对于其他一些应用，为之提供实时资源使用情况可以挖掘潜在的优化空间；</li>
-<li><strong>采用悲观锁，并发粒度小</strong>：悲观锁通常采用锁机制控制并发，这会大大降低性能。</li>
-</ol>
-<h3 id="状态共享调度器"><a href="#状态共享调度器" class="headerlink" title="状态共享调度器"></a>状态共享调度器</h3><p>通过前面两种模型的介绍，可以发现集群中需要管理的状态主要包括以下两种：</p>
-<ol>
-<li>系统中资源分配和使用的状态；</li>
-<li>系统中任务调度和执行的状态</li>
-</ol>
-<p>在集中式调度器中，这两个状态都由中心调度器管理，并且一并集成了调度等功能；而在双层调度器中，这两个状态分别由中央调度器和框架调度器管理。集中式调度器可以容易地保证全局状态的一致性，但是可扩展性不够；双层调度器对共享状态的管理较难达到好的一致性保证，也不容易检测资源竞争和死锁。</p>
-<p>这也就催生出了另一种调度器 —— 状态共享调度器（Shared-State Scheduler），它是 Google 的 Omega 调度系统提出的一种调度器模型。在这种调度器中，每个计算框架可以看到整个集群中的所有资源，并采用互相竞争的方式去获取自己所需的资源，根据自身特性采取不同的具体资源调整策略，同时系统采用了乐观并发控制手段解决不同框架在资源竞争过程中出现的需求冲突。这样，状态共享调度器在以下两个方面对两级调度器做了相应的优化：</p>
-<ol>
-<li><strong>乐观并发控制增加了系统的并发性能</strong>；</li>
-<li>每个计算框架都可以获得全局的资源使用状况；</li>
-</ol>
-<p>与两级调度器对比，两者的根本区别在于 <strong>中央调度器功能的强弱不同</strong>，两级调度器依赖中央调度器来进行第一次资源分配，而 Omega 则严重弱化中央调度器的功能，只是维护一份可恢复的集群资源状态信息的主副本，这份数据被称为 <strong>单元状态（Cell State）</strong></p>
-<ol>
-<li>每个框架在自身内部会维护 单元状态 的一份私有并不断更新的副本信息，而框架对资源的需求则直接在这份副本信息上进行；</li>
-<li>只要框架具有特定的优先级，就可以在这份副本信息上申请相应的闲置资源，也可以抢夺已经分配给其他比自身优先级低的计算任务的资源；</li>
-<li>一旦框架做出资源决策，则可以改变私有 单元状态 信息并将其同步到全局的 单元状态 信息中区，这样就完成了资源申请并使得这种变化让其他框架可见；</li>
-<li>上述资源竞争过程通过 <strong>事务操作</strong> 来进行，保证了操作的原子性。</li>
-</ol>
-<p>如果两个框架竞争同一份资源，因其决策过程都是在各自私有数据上做出的，并通过原子事务进行提交，系统保证此种情形下只有一个竞争胜出者，而失败者可以后续继续重新申请资源，这是一种乐观并发控制手段，可以增加系统的整体并发性能。</p>
-<p>从上面的过程，可以看出，这种架构是一种 <strong>以效率优先，不太考虑资源分配公平性</strong> 的策略，很明显高优先级的任务总是能够在资源竞争过程中获胜，而低优先级的任务存在由于长时间无法竞争到所需资源而被【饿死】的风险。</p>
-<hr>
-<p>参考：</p>
-<ul>
-<li><a href="https://item.jd.com/15542271154.html" target="_blank" rel="external">《Hadoop 技术内幕：深入解析 YARN 架构设计与实现原理》</a>;</li>
-<li><a href="https://item.jd.com/11540991.html" target="_blank" rel="external">《大数据日知录：架构与算法》</a>；</li>
-<li><a href="https://hadoop.apache.org/docs/r2.7.1/hadoop-yarn/hadoop-yarn-site/YARN.html" target="_blank" rel="external">Hadoop Yarn</a>；</li>
-<li><a href="https://www.ibm.com/developerworks/cn/opensource/os-cn-hadoop-yarn/" target="_blank" rel="external">Hadoop 新 MapReduce 框架 Yarn 详解</a>；</li>
-<li><a href="http://shiyanjun.cn/archives/1119.html" target="_blank" rel="external">Hadoop YARN架构设计要点</a>；</li>
-<li><a href="https://www.ibm.com/developerworks/cn/data/library/bd-yarn-intro/index.html" target="_blank" rel="external">YARN 简介</a>；</li>
-<li><a href="https://blog.csdn.net/bingduanlbd/article/details/51880019" target="_blank" rel="external">理解Hadoop YARN架构</a>；</li>
-<li><a href="https://dbaplus.cn/news-141-2004-1.html" target="_blank" rel="external">这里有7种主流案例，告诉你调度器架构设计通用法则</a>；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;关于 Hadoop 的介绍，这里就不再多说，可以简答来说 Hadoop 的出现真正让更多的互联网公司开始有能力解决大数据场景下的问题，其中的 HDFS 和 YARN 已经成为大数据场景下存储和资源调度的统一解决方案（MR 现在正在被 Spark 所取代，Spark 在计算这
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="hadoop" scheme="http://matt33.com/tags/hadoop/"/>
     
   </entry>
   
