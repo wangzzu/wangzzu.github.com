@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2020-10-25T15:59:12.835Z</updated>
+  <updated>2020-10-25T16:05:58.612Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,7 +20,7 @@
     <link href="http://matt33.com/2020/10/25/statefun-introduce/"/>
     <id>http://matt33.com/2020/10/25/statefun-introduce/</id>
     <published>2020-10-25T14:57:05.000Z</published>
-    <updated>2020-10-25T15:59:12.835Z</updated>
+    <updated>2020-10-25T16:05:58.612Z</updated>
     
     <content type="html"><![CDATA[<p>Stateful Function（简称 StateFun）从 2019 正式对外宣布之后，今年 4 月份已经发了 2.0 版（并且是作为 Apache Flink 项目中的一部分发布），7 月份也发布了 2.1.0 版。在 2.0 的架构中 Function 已经从 JVM 中解耦出来，只需要通过 HTTP/gRPC 来调用即可，新的架构可以充分利用 FAAS 的能力。本篇文章就来简单看下 StateFun 的架构及应用示例，后面还会有陆续有两篇文章来深入剖析一些其内部实现。</p>
 <h2 id="StateFun-的架构"><a href="#StateFun-的架构" class="headerlink" title="StateFun 的架构"></a>StateFun 的架构</h2><p>StateFun 2.0 的架构与 1.0 做了非常大的变化，Function 部分已经完全与 JVM 部分解耦，Function 部分可以单独进行部署，直接部署在 FAAS 上或者直接使用 Kubernetes 启动相应的 HTTP/RPC 服务都是可以的，如下图所示：</p>
@@ -30,7 +30,7 @@
 <ol>
 <li>Ingress：StateFun 的事件输入源，它可以是 queue、logs 或者 HTTP servers，当前 StateFun 内部已经支持的是 Kafka 和 Kinesis，类似于 Flink Streaming Job 中的 Source Operator；</li>
 <li>Egress：StateFun 的事件输出源，与 Ingress 类似，在一个 StateFun Application 中，Egress 并不是必需的、是可选的，当前内部支持的是 Kafka 和 Kinesis，类似于 Flink Streaming Job 中 Sink Operator；</li>
-<li>Stateful Functions：它就类似与 FAAS 中的 Function，是应用真正做计算的地方，在 StateFun 中流转的每一条 Event，都需要指定其 target address 来表明它需要发向哪个 Function 或 Egress。</li>
+<li>Stateful Functions：它就类似于 FAAS 中的 Function，是应用真正做计算的地方，在 StateFun 中流转的每一条 Event，都需要指定其 target address 来表明它需要发向哪个 Function 或 Egress。</li>
 </ol>
 <p>在这套架构中，Flink Cluster 主要是做 state 一致性保证及 event 路由转发的功能，FAAS 专注于其计算（无需 care 状态存储及一致性的问题）。实际上，在这套系统下，Flink 相当于去掉了传统数据库的角色，因为 Flink 更适合用于 event 驱动的函数和服务，通过集成状态存储，保证了函数或服务间传递消息的有状态性。</p>
 <h3 id="Event-driven-Database-vs-Request-Response-Database"><a href="#Event-driven-Database-vs-Request-Response-Database" class="headerlink" title="Event-driven Database vs. Request/Response Database"></a>Event-driven Database vs. Request/Response Database</h3><p>在传统的数据库或者 Key/Value 存储（这里称之为 Request/Response Database）中，应用需主动发送一个查询到数据库（如 SQL via JDBC、GET/PUT via HTTP）。然而，在 StateFun 这类事件驱动数据库中，这个关系被反转了：数据库根据到达的消息来调用函数或服务。这个特性非常适合 FaaS 或者事件驱动架构的应用。</p>
@@ -38,7 +38,7 @@
 <p>基于请求/响应数据库的应用中，数据库只负责保存状态。函数或服务间的通讯通常一个独立的服务层进行处理。相反，事件驱动数据库以紧密集成的方式既保存了状态的存储，又承担了消息的传输。</p>
 <p>另外 StateFun 的架构还有两个优势：</p>
 <ol>
-<li>借助 Flink 的 Checkpoint 来实现 Exactly once，而如果使用数据库的话这些都需要业务自己来做，业务比较难道整个链路的 Exactly once；</li>
+<li>借助 Flink 的 Checkpoint 来实现 Exactly once，而如果使用数据库的话这些都需要业务自己来做，业务比较难做到整个链路的 Exactly once；</li>
 <li>数据库一般都会有从库，在向数据库发送一个读请求时，有可能读取的不是最新的数据，而在 StateFun 中，数据只会存储在一个 StateFun Cluster Partition 中（后续文章会介绍），就不会有这个问题。</li>
 </ol>
 <h2 id="StateFun-核心组件"><a href="#StateFun-核心组件" class="headerlink" title="StateFun 核心组件"></a>StateFun 核心组件</h2><p>StateFun 2.0 中，一个 StateFun 应用所涉及的核心组件如下图所示：</p>
@@ -54,14 +54,14 @@
 <p>简单来说，Remote Functions 的意思就是函数是独立部署的，从物理上和 Flink Cluster 是分开的。Flink Task Managers 和函数之间的沟通是通过 HTTP/gRPC 请求来完成的。</p>
 <h3 id="Co-located-Functions"><a href="#Co-located-Functions" class="headerlink" title="Co-located Functions"></a>Co-located Functions</h3><p>其架构如下图所示：</p>
 <p><img src="/images/statefun/co-located-function.png" alt="Co-located Functions"></p>
-<p>这种部署方式就是将函数和 TaskManager 的进程部署在一个实例（Pod 或者机器）上，用不同的容器或者进程隔离开来，例如 K8S 中的 sidecar 这种模式。TaskManager 就可以和函数直接在本地通信，但也是去了 FAAS 独立扩缩的能力。</p>
+<p>这种部署方式就是将函数和 TaskManager 的进程部署在一个实例（Pod 或者机器）上，用不同的容器或者进程隔离开来，例如 K8S 中的 sidecar 这种模式。TaskManager 就可以和函数直接在本地通信，但也失去了 FAAS 独立扩缩的能力。</p>
 <h3 id="Embedded-Functions"><a href="#Embedded-Functions" class="headerlink" title="Embedded Functions"></a>Embedded Functions</h3><p><img src="/images/statefun/embedded-function.png" alt="Embedded Functions"></p>
 <p>这种部署模式更加直接，函数和 TaskManagers 直接在同一个容器内，像 Stateful Functions 1.0 就是这种模式，用高的耦合度换取了高的性能，但损失了灵活性和扩展性，它本质上就完全类似于一个 Flink Streaming Job。</p>
 <h2 id="StateFun-示例"><a href="#StateFun-示例" class="headerlink" title="StateFun 示例"></a>StateFun 示例</h2><p>在介绍 StateFun 示例之前，还有两个概念，需要简单看下，那就是 <code>Router</code> 和 <code>Module</code>，它 StateFun API 中比较核心的抽象（针对 Java SDK 而言，Python SDK 抽象得更简单）。</p>
 <h3 id="Router"><a href="#Router" class="headerlink" title="Router"></a>Router</h3><p>Router 的含义，这里可以从两个方面来理解：</p>
 <ol>
 <li>从 StateFun 的角度，它为 Ingress 指定了其要发送的 Function；</li>
-<li>从 Flink 的角度，它有两个作用：一是指定下游的 FunctionType（要发送的 Function），二是指定的了其 keyBy shuffle 时使用的 key（StateFun 的状态深度使用了 Flink 中 <code>keyby</code> 操作，这里会再后面的文章详细介绍）。</li>
+<li>从 Flink 的角度，它有两个作用：一是指定下游的 FunctionType（要发送的 Function），二是指定的了其 keyBy shuffle 时使用的 key（StateFun 的状态深度使用了 Flink 中 <code>keyby</code> 操作，这里会在后面的文章详细介绍）。</li>
 </ol>
 <p>举一个 Java 的示例：</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">AddToCartRouter</span> <span class="keyword">implements</span> <span class="title">Router</span>&lt;<span class="title">ProtobufMessages</span>.<span class="title">AddToCart</span>&gt; </span>&#123;</span><br><span class="line">  <span class="meta">@Override</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">route</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">      ProtobufMessages.AddToCart message, Downstream&lt;ProtobufMessages.AddToCart&gt; downstream)</span> </span>&#123;</span><br><span class="line">    downstream.forward(Identifiers.CART, message.getUserId(), message);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// forward 的方法说明</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Forwards the message as an input to a downstream function, addressed by a specified &#123;<span class="doctag">@link</span></span></span><br><span class="line"><span class="comment"> * FunctionType&#125; and the functions unique id within its type.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> functionType the target function's type.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> id the target function's unique id.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> message the message being forwarded.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">default</span> <span class="keyword">void</span> <span class="title">forward</span><span class="params">(FunctionType functionType, String id, T message)</span> </span>&#123;</span><br><span class="line">  forward(<span class="keyword">new</span> Address(functionType, id), message);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
