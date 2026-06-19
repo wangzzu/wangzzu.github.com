@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2020-10-31T12:47:52.205Z</updated>
+  <updated>2026-06-19T02:19:10.485Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,7 +20,7 @@
     <link href="http://matt33.com/2020/10/31/statefun-serverless-internals/"/>
     <id>http://matt33.com/2020/10/31/statefun-serverless-internals/</id>
     <published>2020-10-31T11:58:21.000Z</published>
-    <updated>2020-10-31T12:47:52.205Z</updated>
+    <updated>2026-06-19T02:19:10.485Z</updated>
     
     <content type="html"><![CDATA[<p>本篇是 Flink StateFun 的第二篇文章，文中的内容是来自 <a href="https://flink.apache.org/news/2020/10/13/stateful-serverless-internals.html" target="_blank" rel="external">Stateful Functions Internals: Behind the scenes of Stateful Serverless</a> 的翻译，这篇文章从上层把 Flink StateFun 的内核做了一个比较深入的介绍，个人认为它是一篇很不错的、用来了解 StateFun 内部机制的文章。</p>
 <p>Stateful Functions (StateFun) 的出现简化了分布式有状态应用的构建，它将有状态流处理（有状态的强一致性保证）与事件驱动的 FAAS 平台（基于云原生架构带来的弹性和 Serverless 体验）结合起来。一个典型的 StateFun 应用包括两个部分：使用现代平台（kubernetes 等）部署 FAAS 服务以及一个 StateFun 集群，StateFun 集群扮演着事件驱动数据库的角色，来为 Functions 的状态和 Event 提供一致性和容错性保证。</p>
@@ -94,7 +94,7 @@
     <link href="http://matt33.com/2020/10/25/statefun-introduce/"/>
     <id>http://matt33.com/2020/10/25/statefun-introduce/</id>
     <published>2020-10-25T14:57:05.000Z</published>
-    <updated>2020-10-25T16:05:58.612Z</updated>
+    <updated>2026-06-19T02:19:10.485Z</updated>
     
     <content type="html"><![CDATA[<p>Stateful Function（简称 StateFun）从 2019 正式对外宣布之后，今年 4 月份已经发了 2.0 版（并且是作为 Apache Flink 项目中的一部分发布），7 月份也发布了 2.1.0 版。在 2.0 的架构中 Function 已经从 JVM 中解耦出来，只需要通过 HTTP/gRPC 来调用即可，新的架构可以充分利用 FAAS 的能力。本篇文章就来简单看下 StateFun 的架构及应用示例，后面还会有陆续有两篇文章来深入剖析一些其内部实现。</p>
 <h2 id="StateFun-的架构"><a href="#StateFun-的架构" class="headerlink" title="StateFun 的架构"></a>StateFun 的架构</h2><p>StateFun 2.0 的架构与 1.0 做了非常大的变化，Function 部分已经完全与 JVM 部分解耦，Function 部分可以单独进行部署，直接部署在 FAAS 上或者直接使用 Kubernetes 启动相应的 HTTP/RPC 服务都是可以的，如下图所示：</p>
@@ -180,7 +180,7 @@
     <link href="http://matt33.com/2020/08/02/kubernetes-start/"/>
     <id>http://matt33.com/2020/08/02/kubernetes-start/</id>
     <published>2020-08-02T04:10:33.000Z</published>
-    <updated>2020-08-02T10:50:40.101Z</updated>
+    <updated>2026-06-19T02:19:10.485Z</updated>
     
     <content type="html"><![CDATA[<p>近几年来，随着以 Docker 为代表的容器技术的出现，终结了之前 DevOps 中交付和部署环节因环境、配置及程序本身的不同而造成的动辄几种甚至几十种部署配置的困境，将它们统一在容器镜像上。但 Docker 更适用于管理单个容器，一旦开始使用越来越多的容器封装和运行应用程序，必将会导致其管理和编排变得越来越困难。最终，用户不得不对容器实施分组，以便跨所有容器提供网络、安全、监控等服务。于是，以 Kubernetes 为代表的容器编排系统应运而生。本文就是对 Kubernetes 做一个简单的总结，主要从 Kubernetes 架构、组件和核心概念来简单讲述，是一篇关于 Kubernetes 的入门文章。</p>
 <h2 id="什么是-Kubernetes"><a href="#什么是-Kubernetes" class="headerlink" title="什么是 Kubernetes"></a>什么是 Kubernetes</h2><p>Kubernetes（因为首尾字母中间有 8 个字符，所以被简写成 K8s），它是一个是用于自动部署、扩展和管理容器化应用程序的工业级容器编排平台，尽管公开面世不过短短数年，但 Kubernetes 已经成为容器编排领域事实上的标准。</p>
@@ -290,7 +290,7 @@
     <link href="http://matt33.com/2020/04/16/cpu-branch-predictor/"/>
     <id>http://matt33.com/2020/04/16/cpu-branch-predictor/</id>
     <published>2020-04-15T16:33:56.000Z</published>
-    <updated>2020-06-23T14:13:17.227Z</updated>
+    <updated>2026-06-19T02:19:10.485Z</updated>
     
     <content type="html"><![CDATA[<p>最近在看 SQL 优化之 Code Generation 相关的内容，我们知道 Code Generation 是 SQL 优化的大杀器之一，不管是在 Apache Spark 还是 Apache Flink 中都有比较深入的应用（特别是在 Spark 中），Code Generation 最开始是在数据库中应用的，Spark 将其引入到 Spark SQL 的中优化，后来的 Flink 也借鉴了这一思想。Code Generation 是要解决什么问题呢？相信大部分人应该有所了解，简单来说就是减少虚函数调用、尽可能利用 CPU 分支预测的能力（会在 Code Generation 部分详细介绍，这里只需要了解这一背景即可），那么什么是 CPU 分支预测（<a href="https://en.wikipedia.org/wiki/Branch_predictor" target="_blank" rel="external">Wikipedia: CPU Branch Predictor</a>）呢？为什么虚函数调用会极大消耗 CPU 性能呢？这就是本文将要给大家介绍的内容。</p>
 <h2 id="CPU-Instruction-pipelining"><a href="#CPU-Instruction-pipelining" class="headerlink" title="CPU Instruction pipelining"></a>CPU Instruction pipelining</h2><p>在介绍 CPU 分支预测机制之前，先来看下 CPU 的流水线机制（<a href="https://en.wikipedia.org/wiki/Instruction_pipelining" target="_blank" rel="external">Wikipedia: CPU Instruction pipelining</a>）。</p>
@@ -370,7 +370,7 @@
     <link href="http://matt33.com/2020/03/20/flink-task-mailbox/"/>
     <id>http://matt33.com/2020/03/20/flink-task-mailbox/</id>
     <published>2020-03-20T15:46:37.000Z</published>
-    <updated>2020-06-23T14:13:17.226Z</updated>
+    <updated>2026-06-19T02:19:10.484Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第八篇，在介绍 TaskManager 第二部分之前，先来给介绍一下目前 StreamTask 中基于 MailBox 实现的线程模型，这个模型从 1.9 开始实现，在目前发布的 1.10 版本中，基本上已经改造完成，具体 issue 见 <a href="https://issues.apache.org/jira/browse/FLINK-12477" target="_blank" rel="external">FLINK-12477: Change threading-model in StreamTask to a mailbox-based approach</a>，其设计文档见 <a href="https://docs.google.com/document/d/1eDpsUKv2FqwZiS1Pm6gYO5eFHScBHfULKmH1-ZEWB4g/edit" target="_blank" rel="external">Change threading-model in StreamTask to a mailbox-based approach</a>，去年，vinoyang 也写了一篇关于它的介绍，见 <a href="https://mp.weixin.qq.com/s/MrQZS7-dEuNr442lzw3xYg" target="_blank" rel="external">重磅！Flink 将重构其核心线程模型</a>。因为 Flink 1.10 已经发布，本篇关于 MailBox 实现的介绍会基于 1.10 最新的代码来讲述（系列的其他篇，没有说明的话，默认还是以 1.9 的代码为例），这个功能在 1.9 中还并没有完全完成，所以本文以 1.10 代码为例讲述。</p>
 <h2 id="Motivation"><a href="#Motivation" class="headerlink" title="Motivation"></a>Motivation</h2><p>先来看下这个改造/改进最初的动机，在之前 Flink 的线程模型中，会有多个潜在的线程去并发访问其内部的状态，比如 event-processing 和 checkpoint triggering，它们都是通过一个全局锁（checkpoint lock）来保证线程安全，这种实现方案带来的问题是：</p>
@@ -478,7 +478,7 @@
     <link href="http://matt33.com/2020/03/15/flink-taskmanager-7/"/>
     <id>http://matt33.com/2020/03/15/flink-taskmanager-7/</id>
     <published>2020-03-15T03:46:37.000Z</published>
-    <updated>2020-06-23T14:13:17.226Z</updated>
+    <updated>2026-06-19T02:19:10.484Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第七篇，这篇文章主要会讲述 Flink 中的 TaskManager 的一些内容，TaskManager 是 Flink 的 worker 节点，它负责 Flink 中本机 slot 资源的管理以及具体 task 的执行。TaskManager 上的基本资源单位是 slot，一个作业的 task 最终会部署在一个 TM 的 slot 上运行，TM 会负责维护本地的 slot 资源列表，并来与 Flink Master 和 JobManager 通信，预计将会通过两篇左右的文章来向大家揭秘 TaskManager 内部的实现原理。另外，本篇将采用先提出问题，然后再根据源码实现去解答这些问题的形式叙述，如果大家有其他建议，欢迎（博客/公众号）留言反馈。</p>
 <p>对于 TaskManager 的内容，这里将会聚焦下面几个问题上，下面的文章将会逐个去分析这些问题（因为内容较多，会分为两篇文章讲述，本篇注重聚焦在前五个问题上）：</p>
@@ -640,7 +640,7 @@
     <link href="http://matt33.com/2019/12/27/flink-jobmanager-6/"/>
     <id>http://matt33.com/2019/12/27/flink-jobmanager-6/</id>
     <published>2019-12-27T02:16:26.000Z</published>
-    <updated>2020-06-23T14:13:17.226Z</updated>
+    <updated>2026-06-19T02:19:10.484Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第六篇，紧接着上篇文章，本篇主要讲述 Flink Master 中另一个组件 —— JobManager（在源码中对应的实现类是 <code>JobMaster</code>）。每个作业在启动后，Dispatcher 都会为这个作业创建一个 JobManager 对象，用来做这个作业相关的协调工作，比如：调度这个作业的 task、触发 Checkpoint 以及作业的容错恢复等。另外，本篇文章也将会看下一个作业在生成 ExecutionGraph 之后是如何在集群中调度起来的。</p>
 <p>从之前文章的介绍中，我们已经知道 JobManager 其实就是一个作业的 master 服务，主要负责自己作业相关的协调工作，包括：向 ResourceManager 申请 Slot 资源来调度相应的 task 任务、定时触发作业的 checkpoint 和手动 savepoint 的触发、以及作业的容错恢复，这些流程将会在后面的系列文章中介绍（这些流程涉及到的组件比较多，需要等待后面把 TaskManager 及 Flink 的调度模型讲述完再回头来看），本文会从 JobManager 是如何初始化的、JobManager 有哪些组件以及分别提供了哪些功能这两块来讲述。</p>
@@ -794,7 +794,7 @@
     <link href="http://matt33.com/2019/12/23/flink-master-5/"/>
     <id>http://matt33.com/2019/12/23/flink-master-5/</id>
     <published>2019-12-23T15:50:50.000Z</published>
-    <updated>2020-06-23T14:13:17.225Z</updated>
+    <updated>2026-06-19T02:19:10.484Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第五篇，从这篇开始会向大家介绍一下 Flink Runtime 中涉及到的分布式调度相关的内容。Flink 本身也是 Master/Slave 架构（当前的架构是在 <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=65147077" target="_blank" rel="external">FLIP-6 - Flink Deployment and Process Model - Standalone, Yarn, Mesos, Kubernetes, etc</a> 中实现的），这个 Master 节点就类似于 Storm 中 Nimbus 节点，它负责整个集群的一些协调工作，Flink 中 Master 节点主要包含三大组件：Flink Resource Manager、Flink Dispatcher 以及为每个运行的 Job 创建一个 JobManager 服务，本篇文章主要给大家介绍一下 Flink 中 Master 节点相关内容。</p>
 <p>这里要说明的一点是：通常我们认为 Flink 集群的 master 节点就是 JobManager，slave 节点就是 TaskManager 或者 TaskExecutor（见：<a href="https://ci.apache.org/projects/flink/flink-docs-master/concepts/runtime.html" target="_blank" rel="external">Distributed Runtime Environment</a>），这本身是没有什么问题的。但这里需要强调一下，在本文中集群的 Master 节点暂时就叫做 Master 节点，而负责每个作业调度的服务，这里叫做 JobManager/JobMaster（现在源码的实现中对应的类是 JobMaster）。集群的 Master 节点的工作范围与 JobManager 的工作范围还是有所不同的，而且 Master 节点的其中一项工作职责就是为每个提交的作业创建一个 JobManager 对象，用来处理这个作业相关协调工作，比如：task 的调度、Checkpoint 的触发及失败恢复等，JobManager 的内容将会在下篇文章单独讲述，本文主要聚焦 Master 节点除 JobManager 之外的工作。</p>
@@ -969,7 +969,7 @@
     <link href="http://matt33.com/2019/12/20/flink-execution-graph-4/"/>
     <id>http://matt33.com/2019/12/20/flink-execution-graph-4/</id>
     <published>2019-12-20T03:06:33.000Z</published>
-    <updated>2020-06-23T14:13:17.225Z</updated>
+    <updated>2026-06-19T02:19:10.484Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第四篇，紧接着前面两篇文章，在前两篇文章中介绍的 StreamGraph 和 JobGraph 都是在 client 端生成的，本文将会讲述 JobGraph 是如何转换成 ExecutionGraph 的。当 JobGraph 从 client 端提交到 JobManager 端后，JobManager 会根据 JobGraph 生成对应的 ExecutionGraph，ExecutionGraph 是 Flink 作业调度时使用到的核心数据结构，它包含每一个并行的 task、每一个 intermediate stream 以及它们之间的关系，本篇将会详细分析一下 JobGraph 转换为 ExecutionGraph 的流程。</p>
 <h2 id="Create-ExecutionGraph-的整体流程"><a href="#Create-ExecutionGraph-的整体流程" class="headerlink" title="Create ExecutionGraph 的整体流程"></a>Create ExecutionGraph 的整体流程</h2><p>当用户向一个 Flink 集群提交一个作业后，JobManager 会接收到 Client 相应的请求，JobManager 会先做一些初始化相关的操作（也就是 JobGraph 到 ExecutionGraph 的转化），当这个转换完成后，才会根据 ExecutionGraph 真正在分布式环境中调度当前这个作业，而 JobManager 端处理的整体流程如下：</p>
@@ -1060,7 +1060,7 @@
     <link href="http://matt33.com/2019/12/09/flink-job-graph-3/"/>
     <id>http://matt33.com/2019/12/09/flink-job-graph-3/</id>
     <published>2019-12-09T01:34:07.000Z</published>
-    <updated>2020-06-23T14:13:17.225Z</updated>
+    <updated>2026-06-19T02:19:10.484Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第三篇，紧接着上一篇文章，本文主要讲述 StreamGraph 是如何转换成 JobGraph 的，在前面的文章中，我们知道 StreamGraph 是根据用户作业的处理逻生成初始的逻辑计划，它并没有做任何的优化，而 JobGraph 将会在原来的基础上做相应的优化（主要是算子的 Chain 操作，Chain 在一起的算子将会在同一个 task 上运行，会极大减少 shuffle 的开销）。刚开始接触的同学可能会有一个疑问，为什么要有 StreamGraph 和 JobGraph 两层的 Graph，这里最主要的原因是为兼容 batch process，Streaming process 最初产生的是 StreamGraph，而 batch process 产生的则是 OptimizedPlan，但是它们最后都会转换为 JobGraph，本文主要是以 Streaming 作业的 StreamGraph 转换为 JobGraph 的处理流程来介绍。</p>
 <h2 id="生成-JobGraph-的整体流程"><a href="#生成-JobGraph-的整体流程" class="headerlink" title="生成 JobGraph 的整体流程"></a>生成 JobGraph 的整体流程</h2><p>这里我们先看下 FlinkPlan 的实现，它主要有两个实现类：StreamGraph 和 OptimizedPlan，分别对应 Streaming 和 Batch process，不管是哪种类型最后可以转换为 JobGraph：</p>
@@ -1168,7 +1168,7 @@
     <link href="http://matt33.com/2019/12/08/flink-stream-graph-2/"/>
     <id>http://matt33.com/2019/12/08/flink-stream-graph-2/</id>
     <published>2019-12-08T03:03:50.000Z</published>
-    <updated>2020-06-23T14:13:17.224Z</updated>
+    <updated>2026-06-19T02:19:10.483Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第二篇，将会给大家讲述一个 Flink 作业（DataStream 高阶 API 为例的作业）是如何转换为 StreamGraph 的, StreamGraph 可以认为是一个还未经过优化处理的逻辑计划，它完全是在 Client 端生成的。StreamGraph 然后再经过优化转换为 JobGraph，Client 端向 JobManager 提交的作业就是以 JobGraph 的形式提交的，也就是说对于 JobManager 来说，它从客户端接收的作业实际上就是一个 JobGraph，然后它再对 JobGraph 做相应处理，生成具体的物理执行计划进行调度。</p>
 <p>关于分布式计算中的 Graph，对于很多人来说，最开始接触和理解这个概念应该还是在 Spark 中。Spark 中有个 DAG （Directed Acyclic Graph，有向无环图）的概念，它包括一些边和一些顶点，其中边代表了 RDD（Spark 中对数据的封装和抽象）、顶点代表了 RDD 上的 Operator，在一个作业中，一旦有 Action 被调用，创建的 DAG 就会被提交到 DAG Scheduler，它会将这个 graph 以 task 的形式调度到不同的节点上去执行计算。Spark 在 MapReduce 的基础上提出了 DAG 的概念，带来了很多的好处，比如：更方便对复杂作业（复杂的 DAG）做全局优化、通过 DAG 恢复丢失的 RDD 等等。Apache Flink 在设计实现中，也借鉴了这个设计，Flink 中的每个作业在调度时都是一个 Graph（Flink 一般叫 DataFlow Graph，Spark 中一般叫作 DAG）。另外，Google 的 Beam 也是类似的概念，Collection 和 Transformation 对数据和操作的最基本抽象，Graph 由 Collection 和 Transformation 构成。</p>
@@ -1253,7 +1253,7 @@
     <link href="http://matt33.com/2019/11/23/flink-learn-start-1/"/>
     <id>http://matt33.com/2019/11/23/flink-learn-start-1/</id>
     <published>2019-11-23T10:49:56.000Z</published>
-    <updated>2020-06-23T14:13:17.224Z</updated>
+    <updated>2026-06-19T02:19:10.483Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第一篇，最近计划花个一到两个月的时间以最新的 Flink-1.9 代码为例把 Flink 的主要内容梳理一遍，这个系列文章的主要内容见 <a href="https://github.com/wangzzu/awesome/issues/28" target="_blank" rel="external">Flink 源码分析</a>，这个 issue 拖了好几个月，现在终于开动了，不容易。梳理的过程也是个人强化学习的过程，博客中有问题的地方也欢迎各位指正（邮件联系 or disqus 评论都行，我这边都会及时回复）。</p>
 <p>本篇的题目是 <strong>Apache Flink 初探</strong>，比较适合对 Flink 不是很了解，想进一步了解的同学，主要会讲述一下流计算的基本知识，以及对 Flink 做了一个简单的介绍，算是这个系列的开胃小菜。</p>
@@ -1363,7 +1363,7 @@
     <link href="http://matt33.com/2019/10/27/paper-chandy-lamport/"/>
     <id>http://matt33.com/2019/10/27/paper-chandy-lamport/</id>
     <published>2019-10-27T15:12:51.000Z</published>
-    <updated>2020-06-23T14:13:17.223Z</updated>
+    <updated>2026-06-19T02:19:10.483Z</updated>
     
     <content type="html"><![CDATA[<p>今天对分布式系统领域的一篇经典论文 —— Chandy-Lamport 算法做了一下总结，这篇论文对于分布式快照算法产生了非常巨大的影响，比如：Apache Flink、Apache Spark 的 Structured Streaming、Ray 等分布式计算引擎都是使用的这个算法做快照。这篇论文的其中一位作者 —— Lamport，他也是 Paxos 算法的提出者，2013 年图领奖得主（图领奖是计算机领域的诺贝尔奖，目前只有一位华裔 —— 姚期智院士获得过这个殊荣，没错，就是清华交叉学院姚班的姚院士）。这篇论文发表于 1985 年，算法的由来可以参考下面的小段子：</p>
 <blockquote>
@@ -1551,7 +1551,7 @@
     <link href="http://matt33.com/2019/10/20/paper-flink-snapshot/"/>
     <id>http://matt33.com/2019/10/20/paper-flink-snapshot/</id>
     <published>2019-10-20T03:41:42.000Z</published>
-    <updated>2020-06-23T14:13:17.223Z</updated>
+    <updated>2026-06-19T02:19:10.483Z</updated>
     
     <content type="html"><![CDATA[<p>本篇文章是对 <a href="https://arxiv.org/pdf/1506.08603.pdf" target="_blank" rel="external">Lightweight Asynchronous Snapshots for Distributed Dataflow</a> 的一个总结，从文章题目也可以看出文章的主题 —— 分布式 dataflow 的轻量级异步 snapshot 算法，它是 Flink 团队在 2015 年发表的论文，主要讲述了对于 Streaming System 如何做 snapshot 的，它选取的是 Chandy-Lamport 算法（论文见 <a href="https://www.microsoft.com/en-us/research/uploads/prod/2016/12/Determining-Global-States-of-a-Distributed-System.pdf" target="_blank" rel="external"> Distributed Snapshots: Determining Global States of Distributed Systems</a>），关于这个算法后面会单独一篇文章来总结。在 <a href="https://arxiv.org/pdf/1506.08603.pdf" target="_blank" rel="external">Lightweight Asynchronous Snapshots for Distributed Dataflow</a> 这篇论文中，作者更多向我们表达的是 Chandy-Lamport 算法如何在 Flink 中落地的以及如何解决分布式 dataflow 做 snapshot 时遇到的痛点。</p>
 <h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>分布式有状态的流处理允许在云上部署和执行大规模的流数据计算，并且要求低延迟和高吞吐。这种模式一个比较大的挑战，就是其容错能力，能够应对潜在的 failure。当前业内的方案都是依赖<strong>周期性地全局状态的 snapshot </strong> 做 failure recovery。但这种方案有两个非常大的缺陷：</p>
@@ -1647,7 +1647,7 @@
     <link href="http://matt33.com/2019/10/19/paper-ray1/"/>
     <id>http://matt33.com/2019/10/19/paper-ray1/</id>
     <published>2019-10-19T14:26:20.000Z</published>
-    <updated>2020-06-23T14:13:17.223Z</updated>
+    <updated>2026-06-19T02:19:10.483Z</updated>
     
     <content type="html"><![CDATA[<p>这周抽空看了关于 ray 的一篇论文，论文是 2017 年发表的（见：<a href="https://arxiv.org/pdf/1703.03924.pdf" target="_blank" rel="external">Real-Time Machine Learning: The Missing Pieces</a>，他们比较新的论文是 18 年发表的，见：<a href="https://www.usenix.org/system/files/osdi18-moritz.pdf" target="_blank" rel="external">Ray: A Distributed Framework for Emerging AI Applications</a>），虽然论文描述的架构与现在 ray 真正的构架实现已经有了较大的不同，主要也是 ray 这两年发展比较快，架构做了很多的优化，不过本篇论文依然值得仔细阅读学习 一下的，这篇论文也展示了 ray 最初设计实现的出发点。</p>
 <blockquote>
@@ -1750,7 +1750,7 @@
     <link href="http://matt33.com/2019/03/17/apache-calcite-planner/"/>
     <id>http://matt33.com/2019/03/17/apache-calcite-planner/</id>
     <published>2019-03-17T12:41:35.000Z</published>
-    <updated>2020-06-23T14:13:17.223Z</updated>
+    <updated>2026-06-19T02:19:10.483Z</updated>
     
     <content type="html"><![CDATA[<p>紧接上篇文章<a href="http://matt33.com/2019/03/07/apache-calcite-process-flow/">Apache Calcite 处理流程详解（一）</a>，这里是 Calcite 系列文章的第二篇，后面还会有文章讲述 Calcite 的实践（包括：如何开发用于 SQL 优化的 Rule）。本篇文章主要介绍 Apache Calcite 优化器部分的内容，会先简单介绍一下 RBO 和 CBO 模型，之后详细讲述 Calcite 关于这两个优化器的实现 —— HepPlanner 和 VolcanoPlanner，文章内容都是个人的一些理解，由于也是刚接触这块，理解有偏差的地方，欢迎指正。</p>
 <h1 id="什么是查询优化器"><a href="#什么是查询优化器" class="headerlink" title="什么是查询优化器"></a>什么是查询优化器</h1><p>查询优化器是传统数据库的核心模块，也是大数据计算引擎的核心模块，开源大数据引擎如 Impala、Presto、Drill、HAWQ、 Spark、Hive 等都有自己的查询优化器。Calcite 就是从 Hive 的优化器演化而来的。</p>
@@ -2000,7 +2000,7 @@
     <link href="http://matt33.com/2019/03/07/apache-calcite-process-flow/"/>
     <id>http://matt33.com/2019/03/07/apache-calcite-process-flow/</id>
     <published>2019-03-07T12:40:38.000Z</published>
-    <updated>2020-06-23T14:13:17.222Z</updated>
+    <updated>2026-06-19T02:19:10.483Z</updated>
     
     <content type="html"><![CDATA[<p>关于 Apache Calcite 的简单介绍可以参考 <a href="https://www.infoq.cn/article/new-big-data-hadoop-query-engine-apache-calcite" target="_blank" rel="external">Apache Calcite：Hadoop 中新型大数据查询引擎</a> 这篇文章，Calcite 一开始设计的目标就是 <strong>one size fits all</strong>，它希望能为不同计算存储引擎提供统一的 SQL 查询引擎，当然 Calcite 并不仅仅是一个简单的 SQL 查询引擎，在论文 <a href="https://arxiv.org/pdf/1802.10233.pdf" target="_blank" rel="external">Apache Calcite: A Foundational Framework for Optimized Query Processing Over Heterogeneous Data Sources</a> 的摘要（摘要见下面）部分，关于 Calcite 的核心点有简单的介绍，Calcite 的架构有三个特点：flexible, embeddable, and extensible，就是灵活性、组件可插拔、可扩展，它的 SQL Parser 层、Optimizer 层等都可以单独使用，这也是 Calcite 受总多开源框架欢迎的原因之一。</p>
 <blockquote>
@@ -2330,7 +2330,7 @@
     <link href="http://matt33.com/2019/01/28/bk-store-realize/"/>
     <id>http://matt33.com/2019/01/28/bk-store-realize/</id>
     <published>2019-01-28T15:23:35.000Z</published>
-    <updated>2020-06-23T14:13:17.222Z</updated>
+    <updated>2026-06-19T02:19:10.482Z</updated>
     
     <content type="html"><![CDATA[<p>接着之前的一篇文章 <a href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/">BookKeeper 集群搭建及使用</a>，本文是 BookKeeper 系列的第二篇，短期来看应该也是最后一篇，本篇文章主要聚焦于 BookKeeper 内核的实现机制上，会从 BookKeeper 的基本概念、架构、读写一致性实现、读写分离实现、容错机制等方面来讲述，因为我并没有看过 BookKeeper 的源码，所以这里的讲述主要还是从原理、方案实现上来介绍，具体如何从解决方案落地到具体的代码实现，有兴趣的可以去看下 BookKeeper 的源码实现。</p>
 <h2 id="BookKeeper-基础"><a href="#BookKeeper-基础" class="headerlink" title="BookKeeper 基础"></a>BookKeeper 基础</h2><p>正如 Apache BookKeeper 官网介绍的一样：A scalable, fault-tolerant, and low-latency storage service optimized for real-time workloads。BookKeeper 的定位是一个可用于实时场景下的高扩展性、强容错、低延迟的存储服务。<a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming - 示说网</a> 中也做了一个简单总结：</p>
@@ -2519,7 +2519,7 @@
     <link href="http://matt33.com/2018/11/21/effective-learning/"/>
     <id>http://matt33.com/2018/11/21/effective-learning/</id>
     <published>2018-11-21T02:12:51.000Z</published>
-    <updated>2020-06-23T14:13:17.222Z</updated>
+    <updated>2026-06-19T02:19:10.482Z</updated>
     
     <content type="html"><![CDATA[<p>在这个知识爆炸、科技日新月异的时代，技术的变化远比我们想象的要快很多，这就对工程师的要求就提高了很多，特别是对于那些在技术上有所追求的工程师而言。对于一些互联网大厂，学习能力也成了面试中重点考察的内容。如何快速学习、掌握一门新的技术，如何提高自己的学习效率，对于有一定工作经验的人来说，可能每个人都有一个自己的学习方法论，但是我们也需要去学习借鉴别人（特别是那些有一定技术影响力的技术大咖）的经验，来不断更新和完善自己的方法轮。今天这篇《高效学习》，就是与大家一起探讨技术学习的方法论，本文的内容主要来自耗子叔的《左耳听风 —— 高效学习篇》，中间会穿插个人的一些经验，算是对这个系列的一个总结。如果想看原文内容，欢迎订阅耗子叔的这个专栏，这个专栏质量还是非常高的，耗子叔推荐了很多优秀的学习资源（通过文章末尾处的二维码链接购买）。</p>
 <h2 id="端正学习态度"><a href="#端正学习态度" class="headerlink" title="端正学习态度"></a>端正学习态度</h2><p>对于大多数人来说，我们并不是那种天赋异禀的天才，所以那些速成的学习方法并不适合我们，因为，<strong>对于非天才的我们来说，学习是不可能速成的</strong>，学习本来就是一件【逆人性】的事，就像锻炼身体一样，<strong>需要人持续付出，会让人感到痛苦，并随时想找理由放弃，实际上，痛苦是成长的必经阶段</strong>。</p>
@@ -2699,7 +2699,7 @@
     <link href="http://matt33.com/2018/11/04/kafka-transaction/"/>
     <id>http://matt33.com/2018/11/04/kafka-transaction/</id>
     <published>2018-11-04T12:36:34.000Z</published>
-    <updated>2020-06-23T14:13:17.221Z</updated>
+    <updated>2026-06-19T02:19:10.482Z</updated>
     
     <content type="html"><![CDATA[<p>这篇文章是 Kafka Exactly-Once 实现系列的第二篇，主要讲述 Kafka 事务性的实现，这部分的实现要比幂等性的实现复杂一些，幂等性实现是事务性实现的基础，幂等性提供了单会话单 Partition Exactly-Once 语义的实现，正是因为 Idempotent Producer 不提供跨多个 Partition 和跨会话场景下的保证，因此，我们是需要一种更强的事务保证，能够原子处理多个 Partition 的写入操作，数据要么全部写入成功，要么全部失败，不期望出现中间状态。这就是 Kafka Transactions 希望解决的问题，简单来说就是能够实现 <code>atomic writes across partitions</code>，本文以 Apache Kafka 2.0.0 代码实现为例，深入分析一下 Kafka 是如何实现这一机制的。</p>
 <p>Apache Kafka 在 Exactly-Once Semantics（EOS）上三种粒度的保证如下（来自 <a href="https://www.slideshare.net/ConfluentInc/exactlyonce-semantics-in-apache-kafka" target="_blank" rel="external">Exactly-once Semantics in Apache Kafka</a>）：</p>
