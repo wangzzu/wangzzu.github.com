@@ -1,0 +1,438 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="与一群有趣的人，做一些有趣的事."><title>LLM 系列 (一)：从 AI 到 LLM | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (一)：从 AI 到 LLM</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (一)：从 AI 到 LLM</h1><div class="post-meta">Jun 19, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">5,055</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/06/19/llm-ai-to-llm/" href="/2026/06/19/llm-ai-to-llm/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#AI-的终极问题：机器如何获取智能？"><span class="toc-number">1.</span> <span class="toc-text">AI 的终极问题：机器如何获取智能？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LLM-简史：大语言模型是如何一步步长出来的？"><span class="toc-number">2.</span> <span class="toc-text">LLM 简史：大语言模型是如何一步步长出来的？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LLM-崛起的前夜：从词向量到-Transformer（2003-2017）"><span class="toc-number">2.1.</span> <span class="toc-text">LLM 崛起的前夜：从词向量到 Transformer（2003-2017）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Transformer-革命与早期探索：GPT-与-BERT（2017-2019）"><span class="toc-number">2.2.</span> <span class="toc-text">Transformer 革命与早期探索：GPT 与 BERT（2017-2019）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#规模化突破，智能开始显现：GPT-3-到-ChatGPT（2020-2022）"><span class="toc-number">2.3.</span> <span class="toc-text">规模化突破，智能开始显现：GPT-3 到 ChatGPT（2020-2022）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#从模型到系统：多模态、长上下文、Agent-与推理模型（2023-2026）"><span class="toc-number">2.4.</span> <span class="toc-text">从模型到系统：多模态、长上下文、Agent 与推理模型（2023-2026）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LLM-整体流程"><span class="toc-number">3.</span> <span class="toc-text">LLM 整体流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LLM-不是终点，而是一条技术主线的开始"><span class="toc-number">4.</span> <span class="toc-text">LLM 不是终点，而是一条技术主线的开始</span></a></li></ol></div></div><div class="post-content"><p>过去几年，大语言模型（LLM）从实验室里的研究成果，迅速变成了普通人每天都能接触到的工具。ChatGPT、Claude、Gemini、DeepSeek 等产品，让很多人第一次直观感受到：机器不只是能搜索信息、识别图片、完成分类任务，它似乎开始能够理解问题、组织语言、代码生成、分析文档，甚至参与复杂决策。</p>
+<p>但如果只把 LLM 理解成“一个很会聊天的 AI”，其实会低估它背后的技术演进。今天的 LLM，并不是突然出现的魔法，而是人工智能几十年发展积累后的结果：从早期的符号推理，到机器学习；从神经网络，到深度学习；从词向量、注意力机制，到 Transformer；再到预训练、后训练、分布式训练、推理服务、RAG、Agent 和多模态系统，每一步都在回答同一个问题：<strong>机器智能是如何产生并不断演进的？</strong></p>
+<p>因此，我打算新开一个 LLM 系列的文章，这个系列会从底层原理出发，逐步拆开 LLM 的关键技术拼图，让读者能够理解 LLM 背后的技术原理，帮助没有 AI 背景的同学建立完整的框架。</p>
+<p>作为 LLM 系列的第一篇，我们先回到起点：从 AI 到 LLM，看看大语言模型究竟是如何从几十年的人工智能探索中一步步长出来的。</p>
+<a id="more"></a>
+<h2 id="AI-的终极问题：机器如何获取智能？"><a href="#AI-的终极问题：机器如何获取智能？" class="headerlink" title="AI 的终极问题：机器如何获取智能？"></a>AI 的终极问题：机器如何获取智能？</h2><p>在真正进入 LLM 之前，我们先需要理解一个更早的问题：人工智能几十年来到底在追求什么？从早期 AI 到今天的大语言模型，表面上看技术形态变化很大，但背后始终围绕同一个核心问题：<strong>机器如何获得智能，如何理解世界，并给出有用的答案</strong>。</p>
+<p>围绕这个问题，AI 的发展大致可以看成三条重要路线：</p>
+<table>
+<thead>
+<tr>
+<th>路线</th>
+<th>核心想法</th>
+<th>代表人物</th>
+<th>主要贡献</th>
+<th>通俗理解</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>符号主义</td>
+<td>智能来自规则和推理</td>
+<td>Alan Turing、John McCarthy、Marvin Minsky、Allen Newell、Herbert Simon</td>
+<td>图灵测试、AI 学科建立、搜索、逻辑推理、专家系统</td>
+<td>像一本很厚的规则手册，人类把知识写进去，机器按规则推理</td>
+</tr>
+<tr>
+<td>统计学习</td>
+<td>智能来自数据中的规律</td>
+<td>Claude Shannon、Vladimir Vapnik、Judea Pearl</td>
+<td>信息论、统计学习理论、概率图模型、因果推理</td>
+<td>机器不再只靠人写规则，而是从大量数据中总结模式</td>
+</tr>
+<tr>
+<td>神经网络</td>
+<td>智能来自可学习的表示</td>
+<td>Frank Rosenblatt、David Rumelhart、Geoffrey Hinton、Yann LeCun、Yoshua Bengio、Jürgen Schmidhuber、Sepp Hochreiter</td>
+<td>感知机、反向传播、卷积网络、深度学习、LSTM、表示学习</td>
+<td>机器开始自己学习特征，而不是完全依赖人工设计特征</td>
+</tr>
+</tbody>
+</table>
+<p>如果用一句话总结这三条路线：符号主义让机器学会“按规则推理”，统计学习让机器学会“从数据中找规律”，神经网络让机器学会“自己提取特征和表示”。</p>
+<p><img src="/images/llm/ai-routes.png" alt="AI 的三条重要路线"></p>
+<p>而 LLM 的出现，正是这些路线长期积累后的结果。它继承了 AI 对智能的追问，吸收了统计学习从数据中建模的方法，也依赖神经网络强大的表示学习能力。接下来，我们就从语言这个场景出发，看看机器是如何一步步从“处理文字”，走向今天能够理解、生成和协作的大语言模型。</p>
+<blockquote>
+<p>需要说明的是，LLM 只是从“语言”这条路径出发来逼近智能，并不代表它是通往 AGI 的唯一答案。AI 领域仍然有许多重要探索，例如从视觉、具身智能、世界模型等方向理解和建模现实世界。长期来看，单纯依赖语言可能存在边界，真正通用的智能或许需要语言、感知、行动和世界模型等能力共同组成。</p>
+</blockquote>
+<h2 id="LLM-简史：大语言模型是如何一步步长出来的？"><a href="#LLM-简史：大语言模型是如何一步步长出来的？" class="headerlink" title="LLM 简史：大语言模型是如何一步步长出来的？"></a>LLM 简史：大语言模型是如何一步步长出来的？</h2><p>LLM 的历史并不算长，但在这条路上，无数科学家和工程师做过大量探索，也诞生过许多重要的语言模型。本文不会逐一展开每个模型的技术细节，而是重点关注几次关键转折，也就是 LLM 发展过程中的“群星闪烁时刻”。</p>
+<p>早期语言模型首先要解决的是“如何表示文字”：Word2Vec 让词语能够被向量化，语义关系开始变得可计算；Transformer 出现后，模型具备了更高效建模上下文关系的能力；BERT 和 GPT 则分别代表了“理解”和“生成”两条重要路线；GPT-3 之后，规模化训练让模型开始展现少样本学习和通用任务能力；而 ChatGPT、GPT-4、Llama、GPT-4o、DeepSeek-R1、Claude 等产品的出现，则进一步把 LLM 从研究模型推向大众应用、开放生态、多模态交互与推理系统。</p>
+<p><img src="/images/llm/llm-timeline.png" alt="LLM 发展关键时间轴"></p>
+<p>下面我们将这段历史分为四个阶段来看：</p>
+<table>
+<thead>
+<tr>
+<th><strong>阶段</strong></th>
+<th><strong>时间</strong></th>
+<th><strong>核心变化</strong></th>
+<th><strong>代表节点</strong></th>
+<th><strong>核心改变</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LLM 崛起的前夜</td>
+<td>2003-2017</td>
+<td>从词向量到注意力机制</td>
+<td>神经语言模型、Word2Vec、Seq2Seq、Attention</td>
+<td>机器开始把语言变成可计算的向量</td>
+</tr>
+<tr>
+<td>Transformer 革命与早期探索</td>
+<td>2017-2019</td>
+<td>Transformer 成为语言模型底座</td>
+<td>Transformer、GPT-1、BERT、GPT-2</td>
+<td>语言模型开始具备大规模预训练能力</td>
+</tr>
+<tr>
+<td>规模化突破，智能开始显现</td>
+<td>2020-2022</td>
+<td>参数、数据、算力放大，能力涌现</td>
+<td>GPT-3、InstructGPT、GPT-3.5、ChatGPT</td>
+<td>模型从“会补全文字”走向“会完成任务”</td>
+</tr>
+<tr>
+<td>从模型到系统</td>
+<td>2023-2026</td>
+<td>多模态、长上下文、Agent、推理模型融合</td>
+<td>GPT-4、Llama 2、Claude、Gemini、GPT-4o、o1、DeepSeek-R1、GPT-5</td>
+<td>LLM 不再只是聊天模型，而是智能系统的核心组件</td>
+</tr>
+</tbody>
+</table>
+<h3 id="LLM-崛起的前夜：从词向量到-Transformer（2003-2017）"><a href="#LLM-崛起的前夜：从词向量到-Transformer（2003-2017）" class="headerlink" title="LLM 崛起的前夜：从词向量到 Transformer（2003-2017）"></a>LLM 崛起的前夜：从词向量到 Transformer（2003-2017）</h3><p>在 Transformer 出现之前，语言模型已经经历了很长时间的积累。早期的关键问题是：机器如何理解一个词的含义？Word2Vec 给出了一个非常直观的方向：把词变成向量，让语义相近的词在空间中也更接近。</p>
+<p>随后，Seq2Seq 和 Attention 让模型开始处理更复杂的语言任务，比如机器翻译。尤其是 Attention，它让模型在生成答案时，可以动态关注输入中最相关的部分。这一步非常关键，因为后来的 Transformer，本质上就是把 Attention 推到了架构中心。</p>
+<table>
+<thead>
+<tr>
+<th><strong>时间</strong></th>
+<th><strong>节点</strong></th>
+<th><strong>技术意义</strong></th>
+<th><strong>通俗解释</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2003</td>
+<td>神经概率语言模型，Bengio 等</td>
+<td>用神经网络学习词表示和语言概率</td>
+<td>机器开始把词变成可计算的向量</td>
+</tr>
+<tr>
+<td>2013</td>
+<td>Word2Vec，Tomas Mikolov 等</td>
+<td>词向量大规模普及</td>
+<td>“国王 - 男人 + 女人 ≈ 女王”这种语义关系能被计算</td>
+</tr>
+<tr>
+<td>2014</td>
+<td>Seq2Seq / Attention，Sutskever、Bahdanau 等</td>
+<td>机器翻译进入端到端神经网络时代</td>
+<td>模型学会在生成时关注输入里最相关的部分</td>
+</tr>
+<tr>
+<td>2017</td>
+<td>Transformer，Vaswani 等</td>
+<td>自注意力架构成为 LLM 底座</td>
+<td>模型可以同时看整段文本里词与词的关系</td>
+</tr>
+</tbody>
+</table>
+<h3 id="Transformer-革命与早期探索：GPT-与-BERT（2017-2019）"><a href="#Transformer-革命与早期探索：GPT-与-BERT（2017-2019）" class="headerlink" title="Transformer 革命与早期探索：GPT 与 BERT（2017-2019）"></a>Transformer 革命与早期探索：GPT 与 BERT（2017-2019）</h3><p>2017 年，Google 发表的《<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="external">Attention Is All You Need</a>》论文标志着深度学习进入全新纪元。Transformer 架构通过自注意力机制（Self-Attention）显著缓解了 RNN/LSTM 在长距离依赖和并行训练上的瓶颈，也让大规模语言模型训练变得更加可行。</p>
+<p><img src="/images/llm/transformer.png" alt="Transformer 架构"></p>
+<p>Transformer 架构的关键变化是引入了 Self-Attention（自注意力机制）。它让模型在处理一句话时，可以同时观察所有词之间的关系，判断哪些词更重要、哪些词应该彼此关联。这不仅提升了建模能力，也让大规模并行训练成为可能。后来的 GPT、BERT、T5、Llama、Claude、Gemini 等模型，本质上都建立在 Transformer 这条技术路线之上。</p>
+<p>可以用一个简单例子理解：</p>
+<blockquote>
+<p>句子：“苹果发布了新手机，它的销量很好。”</p>
+</blockquote>
+<p>模型需要知道“它”指的是“新手机”，而不是“苹果”这个公司。自注意力机制做的事情，就是帮助模型在上下文中找到这种关联关系。</p>
+<table>
+<thead>
+<tr>
+<th><strong>时间</strong></th>
+<th><strong>节点</strong></th>
+<th><strong>之前的问题</strong></th>
+<th><strong>它做了什么</strong></th>
+<th><strong>示例理解</strong></th>
+<th><strong>关键意义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2017</td>
+<td>Transformer</td>
+<td>RNN/LSTM 按顺序处理文本，训练慢，长距离依赖弱</td>
+<td>用自注意力机制直接建模词与词之间的关系</td>
+<td>在一句话里判断“它”到底指代谁</td>
+<td>奠定现代 LLM 架构基础</td>
+</tr>
+<tr>
+<td>2018</td>
+<td>GPT-1</td>
+<td>过去很多 NLP 任务需要为每个任务单独训练模型</td>
+<td>用 Transformer Decoder 做生成式预训练，再迁移到下游任务</td>
+<td>先大量读书学习语言，再去做分类、问答等任务</td>
+<td>证明“生成式预训练”路线可行</td>
+</tr>
+<tr>
+<td>2018</td>
+<td>BERT</td>
+<td>单向语言模型理解上下文不够完整</td>
+<td>用 Transformer Encoder 做双向预训练，同时看左边和右边上下文</td>
+<td>理解“我去银行存钱”和“河边的银行”含义不同</td>
+<td>让预训练模型成为 NLP 理解任务的标准范式</td>
+</tr>
+<tr>
+<td>2019</td>
+<td>GPT-2</td>
+<td>小模型生成文本连贯性有限，泛化能力不足</td>
+<td>扩大模型和数据规模，展示更强文本生成能力</td>
+<td>给一个开头，模型能续写出较长、连贯的段落</td>
+<td>让人们看到大规模生成模型的潜力</td>
+</tr>
+<tr>
+<td>2019</td>
+<td>T5</td>
+<td>不同 NLP 任务形式不统一，训练和迁移复杂</td>
+<td>把所有 NLP 任务统一成“文本到文本”格式</td>
+<td>翻译、摘要、问答都变成输入文本、输出文本</td>
+<td>推动统一任务范式，为后续通用模型铺路</td>
+</tr>
+</tbody>
+</table>
+<h3 id="规模化突破，智能开始显现：GPT-3-到-ChatGPT（2020-2022）"><a href="#规模化突破，智能开始显现：GPT-3-到-ChatGPT（2020-2022）" class="headerlink" title="规模化突破，智能开始显现：GPT-3 到 ChatGPT（2020-2022）"></a>规模化突破，智能开始显现：GPT-3 到 ChatGPT（2020-2022）</h3><p>真正让 LLM 进入大众视野的，是规模化。GPT-3 把模型参数提升到 1750 亿，展示了一个重要现象：当模型、数据和算力扩大到一定程度后，模型不再只是“补全文字”，而是开始表现出少样本学习、任务迁移和复杂文本生成能力。</p>
+<p>简单说，以前我们想让模型完成一个新任务，往往需要专门准备数据、重新训练模型；而 GPT-3 之后，用户只需要在提示词里写清楚任务，甚至给几个示例，模型就能“临场学会”如何回答。这就是 few-shot learning 带来的震撼。</p>
+<p>但 GPT-3 还不够“听话”。它会生成文本，却不一定理解用户真正想要什么。于是后来的 InstructGPT、GPT-3.5 和 ChatGPT，把重点转向指令理解、对话体验和人类反馈对齐，让模型从“会预测下一个词”，逐渐变成“会按照人的意图完成任务”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>时间</strong></th>
+<th><strong>节点</strong></th>
+<th><strong>技术突破</strong></th>
+<th><strong>解决了什么问题</strong></th>
+<th><strong>典型应用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2020</td>
+<td>GPT-3</td>
+<td>大规模预训练、1750 亿参数、few-shot learning</td>
+<td>不再每个任务都单独训练，模型可以通过提示词适配新任务</td>
+<td>文本生成、翻译、摘要、问答、代码辅助</td>
+</tr>
+<tr>
+<td>2022</td>
+<td>InstructGPT</td>
+<td>指令微调、RLHF</td>
+<td>模型更理解“用户想让我做什么”，回答更符合人类偏好</td>
+<td>指令问答、写作助手、客服回复、任务执行</td>
+</tr>
+<tr>
+<td>2022</td>
+<td>GPT-3.5</td>
+<td>更强对话能力、更好的任务泛化</td>
+<td>从单轮文本生成走向多轮对话和复杂任务处理</td>
+<td>编程辅助、文档总结、头脑风暴、学习辅导</td>
+</tr>
+<tr>
+<td>2022.11</td>
+<td>ChatGPT</td>
+<td>对话产品化、低门槛交互界面</td>
+<td>让非技术用户也能自然使用 LLM</td>
+<td>日常问答、内容创作、代码解释、办公提效</td>
+</tr>
+</tbody>
+</table>
+<p>这一时期的应用场景也开始迅速扩展。对普通用户来说，它可以写邮件、改文案、总结文章、解释概念；对开发者来说，它可以生成代码、解释报错、补全文档、辅助测试；对企业来说，它开始进入客服、知识库、营销、办公自动化等场景。</p>
+<h3 id="从模型到系统：多模态、长上下文、Agent-与推理模型（2023-2026）"><a href="#从模型到系统：多模态、长上下文、Agent-与推理模型（2023-2026）" class="headerlink" title="从模型到系统：多模态、长上下文、Agent 与推理模型（2023-2026）"></a>从模型到系统：多模态、长上下文、Agent 与推理模型（2023-2026）</h3><p>2023 年之后，LLM 的竞争不再只是“谁的参数更多”。这一阶段更重要的变化是：模型开始从单一文本生成器，逐步演化成一个可以理解多模态信息、处理长上下文、调用工具、执行复杂任务的智能系统。</p>
+<table>
+<thead>
+<tr>
+<th><strong>时间</strong></th>
+<th><strong>模型 / 产品</strong></th>
+<th><strong>模型或系统设计变化</strong></th>
+<th><strong>解决了什么问题</strong></th>
+<th><strong>典型场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2023.03</td>
+<td>GPT-4</td>
+<td>更强的规模化训练与对齐，多模态输入能力开始进入主流视野</td>
+<td>GPT-3.5 在复杂推理、代码、专业任务上不够稳定</td>
+<td>复杂问答、代码生成、文档分析、专业考试类任务</td>
+</tr>
+<tr>
+<td>2023.07</td>
+<td>Llama 2</td>
+<td>开放权重模型，提供预训练版和对话微调版</td>
+<td>闭源模型难以本地部署、私有化微调和研究复现</td>
+<td>企业私有部署、垂直领域微调、开源生态应用</td>
+</tr>
+<tr>
+<td>2023.12</td>
+<td>Gemini</td>
+<td>强调原生多模态，从设计上支持文本、图像、音频、视频等输入</td>
+<td>过去多模态常依赖多个模型拼接，理解链路割裂</td>
+<td>图片理解、视频理解、跨模态推理、移动端/云端模型</td>
+</tr>
+<tr>
+<td>2024.03</td>
+<td>Claude 3</td>
+<td>长上下文、视觉理解、不同能力档位模型组合</td>
+<td>模型难以处理超长文档和复杂资料</td>
+<td>长文档阅读、合同分析、研究报告总结、企业知识处理</td>
+</tr>
+<tr>
+<td>2024.05</td>
+<td>GPT-4o</td>
+<td>更统一的文本、视觉、语音交互能力，降低实时交互延迟</td>
+<td>语音助手常依赖“语音识别 + LLM + 语音合成”多段链路，响应不自然</td>
+<td>实时语音对话、看图问答、会议助手、教育陪练</td>
+</tr>
+<tr>
+<td>2024.09</td>
+<td>o1</td>
+<td>引入更明确的推理模型路线，让模型在回答前投入更多计算</td>
+<td>普通聊天模型在数学、代码、科学推理上容易快速但不深入</td>
+<td>数学推理、竞赛题、复杂代码问题、科学分析</td>
+</tr>
+<tr>
+<td>2024.10</td>
+<td>Claude Computer Use</td>
+<td>让模型可以观察屏幕、点击、输入，开始操作软件界面</td>
+<td>LLM 只能“说”，不能真正执行跨应用任务</td>
+<td>自动填表、网页操作、办公流程自动化、UI Agent</td>
+</tr>
+<tr>
+<td>2025.01</td>
+<td>DeepSeek-R1</td>
+<td>通过强化学习激发推理能力，并开放模型与蒸馏版本</td>
+<td>高水平推理模型成本高、封闭、难以复现</td>
+<td>开放推理模型、低成本部署、数学和代码推理</td>
+</tr>
+<tr>
+<td>2025.08</td>
+<td>GPT-5</td>
+<td>统一快速回答模型、深度推理模型和实时路由系统</td>
+<td>用户需要手动选择模型，不知道什么时候该“快答”或“深度思考”</td>
+<td>Agent 工作流、复杂编程、工具调用、多步骤任务</td>
+</tr>
+<tr>
+<td>2026</td>
+<td>Claude Fable 5</td>
+<td>前沿模型继续向高自治、长程任务和复杂协作推进</td>
+<td>模型不仅要回答问题，还要在长任务中保持目标和上下文</td>
+<td>高自治任务、复杂项目协作、企业级工作流</td>
+</tr>
+</tbody>
+</table>
+<h2 id="LLM-整体流程"><a href="#LLM-整体流程" class="headerlink" title="LLM 整体流程"></a>LLM 整体流程</h2><p>前面我们回顾了 LLM 的发展历史，接下来换一个视角：一个大语言模型到底是如何被训练出来，并最终变成 ChatGPT 这类产品的？如果把整个过程拆开看，它并不是一个单点技术，而是一条从数据、表示、训练、对齐到产品化的工程链路。</p>
+<p><img src="/images/llm/llm-process.png" alt="LLM 整体流程"></p>
+<p>这条链路可以简单理解为：<strong>先让模型读大量文本，学会语言规律；再让它理解人类指令，学会更好地回答问题；最后把它包装成可交互、可调用工具、可处理复杂任务的智能系统。</strong></p>
+<table>
+<thead>
+<tr>
+<th><strong>模块</strong></th>
+<th><strong>核心原理</strong></th>
+<th><strong>做了什么</strong></th>
+<th><strong>核心技术</strong></th>
+<th><strong>核心难点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文本数据</td>
+<td>模型从数据中学习语言规律</td>
+<td>收集、清洗、过滤、去重训练语料</td>
+<td>数据清洗、质量过滤、去重、数据配比</td>
+<td>数据质量、版权、安全、有害内容过滤</td>
+</tr>
+<tr>
+<td>Tokenization</td>
+<td>把文本切成模型能处理的基本单位</td>
+<td>将句子拆成 token 序列</td>
+<td>BPE、SentencePiece、Tokenizer 词表</td>
+<td>多语言支持、长文本效率、特殊符号处理</td>
+</tr>
+<tr>
+<td>Embedding 表示</td>
+<td>把 token 映射成向量</td>
+<td>让文字变成可计算的数字表示</td>
+<td>词向量、位置编码、向量空间表示</td>
+<td>如何保留语义、位置和上下文信息</td>
+</tr>
+<tr>
+<td>Transformer 预训练</td>
+<td>通过预测下一个 token 学习语言模式</td>
+<td>在海量文本上训练基础模型</td>
+<td>Self-Attention、Decoder-only、分布式训练</td>
+<td>算力成本、训练稳定性、数据规模和模型规模匹配</td>
+</tr>
+<tr>
+<td>指令微调</td>
+<td>让模型学会按照人类指令回答</td>
+<td>用指令数据优化模型行为</td>
+<td>SFT、指令数据集、多任务样本</td>
+<td>指令质量、任务覆盖度、回答风格一致性</td>
+</tr>
+<tr>
+<td>RLHF / 对齐</td>
+<td>让模型输出更符合人类偏好</td>
+<td>根据人类反馈优化回答质量</td>
+<td>奖励模型、PPO、偏好数据、DPO</td>
+<td>偏好难定义、过度对齐、幻觉和安全问题</td>
+</tr>
+<tr>
+<td>ChatGPT 类产品</td>
+<td>把模型变成用户可用的应用</td>
+<td>提供对话界面、上下文管理、工具入口</td>
+<td>Prompt 工程、上下文窗口、推理服务、模型路由</td>
+<td>低延迟、低成本、稳定性、用户体验</td>
+</tr>
+<tr>
+<td>多模态 / Agent / 推理模型</td>
+<td>扩展模型的感知、行动和思考能力</td>
+<td>处理图像、语音、工具调用、复杂推理任务</td>
+<td>多模态编码、Function Calling、RAG、Agent、推理模型</td>
+<td>长程任务可靠性、工具错误、安全边界、成本控制</td>
+</tr>
+</tbody>
+</table>
+<p>这一节我们先对 LLM 整体流程有一个大概的了解。后面的系列文章会沿着这条链路逐步展开：先讲文本如何变成 token 和向量，再讲 Transformer 如何完成预训练，接着讲后训练、分布式训练、推理服务、RAG、Agent、多模态和推理模型等内容。也就是说，LLM 不是一个单独的模型名，而是一整套从数据到系统的技术工程。</p>
+<h2 id="LLM-不是终点，而是一条技术主线的开始"><a href="#LLM-不是终点，而是一条技术主线的开始" class="headerlink" title="LLM 不是终点，而是一条技术主线的开始"></a>LLM 不是终点，而是一条技术主线的开始</h2><p>回到文章最开始的问题：LLM 为什么会在这几年突然崛起？</p>
+<p>现在我们可以给出一个更清晰的答案：它不是单一技术的偶然爆发，而是 AI 几十年探索之后，多条技术路线汇合的结果。符号主义提出了“机器如何推理”的问题，统计学习让机器开始从数据中寻找规律，神经网络让模型具备了学习表示的能力；而词向量、Attention、Transformer、预训练、后训练和对齐，则一步步把这些能力推向了今天的大语言模型。</p>
+<p>从历史上看，LLM 的发展经历了几个关键阶段：早期模型解决了语言表示问题，Transformer 提供了可扩展的架构，GPT-3 验证了规模化路线，ChatGPT 让大模型真正进入大众视野，而多模态、长上下文、Agent 和推理模型，则正在把 LLM 从“会回答问题的模型”推向“能完成任务的智能系统”。</p>
+<p>当然，LLM 并不是通往通用人工智能的唯一道路。语言是一条非常重要的路径，但真正理解世界，可能还需要视觉、行动、记忆、环境交互和世界模型等能力共同参与。我们今天看到的 LLM，更像是通向未来智能系统的一块关键拼图，而不是故事的终点。</p>
+<p>这一篇文章只是整个系列的起点。我们先从宏观上理解了 AI 到 LLM 的演进脉络，也初步看到了一个大语言模型从数据、Tokenization、Embedding、预训练、后训练到产品化的大致流程。接下来的文章，我们会开始拆开这些关键模块：先从最基础的数学概念讲起，看看向量、矩阵、概率和梯度这些工具，为什么会成为理解大语言模型的底层语言。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/06/19/llm-ai-to-llm/" data-id="cmqnmzbpb00001nlwnrb22nku" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2020/10/31/statefun-serverless-internals/" class="next">Stateful Serverless 背后的 Flink StateFun 内部机制实现【译】</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/06/19/llm-ai-to-llm/';
+var disqus_title = 'LLM 系列 (一)：从 AI 到 LLM';
+var disqus_url = 'http://matt33.com/2026/06/19/llm-ai-to-llm/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-weibo"> 微博</i></div><iframe width="100%" height="90" class="share_self"  frameborder="0" scrolling="no" src="http://widget.weibo.com/weiboshow/index.php?language=&width=0&height=100&fansRow=1&ptype=1&speed=0&skin=1&isTitle=0&noborder=1&isWeibo=0&isFans=0&uid=2650396571&verifier=f2f0e397&colors=D8D8D8,ffffff,666666,0082cb,ecfbfd&dpc=1"></iframe></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/06/19/llm-ai-to-llm/">LLM 系列 (一)：从 AI 到 LLM</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/31/statefun-serverless-internals/">Stateful Serverless 背后的 Flink StateFun 内部机制实现【译】</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/25/statefun-introduce/">Flink StateFun 2.0 浅谈</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/08/02/kubernetes-start/">Kubenetes 之新手入门篇</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/04/16/cpu-branch-predictor/">浅谈 CPU 分支预测技术</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/20/flink-task-mailbox/">Flink 基于 MailBox 实现的 StreamTask 线程模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/15/flink-taskmanager-7/">Flink TaskManager 详解（一）</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/12/27/flink-jobmanager-6/">Flink JobManager 详解</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/12/23/flink-master-5/">Flink Master 详解</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/12/20/flink-execution-graph-4/">Flink 如何生成 ExecutionGraph</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
