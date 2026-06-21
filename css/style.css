@@ -166,6 +166,39 @@ div {
   padding: 5px;
 }
 
+#sidebar .widget .github-profile {
+  display: block;
+  margin-top: 4px;
+  text-align: center;
+  color: #6E7173;
+  text-decoration: none;
+}
+
+#sidebar .widget .github-profile .github-icon {
+  display: block;
+  font-size: 34px;
+  line-height: 1;
+  margin: 0 auto;
+  color: #333;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#sidebar .widget .github-profile .github-name {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+#sidebar .widget .github-profile:hover {
+  color: #444;
+}
+
+#sidebar .widget .github-profile:hover .github-icon {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
 #sidebar .widget ul {
   list-style: none;
   padding: 0;
