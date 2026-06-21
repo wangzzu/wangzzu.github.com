@@ -1,0 +1,1286 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (二)：机器如何把语言变成数学 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (二)：机器如何把语言变成数学</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (二)：机器如何把语言变成数学</h1><div class="post-meta">Jun 21, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">7,735</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/06/21/llm-math-basics/" href="/2026/06/21/llm-math-basics/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#表示与关系：语言如何变成向量并计算相关性"><span class="toc-number">2.</span> <span class="toc-text">表示与关系：语言如何变成向量并计算相关性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#从文字到-Token：模型处理语言的最小单位"><span class="toc-number">2.1.</span> <span class="toc-text">从文字到 Token：模型处理语言的最小单位</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#语言的表示：从-token-到向量空间"><span class="toc-number">2.2.</span> <span class="toc-text">语言的表示：从 token 到向量空间</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#为什么语言要变成向量？"><span class="toc-number">2.2.1.</span> <span class="toc-text">为什么语言要变成向量？</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#向量：语义的坐标"><span class="toc-number">2.2.2.</span> <span class="toc-text">向量：语义的坐标</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#矩阵：表示变换器"><span class="toc-number">2.2.3.</span> <span class="toc-text">矩阵：表示变换器</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#张量：把一批句子组织起来"><span class="toc-number">2.2.4.</span> <span class="toc-text">张量：把一批句子组织起来</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#关系的计算：从相似度到-Attention"><span class="toc-number">2.3.</span> <span class="toc-text">关系的计算：从相似度到 Attention</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#相似度：模型怎么判断“像不像”"><span class="toc-number">2.3.1.</span> <span class="toc-text">相似度：模型怎么判断“像不像”</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#SVD、低秩：复杂矩阵里的主要方向"><span class="toc-number">2.3.2.</span> <span class="toc-text">SVD、低秩：复杂矩阵里的主要方向</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#关系的计算：相似度与-Attention"><span class="toc-number">2.3.3.</span> <span class="toc-text">关系的计算：相似度与 Attention</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#什么是-Attention（注意力机制）"><span class="toc-number">2.3.3.1.</span> <span class="toc-text">什么是 Attention（注意力机制）</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Q、K、V：同一个向量的三种线性投影"><span class="toc-number">2.3.3.2.</span> <span class="toc-text">Q、K、V：同一个向量的三种线性投影</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Softmax：把分数变成权重"><span class="toc-number">2.3.3.3.</span> <span class="toc-text">Softmax：把分数变成权重</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#预测与评估：概率、Softmax-与交叉熵"><span class="toc-number">3.</span> <span class="toc-text">预测与评估：概率、Softmax 与交叉熵</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LLM-输出的是概率分布"><span class="toc-number">3.1.</span> <span class="toc-text">LLM 输出的是概率分布</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#条件概率：上下文决定下一个-token"><span class="toc-number">3.2.</span> <span class="toc-text">条件概率：上下文决定下一个 token</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#期望、方差和不确定性：为什么有的回答稳定，有的回答发散"><span class="toc-number">3.3.</span> <span class="toc-text">期望、方差和不确定性：为什么有的回答稳定，有的回答发散</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#贝叶斯思想：新信息会改变模型判断"><span class="toc-number">3.4.</span> <span class="toc-text">贝叶斯思想：新信息会改变模型判断</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#交叉熵与最大似然：怎么衡量模型预测得好不好"><span class="toc-number">3.5.</span> <span class="toc-text">交叉熵与最大似然：怎么衡量模型预测得好不好</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#学习与优化：模型如何从错误中变好"><span class="toc-number">4.</span> <span class="toc-text">学习与优化：模型如何从错误中变好</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#损失函数：把“模型错了”变成数学目标"><span class="toc-number">4.1.</span> <span class="toc-text">损失函数：把“模型错了”变成数学目标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#导数、偏导数、梯度：找到参数应该怎么改"><span class="toc-number">4.2.</span> <span class="toc-text">导数、偏导数、梯度：找到参数应该怎么改</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#反向传播：用链式法则把错误传回每一层"><span class="toc-number">4.3.</span> <span class="toc-text">反向传播：用链式法则把错误传回每一层</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#梯度下降与优化器：让-loss-一步步变小"><span class="toc-number">4.4.</span> <span class="toc-text">梯度下降与优化器：让 loss 一步步变小</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#训练稳定性：正则化、凸优化与约束思想"><span class="toc-number">4.5.</span> <span class="toc-text">训练稳定性：正则化、凸优化与约束思想</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><p>上一篇我们从大模型的发展脉络出发，回顾了语言模型如何从早期的统计方法，一步步走向 Transformer、GPT，以及今天无处不在的大模型应用。如果说第一篇回答的是“LLM 是怎么发展到今天的”，那么这一篇想往下多走一层，回答一个更底层的问题：<strong>LLM 为什么能被训练出来？机器到底是怎样把语言变成可计算、可优化、可生成的东西？</strong></p>
+<p>无论是 Transformer 里的 Attention，预训练里的 loss，微调时的梯度更新，RAG 里的向量检索，还是 LoRA 里的低秩矩阵，本质上都绕不开几类基础数学概念。不过，这篇并不是要把大家重新拉回大学数学课堂。我们不会从定理证明开始，也不会堆大量公式。更重要的是建立一套直觉：<strong>机器如何把文字变成向量，如何计算词与词之间的关系，如何预测下一个 token，又如何通过错误和梯度一步步修正自己</strong>。</p>
+<a id="more"></a>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>LLM 看起来像是在“理解语言”，但从机器的视角看，它一直在做三件事：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">预测 -&gt; 评估 -&gt; 修正</span><br></pre></td></tr></table></figure>
+<p>给定一句话：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我今天早上喝了一杯 __</span><br></pre></td></tr></table></figure>
+<p>模型会输出一组概率：</p>
+<table>
+<thead>
+<tr>
+<th>候选 token</th>
+<th>概率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>0.62</td>
+</tr>
+<tr>
+<td>水</td>
+<td>0.18</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>0.11</td>
+</tr>
+<tr>
+<td>牛奶</td>
+<td>0.06</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.03</td>
+</tr>
+</tbody>
+</table>
+<p>这件事背后已经包含了 LLM 最核心的数学链路（这些数学概念和 LLM 概念，会在本系列文章中给读者介绍明白）：</p>
+<table>
+<thead>
+<tr>
+<th>机器要解决的问题</th>
+<th>背后的数学</th>
+<th>对应的 LLM 概念</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文字怎么变成数字？</td>
+<td>向量、矩阵、张量</td>
+<td>token、embedding</td>
+</tr>
+<tr>
+<td>词之间怎么产生关系？</td>
+<td>点积、相似度、矩阵乘法</td>
+<td>attention、Q/K/V</td>
+</tr>
+<tr>
+<td>下一个词怎么预测？</td>
+<td>条件概率、Softmax</td>
+<td>next token prediction</td>
+</tr>
+<tr>
+<td>错误怎么衡量？</td>
+<td>交叉熵、最大似然</td>
+<td>loss</td>
+</tr>
+<tr>
+<td>参数怎么修正？</td>
+<td>梯度、链式法则</td>
+<td>backpropagation</td>
+</tr>
+<tr>
+<td>模型怎么变好？</td>
+<td>梯度下降、优化器</td>
+<td>training、fine-tuning</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-math-01.png" alt="LLM 数学基础图"></p>
+<p>可以把 LLM 的数学主线先简化成下面这张图：</p>
+<p><img src="/images/llm/llm-math-02.png" alt="LLM 数学基础图"></p>
+<p>LLM 本质上是在做一件事：先把语言翻译成数字，再用数学计算关系，最后用错误信号反过来修正模型。</p>
+<p>总而言之，LLM 的数学不是抽象公式，而是一套让机器理解语言的翻译系统：NLP 告诉我们语言问题难在哪里，线性代数把文字变成向量，Transformer 用 Attention 计算上下文关系，概率论把生成变成“预测下一个 token”，微积分把错误转化为梯度，优化方法则推动模型在一次次更新中变得更好。</p>
+<blockquote>
+<p>如果上面的概念这里完全搞不清楚，也没关系，接下来这个系列的文章，从本章开始会逐步给读者介绍清楚，不过前提是读者有大学数学的基础，明白线性代数、概率统计、微积分的基础原理。</p>
+</blockquote>
+<h2 id="表示与关系：语言如何变成向量并计算相关性"><a href="#表示与关系：语言如何变成向量并计算相关性" class="headerlink" title="表示与关系：语言如何变成向量并计算相关性"></a>表示与关系：语言如何变成向量并计算相关性</h2><p>这一节本质上要解决两个问题：</p>
+<ol>
+<li>语言如何变成机器可以计算的数字？</li>
+<li>模型如何计算词与词之间的关系？</li>
+</ol>
+<p>这两个问题对应 LLM 中非常核心的两类能力：</p>
+<ol>
+<li>一类是“表示”：把文字变成向量。</li>
+<li>一类是“关系”：计算这些向量之间谁和谁更相关。</li>
+</ol>
+<p>如果说人类读一句话靠语感、经验和上下文，那么机器读一句话，第一步就是把它翻译成<strong>数学结构</strong>。</p>
+<h3 id="从文字到-Token：模型处理语言的最小单位"><a href="#从文字到-Token：模型处理语言的最小单位" class="headerlink" title="从文字到 Token：模型处理语言的最小单位"></a>从文字到 Token：模型处理语言的最小单位</h3><p>在进入向量、矩阵和 Attention 之前，需要先理解一个基础概念：<strong>Token</strong>。人类读文章时，看到的是字、词、句子和段落；但 LLM 并不是直接以“完整句子”为单位处理语言。它会先通过 <strong>Tokenizer</strong>，把文本切分成一个个更小的单位，这些单位就叫做 token。</p>
+<ul>
+<li>Token 可以是一个字、一个词、一个词的一部分，也可以是标点符号。不同模型使用的 tokenizer 不同，切分结果也可能不一样。</li>
+</ul>
+<p>例如一句话：我喜欢喝咖啡。</p>
+<p>可能会被切成：</p>
+<ul>
+<li>我 / 喜欢 / 喝 / 咖啡 / 。</li>
+</ul>
+<p>也可能被切成更细的片段。</p>
+<p>在模型内部，每个 token 会先被转换成一个编号，再进一步转换成向量。</p>
+<p><img src="/images/llm/llm-math-03.png" alt="LLM 数学基础图"></p>
+<p>Token 是 LLM 处理语言的基本单位，文本必须先被切成 token，才能继续变成向量并进入模型计算（后面我们讲 embedding、向量空间、Attention、预测下一个 token，都是建立在 token 这个基本单位之上的）。</p>
+<h3 id="语言的表示：从-token-到向量空间"><a href="#语言的表示：从-token-到向量空间" class="headerlink" title="语言的表示：从 token 到向量空间"></a>语言的表示：从 token 到向量空间</h3><p>计算机并不真正认识“猫”“狗”“咖啡”这些词。对机器来说，它们必须先变成数字，才能参与计算。在线性代数里，最常见的四个对象是：</p>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>直觉</th>
+<th>在 LLM 里的样子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>标量</td>
+<td>一个数字，比如 loss = 2.13</td>
+<td>loss</td>
+</tr>
+<tr>
+<td>向量</td>
+<td>一串数字，一个语义坐标</td>
+<td>一个 token 的 embedding</td>
+</tr>
+<tr>
+<td>矩阵</td>
+<td>一张数字表，一次表示变换</td>
+<td>一层权重、Q/K/V 变换</td>
+</tr>
+<tr>
+<td>张量</td>
+<td>更高维的数字容器</td>
+<td>batch、序列、hidden state</td>
+</tr>
+</tbody>
+</table>
+<p>这里也用一张图来理解它们的样式：</p>
+<p><img src="/images/llm/llm-math-04.png" alt="LLM 数学基础图"></p>
+<p>也就是说，LLM 里大多数计算，本质上不是在处理“文字”，而是在处理这些数字结构。</p>
+<blockquote>
+<p>当然只有 token embedding 还不够，Transformer 还需要位置表示，让模型知道 token 在句子中的顺序，否则“我喜欢你”和“你喜欢我”在词集合上很像，但语义完全不同（这部分会在下一篇文章中介绍）。</p>
+</blockquote>
+<h4 id="为什么语言要变成向量？"><a href="#为什么语言要变成向量？" class="headerlink" title="为什么语言要变成向量？"></a>为什么语言要变成向量？</h4><p>最朴素的方式，是给每个词一个编号，或者使用 one-hot 表示（<code>one-hot</code> 是一种把“类别”表示成向量的方法）。例如：</p>
+<table>
+<thead>
+<tr>
+<th>词</th>
+<th>one-hot 表示</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td><code>[1, 0, 0, 0]</code></td>
+</tr>
+<tr>
+<td>狗</td>
+<td><code>[0, 1, 0, 0]</code></td>
+</tr>
+<tr>
+<td>桌子</td>
+<td><code>[0, 0, 1, 0]</code></td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td><code>[0, 0, 0, 1]</code></td>
+</tr>
+</tbody>
+</table>
+<p>这种方式简单，但有几个明显问题：</p>
+<ol>
+<li>太稀疏：词表很大时，每个向量都非常长；</li>
+<li>没有语义距离：“猫”和“狗”看起来跟“猫”和“桌子”一样远；</li>
+<li>不适合泛化：模型很难知道哪些词意思接近。</li>
+</ol>
+<p>而 Embedding 的思路是：不再用一堆 0 和 1 表示词，而是给每个 token 一个稠密向量。例如：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>embedding 示例</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td>[0.21, -0.13, 0.88, …]</td>
+</tr>
+<tr>
+<td>狗</td>
+<td>[0.24, -0.10, 0.82, …]</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>[-0.57, 0.62, 0.09, …]</td>
+</tr>
+</tbody>
+</table>
+<p>这些数字不是人工写死的，而是在训练过程中学出来的。它们的目标是让语义相近的词，在向量空间里也更接近。</p>
+<h4 id="向量：语义的坐标"><a href="#向量：语义的坐标" class="headerlink" title="向量：语义的坐标"></a>向量：语义的坐标</h4><p>可以把 embedding 想成一个语义地图：</p>
+<p><img src="/images/llm/llm-math-05.png" alt="LLM 数学基础图"></p>
+<p>真实 embedding 当然不是二维，而可能是几百、几千甚至更高维。但直觉类似：语义相近的 token，向量位置也更接近。</p>
+<p>向量化之后，很多语言的问题也变成了数学问题：</p>
+<ol>
+<li>“猫”和“狗”是不是更接近？  –&gt;  两个向量距离是否更近？</li>
+<li>“苹果”在句子里是什么意思？ –&gt; 上下文向量落在哪个语义区域？</li>
+<li>一段文档和问题是否相关？ –&gt; 文档向量和问题向量相似度多高？</li>
+</ol>
+<h4 id="矩阵：表示变换器"><a href="#矩阵：表示变换器" class="headerlink" title="矩阵：表示变换器"></a>矩阵：表示变换器</h4><p>向量表示一个对象，矩阵表示一种变换。在 Transformer 里，很多操作都可以理解成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新表示 = 旧表示 × 参数矩阵</span><br></pre></td></tr></table></figure>
+<p><img src="/images/llm/llm-math-06.png" alt="LLM 数学基础图"></p>
+<p>Transformer 中的 <code>Wq/Wk/Wv</code> 是参数矩阵，<code>Q/K/V</code>是 token 向量经过这些矩阵线性投影后得到的表示：</p>
+<table>
+<thead>
+<tr>
+<th>符号</th>
+<th>可以怎么理解</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>X</code></td>
+<td>当前 token 的向量表示</td>
+</tr>
+<tr>
+<td><code>Wq</code></td>
+<td>把 token 变成“我要找什么”的矩阵</td>
+</tr>
+<tr>
+<td><code>Wk</code></td>
+<td>把 token 变成“我能提供什么线索”的矩阵</td>
+</tr>
+<tr>
+<td><code>Wv</code></td>
+<td>把 token 变成“我真正携带的信息”的矩阵</td>
+</tr>
+</tbody>
+</table>
+<p>这里可以记住一句话：矩阵是 LLM 里最常见的“表示变换器”。</p>
+<h4 id="张量：把一批句子组织起来"><a href="#张量：把一批句子组织起来" class="headerlink" title="张量：把一批句子组织起来"></a>张量：把一批句子组织起来</h4><p>当我们只看一个 token，它是向量。当我们看一句话，它是矩阵。当我们一次处理多句话，它就变成了张量。下面举个例子：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">batch_size</span> <span class="string">=</span> <span class="number">4</span></span><br><span class="line"><span class="string">sequence_length</span> <span class="string">=</span> <span class="number">128</span></span><br><span class="line"><span class="string">hidden_dim</span> <span class="string">=</span> <span class="number">768</span></span><br></pre></td></tr></table></figure>
+<p>可以理解为：一次处理 4 句话、每句话 128 个 token、每个 token 用 768 维向量表示。如下图所示：</p>
+<p><img src="/images/llm/llm-math-07.png" alt="LLM 数学基础图"></p>
+<h3 id="关系的计算：从相似度到-Attention"><a href="#关系的计算：从相似度到-Attention" class="headerlink" title="关系的计算：从相似度到 Attention"></a>关系的计算：从相似度到 Attention</h3><h4 id="相似度：模型怎么判断“像不像”"><a href="#相似度：模型怎么判断“像不像”" class="headerlink" title="相似度：模型怎么判断“像不像”"></a>相似度：模型怎么判断“像不像”</h4><p>当词变成向量之后，模型就可以计算它们之间的关系。常见的相似度计算方式有：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>基本原理</strong></th>
+<th><strong>常见位置</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>点积</td>
+<td>将两个向量对应维度相乘后求和。  <br>两个向量方向越一致、数值越大，分数越高</td>
+<td>Attention score</td>
+<td>适合在模型内部快速计算相关性，尤其是 Q 和 K 的匹配</td>
+</tr>
+<tr>
+<td>余弦相似度</td>
+<td>计算两个向量夹角的余弦值，重点看方向是否接近。  <br>不太关心向量长度，更关心“语义方向”是否一致</td>
+<td>向量检索、RAG、语义搜索</td>
+<td>适合比较文本、问题、文档之间的语义相似度</td>
+</tr>
+<tr>
+<td>欧氏距离</td>
+<td>计算两个点在空间中的直线距离。  <br>两个点离得越近，表示越相似</td>
+<td>聚类、传统机器学习、部分向量检索场景</td>
+<td>适合空间距离有明确意义的场景，但在高维语义向量中不一定总是最优</td>
+</tr>
+</tbody>
+</table>
+<h4 id="SVD、低秩：复杂矩阵里的主要方向"><a href="#SVD、低秩：复杂矩阵里的主要方向" class="headerlink" title="SVD、低秩：复杂矩阵里的主要方向"></a>SVD、低秩：复杂矩阵里的主要方向</h4><p>对于一个复杂矩阵里，往往不是每个方向都同等重要，有些方向承载了主要信息，有些方向只是细节或噪声。SVD（奇异值分解） 是分析矩阵结构的一种分解方法，低秩近似是用少量主要方向表达矩阵信息的思想；它们常用来理解降维、压缩和 LoRA 背后的数学直觉。</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>基本原理</strong></th>
+<th><strong>和 LLM 的关系</strong></th>
+<th><strong>常见应用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SVD</td>
+<td>将一个矩阵分解成几个更简单的矩阵，拆出其中最重要的方向和强度（把复杂矩阵拆成几个主要方向）</td>
+<td>帮助理解降维、压缩、低秩近似</td>
+<td>模型压缩、降维、矩阵分析、理解 LoRA 的数学基础</td>
+</tr>
+<tr>
+<td>低秩</td>
+<td>如果一个矩阵的大部分信息可以由少数几个方向表达，就可以用更小的矩阵近似它（用更少参数表达主要变化）</td>
+<td>LoRA 利用低秩矩阵近似参数更新，不必完整微调整个大矩阵</td>
+<td>LoRA、参数高效微调、模型压缩</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-math-08.png" alt="LLM 数学基础图"></p>
+<h4 id="关系的计算：相似度与-Attention"><a href="#关系的计算：相似度与-Attention" class="headerlink" title="关系的计算：相似度与 Attention"></a>关系的计算：相似度与 Attention</h4><p>线性代数让 token 有了向量。接下来，模型要回答两个更关键的问题：</p>
+<ul>
+<li>当前 token 应该从上下文里看哪些 token？</li>
+<li>每个 token 应该贡献多少信息？</li>
+</ul>
+<p>这里举个例子，有一句话：小明把书放进书包，因为它太重了。</p>
+<ul>
+<li>这里的“它”指的是“书”，还是“书包”？</li>
+</ul>
+<p>人类会根据语义判断。模型也需要计算：当前 token 应该重点关注上下文中的哪些 token。</p>
+<p>这件事可以拆成三个动作：</p>
+<table>
+<thead>
+<tr>
+<th>动作</th>
+<th>数学形式</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>算相关性</td>
+<td>点积</td>
+<td>判断两个 token 是否匹配</td>
+</tr>
+<tr>
+<td>分配权重</td>
+<td>Softmax</td>
+<td>把相关性分数变成注意力比例</td>
+<td>让重要 token 贡献更多</td>
+</tr>
+</tbody>
+</table>
+<p>放回刚才的句子，可以这样理解：</p>
+<p><img src="/images/llm/llm-math-09.png" alt="LLM 数学基础图"></p>
+<p>这不是说模型一定永远这样判断，而是展示 Attention 权重的阅读方式：权重越高，当前 token 从那里拿到的信息越多。</p>
+<h5 id="什么是-Attention（注意力机制）"><a href="#什么是-Attention（注意力机制）" class="headerlink" title="什么是 Attention（注意力机制）"></a>什么是 Attention（注意力机制）</h5><p>继续用上面的示例：小明把书放进书包，因为它太重了。</p>
+<p>当人类理解“它”时，会自然回头看前面的词，并判断“它”更可能指向“书”，而不是“小明”或“放进”。这说明，一个词的含义往往不是孤立决定的，而是<strong>由上下文共同决定的</strong>。</p>
+<p>如何解决这个问题呢？</p>
+<ul>
+<li>2014 年，Dzmitry Bahdanau、Kyunghyun Cho、Yoshua Bengio 在论文《<a href="https://arxiv.org/abs/1409.0473" target="_blank" rel="external">Neural Machine Translation by Jointly Learning to Align and Translate</a>》中提出了 Attention 机制，用来解决机器翻译中长句被压缩成单一向量后信息丢失、词语对齐困难的问题。</li>
+<li>后来，Vaswani 等人在 2017 年的论文《<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="external">Attention Is All You Need</a>》中进一步将 Attention 发展为 Transformer 的核心结构，在 Transformer 中采用并系统化了 Q/K/V 形式的 scaled dot-product attention，让模型能够判断：当前 token 想找什么信息，哪些 token 与它相关，以及最终应该读取哪些内容。</li>
+</ul>
+<p>Attention 的核心思想简单来说，<strong>就是让模型在处理某个 token 时，能够动态地判断上下文中哪些 token 更重要，并给它们分配不同的权重</strong>。</p>
+<blockquote>
+<p>后续会有一篇文章，专门来分析这篇跨时代意义的论文 —— transformer，这里读者简单了解其中使用到的数学理论即可。</p>
+</blockquote>
+<h5 id="Q、K、V：同一个向量的三种线性投影"><a href="#Q、K、V：同一个向量的三种线性投影" class="headerlink" title="Q、K、V：同一个向量的三种线性投影"></a>Q、K、V：同一个向量的三种线性投影</h5><p>在 Transformer 中，每个 token 进入模型后，都会先变成一个向量。然后模型会用三个不同的矩阵，把这个向量变换成三种不同的表示：</p>
+<table>
+<thead>
+<tr>
+<th><strong>名称</strong></th>
+<th><strong>数学含义</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q（Query）</td>
+<td>当前 token 的查询向量</td>
+<td>我想找什么信息</td>
+</tr>
+<tr>
+<td>K（Key）</td>
+<td>其他 token 的匹配向量</td>
+<td>我这里有什么特征可以被匹配</td>
+</tr>
+<tr>
+<td>V（Value）</td>
+<td>其他 token 的内容向量</td>
+<td>如果被关注，真正传递什么信息</td>
+</tr>
+</tbody>
+</table>
+<p>从数学上看，Q、K、V 本质上都是矩阵乘法（Transformer 内部的机制这里先不做过多赘述，简单有一个了解即可，重点关注背后的数学原理）。</p>
+<p><img src="/images/llm/llm-math-10.png" alt="LLM 数学基础图"></p>
+<h5 id="Softmax：把分数变成权重"><a href="#Softmax：把分数变成权重" class="headerlink" title="Softmax：把分数变成权重"></a>Softmax：把分数变成权重</h5><p>在 Transformer 中，用 Q 和 K 计算完相关性后，会得到一组分数。比如当前 token 在看其他 token 时，可能得到这样的分数：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>分数</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我</td>
+<td>1.2</td>
+</tr>
+<tr>
+<td>喜欢</td>
+<td>2.5</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.8</td>
+</tr>
+</tbody>
+</table>
+<p>这些分数本身还不能直接当作“关注比例”，因为它们可能很大、很小，甚至可能是负数。Softmax 的作用，就是把这些分数转换成一组更好理解的权重（不过 Softmax 不是简单线性归一化，它会先对分数做指数变换，再归一化，因此会放大高分项的优势）：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>原始分数</strong></th>
+<th><strong>Softmax 后的权重</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我</td>
+<td>1.2</td>
+<td>0.18</td>
+</tr>
+<tr>
+<td>喜欢</td>
+<td>2.5</td>
+<td>0.66</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.8</td>
+<td>0.16</td>
+</tr>
+</tbody>
+</table>
+<p>Softmax 有两个重要特点：</p>
+<ol>
+<li>所有权重都是正数： 不会出现负的关注比例；</li>
+<li>所有权重加起来等于 1： 可以理解成一组分配比例。</li>
+</ol>
+<p>所以，Softmax 背后的数学概念很简单：它把一组“相关性分数”，转换成一组“信息分配权重”。</p>
+<h2 id="预测与评估：概率、Softmax-与交叉熵"><a href="#预测与评估：概率、Softmax-与交叉熵" class="headerlink" title="预测与评估：概率、Softmax 与交叉熵"></a>预测与评估：概率、Softmax 与交叉熵</h2><p>前面我们讲了：语言会先变成 token，再变成向量，模型通过矩阵乘法、相似度、Attention 等方式计算上下文关系。但计算完关系之后，模型最终还是要回答一个非常具体的问题：<strong>在当前上下文后面，下一个 token 最可能是什么？</strong></p>
+<p>可以先看一张总图：</p>
+<p><img src="/images/llm/llm-math-11.png" alt="LLM 数学基础图"></p>
+<p>在本章节中，重点会介绍的数学概念，及 LLM 中的应用如下：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>数学概念</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>下一个词是什么？</td>
+<td>条件概率</td>
+</tr>
+<tr>
+<td>分数怎么变成概率？</td>
+<td>Softmax</td>
+</tr>
+<tr>
+<td>结果为什么有时稳定、有时发散？</td>
+<td>期望、方差</td>
+</tr>
+<tr>
+<td>新信息为什么会改变回答？</td>
+<td>贝叶斯思想</td>
+</tr>
+<tr>
+<td>怎么知道模型错了多少？</td>
+<td>交叉熵</td>
+</tr>
+</tbody>
+</table>
+<h3 id="LLM-输出的是概率分布"><a href="#LLM-输出的是概率分布" class="headerlink" title="LLM 输出的是概率分布"></a>LLM 输出的是概率分布</h3><p>LLM 每一步生成时，不是直接从数据库里取一个答案，而是在预测下一个 token 的概率分布。当我们输入：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我早上喝了一杯</span><br></pre></td></tr></table></figure>
+<p>模型并不是从数据库里查找“下一句话应该是什么”，而是在所有可能 token 里预测概率。例如：</p>
+<table>
+<thead>
+<tr>
+<th><strong>候选 token</strong></th>
+<th><strong>模型预测概率</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>0.62</td>
+<td>最可能</td>
+</tr>
+<tr>
+<td>水</td>
+<td>0.18</td>
+<td>也合理</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>0.11</td>
+<td>有可能</td>
+</tr>
+<tr>
+<td>牛奶</td>
+<td>0.06</td>
+<td>概率较低</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.03</td>
+<td>很多低概率 token 的合计</td>
+</tr>
+</tbody>
+</table>
+<p>所以，LLM 生成文本的基本单位不是“一句话”，而是“一步一步预测下一个 token”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>我们看到的现象</strong></th>
+<th><strong>背后的数学解释</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型可以继续写文章</td>
+<td>每一步都在预测下一个 token</td>
+</tr>
+<tr>
+<td>同一个问题可能生成不同回答</td>
+<td>采样来自概率分布</td>
+</tr>
+<tr>
+<td>有些回答更稳定，有些回答更发散</td>
+<td>概率分布有时集中，有时分散</td>
+</tr>
+<tr>
+<td>temperature 可以控制创造性</td>
+<td>改变概率分布的尖锐程度</td>
+</tr>
+</tbody>
+</table>
+<h3 id="条件概率：上下文决定下一个-token"><a href="#条件概率：上下文决定下一个-token" class="headerlink" title="条件概率：上下文决定下一个 token"></a>条件概率：上下文决定下一个 token</h3><p>语言模型真正学习的是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(下一个 token | 前面的上下文)</span><br></pre></td></tr></table></figure>
+<p>这句话读起来像公式（也就是条件概率，在上下文确定的前提下，下一个 token 出现的概率），但意思很简单：在已经看到这些文字的前提下，下一个词最可能是什么？</p>
+<p>同一个词，在不同上下文里的概率会完全不同。</p>
+<table>
+<thead>
+<tr>
+<th><strong>上下文</strong></th>
+<th><strong>更可能的下一个 token</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我早上喝了一杯</td>
+<td>咖啡、水、牛奶</td>
+</tr>
+<tr>
+<td>程序抛出了一个</td>
+<td>异常、错误</td>
+</tr>
+<tr>
+<td>请把这段代码转换成</td>
+<td>Python、Java、SQL</td>
+</tr>
+<tr>
+<td>今天天气非常</td>
+<td>好、热、冷</td>
+</tr>
+</tbody>
+</table>
+<p>这也是为什么 prompt 很重要。</p>
+<p>prompt 本质上是在改变上下文，而上下文会改变后续 token 的概率分布。</p>
+<p><img src="/images/llm/llm-math-12.png" alt="LLM 数学基础图"></p>
+<p>举个例子：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Prompt</strong></th>
+<th><strong>“苹果”更可能表示什么</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我削了一个苹果</td>
+<td>水果</td>
+</tr>
+<tr>
+<td>苹果发布了新品</td>
+<td>公司</td>
+</tr>
+<tr>
+<td>苹果股价上涨</td>
+<td>公司</td>
+</tr>
+<tr>
+<td>这个苹果很甜</td>
+<td>水果</td>
+</tr>
+</tbody>
+</table>
+<p>模型并不是先“理解苹果的唯一含义”，而是根据上下文让某些含义的概率升高。</p>
+<h3 id="期望、方差和不确定性：为什么有的回答稳定，有的回答发散"><a href="#期望、方差和不确定性：为什么有的回答稳定，有的回答发散" class="headerlink" title="期望、方差和不确定性：为什么有的回答稳定，有的回答发散"></a>期望、方差和不确定性：为什么有的回答稳定，有的回答发散</h3><p>概率分布不只是告诉我们“谁最大”，还告诉我们模型有多确定。这里可以简单理解三个概念：</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th>原理</th>
+<th><strong>在 LLM 里的表现</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>期望</td>
+<td>对所有可能结果按概率加权平均，表示模型预测的中心趋势</td>
+<td>模型大概率会往哪个方向回答</td>
+</tr>
+<tr>
+<td>方差</td>
+<td>衡量结果相对期望的分散程度，方差越大，输出越不稳定</td>
+<td>回答是否稳定</td>
+</tr>
+<tr>
+<td>不确定性</td>
+<td>当多个 token 或答案路径的概率都接近时，模型难以唯一确定最优选择</td>
+<td>模型可能生成不同答案</td>
+</tr>
+</tbody>
+</table>
+<p>比如一个确定性问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">2 + 2 = ?</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>概率</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4</td>
+<td>0.96</td>
+</tr>
+<tr>
+<td>3</td>
+<td>0.01</td>
+</tr>
+<tr>
+<td>5</td>
+<td>0.01</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.02</td>
+</tr>
+</tbody>
+</table>
+<p>这个分布很集中，模型回答通常稳定。</p>
+<p>再看一个开放问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">请给我一个创业方向</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>概率</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI</td>
+<td>0.22</td>
+</tr>
+<tr>
+<td>教育</td>
+<td>0.18</td>
+</tr>
+<tr>
+<td>工具</td>
+<td>0.15</td>
+</tr>
+<tr>
+<td>内容</td>
+<td>0.12</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.33</td>
+</tr>
+</tbody>
+</table>
+<p>这个分布更分散，所以模型可能给出不同答案。</p>
+<table>
+<thead>
+<tr>
+<th><strong>分布形状</strong></th>
+<th><strong>直觉</strong></th>
+<th><strong>常见场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>很集中</td>
+<td>模型很确定</td>
+<td>数学题、事实题、格式明确的问题</td>
+</tr>
+<tr>
+<td>比较分散</td>
+<td>多个答案都合理</td>
+<td>创意写作、方案建议、开放讨论</td>
+</tr>
+<tr>
+<td>过于分散</td>
+<td>模型方向不清楚</td>
+<td>prompt 太模糊、约束太少</td>
+</tr>
+</tbody>
+</table>
+<p>所以 temperature、top-k、top-p 这些生成参数，本质上都是在控制如何从概率分布中选择下一个 token。</p>
+<h3 id="贝叶斯思想：新信息会改变模型判断"><a href="#贝叶斯思想：新信息会改变模型判断" class="headerlink" title="贝叶斯思想：新信息会改变模型判断"></a>贝叶斯思想：新信息会改变模型判断</h3><blockquote>
+<p>贝叶斯思想可以简单理解为一句话：<strong>我们不是一次性判断真相，而是根据新证据不断更新自己的判断。</strong></p>
+</blockquote>
+<p>贝叶斯可以用一句话理解：<strong>看到新证据后，应该更新原来的判断</strong>。而在 LLM 里，prompt 就是类似一种“新证据”会改变后续的模型输出。比如“苹果”这个词，本身有多种含义：</p>
+<table>
+<thead>
+<tr>
+<th><strong>新上下文</strong></th>
+<th><strong>模型更可能的判断</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我削了一个苹果</td>
+<td>苹果是水果</td>
+</tr>
+<tr>
+<td>苹果发布了新品</td>
+<td>苹果是公司</td>
+</tr>
+<tr>
+<td>苹果股价上涨</td>
+<td>苹果是公司</td>
+</tr>
+<tr>
+<td>这个苹果很甜</td>
+<td>苹果是水果</td>
+</tr>
+</tbody>
+</table>
+<p>这不是模型在查字典，而是上下文改变了不同含义的概率。</p>
+<p><img src="/images/llm/llm-math-13.png" alt="LLM 数学基础图"></p>
+<p>所以，贝叶斯思想对理解 LLM 很有帮助：模型不是一次性固定答案，而是在不断根据上下文更新“接下来什么更可能”。</p>
+<h3 id="交叉熵与最大似然：怎么衡量模型预测得好不好"><a href="#交叉熵与最大似然：怎么衡量模型预测得好不好" class="headerlink" title="交叉熵与最大似然：怎么衡量模型预测得好不好"></a>交叉熵与最大似然：怎么衡量模型预测得好不好</h3><p>有了概率之后，训练还需要回答另一个问题：模型这次预测，到底错了多少？假设真实答案是“咖啡”，模型给出下面的概率：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>预测概率</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>水</td>
+<td>0.5</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.2</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>0.2</td>
+</tr>
+<tr>
+<td>牛奶</td>
+<td>0.1</td>
+</tr>
+</tbody>
+</table>
+<p>人能看出来：模型不太对，因为正确答案“咖啡”的概率只有 0.20。但机器需要一个数字来表示错误程度，这个数字就是 <strong>loss</strong>（交叉熵就是一种常见的损失函数）。</p>
+<p>语言模型常用的 loss 是交叉熵。对单个 token 来说，可以先这样理解：</p>
+<ul>
+<li>正确 token 的概率越高，loss 越小；</li>
+<li>正确 token 的概率越低，loss 越大。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><strong>真实 token</strong></th>
+<th><strong>模型给真实 token 的概率</strong></th>
+<th><strong>loss 直觉</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>0.9</td>
+<td>很小</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.6</td>
+<td>较小</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.2</td>
+<td>较大</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.01</td>
+<td>非常大</td>
+</tr>
+</tbody>
+</table>
+<p>交叉熵不只是看“有没有猜中”，还看模型是不是把足够多的概率分给了正确答案。</p>
+<table>
+<thead>
+<tr>
+<th><strong>预测情况</strong></th>
+<th><strong>惩罚</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>答对且很自信</td>
+<td>很小</td>
+</tr>
+<tr>
+<td>答对但不自信</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>答错但不自信</td>
+<td>较大</td>
+</tr>
+<tr>
+<td>答错还很自信</td>
+<td>很大</td>
+</tr>
+</tbody>
+</table>
+<p>从另一个角度看，训练语言模型就是最大似然：让训练语料里的句子，在模型看来越来越“可能出现”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>LLM 说法</strong></th>
+<th><strong>数学术语</strong></th>
+<th>数学原理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>让模型更像训练数据那样说话</td>
+<td>最大似然</td>
+<td>模型会计算一段训练文本出现的概率，并不断调整参数，让训练数据中的句子在模型看来“更可能出现”。</td>
+</tr>
+<tr>
+<td>让正确 token 概率更高</td>
+<td>最小化交叉熵</td>
+<td>交叉熵关注真实 token 被分到的概率。如果正确 token 概率越高，loss 越小；如果正确 token 概率很低，loss 就会变大。</td>
+</tr>
+<tr>
+<td>让预测错误变少</td>
+<td>最小化 loss</td>
+<td>loss 是所有训练样本预测误差的汇总指标，训练通过反向传播和优化器让平均 loss 下降</td>
+</tr>
+</tbody>
+</table>
+<p>LLM 的生成，是不断根据上下文预测下一个 token 的概率；LLM 的训练，是不断让正确 token 的概率变高，让交叉熵 loss 变低。</p>
+<h2 id="学习与优化：模型如何从错误中变好"><a href="#学习与优化：模型如何从错误中变好" class="headerlink" title="学习与优化：模型如何从错误中变好"></a>学习与优化：模型如何从错误中变好</h2><p>前面讲到，交叉熵会把模型预测错误变成一个数字：loss。但模型不能只知道“我错了”，还必须知道：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>数学概念</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>错误怎么表示成目标？</td>
+<td>目标函数、损失函数</td>
+</tr>
+<tr>
+<td>参数该往哪里改？</td>
+<td>导数、偏导数、梯度</td>
+</tr>
+<tr>
+<td>错误怎么传回前面层？</td>
+<td>链式法则、反向传播</td>
+</tr>
+<tr>
+<td>参数怎么一步步更新？</td>
+<td>梯度下降、优化器</td>
+</tr>
+<tr>
+<td>怎么避免训练不稳定？</td>
+<td>正则化、凸优化思想、约束优化</td>
+</tr>
+</tbody>
+</table>
+<h3 id="损失函数：把“模型错了”变成数学目标"><a href="#损失函数：把“模型错了”变成数学目标" class="headerlink" title="损失函数：把“模型错了”变成数学目标"></a>损失函数：把“模型错了”变成数学目标</h3><p>训练 LLM，本质上是在最小化一个函数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Loss = 模型预测结果 和 真实答案之间的差距</span><br></pre></td></tr></table></figure>
+<p>更数学一点，可以写成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">min L(θ)</span><br></pre></td></tr></table></figure>
+<p>这里：</p>
+<table>
+<thead>
+<tr>
+<th><strong>符号</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>θ</td>
+<td>模型里的所有参数</td>
+</tr>
+<tr>
+<td>L(θ)</td>
+<td>当前参数下的 loss</td>
+</tr>
+<tr>
+<td>min</td>
+<td>希望找到一组参数，让 loss 尽可能小</td>
+</tr>
+</tbody>
+</table>
+<p>在语言模型里，常见目标是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">让真实下一个 token 的概率尽可能高</span><br></pre></td></tr></table></figure>
+<p>所以训练目标可以理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">最小化交叉熵（Loss） = 最大化训练文本出现的概率</span><br></pre></td></tr></table></figure>
+<p>到这里的话，一个“模型表现好不好”，被定义成一个可以计算、可以优化的函数。</p>
+<h3 id="导数、偏导数、梯度：找到参数应该怎么改"><a href="#导数、偏导数、梯度：找到参数应该怎么改" class="headerlink" title="导数、偏导数、梯度：找到参数应该怎么改"></a>导数、偏导数、梯度：找到参数应该怎么改</h3><p>LLM 有大量参数，训练时要回答一个问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果某个参数稍微变大一点，loss 会变大还是变小？</span><br></pre></td></tr></table></figure>
+<p>这就是导数要解决的问题。</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>数学原理</strong></th>
+<th><strong>在 LLM 中的作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>导数</td>
+<td>衡量一个变量变化时，函数如何变化</td>
+<td>看参数变化会不会影响 loss</td>
+</tr>
+<tr>
+<td>偏导数</td>
+<td>多个变量中，只看其中一个变量的影响。</td>
+<td>看某个参数对 loss 的影响</td>
+</tr>
+<tr>
+<td>梯度</td>
+<td>所有偏导数组成的向量</td>
+<td>给出整体参数更新方向</td>
+</tr>
+</tbody>
+</table>
+<p>这三个数学概念，简单举个例子：</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>计算方式示例</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>导数</td>
+<td>如果 <code>f(x) = x²</code>，那么 <code>f&#39;(x) = 2x</code></td>
+<td>当 <code>x</code> 变化一点时，<code>f(x)</code> 会怎么变</td>
+</tr>
+<tr>
+<td>偏导数</td>
+<td>如果 <code>L(w, b) = (wx + b - y)²</code>，分别求 <code>∂L/∂w</code> 和 <code>∂L/∂b</code></td>
+<td>只看 <code>w</code> 或 <code>b</code> 单独变化时，对 loss 的影响</td>
+</tr>
+<tr>
+<td>梯度</td>
+<td><code>∇L = [∂L/∂w, ∂L/∂b]</code></td>
+<td>把所有参数对 loss 的影响组合起来</td>
+</tr>
+</tbody>
+</table>
+<p>这里最重要的数学结论是：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方向</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>梯度方向</td>
+<td>loss 上升最快的方向</td>
+</tr>
+<tr>
+<td>负梯度方向</td>
+<td>loss 下降最快的方向</td>
+</tr>
+</tbody>
+</table>
+<p>所以训练经常有句话：loss 告诉模型“错了多少”，梯度告诉模型“往哪里改”。</p>
+<h3 id="反向传播：用链式法则把错误传回每一层"><a href="#反向传播：用链式法则把错误传回每一层" class="headerlink" title="反向传播：用链式法则把错误传回每一层"></a>反向传播：用链式法则把错误传回每一层</h3><p>反向传播是 Transformer 能够被大规模训练的关键机制之一。如果没有反向传播，模型即使知道最后预测错了，也很难判断前面每一层、每一个参数应该承担多少责任，更谈不上在工业界进行大规模训练和优化。</p>
+<p>我们知道，Transformer 由多层神经网络结构组成。从 Embedding 层，到多层 Attention 和 Feed Forward，再到最终输出层，信息是一步步向前计算的。那么问题来了：如果最后一层输出错了，loss 很大，模型应该如何把这个错误传回前面的层，并据此修改每一层的参数呢？</p>
+<p>这就是反向传播解决的问题，而反向传播背后的数学原理就是<strong>链式法则</strong>。</p>
+<p>简单写成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">如果 L 依赖 y，y 又依赖 x，</span><br><span class="line">那么 L 对 x 的影响可以拆成：</span><br><span class="line"></span><br><span class="line">dL/dx = dL/dy × dy/dx （dy/dx 表示 y 对 x 求导数）</span><br></pre></td></tr></table></figure>
+<p>放到神经网络里反向传播的路径是 <code>Loss → 输出层 → 中间层 → Embedding 层</code>，如下图所示：</p>
+<p><img src="/images/llm/llm-math-14.png" alt="LLM 数学基础图"></p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>反向传播怎么回答</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>最后错了多少？</td>
+<td>计算 loss</td>
+</tr>
+<tr>
+<td>哪一层影响了错误？</td>
+<td>计算该层输出对 loss 的影响</td>
+</tr>
+<tr>
+<td>哪个参数该改？</td>
+<td>计算参数梯度</td>
+</tr>
+<tr>
+<td>改多少？</td>
+<td>梯度大小和学习率共同决定</td>
+</tr>
+</tbody>
+</table>
+<p>一句话理解：反向传播不是新的数学魔法，而是<strong>链式法则在神经网络里的工程实现</strong>。</p>
+<h3 id="梯度下降与优化器：让-loss-一步步变小"><a href="#梯度下降与优化器：让-loss-一步步变小" class="headerlink" title="梯度下降与优化器：让 loss 一步步变小"></a>梯度下降与优化器：让 loss 一步步变小</h3><p>有了梯度，就可以更新参数。最基础的更新公式是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">θ_new = θ_old - η × ∇L(θ)</span><br></pre></td></tr></table></figure>
+<p>这里：</p>
+<table>
+<thead>
+<tr>
+<th><strong>符号</strong></th>
+<th><strong>含义</strong></th>
+<th>LLM 中的含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>θ_old</td>
+<td>当前参数</td>
+<td>当前模型里的所有权重参数，比如 Embedding、Attention、FFN 里的矩阵参数</td>
+</tr>
+<tr>
+<td>θ_new</td>
+<td>更新后的参数</td>
+<td>经过一次训练 step 后的新模型参数</td>
+</tr>
+<tr>
+<td>η</td>
+<td>学习率</td>
+<td>每次参数更新的步长</td>
+</tr>
+<tr>
+<td>∇L(θ)</td>
+<td>当前梯度</td>
+<td>当前 batch 数据中，每个参数对 loss 的影响方向和大小</td>
+</tr>
+<tr>
+<td>-∇L(θ)</td>
+<td>loss 下降方向</td>
+<td>让 loss 下降最快的方向</td>
+</tr>
+</tbody>
+</table>
+<p>这就是梯度下降。</p>
+<p>真实 LLM 训练里，通常不会只用最朴素的梯度下降，而会用更复杂的优化器，例如 Adam。</p>
+<table>
+<thead>
+<tr>
+<th><strong>优化方法</strong></th>
+<th><strong>数学思想</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SGD</td>
+<td>按当前梯度更新参数</td>
+<td>每次看当前坡度走一步</td>
+</tr>
+<tr>
+<td>Momentum</td>
+<td>累积历史梯度方向</td>
+<td>不只看当前一步，也看惯性</td>
+</tr>
+<tr>
+<td>Adam</td>
+<td>同时估计梯度均值和梯度波动</td>
+<td>给不同参数自适应调整步长</td>
+</tr>
+</tbody>
+</table>
+<p>这一小节重点是：优化器决定怎么用梯度更新参数，学习率决定每一步走多大。</p>
+<h3 id="训练稳定性：正则化、凸优化与约束思想"><a href="#训练稳定性：正则化、凸优化与约束思想" class="headerlink" title="训练稳定性：正则化、凸优化与约束思想"></a>训练稳定性：正则化、凸优化与约束思想</h3><p>真实训练中，loss 不会一直平滑下降，常见问题很多，如下：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>表现</strong></th>
+<th><strong>数学原因</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>学习率太大</td>
+<td>loss 震荡或爆炸</td>
+<td>每一步跨得太远</td>
+</tr>
+<tr>
+<td>学习率太小</td>
+<td>训练很慢</td>
+<td>每一步变化太小</td>
+</tr>
+<tr>
+<td>梯度爆炸</td>
+<td>参数更新失控</td>
+<td>梯度数值过大</td>
+</tr>
+<tr>
+<td>梯度消失</td>
+<td>前面层学不动</td>
+<td>梯度经过多层后变得很小</td>
+</tr>
+<tr>
+<td>过拟合</td>
+<td>训练集好，测试集差</td>
+<td>模型记住噪声而不是规律</td>
+</tr>
+</tbody>
+</table>
+<p>正则化就是解决过拟合的一类方法。数学上，它通常是在原来的 loss 后面加一个惩罚项：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">L_total = L_train + λR(θ)</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>部分</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L_train</td>
+<td>训练误差</td>
+</tr>
+<tr>
+<td>R(θ)</td>
+<td>对参数复杂度的惩罚</td>
+</tr>
+<tr>
+<td>λ</td>
+<td>惩罚强度</td>
+</tr>
+</tbody>
+</table>
+<p>最后可以用一张表简单介绍几个优化概念：</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>数学原理</strong></th>
+<th><strong>对理解 LLM 的帮助</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>凸优化</td>
+<td>如果目标函数是凸的，局部最优就是全局最优</td>
+<td>帮助理解什么是“好优化问题”</td>
+</tr>
+<tr>
+<td>岭回归</td>
+<td>在 loss 里加入 L2 参数惩罚</td>
+<td>理解正则化</td>
+</tr>
+<tr>
+<td>拉格朗日乘子</td>
+<td>把约束条件合并进优化目标</td>
+<td>理解带约束优化</td>
+</tr>
+<tr>
+<td>Proximal Gradient</td>
+<td>把普通梯度下降和复杂正则项结合</td>
+<td>理解稀疏化、约束优化</td>
+</tr>
+<tr>
+<td>凸松弛</td>
+<td>把难优化问题放宽成更容易求解的问题</td>
+<td>理解近似求解思想</td>
+</tr>
+</tbody>
+</table>
+<p>LLM 的学习过程，就是把预测错误定义成 loss，用梯度找到参数修改方向，用反向传播把错误传回每一层，再通过优化器一步步更新参数。数学上看，它不是“模型突然理解了语言”，而是在大量样本上持续最小化一个目标函数。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>到这里，我们并不是把大学数学重新学了一遍，而是把和 LLM 最相关的几类数学概念重新串了起来。LLM 看起来是在理解语言、生成文字，但从数学上看，它背后一直在做几件非常基础的事情：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>数学工具</strong></th>
+<th><strong>在 LLM 中的作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>语言怎么被机器处理？</td>
+<td>Token、向量、矩阵</td>
+<td>把文字变成可计算的数字表示</td>
+</tr>
+<tr>
+<td>词和词之间怎么建立关系？</td>
+<td>点积、余弦相似度、Attention</td>
+<td>计算 token 之间的相关性</td>
+</tr>
+<tr>
+<td>下一个 token 怎么预测？</td>
+<td>条件概率、Softmax</td>
+<td>把模型分数变成概率分布</td>
+</tr>
+<tr>
+<td>模型错了怎么衡量？</td>
+<td>交叉熵、最大似然、loss</td>
+<td>把预测错误变成可优化的数字</td>
+</tr>
+<tr>
+<td>模型怎么变好？</td>
+<td>梯度、反向传播、优化器</td>
+<td>根据错误调整参数</td>
+</tr>
+</tbody>
+</table>
+<p>所以，LLM 的核心并不是“机器突然懂了语言”，而是把语言问题转化成了一系列可以计算、可以预测、可以优化的问题。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/06/21/llm-math-basics/" data-id="cmqo1n7li00001dlww8z3sx10" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/06/19/llm-ai-to-llm/" class="next">LLM 系列 (一)：从 AI 到 LLM</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/06/21/llm-math-basics/';
+var disqus_title = 'LLM 系列 (二)：机器如何把语言变成数学';
+var disqus_url = 'http://matt33.com/2026/06/21/llm-math-basics/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/06/21/llm-math-basics/">LLM 系列 (二)：机器如何把语言变成数学</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/19/llm-ai-to-llm/">LLM 系列 (一)：从 AI 到 LLM</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/31/statefun-serverless-internals/">Stateful Serverless 背后的 Flink StateFun 内部机制实现【译】</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/25/statefun-introduce/">Flink StateFun 2.0 浅谈</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/08/02/kubernetes-start/">Kubenetes 之新手入门篇</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/04/16/cpu-branch-predictor/">浅谈 CPU 分支预测技术</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/20/flink-task-mailbox/">Flink 基于 MailBox 实现的 StreamTask 线程模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/15/flink-taskmanager-7/">Flink TaskManager 详解（一）</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/12/27/flink-jobmanager-6/">Flink JobManager 详解</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/12/23/flink-master-5/">Flink Master 详解</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

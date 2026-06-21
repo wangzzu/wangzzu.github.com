@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-06-21T10:23:38.396Z</updated>
+  <updated>2026-06-21T17:11:33.494Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,1276 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (二)：机器如何把语言变成数学</title>
+    <link href="http://matt33.com/2026/06/21/llm-math-basics/"/>
+    <id>http://matt33.com/2026/06/21/llm-math-basics/</id>
+    <published>2026-06-21T10:10:00.000Z</published>
+    <updated>2026-06-21T17:11:33.494Z</updated>
+    
+    <content type="html"><![CDATA[<p>上一篇我们从大模型的发展脉络出发，回顾了语言模型如何从早期的统计方法，一步步走向 Transformer、GPT，以及今天无处不在的大模型应用。如果说第一篇回答的是“LLM 是怎么发展到今天的”，那么这一篇想往下多走一层，回答一个更底层的问题：<strong>LLM 为什么能被训练出来？机器到底是怎样把语言变成可计算、可优化、可生成的东西？</strong></p>
+<p>无论是 Transformer 里的 Attention，预训练里的 loss，微调时的梯度更新，RAG 里的向量检索，还是 LoRA 里的低秩矩阵，本质上都绕不开几类基础数学概念。不过，这篇并不是要把大家重新拉回大学数学课堂。我们不会从定理证明开始，也不会堆大量公式。更重要的是建立一套直觉：<strong>机器如何把文字变成向量，如何计算词与词之间的关系，如何预测下一个 token，又如何通过错误和梯度一步步修正自己</strong>。</p>
+<a id="more"></a>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>LLM 看起来像是在“理解语言”，但从机器的视角看，它一直在做三件事：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">预测 -&gt; 评估 -&gt; 修正</span><br></pre></td></tr></table></figure>
+<p>给定一句话：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我今天早上喝了一杯 __</span><br></pre></td></tr></table></figure>
+<p>模型会输出一组概率：</p>
+<table>
+<thead>
+<tr>
+<th>候选 token</th>
+<th>概率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>0.62</td>
+</tr>
+<tr>
+<td>水</td>
+<td>0.18</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>0.11</td>
+</tr>
+<tr>
+<td>牛奶</td>
+<td>0.06</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.03</td>
+</tr>
+</tbody>
+</table>
+<p>这件事背后已经包含了 LLM 最核心的数学链路（这些数学概念和 LLM 概念，会在本系列文章中给读者介绍明白）：</p>
+<table>
+<thead>
+<tr>
+<th>机器要解决的问题</th>
+<th>背后的数学</th>
+<th>对应的 LLM 概念</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文字怎么变成数字？</td>
+<td>向量、矩阵、张量</td>
+<td>token、embedding</td>
+</tr>
+<tr>
+<td>词之间怎么产生关系？</td>
+<td>点积、相似度、矩阵乘法</td>
+<td>attention、Q/K/V</td>
+</tr>
+<tr>
+<td>下一个词怎么预测？</td>
+<td>条件概率、Softmax</td>
+<td>next token prediction</td>
+</tr>
+<tr>
+<td>错误怎么衡量？</td>
+<td>交叉熵、最大似然</td>
+<td>loss</td>
+</tr>
+<tr>
+<td>参数怎么修正？</td>
+<td>梯度、链式法则</td>
+<td>backpropagation</td>
+</tr>
+<tr>
+<td>模型怎么变好？</td>
+<td>梯度下降、优化器</td>
+<td>training、fine-tuning</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-math-01.png" alt="LLM 数学基础图"></p>
+<p>可以把 LLM 的数学主线先简化成下面这张图：</p>
+<p><img src="/images/llm/llm-math-02.png" alt="LLM 数学基础图"></p>
+<p>LLM 本质上是在做一件事：先把语言翻译成数字，再用数学计算关系，最后用错误信号反过来修正模型。</p>
+<p>总而言之，LLM 的数学不是抽象公式，而是一套让机器理解语言的翻译系统：NLP 告诉我们语言问题难在哪里，线性代数把文字变成向量，Transformer 用 Attention 计算上下文关系，概率论把生成变成“预测下一个 token”，微积分把错误转化为梯度，优化方法则推动模型在一次次更新中变得更好。</p>
+<blockquote>
+<p>如果上面的概念这里完全搞不清楚，也没关系，接下来这个系列的文章，从本章开始会逐步给读者介绍清楚，不过前提是读者有大学数学的基础，明白线性代数、概率统计、微积分的基础原理。</p>
+</blockquote>
+<h2 id="表示与关系：语言如何变成向量并计算相关性"><a href="#表示与关系：语言如何变成向量并计算相关性" class="headerlink" title="表示与关系：语言如何变成向量并计算相关性"></a>表示与关系：语言如何变成向量并计算相关性</h2><p>这一节本质上要解决两个问题：</p>
+<ol>
+<li>语言如何变成机器可以计算的数字？</li>
+<li>模型如何计算词与词之间的关系？</li>
+</ol>
+<p>这两个问题对应 LLM 中非常核心的两类能力：</p>
+<ol>
+<li>一类是“表示”：把文字变成向量。</li>
+<li>一类是“关系”：计算这些向量之间谁和谁更相关。</li>
+</ol>
+<p>如果说人类读一句话靠语感、经验和上下文，那么机器读一句话，第一步就是把它翻译成<strong>数学结构</strong>。</p>
+<h3 id="从文字到-Token：模型处理语言的最小单位"><a href="#从文字到-Token：模型处理语言的最小单位" class="headerlink" title="从文字到 Token：模型处理语言的最小单位"></a>从文字到 Token：模型处理语言的最小单位</h3><p>在进入向量、矩阵和 Attention 之前，需要先理解一个基础概念：<strong>Token</strong>。人类读文章时，看到的是字、词、句子和段落；但 LLM 并不是直接以“完整句子”为单位处理语言。它会先通过 <strong>Tokenizer</strong>，把文本切分成一个个更小的单位，这些单位就叫做 token。</p>
+<ul>
+<li>Token 可以是一个字、一个词、一个词的一部分，也可以是标点符号。不同模型使用的 tokenizer 不同，切分结果也可能不一样。</li>
+</ul>
+<p>例如一句话：我喜欢喝咖啡。</p>
+<p>可能会被切成：</p>
+<ul>
+<li>我 / 喜欢 / 喝 / 咖啡 / 。</li>
+</ul>
+<p>也可能被切成更细的片段。</p>
+<p>在模型内部，每个 token 会先被转换成一个编号，再进一步转换成向量。</p>
+<p><img src="/images/llm/llm-math-03.png" alt="LLM 数学基础图"></p>
+<p>Token 是 LLM 处理语言的基本单位，文本必须先被切成 token，才能继续变成向量并进入模型计算（后面我们讲 embedding、向量空间、Attention、预测下一个 token，都是建立在 token 这个基本单位之上的）。</p>
+<h3 id="语言的表示：从-token-到向量空间"><a href="#语言的表示：从-token-到向量空间" class="headerlink" title="语言的表示：从 token 到向量空间"></a>语言的表示：从 token 到向量空间</h3><p>计算机并不真正认识“猫”“狗”“咖啡”这些词。对机器来说，它们必须先变成数字，才能参与计算。在线性代数里，最常见的四个对象是：</p>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>直觉</th>
+<th>在 LLM 里的样子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>标量</td>
+<td>一个数字，比如 loss = 2.13</td>
+<td>loss</td>
+</tr>
+<tr>
+<td>向量</td>
+<td>一串数字，一个语义坐标</td>
+<td>一个 token 的 embedding</td>
+</tr>
+<tr>
+<td>矩阵</td>
+<td>一张数字表，一次表示变换</td>
+<td>一层权重、Q/K/V 变换</td>
+</tr>
+<tr>
+<td>张量</td>
+<td>更高维的数字容器</td>
+<td>batch、序列、hidden state</td>
+</tr>
+</tbody>
+</table>
+<p>这里也用一张图来理解它们的样式：</p>
+<p><img src="/images/llm/llm-math-04.png" alt="LLM 数学基础图"></p>
+<p>也就是说，LLM 里大多数计算，本质上不是在处理“文字”，而是在处理这些数字结构。</p>
+<blockquote>
+<p>当然只有 token embedding 还不够，Transformer 还需要位置表示，让模型知道 token 在句子中的顺序，否则“我喜欢你”和“你喜欢我”在词集合上很像，但语义完全不同（这部分会在下一篇文章中介绍）。</p>
+</blockquote>
+<h4 id="为什么语言要变成向量？"><a href="#为什么语言要变成向量？" class="headerlink" title="为什么语言要变成向量？"></a>为什么语言要变成向量？</h4><p>最朴素的方式，是给每个词一个编号，或者使用 one-hot 表示（<code>one-hot</code> 是一种把“类别”表示成向量的方法）。例如：</p>
+<table>
+<thead>
+<tr>
+<th>词</th>
+<th>one-hot 表示</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td><code>[1, 0, 0, 0]</code></td>
+</tr>
+<tr>
+<td>狗</td>
+<td><code>[0, 1, 0, 0]</code></td>
+</tr>
+<tr>
+<td>桌子</td>
+<td><code>[0, 0, 1, 0]</code></td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td><code>[0, 0, 0, 1]</code></td>
+</tr>
+</tbody>
+</table>
+<p>这种方式简单，但有几个明显问题：</p>
+<ol>
+<li>太稀疏：词表很大时，每个向量都非常长；</li>
+<li>没有语义距离：“猫”和“狗”看起来跟“猫”和“桌子”一样远；</li>
+<li>不适合泛化：模型很难知道哪些词意思接近。</li>
+</ol>
+<p>而 Embedding 的思路是：不再用一堆 0 和 1 表示词，而是给每个 token 一个稠密向量。例如：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>embedding 示例</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td>[0.21, -0.13, 0.88, …]</td>
+</tr>
+<tr>
+<td>狗</td>
+<td>[0.24, -0.10, 0.82, …]</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>[-0.57, 0.62, 0.09, …]</td>
+</tr>
+</tbody>
+</table>
+<p>这些数字不是人工写死的，而是在训练过程中学出来的。它们的目标是让语义相近的词，在向量空间里也更接近。</p>
+<h4 id="向量：语义的坐标"><a href="#向量：语义的坐标" class="headerlink" title="向量：语义的坐标"></a>向量：语义的坐标</h4><p>可以把 embedding 想成一个语义地图：</p>
+<p><img src="/images/llm/llm-math-05.png" alt="LLM 数学基础图"></p>
+<p>真实 embedding 当然不是二维，而可能是几百、几千甚至更高维。但直觉类似：语义相近的 token，向量位置也更接近。</p>
+<p>向量化之后，很多语言的问题也变成了数学问题：</p>
+<ol>
+<li>“猫”和“狗”是不是更接近？  –&gt;  两个向量距离是否更近？</li>
+<li>“苹果”在句子里是什么意思？ –&gt; 上下文向量落在哪个语义区域？</li>
+<li>一段文档和问题是否相关？ –&gt; 文档向量和问题向量相似度多高？</li>
+</ol>
+<h4 id="矩阵：表示变换器"><a href="#矩阵：表示变换器" class="headerlink" title="矩阵：表示变换器"></a>矩阵：表示变换器</h4><p>向量表示一个对象，矩阵表示一种变换。在 Transformer 里，很多操作都可以理解成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新表示 = 旧表示 × 参数矩阵</span><br></pre></td></tr></table></figure>
+<p><img src="/images/llm/llm-math-06.png" alt="LLM 数学基础图"></p>
+<p>Transformer 中的 <code>Wq/Wk/Wv</code> 是参数矩阵，<code>Q/K/V</code>是 token 向量经过这些矩阵线性投影后得到的表示：</p>
+<table>
+<thead>
+<tr>
+<th>符号</th>
+<th>可以怎么理解</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>X</code></td>
+<td>当前 token 的向量表示</td>
+</tr>
+<tr>
+<td><code>Wq</code></td>
+<td>把 token 变成“我要找什么”的矩阵</td>
+</tr>
+<tr>
+<td><code>Wk</code></td>
+<td>把 token 变成“我能提供什么线索”的矩阵</td>
+</tr>
+<tr>
+<td><code>Wv</code></td>
+<td>把 token 变成“我真正携带的信息”的矩阵</td>
+</tr>
+</tbody>
+</table>
+<p>这里可以记住一句话：矩阵是 LLM 里最常见的“表示变换器”。</p>
+<h4 id="张量：把一批句子组织起来"><a href="#张量：把一批句子组织起来" class="headerlink" title="张量：把一批句子组织起来"></a>张量：把一批句子组织起来</h4><p>当我们只看一个 token，它是向量。当我们看一句话，它是矩阵。当我们一次处理多句话，它就变成了张量。下面举个例子：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">batch_size</span> <span class="string">=</span> <span class="number">4</span></span><br><span class="line"><span class="string">sequence_length</span> <span class="string">=</span> <span class="number">128</span></span><br><span class="line"><span class="string">hidden_dim</span> <span class="string">=</span> <span class="number">768</span></span><br></pre></td></tr></table></figure>
+<p>可以理解为：一次处理 4 句话、每句话 128 个 token、每个 token 用 768 维向量表示。如下图所示：</p>
+<p><img src="/images/llm/llm-math-07.png" alt="LLM 数学基础图"></p>
+<h3 id="关系的计算：从相似度到-Attention"><a href="#关系的计算：从相似度到-Attention" class="headerlink" title="关系的计算：从相似度到 Attention"></a>关系的计算：从相似度到 Attention</h3><h4 id="相似度：模型怎么判断“像不像”"><a href="#相似度：模型怎么判断“像不像”" class="headerlink" title="相似度：模型怎么判断“像不像”"></a>相似度：模型怎么判断“像不像”</h4><p>当词变成向量之后，模型就可以计算它们之间的关系。常见的相似度计算方式有：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>基本原理</strong></th>
+<th><strong>常见位置</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>点积</td>
+<td>将两个向量对应维度相乘后求和。  <br>两个向量方向越一致、数值越大，分数越高</td>
+<td>Attention score</td>
+<td>适合在模型内部快速计算相关性，尤其是 Q 和 K 的匹配</td>
+</tr>
+<tr>
+<td>余弦相似度</td>
+<td>计算两个向量夹角的余弦值，重点看方向是否接近。  <br>不太关心向量长度，更关心“语义方向”是否一致</td>
+<td>向量检索、RAG、语义搜索</td>
+<td>适合比较文本、问题、文档之间的语义相似度</td>
+</tr>
+<tr>
+<td>欧氏距离</td>
+<td>计算两个点在空间中的直线距离。  <br>两个点离得越近，表示越相似</td>
+<td>聚类、传统机器学习、部分向量检索场景</td>
+<td>适合空间距离有明确意义的场景，但在高维语义向量中不一定总是最优</td>
+</tr>
+</tbody>
+</table>
+<h4 id="SVD、低秩：复杂矩阵里的主要方向"><a href="#SVD、低秩：复杂矩阵里的主要方向" class="headerlink" title="SVD、低秩：复杂矩阵里的主要方向"></a>SVD、低秩：复杂矩阵里的主要方向</h4><p>对于一个复杂矩阵里，往往不是每个方向都同等重要，有些方向承载了主要信息，有些方向只是细节或噪声。SVD（奇异值分解） 是分析矩阵结构的一种分解方法，低秩近似是用少量主要方向表达矩阵信息的思想；它们常用来理解降维、压缩和 LoRA 背后的数学直觉。</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>基本原理</strong></th>
+<th><strong>和 LLM 的关系</strong></th>
+<th><strong>常见应用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SVD</td>
+<td>将一个矩阵分解成几个更简单的矩阵，拆出其中最重要的方向和强度（把复杂矩阵拆成几个主要方向）</td>
+<td>帮助理解降维、压缩、低秩近似</td>
+<td>模型压缩、降维、矩阵分析、理解 LoRA 的数学基础</td>
+</tr>
+<tr>
+<td>低秩</td>
+<td>如果一个矩阵的大部分信息可以由少数几个方向表达，就可以用更小的矩阵近似它（用更少参数表达主要变化）</td>
+<td>LoRA 利用低秩矩阵近似参数更新，不必完整微调整个大矩阵</td>
+<td>LoRA、参数高效微调、模型压缩</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-math-08.png" alt="LLM 数学基础图"></p>
+<h4 id="关系的计算：相似度与-Attention"><a href="#关系的计算：相似度与-Attention" class="headerlink" title="关系的计算：相似度与 Attention"></a>关系的计算：相似度与 Attention</h4><p>线性代数让 token 有了向量。接下来，模型要回答两个更关键的问题：</p>
+<ul>
+<li>当前 token 应该从上下文里看哪些 token？</li>
+<li>每个 token 应该贡献多少信息？</li>
+</ul>
+<p>这里举个例子，有一句话：小明把书放进书包，因为它太重了。</p>
+<ul>
+<li>这里的“它”指的是“书”，还是“书包”？</li>
+</ul>
+<p>人类会根据语义判断。模型也需要计算：当前 token 应该重点关注上下文中的哪些 token。</p>
+<p>这件事可以拆成三个动作：</p>
+<table>
+<thead>
+<tr>
+<th>动作</th>
+<th>数学形式</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>算相关性</td>
+<td>点积</td>
+<td>判断两个 token 是否匹配</td>
+</tr>
+<tr>
+<td>分配权重</td>
+<td>Softmax</td>
+<td>把相关性分数变成注意力比例</td>
+<td>让重要 token 贡献更多</td>
+</tr>
+</tbody>
+</table>
+<p>放回刚才的句子，可以这样理解：</p>
+<p><img src="/images/llm/llm-math-09.png" alt="LLM 数学基础图"></p>
+<p>这不是说模型一定永远这样判断，而是展示 Attention 权重的阅读方式：权重越高，当前 token 从那里拿到的信息越多。</p>
+<h5 id="什么是-Attention（注意力机制）"><a href="#什么是-Attention（注意力机制）" class="headerlink" title="什么是 Attention（注意力机制）"></a>什么是 Attention（注意力机制）</h5><p>继续用上面的示例：小明把书放进书包，因为它太重了。</p>
+<p>当人类理解“它”时，会自然回头看前面的词，并判断“它”更可能指向“书”，而不是“小明”或“放进”。这说明，一个词的含义往往不是孤立决定的，而是<strong>由上下文共同决定的</strong>。</p>
+<p>如何解决这个问题呢？</p>
+<ul>
+<li>2014 年，Dzmitry Bahdanau、Kyunghyun Cho、Yoshua Bengio 在论文《<a href="https://arxiv.org/abs/1409.0473" target="_blank" rel="external">Neural Machine Translation by Jointly Learning to Align and Translate</a>》中提出了 Attention 机制，用来解决机器翻译中长句被压缩成单一向量后信息丢失、词语对齐困难的问题。</li>
+<li>后来，Vaswani 等人在 2017 年的论文《<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="external">Attention Is All You Need</a>》中进一步将 Attention 发展为 Transformer 的核心结构，在 Transformer 中采用并系统化了 Q/K/V 形式的 scaled dot-product attention，让模型能够判断：当前 token 想找什么信息，哪些 token 与它相关，以及最终应该读取哪些内容。</li>
+</ul>
+<p>Attention 的核心思想简单来说，<strong>就是让模型在处理某个 token 时，能够动态地判断上下文中哪些 token 更重要，并给它们分配不同的权重</strong>。</p>
+<blockquote>
+<p>后续会有一篇文章，专门来分析这篇跨时代意义的论文 —— transformer，这里读者简单了解其中使用到的数学理论即可。</p>
+</blockquote>
+<h5 id="Q、K、V：同一个向量的三种线性投影"><a href="#Q、K、V：同一个向量的三种线性投影" class="headerlink" title="Q、K、V：同一个向量的三种线性投影"></a>Q、K、V：同一个向量的三种线性投影</h5><p>在 Transformer 中，每个 token 进入模型后，都会先变成一个向量。然后模型会用三个不同的矩阵，把这个向量变换成三种不同的表示：</p>
+<table>
+<thead>
+<tr>
+<th><strong>名称</strong></th>
+<th><strong>数学含义</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q（Query）</td>
+<td>当前 token 的查询向量</td>
+<td>我想找什么信息</td>
+</tr>
+<tr>
+<td>K（Key）</td>
+<td>其他 token 的匹配向量</td>
+<td>我这里有什么特征可以被匹配</td>
+</tr>
+<tr>
+<td>V（Value）</td>
+<td>其他 token 的内容向量</td>
+<td>如果被关注，真正传递什么信息</td>
+</tr>
+</tbody>
+</table>
+<p>从数学上看，Q、K、V 本质上都是矩阵乘法（Transformer 内部的机制这里先不做过多赘述，简单有一个了解即可，重点关注背后的数学原理）。</p>
+<p><img src="/images/llm/llm-math-10.png" alt="LLM 数学基础图"></p>
+<h5 id="Softmax：把分数变成权重"><a href="#Softmax：把分数变成权重" class="headerlink" title="Softmax：把分数变成权重"></a>Softmax：把分数变成权重</h5><p>在 Transformer 中，用 Q 和 K 计算完相关性后，会得到一组分数。比如当前 token 在看其他 token 时，可能得到这样的分数：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>分数</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我</td>
+<td>1.2</td>
+</tr>
+<tr>
+<td>喜欢</td>
+<td>2.5</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.8</td>
+</tr>
+</tbody>
+</table>
+<p>这些分数本身还不能直接当作“关注比例”，因为它们可能很大、很小，甚至可能是负数。Softmax 的作用，就是把这些分数转换成一组更好理解的权重（不过 Softmax 不是简单线性归一化，它会先对分数做指数变换，再归一化，因此会放大高分项的优势）：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>原始分数</strong></th>
+<th><strong>Softmax 后的权重</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我</td>
+<td>1.2</td>
+<td>0.18</td>
+</tr>
+<tr>
+<td>喜欢</td>
+<td>2.5</td>
+<td>0.66</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.8</td>
+<td>0.16</td>
+</tr>
+</tbody>
+</table>
+<p>Softmax 有两个重要特点：</p>
+<ol>
+<li>所有权重都是正数： 不会出现负的关注比例；</li>
+<li>所有权重加起来等于 1： 可以理解成一组分配比例。</li>
+</ol>
+<p>所以，Softmax 背后的数学概念很简单：它把一组“相关性分数”，转换成一组“信息分配权重”。</p>
+<h2 id="预测与评估：概率、Softmax-与交叉熵"><a href="#预测与评估：概率、Softmax-与交叉熵" class="headerlink" title="预测与评估：概率、Softmax 与交叉熵"></a>预测与评估：概率、Softmax 与交叉熵</h2><p>前面我们讲了：语言会先变成 token，再变成向量，模型通过矩阵乘法、相似度、Attention 等方式计算上下文关系。但计算完关系之后，模型最终还是要回答一个非常具体的问题：<strong>在当前上下文后面，下一个 token 最可能是什么？</strong></p>
+<p>可以先看一张总图：</p>
+<p><img src="/images/llm/llm-math-11.png" alt="LLM 数学基础图"></p>
+<p>在本章节中，重点会介绍的数学概念，及 LLM 中的应用如下：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>数学概念</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>下一个词是什么？</td>
+<td>条件概率</td>
+</tr>
+<tr>
+<td>分数怎么变成概率？</td>
+<td>Softmax</td>
+</tr>
+<tr>
+<td>结果为什么有时稳定、有时发散？</td>
+<td>期望、方差</td>
+</tr>
+<tr>
+<td>新信息为什么会改变回答？</td>
+<td>贝叶斯思想</td>
+</tr>
+<tr>
+<td>怎么知道模型错了多少？</td>
+<td>交叉熵</td>
+</tr>
+</tbody>
+</table>
+<h3 id="LLM-输出的是概率分布"><a href="#LLM-输出的是概率分布" class="headerlink" title="LLM 输出的是概率分布"></a>LLM 输出的是概率分布</h3><p>LLM 每一步生成时，不是直接从数据库里取一个答案，而是在预测下一个 token 的概率分布。当我们输入：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我早上喝了一杯</span><br></pre></td></tr></table></figure>
+<p>模型并不是从数据库里查找“下一句话应该是什么”，而是在所有可能 token 里预测概率。例如：</p>
+<table>
+<thead>
+<tr>
+<th><strong>候选 token</strong></th>
+<th><strong>模型预测概率</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>0.62</td>
+<td>最可能</td>
+</tr>
+<tr>
+<td>水</td>
+<td>0.18</td>
+<td>也合理</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>0.11</td>
+<td>有可能</td>
+</tr>
+<tr>
+<td>牛奶</td>
+<td>0.06</td>
+<td>概率较低</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.03</td>
+<td>很多低概率 token 的合计</td>
+</tr>
+</tbody>
+</table>
+<p>所以，LLM 生成文本的基本单位不是“一句话”，而是“一步一步预测下一个 token”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>我们看到的现象</strong></th>
+<th><strong>背后的数学解释</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型可以继续写文章</td>
+<td>每一步都在预测下一个 token</td>
+</tr>
+<tr>
+<td>同一个问题可能生成不同回答</td>
+<td>采样来自概率分布</td>
+</tr>
+<tr>
+<td>有些回答更稳定，有些回答更发散</td>
+<td>概率分布有时集中，有时分散</td>
+</tr>
+<tr>
+<td>temperature 可以控制创造性</td>
+<td>改变概率分布的尖锐程度</td>
+</tr>
+</tbody>
+</table>
+<h3 id="条件概率：上下文决定下一个-token"><a href="#条件概率：上下文决定下一个-token" class="headerlink" title="条件概率：上下文决定下一个 token"></a>条件概率：上下文决定下一个 token</h3><p>语言模型真正学习的是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(下一个 token | 前面的上下文)</span><br></pre></td></tr></table></figure>
+<p>这句话读起来像公式（也就是条件概率，在上下文确定的前提下，下一个 token 出现的概率），但意思很简单：在已经看到这些文字的前提下，下一个词最可能是什么？</p>
+<p>同一个词，在不同上下文里的概率会完全不同。</p>
+<table>
+<thead>
+<tr>
+<th><strong>上下文</strong></th>
+<th><strong>更可能的下一个 token</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我早上喝了一杯</td>
+<td>咖啡、水、牛奶</td>
+</tr>
+<tr>
+<td>程序抛出了一个</td>
+<td>异常、错误</td>
+</tr>
+<tr>
+<td>请把这段代码转换成</td>
+<td>Python、Java、SQL</td>
+</tr>
+<tr>
+<td>今天天气非常</td>
+<td>好、热、冷</td>
+</tr>
+</tbody>
+</table>
+<p>这也是为什么 prompt 很重要。</p>
+<p>prompt 本质上是在改变上下文，而上下文会改变后续 token 的概率分布。</p>
+<p><img src="/images/llm/llm-math-12.png" alt="LLM 数学基础图"></p>
+<p>举个例子：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Prompt</strong></th>
+<th><strong>“苹果”更可能表示什么</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我削了一个苹果</td>
+<td>水果</td>
+</tr>
+<tr>
+<td>苹果发布了新品</td>
+<td>公司</td>
+</tr>
+<tr>
+<td>苹果股价上涨</td>
+<td>公司</td>
+</tr>
+<tr>
+<td>这个苹果很甜</td>
+<td>水果</td>
+</tr>
+</tbody>
+</table>
+<p>模型并不是先“理解苹果的唯一含义”，而是根据上下文让某些含义的概率升高。</p>
+<h3 id="期望、方差和不确定性：为什么有的回答稳定，有的回答发散"><a href="#期望、方差和不确定性：为什么有的回答稳定，有的回答发散" class="headerlink" title="期望、方差和不确定性：为什么有的回答稳定，有的回答发散"></a>期望、方差和不确定性：为什么有的回答稳定，有的回答发散</h3><p>概率分布不只是告诉我们“谁最大”，还告诉我们模型有多确定。这里可以简单理解三个概念：</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th>原理</th>
+<th><strong>在 LLM 里的表现</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>期望</td>
+<td>对所有可能结果按概率加权平均，表示模型预测的中心趋势</td>
+<td>模型大概率会往哪个方向回答</td>
+</tr>
+<tr>
+<td>方差</td>
+<td>衡量结果相对期望的分散程度，方差越大，输出越不稳定</td>
+<td>回答是否稳定</td>
+</tr>
+<tr>
+<td>不确定性</td>
+<td>当多个 token 或答案路径的概率都接近时，模型难以唯一确定最优选择</td>
+<td>模型可能生成不同答案</td>
+</tr>
+</tbody>
+</table>
+<p>比如一个确定性问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">2 + 2 = ?</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>概率</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4</td>
+<td>0.96</td>
+</tr>
+<tr>
+<td>3</td>
+<td>0.01</td>
+</tr>
+<tr>
+<td>5</td>
+<td>0.01</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.02</td>
+</tr>
+</tbody>
+</table>
+<p>这个分布很集中，模型回答通常稳定。</p>
+<p>再看一个开放问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">请给我一个创业方向</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>概率</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AI</td>
+<td>0.22</td>
+</tr>
+<tr>
+<td>教育</td>
+<td>0.18</td>
+</tr>
+<tr>
+<td>工具</td>
+<td>0.15</td>
+</tr>
+<tr>
+<td>内容</td>
+<td>0.12</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>0.33</td>
+</tr>
+</tbody>
+</table>
+<p>这个分布更分散，所以模型可能给出不同答案。</p>
+<table>
+<thead>
+<tr>
+<th><strong>分布形状</strong></th>
+<th><strong>直觉</strong></th>
+<th><strong>常见场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>很集中</td>
+<td>模型很确定</td>
+<td>数学题、事实题、格式明确的问题</td>
+</tr>
+<tr>
+<td>比较分散</td>
+<td>多个答案都合理</td>
+<td>创意写作、方案建议、开放讨论</td>
+</tr>
+<tr>
+<td>过于分散</td>
+<td>模型方向不清楚</td>
+<td>prompt 太模糊、约束太少</td>
+</tr>
+</tbody>
+</table>
+<p>所以 temperature、top-k、top-p 这些生成参数，本质上都是在控制如何从概率分布中选择下一个 token。</p>
+<h3 id="贝叶斯思想：新信息会改变模型判断"><a href="#贝叶斯思想：新信息会改变模型判断" class="headerlink" title="贝叶斯思想：新信息会改变模型判断"></a>贝叶斯思想：新信息会改变模型判断</h3><blockquote>
+<p>贝叶斯思想可以简单理解为一句话：<strong>我们不是一次性判断真相，而是根据新证据不断更新自己的判断。</strong></p>
+</blockquote>
+<p>贝叶斯可以用一句话理解：<strong>看到新证据后，应该更新原来的判断</strong>。而在 LLM 里，prompt 就是类似一种“新证据”会改变后续的模型输出。比如“苹果”这个词，本身有多种含义：</p>
+<table>
+<thead>
+<tr>
+<th><strong>新上下文</strong></th>
+<th><strong>模型更可能的判断</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我削了一个苹果</td>
+<td>苹果是水果</td>
+</tr>
+<tr>
+<td>苹果发布了新品</td>
+<td>苹果是公司</td>
+</tr>
+<tr>
+<td>苹果股价上涨</td>
+<td>苹果是公司</td>
+</tr>
+<tr>
+<td>这个苹果很甜</td>
+<td>苹果是水果</td>
+</tr>
+</tbody>
+</table>
+<p>这不是模型在查字典，而是上下文改变了不同含义的概率。</p>
+<p><img src="/images/llm/llm-math-13.png" alt="LLM 数学基础图"></p>
+<p>所以，贝叶斯思想对理解 LLM 很有帮助：模型不是一次性固定答案，而是在不断根据上下文更新“接下来什么更可能”。</p>
+<h3 id="交叉熵与最大似然：怎么衡量模型预测得好不好"><a href="#交叉熵与最大似然：怎么衡量模型预测得好不好" class="headerlink" title="交叉熵与最大似然：怎么衡量模型预测得好不好"></a>交叉熵与最大似然：怎么衡量模型预测得好不好</h3><p>有了概率之后，训练还需要回答另一个问题：模型这次预测，到底错了多少？假设真实答案是“咖啡”，模型给出下面的概率：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>预测概率</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>水</td>
+<td>0.5</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.2</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>0.2</td>
+</tr>
+<tr>
+<td>牛奶</td>
+<td>0.1</td>
+</tr>
+</tbody>
+</table>
+<p>人能看出来：模型不太对，因为正确答案“咖啡”的概率只有 0.20。但机器需要一个数字来表示错误程度，这个数字就是 <strong>loss</strong>（交叉熵就是一种常见的损失函数）。</p>
+<p>语言模型常用的 loss 是交叉熵。对单个 token 来说，可以先这样理解：</p>
+<ul>
+<li>正确 token 的概率越高，loss 越小；</li>
+<li>正确 token 的概率越低，loss 越大。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th><strong>真实 token</strong></th>
+<th><strong>模型给真实 token 的概率</strong></th>
+<th><strong>loss 直觉</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>0.9</td>
+<td>很小</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.6</td>
+<td>较小</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.2</td>
+<td>较大</td>
+</tr>
+<tr>
+<td>咖啡</td>
+<td>0.01</td>
+<td>非常大</td>
+</tr>
+</tbody>
+</table>
+<p>交叉熵不只是看“有没有猜中”，还看模型是不是把足够多的概率分给了正确答案。</p>
+<table>
+<thead>
+<tr>
+<th><strong>预测情况</strong></th>
+<th><strong>惩罚</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>答对且很自信</td>
+<td>很小</td>
+</tr>
+<tr>
+<td>答对但不自信</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>答错但不自信</td>
+<td>较大</td>
+</tr>
+<tr>
+<td>答错还很自信</td>
+<td>很大</td>
+</tr>
+</tbody>
+</table>
+<p>从另一个角度看，训练语言模型就是最大似然：让训练语料里的句子，在模型看来越来越“可能出现”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>LLM 说法</strong></th>
+<th><strong>数学术语</strong></th>
+<th>数学原理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>让模型更像训练数据那样说话</td>
+<td>最大似然</td>
+<td>模型会计算一段训练文本出现的概率，并不断调整参数，让训练数据中的句子在模型看来“更可能出现”。</td>
+</tr>
+<tr>
+<td>让正确 token 概率更高</td>
+<td>最小化交叉熵</td>
+<td>交叉熵关注真实 token 被分到的概率。如果正确 token 概率越高，loss 越小；如果正确 token 概率很低，loss 就会变大。</td>
+</tr>
+<tr>
+<td>让预测错误变少</td>
+<td>最小化 loss</td>
+<td>loss 是所有训练样本预测误差的汇总指标，训练通过反向传播和优化器让平均 loss 下降</td>
+</tr>
+</tbody>
+</table>
+<p>LLM 的生成，是不断根据上下文预测下一个 token 的概率；LLM 的训练，是不断让正确 token 的概率变高，让交叉熵 loss 变低。</p>
+<h2 id="学习与优化：模型如何从错误中变好"><a href="#学习与优化：模型如何从错误中变好" class="headerlink" title="学习与优化：模型如何从错误中变好"></a>学习与优化：模型如何从错误中变好</h2><p>前面讲到，交叉熵会把模型预测错误变成一个数字：loss。但模型不能只知道“我错了”，还必须知道：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>数学概念</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>错误怎么表示成目标？</td>
+<td>目标函数、损失函数</td>
+</tr>
+<tr>
+<td>参数该往哪里改？</td>
+<td>导数、偏导数、梯度</td>
+</tr>
+<tr>
+<td>错误怎么传回前面层？</td>
+<td>链式法则、反向传播</td>
+</tr>
+<tr>
+<td>参数怎么一步步更新？</td>
+<td>梯度下降、优化器</td>
+</tr>
+<tr>
+<td>怎么避免训练不稳定？</td>
+<td>正则化、凸优化思想、约束优化</td>
+</tr>
+</tbody>
+</table>
+<h3 id="损失函数：把“模型错了”变成数学目标"><a href="#损失函数：把“模型错了”变成数学目标" class="headerlink" title="损失函数：把“模型错了”变成数学目标"></a>损失函数：把“模型错了”变成数学目标</h3><p>训练 LLM，本质上是在最小化一个函数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Loss = 模型预测结果 和 真实答案之间的差距</span><br></pre></td></tr></table></figure>
+<p>更数学一点，可以写成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">min L(θ)</span><br></pre></td></tr></table></figure>
+<p>这里：</p>
+<table>
+<thead>
+<tr>
+<th><strong>符号</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>θ</td>
+<td>模型里的所有参数</td>
+</tr>
+<tr>
+<td>L(θ)</td>
+<td>当前参数下的 loss</td>
+</tr>
+<tr>
+<td>min</td>
+<td>希望找到一组参数，让 loss 尽可能小</td>
+</tr>
+</tbody>
+</table>
+<p>在语言模型里，常见目标是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">让真实下一个 token 的概率尽可能高</span><br></pre></td></tr></table></figure>
+<p>所以训练目标可以理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">最小化交叉熵（Loss） = 最大化训练文本出现的概率</span><br></pre></td></tr></table></figure>
+<p>到这里的话，一个“模型表现好不好”，被定义成一个可以计算、可以优化的函数。</p>
+<h3 id="导数、偏导数、梯度：找到参数应该怎么改"><a href="#导数、偏导数、梯度：找到参数应该怎么改" class="headerlink" title="导数、偏导数、梯度：找到参数应该怎么改"></a>导数、偏导数、梯度：找到参数应该怎么改</h3><p>LLM 有大量参数，训练时要回答一个问题：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果某个参数稍微变大一点，loss 会变大还是变小？</span><br></pre></td></tr></table></figure>
+<p>这就是导数要解决的问题。</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>数学原理</strong></th>
+<th><strong>在 LLM 中的作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>导数</td>
+<td>衡量一个变量变化时，函数如何变化</td>
+<td>看参数变化会不会影响 loss</td>
+</tr>
+<tr>
+<td>偏导数</td>
+<td>多个变量中，只看其中一个变量的影响。</td>
+<td>看某个参数对 loss 的影响</td>
+</tr>
+<tr>
+<td>梯度</td>
+<td>所有偏导数组成的向量</td>
+<td>给出整体参数更新方向</td>
+</tr>
+</tbody>
+</table>
+<p>这三个数学概念，简单举个例子：</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>计算方式示例</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>导数</td>
+<td>如果 <code>f(x) = x²</code>，那么 <code>f&#39;(x) = 2x</code></td>
+<td>当 <code>x</code> 变化一点时，<code>f(x)</code> 会怎么变</td>
+</tr>
+<tr>
+<td>偏导数</td>
+<td>如果 <code>L(w, b) = (wx + b - y)²</code>，分别求 <code>∂L/∂w</code> 和 <code>∂L/∂b</code></td>
+<td>只看 <code>w</code> 或 <code>b</code> 单独变化时，对 loss 的影响</td>
+</tr>
+<tr>
+<td>梯度</td>
+<td><code>∇L = [∂L/∂w, ∂L/∂b]</code></td>
+<td>把所有参数对 loss 的影响组合起来</td>
+</tr>
+</tbody>
+</table>
+<p>这里最重要的数学结论是：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方向</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>梯度方向</td>
+<td>loss 上升最快的方向</td>
+</tr>
+<tr>
+<td>负梯度方向</td>
+<td>loss 下降最快的方向</td>
+</tr>
+</tbody>
+</table>
+<p>所以训练经常有句话：loss 告诉模型“错了多少”，梯度告诉模型“往哪里改”。</p>
+<h3 id="反向传播：用链式法则把错误传回每一层"><a href="#反向传播：用链式法则把错误传回每一层" class="headerlink" title="反向传播：用链式法则把错误传回每一层"></a>反向传播：用链式法则把错误传回每一层</h3><p>反向传播是 Transformer 能够被大规模训练的关键机制之一。如果没有反向传播，模型即使知道最后预测错了，也很难判断前面每一层、每一个参数应该承担多少责任，更谈不上在工业界进行大规模训练和优化。</p>
+<p>我们知道，Transformer 由多层神经网络结构组成。从 Embedding 层，到多层 Attention 和 Feed Forward，再到最终输出层，信息是一步步向前计算的。那么问题来了：如果最后一层输出错了，loss 很大，模型应该如何把这个错误传回前面的层，并据此修改每一层的参数呢？</p>
+<p>这就是反向传播解决的问题，而反向传播背后的数学原理就是<strong>链式法则</strong>。</p>
+<p>简单写成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">如果 L 依赖 y，y 又依赖 x，</span><br><span class="line">那么 L 对 x 的影响可以拆成：</span><br><span class="line"></span><br><span class="line">dL/dx = dL/dy × dy/dx （dy/dx 表示 y 对 x 求导数）</span><br></pre></td></tr></table></figure>
+<p>放到神经网络里反向传播的路径是 <code>Loss → 输出层 → 中间层 → Embedding 层</code>，如下图所示：</p>
+<p><img src="/images/llm/llm-math-14.png" alt="LLM 数学基础图"></p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>反向传播怎么回答</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>最后错了多少？</td>
+<td>计算 loss</td>
+</tr>
+<tr>
+<td>哪一层影响了错误？</td>
+<td>计算该层输出对 loss 的影响</td>
+</tr>
+<tr>
+<td>哪个参数该改？</td>
+<td>计算参数梯度</td>
+</tr>
+<tr>
+<td>改多少？</td>
+<td>梯度大小和学习率共同决定</td>
+</tr>
+</tbody>
+</table>
+<p>一句话理解：反向传播不是新的数学魔法，而是<strong>链式法则在神经网络里的工程实现</strong>。</p>
+<h3 id="梯度下降与优化器：让-loss-一步步变小"><a href="#梯度下降与优化器：让-loss-一步步变小" class="headerlink" title="梯度下降与优化器：让 loss 一步步变小"></a>梯度下降与优化器：让 loss 一步步变小</h3><p>有了梯度，就可以更新参数。最基础的更新公式是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">θ_new = θ_old - η × ∇L(θ)</span><br></pre></td></tr></table></figure>
+<p>这里：</p>
+<table>
+<thead>
+<tr>
+<th><strong>符号</strong></th>
+<th><strong>含义</strong></th>
+<th>LLM 中的含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>θ_old</td>
+<td>当前参数</td>
+<td>当前模型里的所有权重参数，比如 Embedding、Attention、FFN 里的矩阵参数</td>
+</tr>
+<tr>
+<td>θ_new</td>
+<td>更新后的参数</td>
+<td>经过一次训练 step 后的新模型参数</td>
+</tr>
+<tr>
+<td>η</td>
+<td>学习率</td>
+<td>每次参数更新的步长</td>
+</tr>
+<tr>
+<td>∇L(θ)</td>
+<td>当前梯度</td>
+<td>当前 batch 数据中，每个参数对 loss 的影响方向和大小</td>
+</tr>
+<tr>
+<td>-∇L(θ)</td>
+<td>loss 下降方向</td>
+<td>让 loss 下降最快的方向</td>
+</tr>
+</tbody>
+</table>
+<p>这就是梯度下降。</p>
+<p>真实 LLM 训练里，通常不会只用最朴素的梯度下降，而会用更复杂的优化器，例如 Adam。</p>
+<table>
+<thead>
+<tr>
+<th><strong>优化方法</strong></th>
+<th><strong>数学思想</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SGD</td>
+<td>按当前梯度更新参数</td>
+<td>每次看当前坡度走一步</td>
+</tr>
+<tr>
+<td>Momentum</td>
+<td>累积历史梯度方向</td>
+<td>不只看当前一步，也看惯性</td>
+</tr>
+<tr>
+<td>Adam</td>
+<td>同时估计梯度均值和梯度波动</td>
+<td>给不同参数自适应调整步长</td>
+</tr>
+</tbody>
+</table>
+<p>这一小节重点是：优化器决定怎么用梯度更新参数，学习率决定每一步走多大。</p>
+<h3 id="训练稳定性：正则化、凸优化与约束思想"><a href="#训练稳定性：正则化、凸优化与约束思想" class="headerlink" title="训练稳定性：正则化、凸优化与约束思想"></a>训练稳定性：正则化、凸优化与约束思想</h3><p>真实训练中，loss 不会一直平滑下降，常见问题很多，如下：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>表现</strong></th>
+<th><strong>数学原因</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>学习率太大</td>
+<td>loss 震荡或爆炸</td>
+<td>每一步跨得太远</td>
+</tr>
+<tr>
+<td>学习率太小</td>
+<td>训练很慢</td>
+<td>每一步变化太小</td>
+</tr>
+<tr>
+<td>梯度爆炸</td>
+<td>参数更新失控</td>
+<td>梯度数值过大</td>
+</tr>
+<tr>
+<td>梯度消失</td>
+<td>前面层学不动</td>
+<td>梯度经过多层后变得很小</td>
+</tr>
+<tr>
+<td>过拟合</td>
+<td>训练集好，测试集差</td>
+<td>模型记住噪声而不是规律</td>
+</tr>
+</tbody>
+</table>
+<p>正则化就是解决过拟合的一类方法。数学上，它通常是在原来的 loss 后面加一个惩罚项：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">L_total = L_train + λR(θ)</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>部分</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L_train</td>
+<td>训练误差</td>
+</tr>
+<tr>
+<td>R(θ)</td>
+<td>对参数复杂度的惩罚</td>
+</tr>
+<tr>
+<td>λ</td>
+<td>惩罚强度</td>
+</tr>
+</tbody>
+</table>
+<p>最后可以用一张表简单介绍几个优化概念：</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>数学原理</strong></th>
+<th><strong>对理解 LLM 的帮助</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>凸优化</td>
+<td>如果目标函数是凸的，局部最优就是全局最优</td>
+<td>帮助理解什么是“好优化问题”</td>
+</tr>
+<tr>
+<td>岭回归</td>
+<td>在 loss 里加入 L2 参数惩罚</td>
+<td>理解正则化</td>
+</tr>
+<tr>
+<td>拉格朗日乘子</td>
+<td>把约束条件合并进优化目标</td>
+<td>理解带约束优化</td>
+</tr>
+<tr>
+<td>Proximal Gradient</td>
+<td>把普通梯度下降和复杂正则项结合</td>
+<td>理解稀疏化、约束优化</td>
+</tr>
+<tr>
+<td>凸松弛</td>
+<td>把难优化问题放宽成更容易求解的问题</td>
+<td>理解近似求解思想</td>
+</tr>
+</tbody>
+</table>
+<p>LLM 的学习过程，就是把预测错误定义成 loss，用梯度找到参数修改方向，用反向传播把错误传回每一层，再通过优化器一步步更新参数。数学上看，它不是“模型突然理解了语言”，而是在大量样本上持续最小化一个目标函数。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>到这里，我们并不是把大学数学重新学了一遍，而是把和 LLM 最相关的几类数学概念重新串了起来。LLM 看起来是在理解语言、生成文字，但从数学上看，它背后一直在做几件非常基础的事情：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>数学工具</strong></th>
+<th><strong>在 LLM 中的作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>语言怎么被机器处理？</td>
+<td>Token、向量、矩阵</td>
+<td>把文字变成可计算的数字表示</td>
+</tr>
+<tr>
+<td>词和词之间怎么建立关系？</td>
+<td>点积、余弦相似度、Attention</td>
+<td>计算 token 之间的相关性</td>
+</tr>
+<tr>
+<td>下一个 token 怎么预测？</td>
+<td>条件概率、Softmax</td>
+<td>把模型分数变成概率分布</td>
+</tr>
+<tr>
+<td>模型错了怎么衡量？</td>
+<td>交叉熵、最大似然、loss</td>
+<td>把预测错误变成可优化的数字</td>
+</tr>
+<tr>
+<td>模型怎么变好？</td>
+<td>梯度、反向传播、优化器</td>
+<td>根据错误调整参数</td>
+</tr>
+</tbody>
+</table>
+<p>所以，LLM 的核心并不是“机器突然懂了语言”，而是把语言问题转化成了一系列可以计算、可以预测、可以优化的问题。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;上一篇我们从大模型的发展脉络出发，回顾了语言模型如何从早期的统计方法，一步步走向 Transformer、GPT，以及今天无处不在的大模型应用。如果说第一篇回答的是“LLM 是怎么发展到今天的”，那么这一篇想往下多走一层，回答一个更底层的问题：&lt;strong&gt;LLM 为什么能被训练出来？机器到底是怎样把语言变成可计算、可优化、可生成的东西？&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;无论是 Transformer 里的 Attention，预训练里的 loss，微调时的梯度更新，RAG 里的向量检索，还是 LoRA 里的低秩矩阵，本质上都绕不开几类基础数学概念。不过，这篇并不是要把大家重新拉回大学数学课堂。我们不会从定理证明开始，也不会堆大量公式。更重要的是建立一套直觉：&lt;strong&gt;机器如何把文字变成向量，如何计算词与词之间的关系，如何预测下一个 token，又如何通过错误和梯度一步步修正自己&lt;/strong&gt;。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (一)：从 AI 到 LLM</title>
@@ -2935,186 +4205,6 @@
     
     
       <category term="bk" scheme="http://matt33.com/tags/bk/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>如何高效学习</title>
-    <link href="http://matt33.com/2018/11/21/effective-learning/"/>
-    <id>http://matt33.com/2018/11/21/effective-learning/</id>
-    <published>2018-11-21T02:12:51.000Z</published>
-    <updated>2026-06-19T02:19:10.482Z</updated>
-    
-    <content type="html"><![CDATA[<p>在这个知识爆炸、科技日新月异的时代，技术的变化远比我们想象的要快很多，这就对工程师的要求就提高了很多，特别是对于那些在技术上有所追求的工程师而言。对于一些互联网大厂，学习能力也成了面试中重点考察的内容。如何快速学习、掌握一门新的技术，如何提高自己的学习效率，对于有一定工作经验的人来说，可能每个人都有一个自己的学习方法论，但是我们也需要去学习借鉴别人（特别是那些有一定技术影响力的技术大咖）的经验，来不断更新和完善自己的方法轮。今天这篇《高效学习》，就是与大家一起探讨技术学习的方法论，本文的内容主要来自耗子叔的《左耳听风 —— 高效学习篇》，中间会穿插个人的一些经验，算是对这个系列的一个总结。如果想看原文内容，欢迎订阅耗子叔的这个专栏，这个专栏质量还是非常高的，耗子叔推荐了很多优秀的学习资源（通过文章末尾处的二维码链接购买）。</p>
-<h2 id="端正学习态度"><a href="#端正学习态度" class="headerlink" title="端正学习态度"></a>端正学习态度</h2><p>对于大多数人来说，我们并不是那种天赋异禀的天才，所以那些速成的学习方法并不适合我们，因为，<strong>对于非天才的我们来说，学习是不可能速成的</strong>，学习本来就是一件【逆人性】的事，就像锻炼身体一样，<strong>需要人持续付出，会让人感到痛苦，并随时想找理由放弃，实际上，痛苦是成长的必经阶段</strong>。</p>
-<p>大部分人都认为自己热爱学习，但是有多少能真正付出实践、并一直坚持下去，能做到实践和坚持的人，一般运气都不会太差。如果我们去研究一下古今中外的成功人士，就会发现，他们基本上都是非常自律的，也都是非常热爱学习的，他们可以沉得下心来不断学习，在学习中不断地思考、探索和实践。懒，是人类的天性，如果不能克服自己 DNA 中的弱点，不能端正自己的态度，不能自律，不能坚持，不能举一反三，不能不断追问等，那么，无论多好的方法，你都不可能学好。所以，<strong>有正确的态度非常重要</strong>。</p>
-<blockquote>
-<p>当然只做到上面说的，并不一定能保证能够实现所谓的成功，但是完全可以让你在某个领域做到足够优秀。</p>
-</blockquote>
-<h3 id="主动学习和被动学习"><a href="#主动学习和被动学习" class="headerlink" title="主动学习和被动学习"></a>主动学习和被动学习</h3><p>下面这张图，大部分人应该都见过，这张图又称为学习金字塔：</p>
-<p><img src="/images/share/learn.png" alt="学习效率"></p>
-<p>人的学习，可以分为【被动学习】和【主动学习】两个层次：</p>
-<ul>
-<li><strong>被动学习</strong>：如听讲、阅读、视听、演示，学习内容的平均留存率为 5%、10%、20% 和 30%；</li>
-<li><strong>主动学习</strong>：如通过讨论、实践、教授给他人，会将原来被动学习的内容留存率从 5% 提升到 50%、75%、90%。</li>
-</ul>
-<p>关于这个，我是深有体会的，如果我们只是看书或听一下别人的分享，不去实践，可能不到半个月，能记住 10% 的内容就不错了，我认为最好的学习方法是 <strong>实践，总结，教授给别人（要让别人听明白，教授的过程要有深度的讨论，而不是 PPT 走一遍）</strong> 。</p>
-<p>过去一年多，很幸运的是，遇到了几个热爱学习的小伙伴，我们经常周末一起组织分享，每次分享只涉及很少的一块内容，分享过程中我们以讨论为主，这对分享者的能力锻炼有很好的效果（通过讨论听众也能收获很多），首先他需要自己能够理解这个问题，其次他需要把自己的理解给别人讲清楚，还需要回答其他人提出的问题（这些问题可能是分享者压根没注意的问题）。我也一直想在团队内部推广这种学习方法（这种方法人数太多的话就不太适合了），但是在团队内部去推，效果没有想象中得那么好，而且在团队内部反而很难坚持下去（大家的时间都比较有限，如果占据了别人的工作时间，别人可能需要加班才能完成自己的工作，所以大家兴趣并没有那么高昂）。相反，如果能找几个愿意一起学习的小伙伴一同学习、成长，这样反而效果好很多，如果你能找到这样的一群小伙伴，我是非常推荐这种学习方式，把自己学习的内容分享给其他人（大家一起学习、讨论这种学习效果，考虑问题的深度要比自己独自学习高出很多）。</p>
-<h3 id="浅度学习和深度学习"><a href="#浅度学习和深度学习" class="headerlink" title="浅度学习和深度学习"></a>浅度学习和深度学习</h3><p><strong>学习并不是努力读更多的书，盲目追求阅读的速度和数量，这会让人产生低层次的勤奋和成长的感觉，这只是在使蛮力。要思辩，要践行，要总结和归纳，否则，你只是在机械地重复某件事，而不会有质的成长。</strong></p>
-<p>在知识的领域其实也有阶层之分（类似于富人和穷人在财富方面的阶层之分，阶层的跨越非常难，但不是没有可能），那么长期在底层知识阶层的人，需要等着高层的人来喂养，他们长期陷入各种谣言和不准确的信息环境中，于是就导致错误和幼稚的认知，并习惯于哪些不费劲儿的轻度学习方式，<strong>从而一点点地丧失了深度学习的独立思考能力，从而再也没有能力打破知识阶层的限制，被困在认知底层翻不了身</strong>（就像我们经常说的，美国那些在穷人区生活的人们，他们在没有受到很好教育的前提下想突破自己的阶层，真的很难）。</p>
-<p>对于知识的学习，我们应该如何进行深度学习呢？下面几点是关键：</p>
-<ol>
-<li><strong>高质量的信息源和第一手的知识</strong>；</li>
-<li><strong>把知识连成地图，将自己的理解反述出来</strong>；</li>
-<li><strong>不断地反思和思辩，与不同年龄段的人讨论</strong>：讨论、交流很多情况下，比自己看书、看代码收获要多很多；</li>
-<li><strong>举一反三，并践行之，把知识转换成技能</strong>。</li>
-</ol>
-<p>学习有三个步骤：</p>
-<ol>
-<li><strong>知识采集</strong>：信息源是非常重要的，<strong>获取信息源头、破解表面信息的内在本质、多方数据印证</strong>，是这个步骤的关键；</li>
-<li><strong>知识缝合</strong>：所谓缝合就是把信息组织起来，成为结构体的知识，这里，<strong>连接记忆，逻辑推理，知识梳理</strong> 是很重要的三部分；</li>
-<li><strong>技能转换</strong>：通过 <strong>举一反三、实践和练习</strong>，以及<strong>教授传导</strong>，把知识转换成自己的技能，这种技能可以让你进入更高的阶层；</li>
-</ol>
-<h3 id="学习的目的"><a href="#学习的目的" class="headerlink" title="学习的目的"></a>学习的目的</h3><p>学习目的是什么呢？</p>
-<ol>
-<li><strong>学习是为了找到方法</strong>：学习不仅仅是为了找到答案，而更是为了<strong>找到方法</strong>，掌握了通往答案的路径和方法之后，便拥有了无师自通的能力；</li>
-<li><strong>学习是为了找到原理</strong>：学习不仅仅是为了知道，而更是为了<strong>思考和理解</strong>（真正的学习，从来都不是轻松的，而是那种你知道得越多，你的问题就会越多，你的问题越多，你就会思考得越多，你思考得越多，你就会觉得自己直到越少，于是你就会想要了解更多，这是一种螺旋式上升上下求索的状态），一旦掌握了这些本质的东西，你就会发现，整个复杂多变的世界在变得越来越简单；</li>
-<li><strong>学习是为了了解自己</strong>：学习不仅仅是为了开拓眼界，而更是为了找到自己的未知，为了了解自己，开拓眼界的目的就是为了发现自己的不足和上升空间，从而才能让自己成长；</li>
-<li><strong>学习是为了改变自己</strong>：学习不仅仅是为了成长，而更是为了改变自己（改变自己的思考方式和思维方式，改变自己与生俱来的那些垃圾和低效的算法）。</li>
-</ol>
-<h2 id="源头、原理和知识地图"><a href="#源头、原理和知识地图" class="headerlink" title="源头、原理和知识地图"></a>源头、原理和知识地图</h2><h3 id="挑选知识和信息源"><a href="#挑选知识和信息源" class="headerlink" title="挑选知识和信息源"></a>挑选知识和信息源</h3><p>对于计算机知识来说，<strong>学习英文</strong>是是否能够成长的关键，如果我们能用 Google 英文关键词就可以找到自己想要的知识，那么我们只是算得上能跟得上这个时代，但如果能在社区里跟社区里的大牛交流得到答案，这样才算是领先于这个时代。</p>
-<p>信息源应该有以下几个特质：</p>
-<ol>
-<li><strong>第一手的资料</strong>，不是被别人理解过、消化过的二手资料，尤其对于知识性的东西来说，更是这样；</li>
-<li>应该是有佐证、有数据、有引用的，或是有权威人士或大公司生产系统背书的资料，应该是被时间和实践检验过的，或是小心求证过的，不是拍脑袋野路子或是道听途说的资料；</li>
-<li>应该是加入了一些自己的经验和思考，可以引发人深思的，是所谓信息的密集很大的文章。</li>
-</ol>
-<p>耗子叔比较推荐 Medium 上的文章，这个上面的文章质量比较高。</p>
-<h3 id="注重基础和原理"><a href="#注重基础和原理" class="headerlink" title="注重基础和原理"></a>注重基础和原理</h3><p><strong>基础知识和原理性的东西是无比重要的</strong>，无论是 JVM 还是 Node，或者是 Python 解释器里干了什么，它都无法逾越底层操作系统 API 对 『物理世界』的限制。</p>
-<p>比如，当学习一门新的语言时，除了看每个语言都有的 if-else、for/while-loop、function 等东西外，还需要重点看的就是：</p>
-<ul>
-<li>出错处理是怎么玩的？</li>
-<li>内存管理是怎么玩的？</li>
-<li>数据封装和扩展是怎么玩的？</li>
-<li>多态和泛型是怎么搞的？</li>
-<li>运行时识别和反射是怎么玩的？</li>
-<li>并发编程是怎么玩的？</li>
-<li>…</li>
-</ul>
-<p>所以，最关键的是，<strong>这些基础知识和原理性的东西和技术，都是经历过长时间的考验的，这些基础技术也有很多人类历史上的智慧结晶，会给你很多启示和帮助</strong>（基础知识虽然很枯燥不实用、工作上用不到，学习这些知识是为了学得更快，基础打牢，学什么都快，而学得快就会学得多，学得多，就会思考得多，思考得多，就会学得更快…）。</p>
-<h3 id="使用知识图"><a href="#使用知识图" class="headerlink" title="使用知识图"></a>使用知识图</h3><p>耗子叔在这里介绍一个<strong>知识图</strong>的学习方式，通过这种方式可以让我们从一个技术最重要的主干的地方开始出发遍历所有的技术细节，以 C++ 为例，分为三部分：</p>
-<ol>
-<li>C++ 是用来解决 C 语言问题的，那么 C 语言有什么问题呢？指针、宏、错误处理、数据拷贝…C++是用什么技术来解决这些问题的？</li>
-<li>C++ 的面向对象特性：封装、继承、多态。封装，让我想起了构造函数、析构函数等。析构函数让我想起了初始化列表，想到了默认构造函数，想到了拷贝构造函数，想到了 new…多态，让我想到了虚函数，想到了 RTTI，RTTI 让我想起了 <code>dynamic_cast</code> 和 <code>typeid</code> 等；</li>
-<li>C++ 的泛型编程，我想到了 <code>templete</code>，想到了操作符重载，想到了函数对象，想到了 STL，想到数据容器，想到了 iterator，想到了通用算法等等。</li>
-</ol>
-<p>有了这样一颗知识树之后，当出现一些不知道的知识点时，可以往这棵知识树上挂，而这样一来，也使得我们的学习更为系统和全面。</p>
-<h2 id="深度、归纳和坚持实践"><a href="#深度、归纳和坚持实践" class="headerlink" title="深度、归纳和坚持实践"></a>深度、归纳和坚持实践</h2><h3 id="系统地学习"><a href="#系统地学习" class="headerlink" title="系统地学习"></a>系统地学习</h3><p>在系统性地学习一项技术时，耗子叔总结了一个<strong>学习模板</strong>，模板内容如下：</p>
-<ol>
-<li><strong>这个技术出现的背景、初衷和要达到什么样的目标或是要解决什么样的问题</strong>，这是这个技术的成因和目标（设计理念），也是这个技术的灵魂；</li>
-<li><strong>这个技术的优势和劣势分别是什么，或者说，这个技术的 tradeoff 是什么</strong>，任何技术都有其好坏，在解决一个问题的时候，也会带来新的问题，一般来说，任何设计都有 tradeoff，所以，需要知道这个技术的优势和劣势，以及带来的挑战；</li>
-<li><strong>这个技术的适用场景</strong>，要注意没有一个技术是普适的，每个技术都其特别适合的场景，所谓的场景一般分为两个：一个是业务场景，一个是技术场景；</li>
-<li><strong>技术的组成部分和关键点</strong>，这是技术的核心思想，也是这个技术的灵魂所在，学习技术的核心部分是快速掌握的关键；</li>
-<li><strong>技术的底层原理和关键实现</strong>，任何一个技术都有其底层的关键基础技术，学习这些关键的底层技术，可以让我们未来很快地掌握其他技术；</li>
-<li><strong>已有的实现和它之间的对比</strong>，一般来说，任何一个技术都会有不同的实现，不同的实现都会有不同的侧重，学习不同的实现，可以让你得到不同的想法和思路，对于开阔思维、深入细节是非常重要的。</li>
-</ol>
-<h3 id="举一反三"><a href="#举一反三" class="headerlink" title="举一反三"></a>举一反三</h3><p>重点是如何才能让自己拥有举一反三的能力，在这方面，耗子叔对自己训练如下：</p>
-<ol>
-<li>对于一个场景，制造出各种不同的问题或难题；</li>
-<li>对于一个问题，努力寻找尽可能多的解，并比较这些解的优劣；</li>
-<li>对于一个解，努力寻找各种不同的测试案例，以图让其健壮。</li>
-</ol>
-<p>举一反三的能力，可以分解为：</p>
-<ol>
-<li><strong>联想能力</strong>：这种能力的锻炼需要你平时就在不停地思考同一个事物的不同的用法，或是联想与之有关的别的事物。对于软件开发和技术学习也一样；</li>
-<li><strong>抽象能力</strong>：抽象能力是举一反三的基本技能。平时你解决问题的时候，如果你能对这个问题进行抽象，你就可以获得更多的表现形式。抽象能力需要找到解决问题的通用模型，比如数学就是对现实世界的一种抽象。只要我们能把现实世界的各种问题建立成数据模型（如，建立各种维度的向量），我们就可以用数学来求解，这也是机器学习的本质；</li>
-<li><strong>自省能力</strong>：所谓自省能力就是自己找自己的难看。当你得到一个解的时候，要站在自己的对立面来找这个解的漏洞。有点像左右手互博。这种自己和自己辩论的能力又叫思辨能力。将自己分裂成正反方，左右方，甚至多方，站在不同的立场上来和自己辩论，从而做到不漏过一个 case，从而获得完整全面的问题分析能力。</li>
-</ol>
-<p>如果要获得这三种能力，除了你要很喜欢思考和找其它人来辩论或讨论以外，还要看你自己是否真的善于思考，是否有好奇心，是否喜欢打破沙锅问到底，是否喜欢关注细节，做事是否认真，是否严谨……</p>
-<h3 id="总结和归纳"><a href="#总结和归纳" class="headerlink" title="总结和归纳"></a>总结和归纳</h3><p>我们把学到的东西用自己的语言和理解重新组织并表达出来，本质上是对信息进行消化和再加工的过程，这个过程可能会有信息损失，但也可能会有新信息加入，本质上是信息重构的过程。<strong>我们积累的知识越多，在知识间进行联系和区辨的能力就越强，对知识进行总结和归纳也就越轻松</strong>。而想要提高总结归纳的能力，首先要多阅读，多积累素材，扩大自己的知识面，多和别人讨论，多思辨，从而见多识广。</p>
-<p>不过，我们需要注意的是，如果只学了部分知识或者还没有学透，就开始对知识进行总结归纳，那么总结归纳出来的知识结构也只能是混乱和幼稚的。因此，学习的开始阶段，可以不急于总结归纳，不急于下判断，做结论，而应该<strong>保留部分知识的不确定性，保持对知识的开放状态</strong>。当对整个知识的理解更深入，自己站的位置更高以后，总结和归纳才会更有条理。总结归纳更多是在复习中对知识的回顾和重组，而不是一边学习一边就总结归纳。</p>
-<p>最后再总结一下做总结归纳的方法：<strong>把你看到和学习到的信息，归整好，排列好，关联好，总之把信息碎片给结构化掉，然后在结构化的信息中，找到规律，找到相通之处，找到共同之处，进行简化、归纳和总结，最终形成一种套路，一种模式，一种通用方法</strong>。</p>
-<h3 id="实践出真知"><a href="#实践出真知" class="headerlink" title="实践出真知"></a>实践出真知</h3><p><strong>实践是很累很痛苦的事，但只有痛苦才会让人反思，而反思则是学习和改变自己的动力。Grow up through the pain，是非常有道理的。</strong></p>
-<h3 id="坚持不懈"><a href="#坚持不懈" class="headerlink" title="坚持不懈"></a>坚持不懈</h3><p>坚持本来也是一件反人性的事情，关于坚持的问题，大家应该都见过很多相似的文章，总之，坚持是一件看似简单、但是完成率非常低的事情。如果想要让自己能够坚持下去，最好能够让自己处于一个<strong>正反馈的循环</strong>中，比如，学习一个技术之后，与大家去分享自己的经验，或者整理出一篇博客让其他学习，都是一种很好的学习方法。</p>
-<h2 id="如何学习和阅读代码"><a href="#如何学习和阅读代码" class="headerlink" title="如何学习和阅读代码"></a>如何学习和阅读代码</h2><h3 id="读书还是读代码？"><a href="#读书还是读代码？" class="headerlink" title="读书还是读代码？"></a>读书还是读代码？</h3><p>关于书/文档和代码的关系：</p>
-<ul>
-<li>代码：What、How &amp; Details；</li>
-<li>书/文档：What、How &amp; Why；</li>
-</ul>
-<p>代码是具体的实现，但是并不能告诉你为什么？<strong>书和文档是人对人说的话，代码是人对机器说的话</strong>：</p>
-<ol>
-<li><strong>如果想知道为什么要这么搞，应该去看书、看文档</strong>：特别当我们想了解一种思想、一种方法、一种原理、一种经验时，书和文档是最佳的方式、更有效率一些；</li>
-<li><strong>如果想知道是怎么实现的，实现的细节，应该去看代码</strong>：对于具体的实现，比如：某协程的实现、某模块的性能、某个算法的实现，这时候最好的方式就是去读代码；</li>
-</ol>
-<p>至于从代码中收获大还是从书中收获大，不同的场景、不同的目的下，会有不同的答案，我个人对这部分的想法是：</p>
-<ol>
-<li>工作的前几年，更多的时候应该关注代码、关注细节的实现、多写代码（当然不是说完全不看书，书是必须要看的，特别是当有了相关实战经验之后再去看书看，效果会更好），这个阶段，Google、Stack Overflow、Github 将会是最好的学习渠道，如果在过程中，还能获得一些技术影响力，那将再好不过了；</li>
-<li>有一定经验之后，这时候需要更多的【理性认识】，在这个阶段，我们的想法不再是实现某个功能，可能是想做出更牛逼的东西来，这时候应该多读那些大牛的书、与大牛交流、关注国际顶级会议的论文，应该让自己往技术 leader 这个方向发展。</li>
-</ol>
-<h3 id="如何阅读源代码"><a href="#如何阅读源代码" class="headerlink" title="如何阅读源代码"></a>如何阅读源代码</h3><p>关于如何阅读源代码，耗子叔分享了一些干货，我这里简单总结一下</p>
-<p>首先是阅读代码之前，最好先有以下了解：</p>
-<ol>
-<li>基础知识：相关的语言和基础技术的知识；</li>
-<li>软件功能：需要知道这个软件是做什么的、有哪些特性、哪些配置项，最好能够读一遍用户手册，然后让软件跑起来，自己先用一下感受一下；</li>
-<li>相关文档：读一下相关的内部文档；</li>
-<li>代码的组织结构：先简单看下源码的组织结构。</li>
-</ol>
-<p>接下来，就是详细地看代码的实现，这里耗子叔分享了一个源代码阅读的经验：</p>
-<ol>
-<li><strong>接口抽象定义</strong>：任何代码都会有很多接口或抽象定义，其描述了代码需要处理的数据结构或者业务实体，以及它们之间的关系，理清楚这些关系是非常重要的；</li>
-<li><strong>模块粘合层</strong>：我们的代码有很多都是用来粘合代码的，比如中间件（middleware）、Promises 模式、回调（Callback）、代理委托、依赖注入等。这些代码模块间的粘合技术是非常重要的，因为它们会把本来平铺直述的代码给分裂开来，让你不容易看明白它们的关系；</li>
-<li><strong>业务流程</strong>：这是代码运行的过程。<strong>一开始，我们不要进入细节，但需要在高层搞清楚整个业务的流程是什么样的</strong>，在这个流程中，数据是怎么被传递和处理的。一般来说，我们需要<strong>画程序流程图或者时序处理图</strong>；</li>
-<li><strong>具体实现</strong>：了解上述的三个方面的内容，相信你对整个代码的框架和逻辑已经有了总体认识。这个时候，你就可以深入细节，开始阅读具体实现的代码了。对于代码的具体实现，一般来说，你需要知道下面一些事实，这样有助于你在阅读代码时找到重点。<ul>
-<li><strong>代码逻辑</strong>：代码有两种逻辑，一种是<strong>业务逻辑</strong>，这种逻辑是真正的业务处理逻辑；另一种是<strong>控制逻辑</strong>，这种逻辑只是用控制程序流转的，不是业务逻辑。比如：flag 之类的控制变量，多线程处理的代码，异步控制的代码，远程通讯的代码，对象序列化反序列化的代码等。这两种逻辑你要分开，很多代码之所以混乱就是把这两种逻辑混在一起了；</li>
-<li><strong>出错处理</strong>：根据 2：8 原则，20% 的代码是正常的逻辑，80% 的代码是在处理各种错误，所以，你在读代码的时候，完全可以把处理错误的代码全部删除掉，这样就会留下比较干净和简单的正常逻辑的代码。排除干扰因素，可以更高效地读代码；</li>
-<li><strong>数据处理</strong>：只要你认真观察，就会发现，我们好多代码就是在那里倒腾数据。比如 DAO、DTO，比如 JSON、XML，这些代码冗长无聊，不是主要逻辑，可以不理；</li>
-<li><strong>重要的算法</strong>：一般来说，我们的代码里会有很多重要的算法，我说的并不一定是什么排序或是搜索算法，可能会是一些其它的核心算法，比如一些索引表的算法，全局唯一 ID 的算法，信息推荐的算法、统计算法、通读算法（如 Gossip）等。这些比较核心的算法可能会非常难读，但它们往往是最有技术含量的部分；</li>
-<li><strong>底层交互</strong>：有一些代码是和底层系统的交互，一般来说是和操作系统或是 JVM 的交互。因此，读这些代码通常需要一定的底层技术知识，不然，很难读懂；</li>
-</ul>
-</li>
-<li><strong>运行时调试</strong>：很多时候，代码只有运行起来了，才能知道具体发生了什么事，所以，我们让代码运行进来，然后用日志也好，debug 设置断点跟踪也好。实际看一下代码的运行过程，是了解代码的一种很好的方式。</li>
-</ol>
-<p>总结一下，阅读代码的方法如下。</p>
-<ul>
-<li>一般采用自顶向下，从总体到细节的【剥洋葱皮】的读法；</li>
-<li>画图是必要的，程序流程图，调用时序图，模块组织图；</li>
-<li>代码逻辑归一下类，排除杂音，主要逻辑才会更清楚；</li>
-<li>debug 跟踪一下代码是了解代码在执行中发生了什么的最好方式。</li>
-</ul>
-<h2 id="面对枯燥和量大的知识"><a href="#面对枯燥和量大的知识" class="headerlink" title="面对枯燥和量大的知识"></a>面对枯燥和量大的知识</h2><p>知识很多，在学习的时候要<strong>抓住本质，关注本质和原理</strong>，这些才是不容易改变的，是经得住时间考验的。<strong>带着问题去学习</strong>也是一种非常好的学习方式，耗子叔根据自己经验在专栏中分享以下几个 tips：</p>
-<ol>
-<li><strong>认真阅读文档</strong>：使用前之前看文档，跟遇到问题之后再看一遍使用文档，收获可能会完全不一样；</li>
-<li><strong>用不同的方式学习同一个东西</strong>：比如，看书、听课、写博客、讲课等；</li>
-<li><strong>不要被打断</strong>：被打断简直是学习天敌，保持自己注意力的集中；</li>
-<li><strong>总结压缩信息</strong>：面对太多的信息时，用一个自己的【压缩算法】抓住问题的关键点；</li>
-<li><strong>把未知关联到已知</strong>：把新学的知识关联到已知的事物上来；</li>
-<li><strong>用教的方式学习</strong>：这种方式对自己的能力会是一个极大的提升；</li>
-<li><strong>学以致用</strong>：把学到的东西用起来，在实践中深化自己的学习效果；</li>
-<li><strong>不要记忆</strong>：聪明的人不会记忆知识的，他们会找方法，那些可以推导出知识或答案的方法；</li>
-<li><strong>多犯错误</strong>：犯错会让你学到更多，通过错误总结教训。</li>
-</ol>
-<blockquote>
-<p>这里有一个 TED 的演讲，<a href="https://weibo.com/tv/v/Gj1tol62s?fid=1034:3e9bbb1d315b62c5deb90e13efd09981" target="_blank" rel="external">TED演讲：只需20个小时，你就能学会任何事情！</a>，保证自己全身心投入、不受外界打扰的情况下，只要20个小时，我们就能达到这里 <a href="http://matt33.com/2018/08/01/system-learn-summary/#3-%E5%8E%9F%E7%90%86%E7%A0%94%E7%A9%B6">如何学习开源项目-第三步</a>，当然这20个小时要求是一个非常专注的20个小时，我还没有尝试过这种学习方法，近期准备尝试一次这种学习方法，到时候会写一篇文章来总结一下自己的经验。</p>
-</blockquote>
-<p>最后，以矮大紧的一句话作为结束：【时代变来变去，确实有一些新的东西，但是在这样一个时代里，有一样东西没有变，就是有这样一群人，然后我们都读了一点书，受过不错的教育，然后对自己的心灵能长出什么东西，虽然不知道具体会长什么东西，但是拒绝全部种玉米、拒绝全部长土豆，希望心里有一亩田，有一天能长出一朵不知道是什么的花。（—来自《晓说》）】（这段话好像跟文章的主题没有什么关系，但不知为何突然想到了这段话，这里就列了出来）。</p>
-<p><img src="/images/share/zuoer-tingfeng.jpeg" alt="《极客时间-左耳听风》专栏，这里订阅有优惠"></p>
-<hr>
-<p>参考：</p>
-<ul>
-<li>极客时间-左耳听风-《高效学习》系列整理；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;在这个知识爆炸、科技日新月异的时代，技术的变化远比我们想象的要快很多，这就对工程师的要求就提高了很多，特别是对于那些在技术上有所追求的工程师而言。对于一些互联网大厂，学习能力也成了面试中重点考察的内容。如何快速学习、掌握一门新的技术，如何提高自己的学习效率，对于有一定工作经
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="思考" scheme="http://matt33.com/tags/%E6%80%9D%E8%80%83/"/>
     
   </entry>
   
