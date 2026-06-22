@@ -1,0 +1,718 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (三)：算法原理篇：机器是如何学会语言的 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (三)：算法原理篇：机器是如何学会语言的</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (三)：算法原理篇：机器是如何学会语言的</h1><div class="post-meta">Jun 22, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">6,710</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/06/22/llm-algorithm-principles/" href="/2026/06/22/llm-algorithm-principles/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#前言"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#NLP：让机器处理语言"><span class="toc-number">2.</span> <span class="toc-text">NLP：让机器处理语言</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#语言为什么难？"><span class="toc-number">2.1.</span> <span class="toc-text">语言为什么难？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#从文本到-token"><span class="toc-number">2.2.</span> <span class="toc-text">从文本到 token</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Embedding：让-token-有意义"><span class="toc-number">2.3.</span> <span class="toc-text">Embedding：让 token 有意义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#词向量：从-one-hot-到-word2vec"><span class="toc-number">2.4.</span> <span class="toc-text">词向量：从 one-hot 到 word2vec</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#感知机：机器学习的最小原型"><span class="toc-number">3.</span> <span class="toc-text">感知机：机器学习的最小原型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#感知机为什么重要？"><span class="toc-number">3.1.</span> <span class="toc-text">感知机为什么重要？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#感知机的不足"><span class="toc-number">3.2.</span> <span class="toc-text">感知机的不足</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#神经网络：从简单到复杂"><span class="toc-number">4.</span> <span class="toc-text">神经网络：从简单到复杂</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#为什么需要“多层”？"><span class="toc-number">4.1.</span> <span class="toc-text">为什么需要“多层”？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#神经网络如何训练？"><span class="toc-number">4.2.</span> <span class="toc-text">神经网络如何训练？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#神经网络的不足"><span class="toc-number">4.3.</span> <span class="toc-text">神经网络的不足</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#序列模型：让模型读懂上下文"><span class="toc-number">5.</span> <span class="toc-text">序列模型：让模型读懂上下文</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#语言模型：预测下一个-token"><span class="toc-number">5.1.</span> <span class="toc-text">语言模型：预测下一个 token</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#模型一：CNN-捕捉局部特征"><span class="toc-number">5.2.</span> <span class="toc-text">模型一：CNN 捕捉局部特征</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#模型二：RNN-按顺序读取文本"><span class="toc-number">5.3.</span> <span class="toc-text">模型二：RNN 按顺序读取文本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#模型三：LSTM-和-GRU-试图增强记忆"><span class="toc-number">5.4.</span> <span class="toc-text">模型三：LSTM 和 GRU 试图增强记忆</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#模型四：双向-RNN-同时看前后文"><span class="toc-number">5.5.</span> <span class="toc-text">模型四：双向 RNN 同时看前后文</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#小结"><span class="toc-number">5.6.</span> <span class="toc-text">小结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">6.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><blockquote>
+<p>核心句：这篇文章不是算法课，而是给普通开发者补一条最短路径：从 NLP、感知机、神经网络，到为什么需要 Transformer。</p>
+</blockquote>
+<p>前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。</p>
+<p>我们不追求推导公式，也不会一上来就深入 Transformer 的细节。本文更希望回答一个核心问题：</p>
+<ul>
+<li>机器到底是如何一步步学会处理语言的？</li>
+</ul>
+<p>理解这个问题之后，再去看 LLM、Transformer、Attention、预训练、微调这些概念，就不会只是记住一堆名词，而是能知道它们分别解决了什么问题，为什么会一步步演进到今天的大语言模型。</p>
+<p>读完这篇文章，希望你能清晰回答下面几个问题：</p>
+<ol>
+<li>为什么要把文本变成 token 和向量？</li>
+<li>为什么模型可以从数据中学习？</li>
+<li>为什么神经网络比手写规则更强？</li>
+<li>为什么传统序列模型不够用？</li>
+<li>为什么 Transformer 会成为大模型的核心架构？</li>
+</ol>
+<a id="more"></a>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>简单来说，这篇文章是为后面深入理解 Transformer 和 LLM 工作原理做准备。我们会从 NLP、词向量、感知机、神经网络讲起，再一路过渡到 CNN、RNN、双向 RNN 等经典模型。核心概念如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>它解决什么问题</th>
+<th>它的不足</th>
+<th>和 LLM 的关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NLP</td>
+<td>让机器处理自然语言</td>
+<td>语言有歧义和上下文</td>
+<td>定义了 LLM 要处理的问题</td>
+</tr>
+<tr>
+<td>Token</td>
+<td>把文本拆成基本单位</td>
+<td>切分方式会影响理解</td>
+<td>LLM 的输入和输出单位</td>
+</tr>
+<tr>
+<td>词向量</td>
+<td>把 token 变成可计算的语义向量</td>
+<td>早期词向量难表达上下文变化</td>
+<td>LLM 计算语言的基础表示</td>
+</tr>
+<tr>
+<td>感知机</td>
+<td>让机器学会简单分类</td>
+<td>只能处理线性问题</td>
+<td>神经网络的原始雏形</td>
+</tr>
+<tr>
+<td>神经网络</td>
+<td>自动学习复杂特征</td>
+<td>需要大量数据和训练</td>
+<td>LLM 的基本学习框架</td>
+</tr>
+<tr>
+<td>CNN</td>
+<td>捕捉局部词组特征</td>
+<td>不擅长长距离依赖</td>
+<td>早期文本分类常用模型</td>
+</tr>
+<tr>
+<td>RNN / 双向 RNN</td>
+<td>按顺序读取文本上下文</td>
+<td>训练慢，长文本容易遗忘</td>
+<td>Transformer 出现前的重要序列模型</td>
+</tr>
+<tr>
+<td>Attention</td>
+<td>动态关注相关信息</td>
+<td>本篇只做引出</td>
+<td>Transformer 的核心入口</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-algorithm-01.png" alt="LLM 算法原理图"></p>
+<h2 id="NLP：让机器处理语言"><a href="#NLP：让机器处理语言" class="headerlink" title="NLP：让机器处理语言"></a>NLP：让机器处理语言</h2><p>NLP，全称 Natural Language Processing，也就是自然语言处理，研究的是<strong>如何让机器处理、理解和生成自然语言</strong>。它并不是大语言模型出现后才有的概念，早期 NLP 主要依赖人工编写规则和词典，后来逐渐发展到基于统计的方法，再到机器学习和深度学习方法。</p>
+<p>对非算法同学来说，可以先不用把 NLP 想得太玄。它本质上是在做一件事：把自然语言问题，转换成机器学习任务。比如：</p>
+<table>
+<thead>
+<tr>
+<th>人类要解决的问题</th>
+<th>对应的机器学习任务</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>这条评论是好评还是差评</td>
+<td>文本分类</td>
+</tr>
+<tr>
+<td>这句话里的公司名是什么</td>
+<td>序列标注</td>
+</tr>
+<tr>
+<td>两个问题是不是同一个意思</td>
+<td>文本匹配</td>
+</tr>
+<tr>
+<td>把中文翻译成英文</td>
+<td>序列生成</td>
+</tr>
+<tr>
+<td>根据文档回答问题</td>
+<td>阅读理解或生成</td>
+</tr>
+<tr>
+<td>根据上文继续写</td>
+<td>语言建模</td>
+</tr>
+</tbody>
+</table>
+<h3 id="语言为什么难？"><a href="#语言为什么难？" class="headerlink" title="语言为什么难？"></a>语言为什么难？</h3><p>自然语言难处理，主要不是因为字多，而是因为它不够“规整”。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">苹果很好吃。</span><br><span class="line">苹果发布了新产品。</span><br></pre></td></tr></table></figure>
+<p>同样是<code>苹果</code>，第一个是水果，第二个是公司。机器如果只看字面，很难判断。再比如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个模型不太稳定。</span><br></pre></td></tr></table></figure>
+<p>在不同场景里，<code>模型</code>可能是机器学习模型、业务模型、3D 模型，也可能只是一个抽象方案。也就是说，语言的含义往往不是由单个词决定的，而是由上下文、语序、场景和表达意图共同决定的。</p>
+<p>可以把自然语言的难点简单总结成下面几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>难点</strong></th>
+<th><strong>NLP 术语</strong></th>
+<th><strong>例子</strong></th>
+<th><strong>机器为什么难</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>一词多义</td>
+<td>词义消歧</td>
+<td>苹果、模型、银行</td>
+<td>同一个词在不同上下文里含义不同</td>
+</tr>
+<tr>
+<td>指代关系</td>
+<td>指代消解</td>
+<td>它、这个、那个</td>
+<td>必须结合前后文判断指的是谁</td>
+</tr>
+<tr>
+<td>语序变化</td>
+<td>句法分析</td>
+<td>狗咬人，人咬狗</td>
+<td>词一样但顺序不同，意思完全不同</td>
+</tr>
+<tr>
+<td>同义表达</td>
+<td>语义匹配</td>
+<td>页面很卡、打开很慢</td>
+<td>表达不同，但语义可能相同</td>
+</tr>
+<tr>
+<td>隐含意图</td>
+<td>意图识别</td>
+<td>页面有点慢</td>
+<td>可能不是描述现象，而是在提出优化诉求</td>
+</tr>
+</tbody>
+</table>
+<p>所以，NLP 的第一步并不是让机器“真正理解语言”，而是先把这些灵活、模糊、上下文相关的自然语言，转换成机器可以表示、计算和学习的形式。</p>
+<h3 id="从文本到-token"><a href="#从文本到-token" class="headerlink" title="从文本到 token"></a>从文本到 token</h3><p>模型不能直接处理一整段原始文本。对模型来说，文本需要先被拆成一个个更小的基本单位，这个单位就叫 <strong>token</strong>。比如下面这句话：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我喜欢机器学习</span><br></pre></td></tr></table></figure>
+<p>经过 tokenizer 处理后，可能会被拆成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[我] [喜欢] [机器] [学习]</span><br></pre></td></tr></table></figure>
+<p>也可能被拆成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[我] [喜欢] [机器学习]</span><br></pre></td></tr></table></figure>
+<p>不同模型使用的 tokenizer 不完全一样，所以切分结果也可能不同。但它们的目标是一致的：把连续的自然语言文本，转换成模型可以接收的 token 序列。</p>
+<p>接下来，每个 token 通常会被映射成一个对应的编号，也就是 token id。比如可以简单理解为：</p>
+<ul>
+<li>[我] -&gt; 101</li>
+<li>[喜欢] -&gt; 245</li>
+<li>[机器学习] -&gt; 1024</li>
+</ul>
+<p>这样，文本就从“文字”变成了“数字序列”。tokenizer 整体流程如下所示：</p>
+<p><img src="/images/llm/llm-algorithm-02.png" alt="LLM 算法原理图"></p>
+<p>不过，到这一步还不够。token id 只是编号，本身并不包含语义信息。模型知道 101、245、1024 是不同的编号，但并不知道“机器学习”和“深度学习”更接近，也不知道“猫”和“狗”比“猫”和“桌子”更相似。</p>
+<p>所以，下一步还需要 embedding，把这些 token 编号转换成真正可以表达语义关系的向量。</p>
+<h3 id="Embedding：让-token-有意义"><a href="#Embedding：让-token-有意义" class="headerlink" title="Embedding：让 token 有意义"></a>Embedding：让 token 有意义</h3><p>Embedding 可以简单理解为：给每个 token 分配一个向量，让模型能够用数学方式计算词与词之间的关系。也就是说，模型不再只知道“猫”“狗”“桌子”是三个不同的 token，而是能够进一步表示它们在语义上的远近关系。</p>
+<table>
+<thead>
+<tr>
+<th>token</th>
+<th>向量直觉</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td>接近动物、宠物</td>
+</tr>
+<tr>
+<td>狗</td>
+<td>接近动物、宠物</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>接近家具</td>
+</tr>
+<tr>
+<td>学习</td>
+<td>接近教育、训练</td>
+</tr>
+</tbody>
+</table>
+<p>在这样的向量空间里，“猫”和“狗”应该更接近，因为它们都和动物、宠物相关；而“猫”和“桌子”距离会更远，因为它们属于完全不同的语义类别。</p>
+<p>这就是 embedding 的核心作用：<strong>把离散的 token，变成可以计算相似度和语义关系的向量</strong>。</p>
+<blockquote>
+<p>不同模型中，token 的切分方式不同、token 的 embedding 也是不同，embedding 是对应模型训练出来的参数。</p>
+</blockquote>
+<h3 id="词向量：从-one-hot-到-word2vec"><a href="#词向量：从-one-hot-到-word2vec" class="headerlink" title="词向量：从 one-hot 到 word2vec"></a>词向量：从 one-hot 到 word2vec</h3><p>在词向量出现之前，常见的文本表示方式是 one-hot（词向量可以看作 embedding 的一种，主要指把词表示成向量）。假设词表里只有 4 个词，每个词都可以用一个只有一位是 1、其余都是 0 的向量表示：</p>
+<table>
+<thead>
+<tr>
+<th>词</th>
+<th>one-hot 表示</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td><code>[1, 0, 0, 0]</code></td>
+</tr>
+<tr>
+<td>狗</td>
+<td><code>[0, 1, 0, 0]</code></td>
+</tr>
+<tr>
+<td>桌子</td>
+<td><code>[0, 0, 1, 0]</code></td>
+</tr>
+<tr>
+<td>学习</td>
+<td><code>[0, 0, 0, 1]</code></td>
+</tr>
+</tbody>
+</table>
+<p>one-hot 的好处是简单，能清楚表示“这个词是谁”。但它的问题也很明显：它不能表示“这个词和谁更像”。</p>
+<p>比如“猫”和“狗”在语义上更接近，因为它们都和动物、宠物有关；而“猫”和“桌子”明显不是一类东西。但在 one-hot 表示里，这些词都是彼此独立的编号，模型看不出它们之间的语义远近。</p>
+<p>词向量的出现，就是为了解决这个问题。</p>
+<ul>
+<li>word2vec 这类方法的核心直觉是：一个词的意思，可以从它经常出现的上下文中学出来。</li>
+</ul>
+<p>比如：我 今天 喝 了 一杯 咖啡</p>
+<p>如果“咖啡”经常出现在“喝”“一杯”“早上”这些词附近，模型就会逐渐学到：咖啡更可能和饮品、早餐、杯子这些语义场景相关。</p>
+<p><img src="/images/llm/llm-algorithm-03.png" alt="LLM 算法原理图"></p>
+<p>word2vec 中经典训练方式有两类：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>直觉</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CBOW</td>
+<td>根据上下文预测中间词</td>
+</tr>
+<tr>
+<td>Skip-gram</td>
+<td>根据中心词预测周围词</td>
+</tr>
+</tbody>
+</table>
+<p>这类词向量的价值在于，它把词从离散编号，放进了一个连续的语义空间。这样一来，模型不仅知道“猫”和“狗”是不同的词，还能知道它们在语义上比“猫”和“桌子”更接近。不过，早期词向量也有明显不足：</p>
+<table>
+<thead>
+<tr>
+<th>不足</th>
+<th>例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>一个词通常只有一个固定向量</td>
+<td>“苹果”既可能是水果，也可能是公司</td>
+</tr>
+<tr>
+<td>上下文变化表达不够细</td>
+<td>“模型不稳定”在不同场景含义不同</td>
+</tr>
+<tr>
+<td>主要学习词级别关系</td>
+<td>对长句结构和篇章关系表达有限</td>
+</tr>
+</tbody>
+</table>
+<p>后来 BERT、GPT 这类模型进一步发展出了上下文相关表示。也就是说，同一个 token 在不同句子里，经过模型计算后可以得到不同的上下文表示。</p>
+<h2 id="感知机：机器学习的最小原型"><a href="#感知机：机器学习的最小原型" class="headerlink" title="感知机：机器学习的最小原型"></a>感知机：机器学习的最小原型</h2><p>理解神经网络之前，可以先理解<strong>感知机</strong>。感知机是一个非常早期、非常简单的机器学习模型。它可以看作神经网络的最小原型。</p>
+<p><img src="/images/llm/llm-algorithm-04.png" alt="LLM 算法原理图"></p>
+<p>感知机要解决的问题很简单：给定一些输入特征，模型能不能学会做一个基本判断？比如，我们想判断一封邮件是不是垃圾邮件，可以先把邮件拆成一些特征：</p>
+<table>
+<thead>
+<tr>
+<th>特征</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>是否包含“中奖”</td>
+<td>可疑词</td>
+</tr>
+<tr>
+<td>是否包含链接</td>
+<td>可疑行为</td>
+</tr>
+<tr>
+<td>发件人是否陌生</td>
+<td>来源特征</td>
+</tr>
+<tr>
+<td>邮件长度</td>
+<td>内容特征</td>
+</tr>
+</tbody>
+</table>
+<p>感知机会给每个特征一个权重，然后算一个总分。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">总分 = 特征1 * 权重1 + 特征2 * 权重2 + ... + 偏置</span><br></pre></td></tr></table></figure>
+<p>如果总分超过某个阈值，就判断为垃圾邮件，否则不是。</p>
+<p>所以，感知机本质上就像一张自动学习出来的打分表。它不是靠人手写“如果出现中奖就一定是垃圾邮件”这样的死规则，而是通过数据学习每个特征到底应该占多大权重。</p>
+<h3 id="感知机为什么重要？"><a href="#感知机为什么重要？" class="headerlink" title="感知机为什么重要？"></a>感知机为什么重要？</h3><p>感知机的重要性在于，它把“机器如何学习”这件事变得非常具体。在感知机之前，我们很容易把机器判断理解成一堆人工规则：如果出现某个词，就执行某个判断。但感知机提供了另一种思路：</p>
+<ul>
+<li>模型不再完全依赖人手写规则，而是<strong>通过数据不断调整权重</strong>。</li>
+</ul>
+<p>比如一开始，模型可能把“包含链接”这个特征看得太重，导致很多正常邮件也被误判成垃圾邮件。经过训练后，如果模型发现自己判断错了，就会调整相关权重。下一次再遇到类似样本时，判断就可能更准确。</p>
+<p>也就是说，感知机已经具备了机器学习最核心的雏形：<strong>预测、犯错、调整，再预测</strong>。</p>
+<p>它和后来的神经网络之间，也有很自然的对应关系：</p>
+<table>
+<thead>
+<tr>
+<th>感知机里的东西</th>
+<th>后来神经网络里的对应物</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入特征</td>
+<td>输入向量</td>
+</tr>
+<tr>
+<td>权重</td>
+<td>参数</td>
+</tr>
+<tr>
+<td>加权求和</td>
+<td>线性变换</td>
+</tr>
+<tr>
+<td>阈值判断</td>
+<td>激活函数</td>
+</tr>
+<tr>
+<td>调整权重</td>
+<td>训练</td>
+</tr>
+</tbody>
+</table>
+<h3 id="感知机的不足"><a href="#感知机的不足" class="headerlink" title="感知机的不足"></a>感知机的不足</h3><p>感知机的优点是简单，缺点也正是太简单。它主要适合处理“<strong>线性可分</strong>”的问题。简单来说，如果两类样本可以用一条直线分开，感知机就比较擅长；如果样本分布更复杂，无法用一条直线清楚分开，感知机就会很吃力。</p>
+<p>可以把它想象成下面这种情况：一边是类别 A，一边是类别 B，中间只需要一条分界线，就能把它们区分开。</p>
+<p><img src="/images/llm/llm-algorithm-05.png" alt="LLM 算法原理图"></p>
+<p>但真实语言问题显然没有这么简单。一句话的含义，往往不是几个特征简单加权就能判断出来的。比如，“这家店的服务可真好，等了两个小时都没人理我”。这句话里，如果只看 “服务”“真好”这些词，模型可能会判断成正面评价，但结合后半句看，实际可能是在表达不满。</p>
+<p>语言里有词语组合、上下文变化、语气反转、长距离依赖等复杂现象。单个感知机很难处理这些非线性、上下文相关的问题。所以，我们需要更强的模型：<strong>能够把简单特征不断组合，学习更复杂的表示</strong>。这就走向了<strong>神经网络</strong>。</p>
+<h2 id="神经网络：从简单到复杂"><a href="#神经网络：从简单到复杂" class="headerlink" title="神经网络：从简单到复杂"></a>神经网络：从简单到复杂</h2><p>神经网络可以粗略理解为：把很多类似感知机的计算单元连接起来，形成一个可以学习复杂模式的系统。感知机只做一次加权求和。神经网络会把这种计算堆很多层。如下图所示：</p>
+<p><img src="/images/llm/llm-algorithm-06.png" alt="LLM 算法原理图"></p>
+<p>每一层都会对输入做一次表示变换。层数多了以后，模型就有机会学习更复杂的关系。</p>
+<h3 id="为什么需要“多层”？"><a href="#为什么需要“多层”？" class="headerlink" title="为什么需要“多层”？"></a>为什么需要“多层”？</h3><p>可以用图片识别来类比：模型最底层可能先识别边缘、颜色、纹理；中间层再组合出局部形状；更高层才逐渐识别出完整对象，比如猫、狗、汽车。</p>
+<p>语言处理里也类似。模型不是一开始就能理解“这句话表达了什么意图”，它通常需要从更基础的信息一层层组合上来：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>可能学习到什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>底层</td>
+<td>token、词形、局部搭配</td>
+</tr>
+<tr>
+<td>中层</td>
+<td>短语、语法关系</td>
+</tr>
+<tr>
+<td>高层</td>
+<td>语义、意图、任务模式</td>
+</tr>
+</tbody>
+</table>
+<p>这就是“表示学习”的直觉：模型不只是接收特征，而是在训练中自己学习更有用的中间表示。</p>
+<h3 id="神经网络如何训练？"><a href="#神经网络如何训练？" class="headerlink" title="神经网络如何训练？"></a>神经网络如何训练？</h3><p>神经网络的训练循环可以概括成三个词：<strong>预测 -&gt; 评估 -&gt; 修正</strong></p>
+<p>这和人做题有点像：先根据当前能力做出答案，再对照标准答案看错在哪里，最后根据错误调整方法。模型训练也是类似的过程。完整流程可以简化成下面这张图：</p>
+<p><img src="/images/llm/llm-algorithm-07.png" alt="LLM 算法原理图"></p>
+<p>其中几个关键概念可以这样理解：</p>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>小白解释</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>前向传播</td>
+<td>输入一路经过模型，得到预测</td>
+</tr>
+<tr>
+<td>Loss</td>
+<td>模型预测和正确答案之间的差距</td>
+</tr>
+<tr>
+<td>反向传播</td>
+<td>把错误反向传回每一层</td>
+</tr>
+<tr>
+<td>梯度</td>
+<td>参数应该往哪个方向改</td>
+</tr>
+<tr>
+<td>梯度下降</td>
+<td>沿着让错误变小的方向更新参数</td>
+</tr>
+</tbody>
+</table>
+<p>模型不是一次就学会的，而是在大量样本上不断预测、犯错、修正，再继续预测。训练的过程，本质上就是让模型的参数一点点变得更合适。</p>
+<h3 id="神经网络的不足"><a href="#神经网络的不足" class="headerlink" title="神经网络的不足"></a>神经网络的不足</h3><p>神经网络比感知机强很多，它可以通过多层结构学习更复杂的模式。但普通的前馈神经网络并不天然适合处理语言。原因很简单：<strong>语言是有顺序的</strong>。比如，下面两句话：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">我不喜欢这个方案。</span><br><span class="line">我喜欢这个方案。</span><br></pre></td></tr></table></figure>
+<p>这两句话只差一个“不”，但含义完全不同。如果模型只是把词当成一组特征，而不能理解它们出现的位置和顺序，就很容易判断错误。</p>
+<p>所以，对于语言任务来说，仅仅能学习复杂特征还不够。模型还必须能够处理 token 之间的顺序关系、上下文关系，以及长句中前后信息的依赖关系。这就引出了下一类模型：能够处理文本结构和上下文关系的经典神经网络，比如 CNN、RNN、LSTM 和双向 RNN。</p>
+<h2 id="序列模型：让模型读懂上下文"><a href="#序列模型：让模型读懂上下文" class="headerlink" title="序列模型：让模型读懂上下文"></a>序列模型：让模型读懂上下文</h2><p>语言不是一组孤立的特征，而是一串有顺序的 token。前面的词会影响后面的词，后面的表达也依赖前面的上下文。因此，在 NLP 中有一个非常核心的问题：</p>
+<ul>
+<li>给定前面的内容，模型能不能预测接下来最可能出现什么？</li>
+</ul>
+<p>这就是语言模型要解决的问题。</p>
+<h3 id="语言模型：预测下一个-token"><a href="#语言模型：预测下一个-token" class="headerlink" title="语言模型：预测下一个 token"></a>语言模型：预测下一个 token</h3><p>语言模型最朴素的直觉，就是根据前面的内容，预测接下来最可能出现什么。比如：</p>
+<ul>
+<li>我今天早上喝了一杯 __</li>
+</ul>
+<p>模型需要判断空白处更可能出现哪个 token：</p>
+<table>
+<thead>
+<tr>
+<th>候选 token</th>
+<th>可能性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>高</td>
+</tr>
+<tr>
+<td>水</td>
+<td>中</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>中</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<p>这个过程看起来像“填空题”，但它非常关键。因为只要上下文足够丰富，很多 NLP 任务都可以转化成“继续生成后面的内容”。比如：</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>输入方式</th>
+<th>输出方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>翻译</td>
+<td>请翻译这句话</td>
+<td>生成译文</td>
+</tr>
+<tr>
+<td>摘要</td>
+<td>请总结这篇文章</td>
+<td>生成摘要</td>
+</tr>
+<tr>
+<td>问答</td>
+<td>根据材料回答问题</td>
+<td>生成答案</td>
+</tr>
+<tr>
+<td>分类</td>
+<td>判断正面还是负面</td>
+<td>生成类别</td>
+</tr>
+<tr>
+<td>写代码</td>
+<td>根据需求写函数</td>
+<td>生成代码</td>
+</tr>
+</tbody>
+</table>
+<p>这就是大语言模型的统一性：它没有为每个任务单独设计一套模型，而是把很多任务都转化成“给定上下文后继续生成”。</p>
+<p>所以，LLM 的很多能力，底层都可以先用一句话来理解：<strong>根据上下文，预测下一个 token</strong>。</p>
+<h3 id="模型一：CNN-捕捉局部特征"><a href="#模型一：CNN-捕捉局部特征" class="headerlink" title="模型一：CNN 捕捉局部特征"></a>模型一：CNN 捕捉局部特征</h3><p>很多人第一次接触 CNN（Convolutional Neural Network，又叫做卷积神经网络），是在图像识别里。图像里的 CNN 会用卷积核扫描图片的局部区域，提取边缘、纹理、形状等特征。文本里也可以使用 CNN。只不过它扫描的不是像素，而是一串 token 对应的向量。</p>
+<p>可以把它理解成：</p>
+<ul>
+<li>CNN 擅长从文本中抓局部模式，比如几个词组成的短语。</li>
+</ul>
+<p>例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个 产品 非常 好用</span><br></pre></td></tr></table></figure>
+<p>CNN 可以用不同大小的窗口扫过句子：</p>
+<p><img src="/images/llm/llm-algorithm-08.png" alt="LLM 算法原理图"></p>
+<p>在早期文本分类里，CNN 很实用。比如情感分析中，“非常好用”“极其糟糕”“不推荐购买”这些局部短语很有判断价值。但 CNN 的不足也明显：</p>
+<table>
+<thead>
+<tr>
+<th>优点</th>
+<th>不足</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>擅长提取局部 n-gram 特征</td>
+<td>对很远的词之间关系不敏感</td>
+</tr>
+<tr>
+<td>并行效率较好</td>
+<td>需要通过多层堆叠扩大感受野</td>
+</tr>
+<tr>
+<td>适合分类任务</td>
+<td>不天然适合逐步生成文本</td>
+</tr>
+</tbody>
+</table>
+<p>所以，CNN 在 NLP 里更像是一个“局部特征提取器”。它能很好地抓住短语级别的模式，但不擅长处理长距离依赖。也就是说，如果一句话前面很远的信息会影响后面的判断，CNN 就会比较吃力。</p>
+<h3 id="模型二：RNN-按顺序读取文本"><a href="#模型二：RNN-按顺序读取文本" class="headerlink" title="模型二：RNN 按顺序读取文本"></a>模型二：RNN 按顺序读取文本</h3><p>RNN，全称 Recurrent Neural Network，中文叫循环神经网络。它是一类专门用来处理序列数据的模型，比如文本、语音、时间序列等。它的基本思路是：</p>
+<ul>
+<li>从左到右依次读取文本，每读一个 token，就把当前 token 的信息和前面已经读到的信息合并起来，更新成一个新的隐藏状态。</li>
+</ul>
+<p>可以简单理解为，RNN 在读一句话时，会一边读当前词，一边带着前面的“记忆”继续往后读。如下图所示：</p>
+<p><img src="/images/llm/llm-algorithm-09.png" alt="LLM 算法原理图"></p>
+<p>这里的 <code>状态</code> 可以理解为模型到目前为止读到的信息摘要。每读一个新的 token，模型都会更新一次状态。相比 CNN，RNN 更适合表达文本顺序，因为它不是只看局部窗口，而是按顺序一步步读取整句话。</p>
+<p>比如读到“我不喜欢这个方案”时，RNN 有机会把“不”这个信息传到后面，影响对整句话的判断。但 RNN 有两个经典问题：</p>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>长距离依赖困难</td>
+<td>前面很远的信息传到后面时容易变弱</td>
+</tr>
+<tr>
+<td>并行能力弱</td>
+<td>后一个状态依赖前一个状态，训练不容易并行</td>
+</tr>
+</tbody>
+</table>
+<p>所以，RNN 比 CNN 更擅长处理顺序，但当文本变长时，它对长距离上下文的记忆能力仍然有限。</p>
+<h3 id="模型三：LSTM-和-GRU-试图增强记忆"><a href="#模型三：LSTM-和-GRU-试图增强记忆" class="headerlink" title="模型三：LSTM 和 GRU 试图增强记忆"></a>模型三：LSTM 和 GRU 试图增强记忆</h3><p>LSTM 和 GRU 都是 RNN 的改进版本。它们出现的主要目的，是缓解普通 RNN 容易“忘记前文”的问题。普通 RNN 在读取长文本时，前面的信息需要一步步传到后面。句子越长，早期信息越容易被稀释。LSTM 和 GRU 的改进思路是：给模型增加一种 <code>门控机制</code>。</p>
+<p>可以先不用记复杂结构，只抓住一个直觉：LSTM / GRU 给模型增加了 <code>门</code>，让模型自己决定哪些信息要记住，哪些信息要忘掉。</p>
+<p><img src="/images/llm/llm-algorithm-10.png" alt="LLM 算法原理图"></p>
+<p>比如这句话：我昨天在朋友推荐的一家店里喝了一杯咖啡。如果模型要预测或理解最后的“咖啡”，它需要记住前面的“喝了一杯”。LSTM/GRU 就是在努力让这种关键信息不要太快丢失。</p>
+<p>所以，相比普通 RNN，LSTM / GRU 更擅长<strong>处理稍长一些的上下文</strong>，也曾经广泛用于机器翻译、语音识别、文本分类等任务。但它们仍然没有彻底解决问题：</p>
+<table>
+<thead>
+<tr>
+<th>不足</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仍然偏顺序处理</td>
+<td>长文本训练效率有限</td>
+</tr>
+<tr>
+<td>远距离信息仍可能衰减</td>
+<td>只是缓解，不是根治</td>
+</tr>
+<tr>
+<td>很难直接建模任意两个 token 的关系</td>
+<td>信息主要通过状态逐步传递</td>
+</tr>
+</tbody>
+</table>
+<p>也就是说，LSTM / GRU 让模型“记得更久了一些”，但还没有让模型真正做到“直接看到所有相关信息”。</p>
+<h3 id="模型四：双向-RNN-同时看前后文"><a href="#模型四：双向-RNN-同时看前后文" class="headerlink" title="模型四：双向 RNN 同时看前后文"></a>模型四：双向 RNN 同时看前后文</h3><p>普通 RNN 通常是从左往右读取文本，因此它在处理当前位置时，主要依赖已经读过的前文信息。但很多语言理解任务，只看前文是不够的，还需要结合后文一起判断。</p>
+<p>比如： 苹果 发布 了 新产品</p>
+<p>如果只看“苹果”前面的内容，几乎没有有效信息；但如果同时看到后面的“发布”“新产品”，就更容易判断这里的“苹果”指的是公司，而不是水果。</p>
+<p>双向 RNN 的思路就是：<strong>让模型从两个方向同时读句子</strong>。</p>
+<ol>
+<li>一条 RNN 从左往右读，获取前文信息；</li>
+<li>另一条 RNN 从右往左读，获取后文信息；</li>
+<li>最后把两个方向的信息合并起来，得到更完整的上下文表示。</li>
+</ol>
+<p>可以简单理解为：</p>
+<p><img src="/images/llm/llm-algorithm-11.png" alt="LLM 算法原理图"></p>
+<p>双向 RNN 在很多语言理解任务中非常有用，比如命名实体识别、文本分类、序列标注、句子匹配等。因为这些任务通常可以先看到完整句子，再做判断。不过，双向 RNN 也有自己的边界：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>是否适合</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>句子理解、分类、标注</td>
+<td>适合</td>
+</tr>
+<tr>
+<td>实时生成下一个 token</td>
+<td>不太适合，因为它依赖未来信息</td>
+</tr>
+</tbody>
+</table>
+<p>原因也很直观：生成式语言模型在写下一个 token 时，只能根据已经出现的内容继续往后生成，不能提前看到未来答案。因此，双向 RNN 更适合理解类任务，而不适合作为自回归生成模型的直接结构。</p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>把这些经典模型放在一起看，脉络就很清楚：</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>擅长什么</th>
+<th>主要不足</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CNN</td>
+<td>抓局部短语特征</td>
+<td>不擅长长距离依赖</td>
+</tr>
+<tr>
+<td>RNN</td>
+<td>按顺序建模文本</td>
+<td>长文本容易遗忘，训练慢</td>
+</tr>
+<tr>
+<td>LSTM / GRU</td>
+<td>增强记忆能力</td>
+<td>仍然偏顺序传递</td>
+</tr>
+<tr>
+<td>双向 RNN</td>
+<td>同时利用前后文</td>
+<td>不适合自回归生成</td>
+</tr>
+</tbody>
+</table>
+<p>这些模型都在不同阶段推动了 NLP 的发展，但它们也都没有彻底解决一个核心问题：长距离依赖。比如：</p>
+<ul>
+<li>虽然我昨天在朋友推荐的那家开在巷子深处、装修很有特色、排队也很久的咖啡店里坐了很久，但最后只点了一杯 __</li>
+</ul>
+<p>要预测最后空白处的词，模型需要记住前面较早出现的“咖啡店”。如果前文信息在传递过程中被不断稀释，模型可能就无法准确判断这里更可能是“咖啡”，而不是“水”“酒”或其他东西。</p>
+<p>这就是 Transformer 出现前，序列建模面临的关键挑战：如何让模型在处理当前位置时，更高效地找到上下文中真正相关的信息。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>回到文章开头提出的问题：机器到底是如何一步步学会处理语言的？</p>
+<p>现在我们可以把这条路径串起来看：</p>
+<ol>
+<li>首先，NLP 把自然语言问题转换成机器可以处理的任务；</li>
+<li>接着，token 和 embedding 把文本从“文字”变成可计算的数字表示；</li>
+<li>然后，感知机和神经网络说明模型并不是靠人手写规则，而是可以通过数据不断调整参数、学习规律；</li>
+<li>再往后，CNN、RNN、LSTM/GRU、双向 RNN 等模型不断尝试处理语言中的局部特征、顺序关系和上下文依赖；</li>
+<li>最后，Transformer 通过 Attention 机制，让模型能够更直接地关注上下文中真正相关的信息。</li>
+</ol>
+<p>所以，LLM 并不是突然出现的“魔法”。它背后是一条长期演进出来的技术路线。LLM 的能力不是来自某一个单点技术，而是来自语言表示、模型训练、上下文建模和大规模数据共同作用的结果。</p>
+<p>最后，用一张图总结本文的核心内容：从语言进入模型，到模型学会预测，再到 Transformer 成为现代 LLM 的核心架构。</p>
+<p><img src="/images/llm/llm-algorithm-12.png" alt="LLM 算法原理图"></p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/06/22/llm-algorithm-principles/" data-id="cmqpfwd790000b3lwbdsil81g" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/06/21/llm-math-basics/" class="next">LLM 系列 (二)：机器如何把语言变成数学</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/06/22/llm-algorithm-principles/';
+var disqus_title = 'LLM 系列 (三)：算法原理篇：机器是如何学会语言的';
+var disqus_url = 'http://matt33.com/2026/06/22/llm-algorithm-principles/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/06/22/llm-algorithm-principles/">LLM 系列 (三)：算法原理篇：机器是如何学会语言的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/21/llm-math-basics/">LLM 系列 (二)：机器如何把语言变成数学</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/19/llm-ai-to-llm/">LLM 系列 (一)：从 AI 到 LLM</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/31/statefun-serverless-internals/">Stateful Serverless 背后的 Flink StateFun 内部机制实现【译】</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/25/statefun-introduce/">Flink StateFun 2.0 浅谈</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/08/02/kubernetes-start/">Kubenetes 之新手入门篇</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/04/16/cpu-branch-predictor/">浅谈 CPU 分支预测技术</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/20/flink-task-mailbox/">Flink 基于 MailBox 实现的 StreamTask 线程模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/15/flink-taskmanager-7/">Flink TaskManager 详解（一）</a></li><li class="post-list-item"><a class="post-list-link" href="/2019/12/27/flink-jobmanager-6/">Flink JobManager 详解</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

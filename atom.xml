@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-06-21T17:11:33.494Z</updated>
+  <updated>2026-06-22T16:37:14.424Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,723 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (三)：算法原理篇：机器是如何学会语言的</title>
+    <link href="http://matt33.com/2026/06/22/llm-algorithm-principles/"/>
+    <id>http://matt33.com/2026/06/22/llm-algorithm-principles/</id>
+    <published>2026-06-22T10:10:00.000Z</published>
+    <updated>2026-06-22T16:37:14.424Z</updated>
+    
+    <content type="html"><![CDATA[<blockquote>
+<p>核心句：这篇文章不是算法课，而是给普通开发者补一条最短路径：从 NLP、感知机、神经网络，到为什么需要 Transformer。</p>
+</blockquote>
+<p>前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。</p>
+<p>我们不追求推导公式，也不会一上来就深入 Transformer 的细节。本文更希望回答一个核心问题：</p>
+<ul>
+<li>机器到底是如何一步步学会处理语言的？</li>
+</ul>
+<p>理解这个问题之后，再去看 LLM、Transformer、Attention、预训练、微调这些概念，就不会只是记住一堆名词，而是能知道它们分别解决了什么问题，为什么会一步步演进到今天的大语言模型。</p>
+<p>读完这篇文章，希望你能清晰回答下面几个问题：</p>
+<ol>
+<li>为什么要把文本变成 token 和向量？</li>
+<li>为什么模型可以从数据中学习？</li>
+<li>为什么神经网络比手写规则更强？</li>
+<li>为什么传统序列模型不够用？</li>
+<li>为什么 Transformer 会成为大模型的核心架构？</li>
+</ol>
+<a id="more"></a>
+<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>简单来说，这篇文章是为后面深入理解 Transformer 和 LLM 工作原理做准备。我们会从 NLP、词向量、感知机、神经网络讲起，再一路过渡到 CNN、RNN、双向 RNN 等经典模型。核心概念如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>它解决什么问题</th>
+<th>它的不足</th>
+<th>和 LLM 的关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NLP</td>
+<td>让机器处理自然语言</td>
+<td>语言有歧义和上下文</td>
+<td>定义了 LLM 要处理的问题</td>
+</tr>
+<tr>
+<td>Token</td>
+<td>把文本拆成基本单位</td>
+<td>切分方式会影响理解</td>
+<td>LLM 的输入和输出单位</td>
+</tr>
+<tr>
+<td>词向量</td>
+<td>把 token 变成可计算的语义向量</td>
+<td>早期词向量难表达上下文变化</td>
+<td>LLM 计算语言的基础表示</td>
+</tr>
+<tr>
+<td>感知机</td>
+<td>让机器学会简单分类</td>
+<td>只能处理线性问题</td>
+<td>神经网络的原始雏形</td>
+</tr>
+<tr>
+<td>神经网络</td>
+<td>自动学习复杂特征</td>
+<td>需要大量数据和训练</td>
+<td>LLM 的基本学习框架</td>
+</tr>
+<tr>
+<td>CNN</td>
+<td>捕捉局部词组特征</td>
+<td>不擅长长距离依赖</td>
+<td>早期文本分类常用模型</td>
+</tr>
+<tr>
+<td>RNN / 双向 RNN</td>
+<td>按顺序读取文本上下文</td>
+<td>训练慢，长文本容易遗忘</td>
+<td>Transformer 出现前的重要序列模型</td>
+</tr>
+<tr>
+<td>Attention</td>
+<td>动态关注相关信息</td>
+<td>本篇只做引出</td>
+<td>Transformer 的核心入口</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-algorithm-01.png" alt="LLM 算法原理图"></p>
+<h2 id="NLP：让机器处理语言"><a href="#NLP：让机器处理语言" class="headerlink" title="NLP：让机器处理语言"></a>NLP：让机器处理语言</h2><p>NLP，全称 Natural Language Processing，也就是自然语言处理，研究的是<strong>如何让机器处理、理解和生成自然语言</strong>。它并不是大语言模型出现后才有的概念，早期 NLP 主要依赖人工编写规则和词典，后来逐渐发展到基于统计的方法，再到机器学习和深度学习方法。</p>
+<p>对非算法同学来说，可以先不用把 NLP 想得太玄。它本质上是在做一件事：把自然语言问题，转换成机器学习任务。比如：</p>
+<table>
+<thead>
+<tr>
+<th>人类要解决的问题</th>
+<th>对应的机器学习任务</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>这条评论是好评还是差评</td>
+<td>文本分类</td>
+</tr>
+<tr>
+<td>这句话里的公司名是什么</td>
+<td>序列标注</td>
+</tr>
+<tr>
+<td>两个问题是不是同一个意思</td>
+<td>文本匹配</td>
+</tr>
+<tr>
+<td>把中文翻译成英文</td>
+<td>序列生成</td>
+</tr>
+<tr>
+<td>根据文档回答问题</td>
+<td>阅读理解或生成</td>
+</tr>
+<tr>
+<td>根据上文继续写</td>
+<td>语言建模</td>
+</tr>
+</tbody>
+</table>
+<h3 id="语言为什么难？"><a href="#语言为什么难？" class="headerlink" title="语言为什么难？"></a>语言为什么难？</h3><p>自然语言难处理，主要不是因为字多，而是因为它不够“规整”。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">苹果很好吃。</span><br><span class="line">苹果发布了新产品。</span><br></pre></td></tr></table></figure>
+<p>同样是<code>苹果</code>，第一个是水果，第二个是公司。机器如果只看字面，很难判断。再比如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个模型不太稳定。</span><br></pre></td></tr></table></figure>
+<p>在不同场景里，<code>模型</code>可能是机器学习模型、业务模型、3D 模型，也可能只是一个抽象方案。也就是说，语言的含义往往不是由单个词决定的，而是由上下文、语序、场景和表达意图共同决定的。</p>
+<p>可以把自然语言的难点简单总结成下面几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>难点</strong></th>
+<th><strong>NLP 术语</strong></th>
+<th><strong>例子</strong></th>
+<th><strong>机器为什么难</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>一词多义</td>
+<td>词义消歧</td>
+<td>苹果、模型、银行</td>
+<td>同一个词在不同上下文里含义不同</td>
+</tr>
+<tr>
+<td>指代关系</td>
+<td>指代消解</td>
+<td>它、这个、那个</td>
+<td>必须结合前后文判断指的是谁</td>
+</tr>
+<tr>
+<td>语序变化</td>
+<td>句法分析</td>
+<td>狗咬人，人咬狗</td>
+<td>词一样但顺序不同，意思完全不同</td>
+</tr>
+<tr>
+<td>同义表达</td>
+<td>语义匹配</td>
+<td>页面很卡、打开很慢</td>
+<td>表达不同，但语义可能相同</td>
+</tr>
+<tr>
+<td>隐含意图</td>
+<td>意图识别</td>
+<td>页面有点慢</td>
+<td>可能不是描述现象，而是在提出优化诉求</td>
+</tr>
+</tbody>
+</table>
+<p>所以，NLP 的第一步并不是让机器“真正理解语言”，而是先把这些灵活、模糊、上下文相关的自然语言，转换成机器可以表示、计算和学习的形式。</p>
+<h3 id="从文本到-token"><a href="#从文本到-token" class="headerlink" title="从文本到 token"></a>从文本到 token</h3><p>模型不能直接处理一整段原始文本。对模型来说，文本需要先被拆成一个个更小的基本单位，这个单位就叫 <strong>token</strong>。比如下面这句话：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我喜欢机器学习</span><br></pre></td></tr></table></figure>
+<p>经过 tokenizer 处理后，可能会被拆成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[我] [喜欢] [机器] [学习]</span><br></pre></td></tr></table></figure>
+<p>也可能被拆成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[我] [喜欢] [机器学习]</span><br></pre></td></tr></table></figure>
+<p>不同模型使用的 tokenizer 不完全一样，所以切分结果也可能不同。但它们的目标是一致的：把连续的自然语言文本，转换成模型可以接收的 token 序列。</p>
+<p>接下来，每个 token 通常会被映射成一个对应的编号，也就是 token id。比如可以简单理解为：</p>
+<ul>
+<li>[我] -&gt; 101</li>
+<li>[喜欢] -&gt; 245</li>
+<li>[机器学习] -&gt; 1024</li>
+</ul>
+<p>这样，文本就从“文字”变成了“数字序列”。tokenizer 整体流程如下所示：</p>
+<p><img src="/images/llm/llm-algorithm-02.png" alt="LLM 算法原理图"></p>
+<p>不过，到这一步还不够。token id 只是编号，本身并不包含语义信息。模型知道 101、245、1024 是不同的编号，但并不知道“机器学习”和“深度学习”更接近，也不知道“猫”和“狗”比“猫”和“桌子”更相似。</p>
+<p>所以，下一步还需要 embedding，把这些 token 编号转换成真正可以表达语义关系的向量。</p>
+<h3 id="Embedding：让-token-有意义"><a href="#Embedding：让-token-有意义" class="headerlink" title="Embedding：让 token 有意义"></a>Embedding：让 token 有意义</h3><p>Embedding 可以简单理解为：给每个 token 分配一个向量，让模型能够用数学方式计算词与词之间的关系。也就是说，模型不再只知道“猫”“狗”“桌子”是三个不同的 token，而是能够进一步表示它们在语义上的远近关系。</p>
+<table>
+<thead>
+<tr>
+<th>token</th>
+<th>向量直觉</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td>接近动物、宠物</td>
+</tr>
+<tr>
+<td>狗</td>
+<td>接近动物、宠物</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>接近家具</td>
+</tr>
+<tr>
+<td>学习</td>
+<td>接近教育、训练</td>
+</tr>
+</tbody>
+</table>
+<p>在这样的向量空间里，“猫”和“狗”应该更接近，因为它们都和动物、宠物相关；而“猫”和“桌子”距离会更远，因为它们属于完全不同的语义类别。</p>
+<p>这就是 embedding 的核心作用：<strong>把离散的 token，变成可以计算相似度和语义关系的向量</strong>。</p>
+<blockquote>
+<p>不同模型中，token 的切分方式不同、token 的 embedding 也是不同，embedding 是对应模型训练出来的参数。</p>
+</blockquote>
+<h3 id="词向量：从-one-hot-到-word2vec"><a href="#词向量：从-one-hot-到-word2vec" class="headerlink" title="词向量：从 one-hot 到 word2vec"></a>词向量：从 one-hot 到 word2vec</h3><p>在词向量出现之前，常见的文本表示方式是 one-hot（词向量可以看作 embedding 的一种，主要指把词表示成向量）。假设词表里只有 4 个词，每个词都可以用一个只有一位是 1、其余都是 0 的向量表示：</p>
+<table>
+<thead>
+<tr>
+<th>词</th>
+<th>one-hot 表示</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>猫</td>
+<td><code>[1, 0, 0, 0]</code></td>
+</tr>
+<tr>
+<td>狗</td>
+<td><code>[0, 1, 0, 0]</code></td>
+</tr>
+<tr>
+<td>桌子</td>
+<td><code>[0, 0, 1, 0]</code></td>
+</tr>
+<tr>
+<td>学习</td>
+<td><code>[0, 0, 0, 1]</code></td>
+</tr>
+</tbody>
+</table>
+<p>one-hot 的好处是简单，能清楚表示“这个词是谁”。但它的问题也很明显：它不能表示“这个词和谁更像”。</p>
+<p>比如“猫”和“狗”在语义上更接近，因为它们都和动物、宠物有关；而“猫”和“桌子”明显不是一类东西。但在 one-hot 表示里，这些词都是彼此独立的编号，模型看不出它们之间的语义远近。</p>
+<p>词向量的出现，就是为了解决这个问题。</p>
+<ul>
+<li>word2vec 这类方法的核心直觉是：一个词的意思，可以从它经常出现的上下文中学出来。</li>
+</ul>
+<p>比如：我 今天 喝 了 一杯 咖啡</p>
+<p>如果“咖啡”经常出现在“喝”“一杯”“早上”这些词附近，模型就会逐渐学到：咖啡更可能和饮品、早餐、杯子这些语义场景相关。</p>
+<p><img src="/images/llm/llm-algorithm-03.png" alt="LLM 算法原理图"></p>
+<p>word2vec 中经典训练方式有两类：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>直觉</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CBOW</td>
+<td>根据上下文预测中间词</td>
+</tr>
+<tr>
+<td>Skip-gram</td>
+<td>根据中心词预测周围词</td>
+</tr>
+</tbody>
+</table>
+<p>这类词向量的价值在于，它把词从离散编号，放进了一个连续的语义空间。这样一来，模型不仅知道“猫”和“狗”是不同的词，还能知道它们在语义上比“猫”和“桌子”更接近。不过，早期词向量也有明显不足：</p>
+<table>
+<thead>
+<tr>
+<th>不足</th>
+<th>例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>一个词通常只有一个固定向量</td>
+<td>“苹果”既可能是水果，也可能是公司</td>
+</tr>
+<tr>
+<td>上下文变化表达不够细</td>
+<td>“模型不稳定”在不同场景含义不同</td>
+</tr>
+<tr>
+<td>主要学习词级别关系</td>
+<td>对长句结构和篇章关系表达有限</td>
+</tr>
+</tbody>
+</table>
+<p>后来 BERT、GPT 这类模型进一步发展出了上下文相关表示。也就是说，同一个 token 在不同句子里，经过模型计算后可以得到不同的上下文表示。</p>
+<h2 id="感知机：机器学习的最小原型"><a href="#感知机：机器学习的最小原型" class="headerlink" title="感知机：机器学习的最小原型"></a>感知机：机器学习的最小原型</h2><p>理解神经网络之前，可以先理解<strong>感知机</strong>。感知机是一个非常早期、非常简单的机器学习模型。它可以看作神经网络的最小原型。</p>
+<p><img src="/images/llm/llm-algorithm-04.png" alt="LLM 算法原理图"></p>
+<p>感知机要解决的问题很简单：给定一些输入特征，模型能不能学会做一个基本判断？比如，我们想判断一封邮件是不是垃圾邮件，可以先把邮件拆成一些特征：</p>
+<table>
+<thead>
+<tr>
+<th>特征</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>是否包含“中奖”</td>
+<td>可疑词</td>
+</tr>
+<tr>
+<td>是否包含链接</td>
+<td>可疑行为</td>
+</tr>
+<tr>
+<td>发件人是否陌生</td>
+<td>来源特征</td>
+</tr>
+<tr>
+<td>邮件长度</td>
+<td>内容特征</td>
+</tr>
+</tbody>
+</table>
+<p>感知机会给每个特征一个权重，然后算一个总分。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">总分 = 特征1 * 权重1 + 特征2 * 权重2 + ... + 偏置</span><br></pre></td></tr></table></figure>
+<p>如果总分超过某个阈值，就判断为垃圾邮件，否则不是。</p>
+<p>所以，感知机本质上就像一张自动学习出来的打分表。它不是靠人手写“如果出现中奖就一定是垃圾邮件”这样的死规则，而是通过数据学习每个特征到底应该占多大权重。</p>
+<h3 id="感知机为什么重要？"><a href="#感知机为什么重要？" class="headerlink" title="感知机为什么重要？"></a>感知机为什么重要？</h3><p>感知机的重要性在于，它把“机器如何学习”这件事变得非常具体。在感知机之前，我们很容易把机器判断理解成一堆人工规则：如果出现某个词，就执行某个判断。但感知机提供了另一种思路：</p>
+<ul>
+<li>模型不再完全依赖人手写规则，而是<strong>通过数据不断调整权重</strong>。</li>
+</ul>
+<p>比如一开始，模型可能把“包含链接”这个特征看得太重，导致很多正常邮件也被误判成垃圾邮件。经过训练后，如果模型发现自己判断错了，就会调整相关权重。下一次再遇到类似样本时，判断就可能更准确。</p>
+<p>也就是说，感知机已经具备了机器学习最核心的雏形：<strong>预测、犯错、调整，再预测</strong>。</p>
+<p>它和后来的神经网络之间，也有很自然的对应关系：</p>
+<table>
+<thead>
+<tr>
+<th>感知机里的东西</th>
+<th>后来神经网络里的对应物</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入特征</td>
+<td>输入向量</td>
+</tr>
+<tr>
+<td>权重</td>
+<td>参数</td>
+</tr>
+<tr>
+<td>加权求和</td>
+<td>线性变换</td>
+</tr>
+<tr>
+<td>阈值判断</td>
+<td>激活函数</td>
+</tr>
+<tr>
+<td>调整权重</td>
+<td>训练</td>
+</tr>
+</tbody>
+</table>
+<h3 id="感知机的不足"><a href="#感知机的不足" class="headerlink" title="感知机的不足"></a>感知机的不足</h3><p>感知机的优点是简单，缺点也正是太简单。它主要适合处理“<strong>线性可分</strong>”的问题。简单来说，如果两类样本可以用一条直线分开，感知机就比较擅长；如果样本分布更复杂，无法用一条直线清楚分开，感知机就会很吃力。</p>
+<p>可以把它想象成下面这种情况：一边是类别 A，一边是类别 B，中间只需要一条分界线，就能把它们区分开。</p>
+<p><img src="/images/llm/llm-algorithm-05.png" alt="LLM 算法原理图"></p>
+<p>但真实语言问题显然没有这么简单。一句话的含义，往往不是几个特征简单加权就能判断出来的。比如，“这家店的服务可真好，等了两个小时都没人理我”。这句话里，如果只看 “服务”“真好”这些词，模型可能会判断成正面评价，但结合后半句看，实际可能是在表达不满。</p>
+<p>语言里有词语组合、上下文变化、语气反转、长距离依赖等复杂现象。单个感知机很难处理这些非线性、上下文相关的问题。所以，我们需要更强的模型：<strong>能够把简单特征不断组合，学习更复杂的表示</strong>。这就走向了<strong>神经网络</strong>。</p>
+<h2 id="神经网络：从简单到复杂"><a href="#神经网络：从简单到复杂" class="headerlink" title="神经网络：从简单到复杂"></a>神经网络：从简单到复杂</h2><p>神经网络可以粗略理解为：把很多类似感知机的计算单元连接起来，形成一个可以学习复杂模式的系统。感知机只做一次加权求和。神经网络会把这种计算堆很多层。如下图所示：</p>
+<p><img src="/images/llm/llm-algorithm-06.png" alt="LLM 算法原理图"></p>
+<p>每一层都会对输入做一次表示变换。层数多了以后，模型就有机会学习更复杂的关系。</p>
+<h3 id="为什么需要“多层”？"><a href="#为什么需要“多层”？" class="headerlink" title="为什么需要“多层”？"></a>为什么需要“多层”？</h3><p>可以用图片识别来类比：模型最底层可能先识别边缘、颜色、纹理；中间层再组合出局部形状；更高层才逐渐识别出完整对象，比如猫、狗、汽车。</p>
+<p>语言处理里也类似。模型不是一开始就能理解“这句话表达了什么意图”，它通常需要从更基础的信息一层层组合上来：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>可能学习到什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>底层</td>
+<td>token、词形、局部搭配</td>
+</tr>
+<tr>
+<td>中层</td>
+<td>短语、语法关系</td>
+</tr>
+<tr>
+<td>高层</td>
+<td>语义、意图、任务模式</td>
+</tr>
+</tbody>
+</table>
+<p>这就是“表示学习”的直觉：模型不只是接收特征，而是在训练中自己学习更有用的中间表示。</p>
+<h3 id="神经网络如何训练？"><a href="#神经网络如何训练？" class="headerlink" title="神经网络如何训练？"></a>神经网络如何训练？</h3><p>神经网络的训练循环可以概括成三个词：<strong>预测 -&gt; 评估 -&gt; 修正</strong></p>
+<p>这和人做题有点像：先根据当前能力做出答案，再对照标准答案看错在哪里，最后根据错误调整方法。模型训练也是类似的过程。完整流程可以简化成下面这张图：</p>
+<p><img src="/images/llm/llm-algorithm-07.png" alt="LLM 算法原理图"></p>
+<p>其中几个关键概念可以这样理解：</p>
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>小白解释</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>前向传播</td>
+<td>输入一路经过模型，得到预测</td>
+</tr>
+<tr>
+<td>Loss</td>
+<td>模型预测和正确答案之间的差距</td>
+</tr>
+<tr>
+<td>反向传播</td>
+<td>把错误反向传回每一层</td>
+</tr>
+<tr>
+<td>梯度</td>
+<td>参数应该往哪个方向改</td>
+</tr>
+<tr>
+<td>梯度下降</td>
+<td>沿着让错误变小的方向更新参数</td>
+</tr>
+</tbody>
+</table>
+<p>模型不是一次就学会的，而是在大量样本上不断预测、犯错、修正，再继续预测。训练的过程，本质上就是让模型的参数一点点变得更合适。</p>
+<h3 id="神经网络的不足"><a href="#神经网络的不足" class="headerlink" title="神经网络的不足"></a>神经网络的不足</h3><p>神经网络比感知机强很多，它可以通过多层结构学习更复杂的模式。但普通的前馈神经网络并不天然适合处理语言。原因很简单：<strong>语言是有顺序的</strong>。比如，下面两句话：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">我不喜欢这个方案。</span><br><span class="line">我喜欢这个方案。</span><br></pre></td></tr></table></figure>
+<p>这两句话只差一个“不”，但含义完全不同。如果模型只是把词当成一组特征，而不能理解它们出现的位置和顺序，就很容易判断错误。</p>
+<p>所以，对于语言任务来说，仅仅能学习复杂特征还不够。模型还必须能够处理 token 之间的顺序关系、上下文关系，以及长句中前后信息的依赖关系。这就引出了下一类模型：能够处理文本结构和上下文关系的经典神经网络，比如 CNN、RNN、LSTM 和双向 RNN。</p>
+<h2 id="序列模型：让模型读懂上下文"><a href="#序列模型：让模型读懂上下文" class="headerlink" title="序列模型：让模型读懂上下文"></a>序列模型：让模型读懂上下文</h2><p>语言不是一组孤立的特征，而是一串有顺序的 token。前面的词会影响后面的词，后面的表达也依赖前面的上下文。因此，在 NLP 中有一个非常核心的问题：</p>
+<ul>
+<li>给定前面的内容，模型能不能预测接下来最可能出现什么？</li>
+</ul>
+<p>这就是语言模型要解决的问题。</p>
+<h3 id="语言模型：预测下一个-token"><a href="#语言模型：预测下一个-token" class="headerlink" title="语言模型：预测下一个 token"></a>语言模型：预测下一个 token</h3><p>语言模型最朴素的直觉，就是根据前面的内容，预测接下来最可能出现什么。比如：</p>
+<ul>
+<li>我今天早上喝了一杯 __</li>
+</ul>
+<p>模型需要判断空白处更可能出现哪个 token：</p>
+<table>
+<thead>
+<tr>
+<th>候选 token</th>
+<th>可能性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>高</td>
+</tr>
+<tr>
+<td>水</td>
+<td>中</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>中</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<p>这个过程看起来像“填空题”，但它非常关键。因为只要上下文足够丰富，很多 NLP 任务都可以转化成“继续生成后面的内容”。比如：</p>
+<table>
+<thead>
+<tr>
+<th>任务</th>
+<th>输入方式</th>
+<th>输出方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>翻译</td>
+<td>请翻译这句话</td>
+<td>生成译文</td>
+</tr>
+<tr>
+<td>摘要</td>
+<td>请总结这篇文章</td>
+<td>生成摘要</td>
+</tr>
+<tr>
+<td>问答</td>
+<td>根据材料回答问题</td>
+<td>生成答案</td>
+</tr>
+<tr>
+<td>分类</td>
+<td>判断正面还是负面</td>
+<td>生成类别</td>
+</tr>
+<tr>
+<td>写代码</td>
+<td>根据需求写函数</td>
+<td>生成代码</td>
+</tr>
+</tbody>
+</table>
+<p>这就是大语言模型的统一性：它没有为每个任务单独设计一套模型，而是把很多任务都转化成“给定上下文后继续生成”。</p>
+<p>所以，LLM 的很多能力，底层都可以先用一句话来理解：<strong>根据上下文，预测下一个 token</strong>。</p>
+<h3 id="模型一：CNN-捕捉局部特征"><a href="#模型一：CNN-捕捉局部特征" class="headerlink" title="模型一：CNN 捕捉局部特征"></a>模型一：CNN 捕捉局部特征</h3><p>很多人第一次接触 CNN（Convolutional Neural Network，又叫做卷积神经网络），是在图像识别里。图像里的 CNN 会用卷积核扫描图片的局部区域，提取边缘、纹理、形状等特征。文本里也可以使用 CNN。只不过它扫描的不是像素，而是一串 token 对应的向量。</p>
+<p>可以把它理解成：</p>
+<ul>
+<li>CNN 擅长从文本中抓局部模式，比如几个词组成的短语。</li>
+</ul>
+<p>例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个 产品 非常 好用</span><br></pre></td></tr></table></figure>
+<p>CNN 可以用不同大小的窗口扫过句子：</p>
+<p><img src="/images/llm/llm-algorithm-08.png" alt="LLM 算法原理图"></p>
+<p>在早期文本分类里，CNN 很实用。比如情感分析中，“非常好用”“极其糟糕”“不推荐购买”这些局部短语很有判断价值。但 CNN 的不足也明显：</p>
+<table>
+<thead>
+<tr>
+<th>优点</th>
+<th>不足</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>擅长提取局部 n-gram 特征</td>
+<td>对很远的词之间关系不敏感</td>
+</tr>
+<tr>
+<td>并行效率较好</td>
+<td>需要通过多层堆叠扩大感受野</td>
+</tr>
+<tr>
+<td>适合分类任务</td>
+<td>不天然适合逐步生成文本</td>
+</tr>
+</tbody>
+</table>
+<p>所以，CNN 在 NLP 里更像是一个“局部特征提取器”。它能很好地抓住短语级别的模式，但不擅长处理长距离依赖。也就是说，如果一句话前面很远的信息会影响后面的判断，CNN 就会比较吃力。</p>
+<h3 id="模型二：RNN-按顺序读取文本"><a href="#模型二：RNN-按顺序读取文本" class="headerlink" title="模型二：RNN 按顺序读取文本"></a>模型二：RNN 按顺序读取文本</h3><p>RNN，全称 Recurrent Neural Network，中文叫循环神经网络。它是一类专门用来处理序列数据的模型，比如文本、语音、时间序列等。它的基本思路是：</p>
+<ul>
+<li>从左到右依次读取文本，每读一个 token，就把当前 token 的信息和前面已经读到的信息合并起来，更新成一个新的隐藏状态。</li>
+</ul>
+<p>可以简单理解为，RNN 在读一句话时，会一边读当前词，一边带着前面的“记忆”继续往后读。如下图所示：</p>
+<p><img src="/images/llm/llm-algorithm-09.png" alt="LLM 算法原理图"></p>
+<p>这里的 <code>状态</code> 可以理解为模型到目前为止读到的信息摘要。每读一个新的 token，模型都会更新一次状态。相比 CNN，RNN 更适合表达文本顺序，因为它不是只看局部窗口，而是按顺序一步步读取整句话。</p>
+<p>比如读到“我不喜欢这个方案”时，RNN 有机会把“不”这个信息传到后面，影响对整句话的判断。但 RNN 有两个经典问题：</p>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>长距离依赖困难</td>
+<td>前面很远的信息传到后面时容易变弱</td>
+</tr>
+<tr>
+<td>并行能力弱</td>
+<td>后一个状态依赖前一个状态，训练不容易并行</td>
+</tr>
+</tbody>
+</table>
+<p>所以，RNN 比 CNN 更擅长处理顺序，但当文本变长时，它对长距离上下文的记忆能力仍然有限。</p>
+<h3 id="模型三：LSTM-和-GRU-试图增强记忆"><a href="#模型三：LSTM-和-GRU-试图增强记忆" class="headerlink" title="模型三：LSTM 和 GRU 试图增强记忆"></a>模型三：LSTM 和 GRU 试图增强记忆</h3><p>LSTM 和 GRU 都是 RNN 的改进版本。它们出现的主要目的，是缓解普通 RNN 容易“忘记前文”的问题。普通 RNN 在读取长文本时，前面的信息需要一步步传到后面。句子越长，早期信息越容易被稀释。LSTM 和 GRU 的改进思路是：给模型增加一种 <code>门控机制</code>。</p>
+<p>可以先不用记复杂结构，只抓住一个直觉：LSTM / GRU 给模型增加了 <code>门</code>，让模型自己决定哪些信息要记住，哪些信息要忘掉。</p>
+<p><img src="/images/llm/llm-algorithm-10.png" alt="LLM 算法原理图"></p>
+<p>比如这句话：我昨天在朋友推荐的一家店里喝了一杯咖啡。如果模型要预测或理解最后的“咖啡”，它需要记住前面的“喝了一杯”。LSTM/GRU 就是在努力让这种关键信息不要太快丢失。</p>
+<p>所以，相比普通 RNN，LSTM / GRU 更擅长<strong>处理稍长一些的上下文</strong>，也曾经广泛用于机器翻译、语音识别、文本分类等任务。但它们仍然没有彻底解决问题：</p>
+<table>
+<thead>
+<tr>
+<th>不足</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仍然偏顺序处理</td>
+<td>长文本训练效率有限</td>
+</tr>
+<tr>
+<td>远距离信息仍可能衰减</td>
+<td>只是缓解，不是根治</td>
+</tr>
+<tr>
+<td>很难直接建模任意两个 token 的关系</td>
+<td>信息主要通过状态逐步传递</td>
+</tr>
+</tbody>
+</table>
+<p>也就是说，LSTM / GRU 让模型“记得更久了一些”，但还没有让模型真正做到“直接看到所有相关信息”。</p>
+<h3 id="模型四：双向-RNN-同时看前后文"><a href="#模型四：双向-RNN-同时看前后文" class="headerlink" title="模型四：双向 RNN 同时看前后文"></a>模型四：双向 RNN 同时看前后文</h3><p>普通 RNN 通常是从左往右读取文本，因此它在处理当前位置时，主要依赖已经读过的前文信息。但很多语言理解任务，只看前文是不够的，还需要结合后文一起判断。</p>
+<p>比如： 苹果 发布 了 新产品</p>
+<p>如果只看“苹果”前面的内容，几乎没有有效信息；但如果同时看到后面的“发布”“新产品”，就更容易判断这里的“苹果”指的是公司，而不是水果。</p>
+<p>双向 RNN 的思路就是：<strong>让模型从两个方向同时读句子</strong>。</p>
+<ol>
+<li>一条 RNN 从左往右读，获取前文信息；</li>
+<li>另一条 RNN 从右往左读，获取后文信息；</li>
+<li>最后把两个方向的信息合并起来，得到更完整的上下文表示。</li>
+</ol>
+<p>可以简单理解为：</p>
+<p><img src="/images/llm/llm-algorithm-11.png" alt="LLM 算法原理图"></p>
+<p>双向 RNN 在很多语言理解任务中非常有用，比如命名实体识别、文本分类、序列标注、句子匹配等。因为这些任务通常可以先看到完整句子，再做判断。不过，双向 RNN 也有自己的边界：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>是否适合</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>句子理解、分类、标注</td>
+<td>适合</td>
+</tr>
+<tr>
+<td>实时生成下一个 token</td>
+<td>不太适合，因为它依赖未来信息</td>
+</tr>
+</tbody>
+</table>
+<p>原因也很直观：生成式语言模型在写下一个 token 时，只能根据已经出现的内容继续往后生成，不能提前看到未来答案。因此，双向 RNN 更适合理解类任务，而不适合作为自回归生成模型的直接结构。</p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>把这些经典模型放在一起看，脉络就很清楚：</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>擅长什么</th>
+<th>主要不足</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CNN</td>
+<td>抓局部短语特征</td>
+<td>不擅长长距离依赖</td>
+</tr>
+<tr>
+<td>RNN</td>
+<td>按顺序建模文本</td>
+<td>长文本容易遗忘，训练慢</td>
+</tr>
+<tr>
+<td>LSTM / GRU</td>
+<td>增强记忆能力</td>
+<td>仍然偏顺序传递</td>
+</tr>
+<tr>
+<td>双向 RNN</td>
+<td>同时利用前后文</td>
+<td>不适合自回归生成</td>
+</tr>
+</tbody>
+</table>
+<p>这些模型都在不同阶段推动了 NLP 的发展，但它们也都没有彻底解决一个核心问题：长距离依赖。比如：</p>
+<ul>
+<li>虽然我昨天在朋友推荐的那家开在巷子深处、装修很有特色、排队也很久的咖啡店里坐了很久，但最后只点了一杯 __</li>
+</ul>
+<p>要预测最后空白处的词，模型需要记住前面较早出现的“咖啡店”。如果前文信息在传递过程中被不断稀释，模型可能就无法准确判断这里更可能是“咖啡”，而不是“水”“酒”或其他东西。</p>
+<p>这就是 Transformer 出现前，序列建模面临的关键挑战：如何让模型在处理当前位置时，更高效地找到上下文中真正相关的信息。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>回到文章开头提出的问题：机器到底是如何一步步学会处理语言的？</p>
+<p>现在我们可以把这条路径串起来看：</p>
+<ol>
+<li>首先，NLP 把自然语言问题转换成机器可以处理的任务；</li>
+<li>接着，token 和 embedding 把文本从“文字”变成可计算的数字表示；</li>
+<li>然后，感知机和神经网络说明模型并不是靠人手写规则，而是可以通过数据不断调整参数、学习规律；</li>
+<li>再往后，CNN、RNN、LSTM/GRU、双向 RNN 等模型不断尝试处理语言中的局部特征、顺序关系和上下文依赖；</li>
+<li>最后，Transformer 通过 Attention 机制，让模型能够更直接地关注上下文中真正相关的信息。</li>
+</ol>
+<p>所以，LLM 并不是突然出现的“魔法”。它背后是一条长期演进出来的技术路线。LLM 的能力不是来自某一个单点技术，而是来自语言表示、模型训练、上下文建模和大规模数据共同作用的结果。</p>
+<p>最后，用一张图总结本文的核心内容：从语言进入模型，到模型学会预测，再到 Transformer 成为现代 LLM 的核心架构。</p>
+<p><img src="/images/llm/llm-algorithm-12.png" alt="LLM 算法原理图"></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;blockquote&gt;
+&lt;p&gt;核心句：这篇文章不是算法课，而是给普通开发者补一条最短路径：从 NLP、感知机、神经网络，到为什么需要 Transformer。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。&lt;/p&gt;
+&lt;p&gt;我们不追求推导公式，也不会一上来就深入 Transformer 的细节。本文更希望回答一个核心问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;机器到底是如何一步步学会处理语言的？&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;理解这个问题之后，再去看 LLM、Transformer、Attention、预训练、微调这些概念，就不会只是记住一堆名词，而是能知道它们分别解决了什么问题，为什么会一步步演进到今天的大语言模型。&lt;/p&gt;
+&lt;p&gt;读完这篇文章，希望你能清晰回答下面几个问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;为什么要把文本变成 token 和向量？&lt;/li&gt;
+&lt;li&gt;为什么模型可以从数据中学习？&lt;/li&gt;
+&lt;li&gt;为什么神经网络比手写规则更强？&lt;/li&gt;
+&lt;li&gt;为什么传统序列模型不够用？&lt;/li&gt;
+&lt;li&gt;为什么 Transformer 会成为大模型的核心架构？&lt;/li&gt;
+&lt;/ol&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (二)：机器如何把语言变成数学</title>
@@ -4016,195 +4733,6 @@
     
     
       <category term="calcite" scheme="http://matt33.com/tags/calcite/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>BookKeeper 原理浅谈</title>
-    <link href="http://matt33.com/2019/01/28/bk-store-realize/"/>
-    <id>http://matt33.com/2019/01/28/bk-store-realize/</id>
-    <published>2019-01-28T15:23:35.000Z</published>
-    <updated>2026-06-19T02:19:10.482Z</updated>
-    
-    <content type="html"><![CDATA[<p>接着之前的一篇文章 <a href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/">BookKeeper 集群搭建及使用</a>，本文是 BookKeeper 系列的第二篇，短期来看应该也是最后一篇，本篇文章主要聚焦于 BookKeeper 内核的实现机制上，会从 BookKeeper 的基本概念、架构、读写一致性实现、读写分离实现、容错机制等方面来讲述，因为我并没有看过 BookKeeper 的源码，所以这里的讲述主要还是从原理、方案实现上来介绍，具体如何从解决方案落地到具体的代码实现，有兴趣的可以去看下 BookKeeper 的源码实现。</p>
-<h2 id="BookKeeper-基础"><a href="#BookKeeper-基础" class="headerlink" title="BookKeeper 基础"></a>BookKeeper 基础</h2><p>正如 Apache BookKeeper 官网介绍的一样：A scalable, fault-tolerant, and low-latency storage service optimized for real-time workloads。BookKeeper 的定位是一个可用于实时场景下的高扩展性、强容错、低延迟的存储服务。<a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming - 示说网</a> 中也做了一个简单总结：</p>
-<ol>
-<li>低延迟多副本复制：Quorum Parallel Replication；</li>
-<li>持久化：所有操作保证在刷盘后才 ack；</li>
-<li>强一致性：可重复读的一致性（Repeatable Read Consistency）;</li>
-<li>读写高可用；</li>
-<li>读写分离。</li>
-</ol>
-<h3 id="BookKeeper-基本概念"><a href="#BookKeeper-基本概念" class="headerlink" title="BookKeeper 基本概念"></a>BookKeeper 基本概念</h3><p><a href="http://matt33.com/2018/10/19/bk-cluster-install-and-use/#BookKeeper-%E7%AE%80%E4%BB%8B">BookKeeper 简介</a> 部分已经对 BookKeeper 的基本概念做了一些讲解，这里再重新回顾一下，只有明白这些概念之后才能对更好地理解后面的内容，如下图所示，一个 Log/Stream/Topic 可以由下面的部分组成（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）。</p>
-<p><img src="/images/bookkeeper/bk5.png" alt="BookKeeper 中的基本概念"></p>
-<p>其中：</p>
-<ol>
-<li>Ledger：它是 BK 的一个基本存储单元（本质上还是一种抽象），BK Client 的读写操作也都是以 Ledger 为粒度的；</li>
-<li>Fragment：BK 的最小分布单元（实际上也是物理上的最小存储单元），也是 Ledger 的组成单位，默认情况下一个 Ledger 会对应的一个 Fragment（一个 Ledger 也可能由多个 Fragment 组成）；</li>
-<li>Entry：每条日志都是一个 Entry，它代表一个 record，每条 record 都会有一个对应的 entry id；</li>
-</ol>
-<p>关于 Fragment，它是 Ledger 的物理组成单元，也是最小的物理存储单元，在以下两种情况下会创建新的 Fragment：</p>
-<ol>
-<li>当创建新的 Ledger 时；</li>
-<li>当前 Fragment 使用的 Bookies 发生写入错误或超时，系统会在剩下的 Bookie 中新建 Fragment，但这时并不会新建 Ledger，因为 Ledger 的创建和关闭是由 Client 控制的，这里只是新建了 Fragment（需要注意的是：<strong>这两个 Fragment 对应的 Ensemble Bookie 已经不一样了</strong>，但它们都属于一个 Ledger，这里并不一定是一个 Ensemble Change 操作）。</li>
-</ol>
-<h3 id="BookKeeper-架构设计"><a href="#BookKeeper-架构设计" class="headerlink" title="BookKeeper 架构设计"></a>BookKeeper 架构设计</h3><p>Apache BookKeeper 的架构如下图所示，它主要由三个组件构成：客户端 (client)、数据存储节点 (Bookie) 和元数据存储 Service Discovery（ZooKeeper），Bookies 在启动的时候向 ZooKeeper 注册节点，Client 通过 ZooKeeper 发现可用的 Bookie。</p>
-<p><img src="/images/bookkeeper/bk-articture.png" alt="Apache BookKeeper 架构"></p>
-<p>这里，我们可以看到 BookKeeper 架构属于典型的 slave-slave 架构，zk 存储其集群的 meta 信息（zk 虽是单点，但 zk 目前的高可用还是很有保障的），这种模式的好处显而易见，server 端变得非常简单，所有节点都是一样的角色和处理逻辑，能够这样设计的主要原因是其副本没有 leader 和 follower 之分，这是它与一些常见 mq（如：kafka、RocketMQ）系统的典型区别，每种设计都有其 trade-off，BeekKeeper 从设计之初就是为了高可靠而设计。</p>
-<h2 id="BookKeeper-存储层实现"><a href="#BookKeeper-存储层实现" class="headerlink" title="BookKeeper 存储层实现"></a>BookKeeper 存储层实现</h2><p>Apache BookKeeper 是一个高可靠的分布式存储系统，存储层的实现是其核心，对一个存储系统来说，关键的几点实现，无非是：一致性如何保证、IO 如何优化、高可用如何实现等，这小节就让我们揭开其神秘面纱。</p>
-<h3 id="新建-Ledger"><a href="#新建-Ledger" class="headerlink" title="新建 Ledger"></a>新建 Ledger</h3><p>Ledger 是 BookKeeper 的基本存储抽象单元，这里先看下一个 Ledger 是如何创建的，这里会介绍一些关于 Ledger 存储层的一些重要概念（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）。</p>
-<p><img src="/images/bookkeeper/bk2.png" alt="BookKeeper Ledger 的创建"></p>
-<p>Ledger 是一组追加有序的记录，它是由 Client 创建的，然后由其进行追加写操作。每个 Ledger 在创建时会被赋予全局唯一的 ID，其他的 Client 可以根据 Ledger ID，对其进行读取操作。创建 Ledger 及 Entry 写入的相关过程如下：</p>
-<ol>
-<li>Client 在创建 Ledger 的时候，从 Bookie Pool 里面按照指定的数据放置策略挑选出一定数量的 Bookie，构成一个 Ensemble；</li>
-<li>每条 Entry 会被并行地发送给 Ensemble 里面的部分 Bookies（每条 Entry 发送多少个 Bookie 是由 Write Quorum size 设置、具体发送哪些 Bookie 是由 Round Robin 算法来计算），并且所有 Entry 的发送以流水线的方式进行，也就是意味着发送第 N + 1 条记录的写请求不需要等待发送第 N 条记录的写请求返回；</li>
-<li>对于每条 Entry 的写操作而言，当它收到 Ensemble 里面大多数 Bookie 的确认后（这个由 Ack Quorum size 来设置），Client 认为这条记录已经持久化到这个 Ensemble 中，并且有大多数副本。</li>
-</ol>
-<p><img src="/images/bookkeeper/bk3.png" alt="BookKeeper Ledger 多副本复制"></p>
-<p>这里引入了三个重要的概念，它们也是 BookKeeper 一致性的基础：</p>
-<ol>
-<li>Ensemble size(E)：Set of Bookies across which a ledger is striped，一个 Ledger 所涉及的 Bookie 集合；</li>
-<li>Write Quorum Size（Qw）：Number of replicas，副本数；</li>
-<li>Ack Quorum Size（Qa）：Number of responses needed before client’s write is satisfied。</li>
-</ol>
-<p>从上面 Ensemble、Qw、Qa 的概念可以得到以下这些推论：</p>
-<ol>
-<li>Ensemble：可以控制一个 Ledger 的读写带宽；</li>
-<li>Write Quorum：控制一条记录的复本数；</li>
-<li>Ack Quorum：写每条记录需要等待的 Ack 数 ，控制时延； </li>
-<li>增加 Ensemble，可以增加读写带宽（增加了可写的机器数）；</li>
-<li>减少 Ack Quorum，可以减长尾时延。</li>
-</ol>
-<h3 id="一致性"><a href="#一致性" class="headerlink" title="一致性"></a>一致性</h3><p>对于分布式存储系统，为了高可用，多副本是其通用的解决方案，但也带来了一致性的问题，这里就看下 Apache BookKeeper 是如何解决其带来的一致性问题的。</p>
-<h4 id="一致性模型"><a href="#一致性模型" class="headerlink" title="一致性模型"></a>一致性模型</h4><p>在介绍其读写一致性之前，先看下 BK 的一致性模型（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
-<p><img src="/images/bookkeeper/bk-consistency1.png" alt="BookKeeper 一致性模型-开始时的状态"></p>
-<p>对于 Write 操作而言，writer 不断添加记录，每条记录会被 writer 赋予一个严格递增的 id，所有的追加操作都是异步的，也就是说：第二条记录不用等待第一条记录返回结果。所有写成功的操作都会按照 id 递增顺序返回 ack 给 writer。（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
-<p><img src="/images/bookkeeper/bk-consistency2.png" alt="BookKeeper 一致性模型-追加数据时的中间状态"></p>
-<p>伴随着写成功的 ack，writer 不断地更新一个指针叫做 <strong>Last-Add-Confirm（LAC）</strong>，所有 Entry id 小于等于 LAC 的记录保证持久化并复制到大多数副本上，而 LAC 与 <strong>LAP（Last-Add-Pushed）</strong>之间的记录就是已经发送到 Bookie 上但还未被 ack 的数据。</p>
-<h4 id="读的一致性"><a href="#读的一致性" class="headerlink" title="读的一致性"></a>读的一致性</h4><p>所有的 Reader 都可以安全读取 Entry ID 小于或者等于 LAC 的记录，从而保证 reader 不会读取未确认的数据，从而保证了 reader 之间的一致性（图片来自 <a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>）。</p>
-<p><img src="/images/bookkeeper/bk-consistency3.png" alt="BookKeeper 一致性模型-读的一致性"></p>
-<h4 id="写的一致性"><a href="#写的一致性" class="headerlink" title="写的一致性"></a>写的一致性</h4><p>从上面的介绍中，也可以看出，对于 BK 的多个副本，其并没有 leader 和 follower 之分，因此，BK 并不会进行相应的选主（leader election）操作，并且限制<strong>每个 Ledger 只能被一个 Writer 写，BK 通过 Fencing 机制来防止出现多个 Writer 的状态</strong>，从而保证写的一致性。</p>
-<h3 id="读写分离"><a href="#读写分离" class="headerlink" title="读写分离"></a>读写分离</h3><p>下面来看下 BK 存储层一个很重要的设计，那就是读写分离机制。在论文 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a> 中，关于读写分离机制的介绍如下所示（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
-<p><img src="/images/bookkeeper/bk7.png" alt="BookKeeper 读写分离"></p>
-<p>A bookie uses two devices, ideally in separate physical disks: </p>
-<ol>
-<li><strong>The journal device</strong> is a write-ahead log and stores synchronously and sequentially all updates the bookie executes. </li>
-<li><strong>The ledger device</strong> contains an indexed copy of a ledger fragment, which a bookie uses to respond to read requests. </li>
-</ol>
-<p>上面是论文中关于 BK 读写分离机制实现的介绍，我当时在看完上面的记录之后，脑海中有以下疑问：</p>
-<ol>
-<li>一个写请求是怎么处理？什么时候数据被认为是 ack 了；</li>
-<li>数据肯定先写到 Journal Device 中的，那么数据是如何到 Ledger Device 中的？</li>
-<li>Ledger Device 中的顺序写跟随机读是什么意思？难道跟 RocketMQ 的存储结构一样？</li>
-<li>Ledger Device 底层是怎么切分实际的物理文件的？</li>
-<li>数据在什么时候才能可见？</li>
-<li>在从 Ledger Device 读数据时，它是通过什么机制提高查询速度的？</li>
-</ol>
-<p>带着这些疑问，接下来来分析其实现（图片来自 <a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>）：</p>
-<p><img src="/images/bookkeeper/bk1.png" alt="BookKeeper 读写分离"></p>
-<p>Journal Device 分析：</p>
-<ul>
-<li>处理写入请求时，如果 Journal 是在专用的磁盘上，由于是顺序写入刷盘，性能会很高；</li>
-</ul>
-<p>Ledger Device 的实现：</p>
-<ul>
-<li>Bookie 最初的设计方案是每个 Ledger 对应一个物理文件，但这样会极大消耗写性能，所以 Bookie 当前的设计方案是所有 Ledger 都写一个单独的文件中，这个文件又叫 entry log；</li>
-<li>写入时，不但会写入到 Journal 中还会写入到缓存（memtable）中，定期会做刷盘（<strong>刷盘前会做排序</strong>，通过 <strong>聚合+排序</strong> 优化读取性能）；</li>
-<li>优化查找：Ledger Device 中会维护一个索引结构，存储在 RocksDB 中，它会<strong>将 (LedgerId，EntryId) 映射到(EntryLogId，文件中的偏移量)</strong>。</li>
-</ul>
-<h3 id="读写流程"><a href="#读写流程" class="headerlink" title="读写流程"></a>读写流程</h3><p>了解完 BK 的一致性模型和读写分离机制之后，这里来看下 BK 的读写流程。</p>
-<h4 id="Entry-写入流程"><a href="#Entry-写入流程" class="headerlink" title="Entry 写入流程"></a>Entry 写入流程</h4><p>这里以一个例子来说明，假设 E 是3，Qw 和 Qa 是2，那么 Entry 写入如下图（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
-<p><img src="/images/bookkeeper/bk8.png" alt="BookKeeper Entry 写入流程"></p>
-<ol>
-<li>Writer 会先分配对应的 id，然后按照 round-robin 算法从3个 Bookie 中选取2个 Bookie；</li>
-<li>Writer 会向两个 Bookie 发送写入请求，因为 Qa 设置为2，只有收到两个 ack 响应后，才会认为这条 Entry 写入成功；</li>
-</ol>
-<p><strong>如果写入过程中有一台 Bookie 挂了怎么办？</strong></p>
-<ol>
-<li>那么只能向另外2台 Bookie 写入数据；</li>
-<li>这时候这个 Ledger 会新建一个 Fragment，假设挂的是A，之前 Ensemble 是 A、B、C，现在的是 B、C；</li>
-<li>这个变化会更新到 zk 中这个 Ledger 的 meta 中。</li>
-</ol>
-<p><strong>如果写入过程中有两个 Bookie 挂了怎么办？</strong></p>
-<ol>
-<li>Ensemble 里面的存活的 Bookies 不能满足 Qw 的要求；</li>
-<li>Client 会进行一个 <strong>Ensemble Change</strong> 操作；</li>
-<li>Ensemble Change 将从 Bookie Pool 中根据数据放置策略挑选出额外的 Bookie 用来取代那些不存活的 Bookie 。</li>
-</ol>
-<h4 id="Entry-读取流程"><a href="#Entry-读取流程" class="headerlink" title="Entry 读取流程"></a>Entry 读取流程</h4><p>这里依然以一个例子做说明，例子是紧接着上面的示例，如下图所示（图片来自 <a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>）：</p>
-<p><img src="/images/bookkeeper/bk9.png" alt="BookKeeper Entry 读取流程"></p>
-<p>如何想要读取 id 为1的那条 Entry 应该怎么做？</p>
-<ul>
-<li>在读取会选择最优的 Bookie，有了 Entry 的 id 和 Ledger 的 Ensemble 就可以根据 round-robin 计算出其所在 Bookie 信息，会选择向其中一个 Bookie 发送读请求。</li>
-</ul>
-<p>这种机制会导致，读取数据时可能需要从多个 Bookie 获取数据，需要并发访问多个 Bookie，性能会变差，极端情况会有这个问题。</p>
-<ul>
-<li>BK 有一个优化策略：读取时一般是选择读一段数据，如果 entries 在同一台机器上，会从同一个 Bookie 把这批 Entry 全部读取。</li>
-</ul>
-<p>BK 怎么处理长尾效应的问题（长尾效应指的是某台机器上某段或者某条数据读取得比较慢，进而影响了整体的效率）？</p>
-<ul>
-<li>Client 可以向任意一个副本读取相应的 Entry，但为了保证低延时，这里使用了一个叫 <strong>Speculative Read</strong> 的机制。读请求首先发送给第一个副本后，如果在指定的时间内没有收到 reponse，则发送读请求给第二个副本，然后同时等待第一个和第二个副本。谁第一个返回，即读取成功。通过有效的 Speculative read，可以很大程度减少长尾效应。</li>
-</ul>
-<h2 id="BookKeeper-容错机制"><a href="#BookKeeper-容错机制" class="headerlink" title="BookKeeper 容错机制"></a>BookKeeper 容错机制</h2><p>这里来简单来看下 BookKeeper 容错机制的实现。</p>
-<h3 id="Fencing-机制"><a href="#Fencing-机制" class="headerlink" title="Fencing 机制"></a>Fencing 机制</h3><p>Fencing 机制在前面已经简单介绍过了，它目的主要是为了保证写的一致性，<strong>严格保证一个 Ledger 只能被一个 Writer 来写</strong>。</p>
-<p>Fencing 怎么触发呢？</p>
-<ul>
-<li>如果一个 Writer 打开一个 Ledger，发现这个 Ledger 存在，并且没有 close，这种情况下，就会触发 Fencing 策略，并且触发 Ledger Recovery。</li>
-</ul>
-<h3 id="Log-Recovery-机制"><a href="#Log-Recovery-机制" class="headerlink" title="Log Recovery 机制"></a>Log Recovery 机制</h3><p>一个 Ledger 正常关闭后，会在其 Metadata 中存储 the last entry 的信息，所以正常关闭一个 Ledger 是非常重要的（<strong>Ledger 一旦关闭，其就是不可变的</strong>，读取的时候可以从任意一个 Bookie 上读取，而不需要再取 care 这个 Ledger 的 LAC 信息），否则可能会出现这样一种情况：</p>
-<p>由于 Writer 挂了（Ledger 未正常关闭），导致部分数据写入成功，实际上这个条消息并不满足 Qw（可能满足了 Qa），会导致不同 Reader 读取的结果不一致！如下图所示：</p>
-<p><img src="/images/bookkeeper/bk10.png" alt="不同 Reader 读取不一致的情况"></p>
-<p>解决方案就是： <strong>Log Recovery</strong>，正常关闭这个 Ledger，并将 The Last Entry 及状态更新到 metadata 中。</p>
-<p>Log Recovery 怎么实现呢？通常有两种方案：</p>
-<ol>
-<li>遍历这个 Ledger 所有 Entry 进行恢复；</li>
-<li>利用 LAC 机制可以加速 recovery：恢复前，先获取每个 Ledger 的 LAC 信息，然后从 LAC 开始恢复；</li>
-</ol>
-<p>很明显，第二种方案是比较合理的恢复速度更快。</p>
-<h3 id="Bookie-容错"><a href="#Bookie-容错" class="headerlink" title="Bookie 容错"></a>Bookie 容错</h3><p>当一个 Bookie 故障时：</p>
-<ul>
-<li>所有在这个 Bookie 上的 Ledgers 都处于 under-replica 状态，恢复就是复制 Fragment （Ledger 的组成单位）的过程，以确保每个 Ledger 维护的副本数打到 Qw。</li>
-</ul>
-<p>Bk 提供自动和手动两种方式：两种方式的复制协议是一样的；自动恢复是 BK 内部自动触发，手动过程需要手动干预，这里重点介绍自动过程：</p>
-<ol>
-<li>自动恢复是在 Bookie 上运行 <strong>AutoRecoveryMain 线程</strong>来实现，它会首先通过 zk 选举一个 Auditor；</li>
-<li>Auditor 的作用是<strong>检查不可用的 Bookie</strong>，然后做下面的操作：读取 zk 上完整的 Ledgers 信息，找到失败的 Ledgers（副本不满足条件的）；然后在 zk 的 <code>/underreplicated</code> znode 节点创建重新复制任务；</li>
-<li>AutoRecoveryMain 还有 Replicator Worker 线程会复制相应的 Fragment 到自己的 Ledger 上，如果复制后满足 Fully Replicated，那么就从 zk 的节点中删除这个任务；</li>
-</ol>
-<p><img src="/images/bookkeeper/bk11.png" alt="Bookie 容错机制"></p>
-<p>每个 Bookie 在发现任务时会尝试锁定，如果无法锁定就会执行后面的任务。如果获得锁，那么：</p>
-<ol>
-<li>扫描 Ledgers，查找不属于当前 Bookie 的 Fragment；</li>
-<li>对于每个匹配的 Fragment，它将另一个 Bookie 的数据复制到它自己的 Bookie，用新的集合更新 Zookeeper 并将 Fragment 标识为 Fully Replicated。</li>
-</ol>
-<p>如果 Ledgers 仍然存在副本数不足的 Fragment，则释放锁。如果所有 Fragment 都已经Fully Replicated，则从 <code>/underreplicated</code> 删除重复复制任务。</p>
-<h2 id="最后"><a href="#最后" class="headerlink" title="最后"></a>最后</h2><p>到这里，关于 BK 内核实现的主要部分已经介绍完毕，这篇文章的主要内容来自之前在团队的一次分享，一直想整理成博客的，但一直拖到了现在（因为并没有去看代码实现，主要是跟 bk 的论文及相关资料来整理的，有问题的地方欢迎指正）。</p>
-<hr>
-<p>参考：</p>
-<ul>
-<li><a href="https://www.deepdyve.com/lp/association-for-computing-machinery/durability-with-bookkeeper-85Q3t4l8SF" target="_blank" rel="external">Durability with BookKeeper</a>;</li>
-<li><a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming</a>；</li>
-<li><a href="https://bookkeeper.apache.org/docs/4.8.0/overview/overview/" target="_blank" rel="external">Apache BookKeeper Documentation</a>;</li>
-<li><a href="https://streaml.io/blog/intro-to-bookkeeper" target="_blank" rel="external">Introduction to Apache BookKeeper</a>;</li>
-<li><a href="https://streaml.io/blog/why-apache-bookkeeper" target="_blank" rel="external">Why Apache BookKeeper? Part 1: consistency, durability, availability</a>;</li>
-<li><a href="https://streaml.io/blog/why-bookkeeper-part-2" target="_blank" rel="external">Why Apache Bookkeeper? Part 2</a>；</li>
-<li><a href="https://jack-vanlightly.com/blog/2018/10/2/understanding-how-apache-pulsar-works?from=timeline" target="_blank" rel="external">Understanding How Apache Pulsar Works</a>；</li>
-<li><a href="https://jack-vanlightly.com/blog/2018/9/10/how-to-lose-messages-on-a-rabbitmq-cluster" target="_blank" rel="external">How to Lose Messages on a RabbitMQ Cluster</a>；</li>
-<li><a href="https://www.slidestalk.com/s/pulsar_cloud_native_messaging_and_streaming" target="_blank" rel="external">Pulsar-Cloud Native Messaging &amp; Streaming - 示说网</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/0dkgA8swNPkpcY5H6CU62w" target="_blank" rel="external">Twitter高性能分布式日志系统架构解析</a>；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;接着之前的一篇文章 &lt;a href=&quot;http://matt33.com/2018/10/19/bk-cluster-install-and-use/&quot;&gt;BookKeeper 集群搭建及使用&lt;/a&gt;，本文是 BookKeeper 系列的第二篇，短期来看应该也是最后一篇，本篇
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="bk" scheme="http://matt33.com/tags/bk/"/>
     
   </entry>
   
