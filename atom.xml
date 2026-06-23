@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-06-23T16:43:19.541Z</updated>
+  <updated>2026-06-24T10:10:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -20,10 +20,11 @@
     <link href="http://matt33.com/2026/06/24/llm-transformer-architecture/"/>
     <id>http://matt33.com/2026/06/24/llm-transformer-architecture/</id>
     <published>2026-06-24T10:10:00.000Z</published>
-    <updated>2026-06-23T16:43:19.541Z</updated>
+    <updated>2026-06-24T10:10:00.000Z</updated>
     
     <content type="html"><![CDATA[<p>前三篇文章里，我们已经分别从三个角度为理解大语言模型打了基础：第一篇看发展脉络，知道 LLM 是怎么一步步演进出来的；第二篇看数学基础，理解向量、概率、损失函数、梯度这些底层工具；第三篇看算法基础，从 NLP、词向量、感知机、神经网络，一路讲到 CNN、RNN 和双向 RNN。到了第四篇，我们终于可以进入现代大语言模型最核心的一块内容：<strong>Transformer</strong>。</p>
 <p>如果说前几篇是在回答“机器如何把语言变成可以计算的问题”，那么这一篇要回答的是另一个更关键的问题：<strong>为什么后来的主流大语言模型，几乎都选择了 Transformer 作为核心架构？</strong></p>
+<a id="more"></a>
 <p>这篇文章仍然不是论文精读，也不会一上来就推公式。我们会继续站在普通开发者的视角，把 Transformer 拆成几个容易理解的部分：它想解决什么问题，Attention 到底在做什么，Self-Attention 为什么能理解上下文，Multi-Head Attention 为什么要从多个角度看文本，位置编码解决了什么问题，Transformer Block 又是如何一层层堆出大模型能力的。</p>
 <p>先不用急着记住每个概念的细节，可以先把下面这张表当成本文的地图：</p>
 <table>
@@ -82,7 +83,6 @@
 </table>
 <p>整体路线可以理解成这样：</p>
 <p><img src="/images/llm/llm-transformer-01.png" alt="Transformer 架构篇整体路线图"></p>
-<a id="more"></a>
 <h2 id="为什么需要-Transformer？"><a href="#为什么需要-Transformer？" class="headerlink" title="为什么需要 Transformer？"></a>为什么需要 Transformer？</h2><p>在第三篇文章里，我们讲过 RNN、LSTM、GRU、双向 RNN 这些经典序列模型。它们的共同特点是：按顺序处理文本。</p>
 <p>比如一句话：<code>我 今天 早上 喝 了 一杯 咖啡</code></p>
 <p>RNN 会从左到右一个 token 一个 token 地读，每一步都把前面读到的信息压缩进一个隐藏状态。</p>
@@ -500,7 +500,7 @@
 </table>
 <p>模型选择一个 token 之后，再把它拼回上下文，继续生成后面的内容。</p>
 <p>整个流程可以用一张图串起来：</p>
-<p><img src="/images/llm/llm-transformer-13.svg" alt="Transformer 完整运作流程"></p>
+<p><img src="/images/llm/llm-transformer-14.png" alt="Transformer 完整运作流程"></p>
 <p>可以把这张图记成一句话：<strong>文本先变成 token，token 再变成向量，向量经过多层 Transformer Block 不断融合上下文，最后输出下一个 token 的概率</strong>。</p>
 <p>这样，Transformer 就不再是一堆独立概念，而是一条完整的计算链路。</p>
 <h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>讲到这里，我们已经知道 Transformer 的核心能力是：通过 Attention，让文本中的 token 直接建立关系。</p>
@@ -666,64 +666,6 @@
     
       &lt;p&gt;前三篇文章里，我们已经分别从三个角度为理解大语言模型打了基础：第一篇看发展脉络，知道 LLM 是怎么一步步演进出来的；第二篇看数学基础，理解向量、概率、损失函数、梯度这些底层工具；第三篇看算法基础，从 NLP、词向量、感知机、神经网络，一路讲到 CNN、RNN 和双向 RNN。到了第四篇，我们终于可以进入现代大语言模型最核心的一块内容：&lt;strong&gt;Transformer&lt;/strong&gt;。&lt;/p&gt;
 &lt;p&gt;如果说前几篇是在回答“机器如何把语言变成可以计算的问题”，那么这一篇要回答的是另一个更关键的问题：&lt;strong&gt;为什么后来的主流大语言模型，几乎都选择了 Transformer 作为核心架构？&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;这篇文章仍然不是论文精读，也不会一上来就推公式。我们会继续站在普通开发者的视角，把 Transformer 拆成几个容易理解的部分：它想解决什么问题，Attention 到底在做什么，Self-Attention 为什么能理解上下文，Multi-Head Attention 为什么要从多个角度看文本，位置编码解决了什么问题，Transformer Block 又是如何一层层堆出大模型能力的。&lt;/p&gt;
-&lt;p&gt;先不用急着记住每个概念的细节，可以先把下面这张表当成本文的地图：&lt;/p&gt;
-&lt;table&gt;
-&lt;thead&gt;
-&lt;tr&gt;
-&lt;th&gt;&lt;strong&gt;概念&lt;/strong&gt;&lt;/th&gt;
-&lt;th&gt;&lt;strong&gt;它解决什么问题&lt;/strong&gt;&lt;/th&gt;
-&lt;th&gt;&lt;strong&gt;直觉理解&lt;/strong&gt;&lt;/th&gt;
-&lt;th&gt;&lt;strong&gt;和 LLM 的关系&lt;/strong&gt;&lt;/th&gt;
-&lt;/tr&gt;
-&lt;/thead&gt;
-&lt;tbody&gt;
-&lt;tr&gt;
-&lt;td&gt;Transformer&lt;/td&gt;
-&lt;td&gt;重新设计序列建模方式&lt;/td&gt;
-&lt;td&gt;不再一个词一个词慢慢传，而是让 token 直接建立关系&lt;/td&gt;
-&lt;td&gt;现代 LLM 的核心架构&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;Attention&lt;/td&gt;
-&lt;td&gt;找到当前 token 应该关注谁&lt;/td&gt;
-&lt;td&gt;读一句话时，自动把注意力放到相关词上&lt;/td&gt;
-&lt;td&gt;Transformer 的核心机制&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;Self-Attention&lt;/td&gt;
-&lt;td&gt;让一句话内部 token 互相关注&lt;/td&gt;
-&lt;td&gt;每个 token 都能参考其他 token&lt;/td&gt;
-&lt;td&gt;理解上下文的关键&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;Multi-Head Attention&lt;/td&gt;
-&lt;td&gt;从多个角度看关系&lt;/td&gt;
-&lt;td&gt;有的头看语法，有的头看指代，有的头看语义&lt;/td&gt;
-&lt;td&gt;提升表达能力&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;Positional Encoding&lt;/td&gt;
-&lt;td&gt;补充位置信息&lt;/td&gt;
-&lt;td&gt;告诉模型 token 的顺序&lt;/td&gt;
-&lt;td&gt;让模型知道“狗咬人”和“人咬狗”不同&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;Transformer Block&lt;/td&gt;
-&lt;td&gt;把注意力、前馈网络、残差连接组合起来&lt;/td&gt;
-&lt;td&gt;一个可重复堆叠的计算单元&lt;/td&gt;
-&lt;td&gt;LLM 就是很多层 block 堆起来&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;Decoder-only&lt;/td&gt;
-&lt;td&gt;只根据前文预测后文&lt;/td&gt;
-&lt;td&gt;不能偷看未来，只能一步步生成&lt;/td&gt;
-&lt;td&gt;GPT 类模型的主流结构&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;p&gt;整体路线可以理解成这样：&lt;/p&gt;
-&lt;p&gt;&lt;img src=&quot;/images/llm/llm-transformer-01.png&quot; alt=&quot;Transformer 架构篇整体路线图&quot;&gt;&lt;/p&gt;
     
     </summary>
     
@@ -739,9 +681,10 @@
     <link href="http://matt33.com/2026/06/22/llm-algorithm-principles/"/>
     <id>http://matt33.com/2026/06/22/llm-algorithm-principles/</id>
     <published>2026-06-22T10:10:00.000Z</published>
-    <updated>2026-06-22T16:51:13.494Z</updated>
+    <updated>2026-06-23T16:58:12.426Z</updated>
     
     <content type="html"><![CDATA[<p>前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。</p>
+<a id="more"></a>
 <p>我们不追求推导公式，也不会一上来就深入 Transformer 的细节。本文更希望回答一个核心问题：</p>
 <ul>
 <li>机器到底是如何一步步学会处理语言的？</li>
@@ -755,7 +698,6 @@
 <li>为什么传统序列模型不够用？</li>
 <li>为什么 Transformer 会成为大模型的核心架构？</li>
 </ol>
-<a id="more"></a>
 <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>简单来说，这篇文章是为后面深入理解 Transformer 和 LLM 工作原理做准备。我们会从 NLP、词向量、感知机、神经网络讲起，再一路过渡到 CNN、RNN、双向 RNN 等经典模型。核心概念如下表所示：</p>
 <table>
 <thead>
@@ -1422,19 +1364,6 @@
     <summary type="html">
     
       &lt;p&gt;前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。&lt;/p&gt;
-&lt;p&gt;我们不追求推导公式，也不会一上来就深入 Transformer 的细节。本文更希望回答一个核心问题：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;机器到底是如何一步步学会处理语言的？&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;理解这个问题之后，再去看 LLM、Transformer、Attention、预训练、微调这些概念，就不会只是记住一堆名词，而是能知道它们分别解决了什么问题，为什么会一步步演进到今天的大语言模型。&lt;/p&gt;
-&lt;p&gt;读完这篇文章，希望你能清晰回答下面几个问题：&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;为什么要把文本变成 token 和向量？&lt;/li&gt;
-&lt;li&gt;为什么模型可以从数据中学习？&lt;/li&gt;
-&lt;li&gt;为什么神经网络比手写规则更强？&lt;/li&gt;
-&lt;li&gt;为什么传统序列模型不够用？&lt;/li&gt;
-&lt;li&gt;为什么 Transformer 会成为大模型的核心架构？&lt;/li&gt;
-&lt;/ol&gt;
     
     </summary>
     
@@ -1450,7 +1379,7 @@
     <link href="http://matt33.com/2026/06/21/llm-math-basics/"/>
     <id>http://matt33.com/2026/06/21/llm-math-basics/</id>
     <published>2026-06-21T10:10:00.000Z</published>
-    <updated>2026-06-21T17:11:33.494Z</updated>
+    <updated>2026-06-22T02:14:26.061Z</updated>
     
     <content type="html"><![CDATA[<p>上一篇我们从大模型的发展脉络出发，回顾了语言模型如何从早期的统计方法，一步步走向 Transformer、GPT，以及今天无处不在的大模型应用。如果说第一篇回答的是“LLM 是怎么发展到今天的”，那么这一篇想往下多走一层，回答一个更底层的问题：<strong>LLM 为什么能被训练出来？机器到底是怎样把语言变成可计算、可优化、可生成的东西？</strong></p>
 <p>无论是 Transformer 里的 Attention，预训练里的 loss，微调时的梯度更新，RAG 里的向量检索，还是 LoRA 里的低秩矩阵，本质上都绕不开几类基础数学概念。不过，这篇并不是要把大家重新拉回大学数学课堂。我们不会从定理证明开始，也不会堆大量公式。更重要的是建立一套直觉：<strong>机器如何把文字变成向量，如何计算词与词之间的关系，如何预测下一个 token，又如何通过错误和梯度一步步修正自己</strong>。</p>
@@ -2720,13 +2649,13 @@
     <link href="http://matt33.com/2026/06/19/llm-ai-to-llm/"/>
     <id>http://matt33.com/2026/06/19/llm-ai-to-llm/</id>
     <published>2026-06-19T10:10:00.000Z</published>
-    <updated>2026-06-21T10:23:38.396Z</updated>
+    <updated>2026-06-23T16:58:12.300Z</updated>
     
     <content type="html"><![CDATA[<p>过去几年，大语言模型（LLM）从实验室里的研究成果，迅速变成了普通人每天都能接触到的工具。ChatGPT、Claude、Gemini、DeepSeek 等产品，让很多人第一次直观感受到：机器不只是能搜索信息、识别图片、完成分类任务，它似乎开始能够理解问题、组织语言、代码生成、分析文档，甚至参与复杂决策。</p>
 <p>但如果只把 LLM 理解成“一个很会聊天的 AI”，其实会低估它背后的技术演进。今天的 LLM，并不是突然出现的魔法，而是人工智能几十年发展积累后的结果：从早期的符号推理，到机器学习；从神经网络，到深度学习；从词向量、注意力机制，到 Transformer；再到预训练、后训练、分布式训练、推理服务、RAG、Agent 和多模态系统，每一步都在回答同一个问题：<strong>机器智能是如何产生并不断演进的？</strong></p>
+<a id="more"></a>
 <p>因此，我打算新开一个 LLM 系列的文章，这个系列会从底层原理出发，逐步拆开 LLM 的关键技术拼图，让读者能够理解 LLM 背后的技术原理，帮助没有 AI 背景的同学建立完整的框架。</p>
 <p>作为 LLM 系列的第一篇，我们先回到起点：从 AI 到 LLM，看看大语言模型究竟是如何从几十年的人工智能探索中一步步长出来的。</p>
-<a id="more"></a>
 <h2 id="AI-的终极问题：机器如何获取智能？"><a href="#AI-的终极问题：机器如何获取智能？" class="headerlink" title="AI 的终极问题：机器如何获取智能？"></a>AI 的终极问题：机器如何获取智能？</h2><p>在真正进入 LLM 之前，我们先需要理解一个更早的问题：人工智能几十年来到底在追求什么？从早期 AI 到今天的大语言模型，表面上看技术形态变化很大，但背后始终围绕同一个核心问题：<strong>机器如何获得智能，如何理解世界，并给出有用的答案</strong>。</p>
 <p>围绕这个问题，AI 的发展大致可以看成三条重要路线：</p>
 <table>
@@ -3127,8 +3056,6 @@
     
       &lt;p&gt;过去几年，大语言模型（LLM）从实验室里的研究成果，迅速变成了普通人每天都能接触到的工具。ChatGPT、Claude、Gemini、DeepSeek 等产品，让很多人第一次直观感受到：机器不只是能搜索信息、识别图片、完成分类任务，它似乎开始能够理解问题、组织语言、代码生成、分析文档，甚至参与复杂决策。&lt;/p&gt;
 &lt;p&gt;但如果只把 LLM 理解成“一个很会聊天的 AI”，其实会低估它背后的技术演进。今天的 LLM，并不是突然出现的魔法，而是人工智能几十年发展积累后的结果：从早期的符号推理，到机器学习；从神经网络，到深度学习；从词向量、注意力机制，到 Transformer；再到预训练、后训练、分布式训练、推理服务、RAG、Agent 和多模态系统，每一步都在回答同一个问题：&lt;strong&gt;机器智能是如何产生并不断演进的？&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;因此，我打算新开一个 LLM 系列的文章，这个系列会从底层原理出发，逐步拆开 LLM 的关键技术拼图，让读者能够理解 LLM 背后的技术原理，帮助没有 AI 背景的同学建立完整的框架。&lt;/p&gt;
-&lt;p&gt;作为 LLM 系列的第一篇，我们先回到起点：从 AI 到 LLM，看看大语言模型究竟是如何从几十年的人工智能探索中一步步长出来的。&lt;/p&gt;
     
     </summary>
     
