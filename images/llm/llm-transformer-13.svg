@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="960" viewBox="0 0 1280 960">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4B5563"/>
+    </marker>
+    <style>
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+      .subtitle { font: 400 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #6B7280; }
+      .label { font: 500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1F2937; }
+      .box { stroke: #CBD5E1; stroke-width: 2; filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.08)); }
+      .arrow { fill: none; stroke: #4B5563; stroke-width: 2.5; marker-end: url(#arrowhead); }
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#F8FAFC"/>
+  <text x="640" y="42" text-anchor="middle" class="title">Transformer 的一次完整运作流程</text>
+  <text x="640" y="70" text-anchor="middle" class="subtitle">从文本输入，到多层 Block 更新表示，再到输出下一个 token 概率</text>
+  <path d="M 300 126 L 300 140" class="arrow"/>
+<path d="M 300 196 L 300 210" class="arrow"/>
+<path d="M 300 266 L 300 280" class="arrow"/>
+<path d="M 300 336 L 300 350" class="arrow"/>
+<path d="M 300 406 L 300 420" class="arrow"/>
+<path d="M 300 476 L 300 490" class="arrow"/>
+<path d="M 480 518 C 560 518, 720 98, 800 98" class="arrow"/>
+<path d="M 980 126 L 980 140" class="arrow"/>
+<path d="M 980 196 L 980 210" class="arrow"/>
+<path d="M 980 266 L 980 280" class="arrow"/>
+<path d="M 980 336 L 980 350" class="arrow"/>
+<path d="M 980 406 L 980 420" class="arrow"/>
+  <rect x="120" y="70" width="360" height="56" rx="12" fill="#E7F0FF" class="box"/>
+<text x="300" y="106" text-anchor="middle" class="label">文本</text>
+<rect x="120" y="140" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="300" y="176" text-anchor="middle" class="label">Tokenizer: 切成 token</text>
+<rect x="120" y="210" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="300" y="246" text-anchor="middle" class="label">Token IDs</text>
+<rect x="120" y="280" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="300" y="316" text-anchor="middle" class="label">Embedding: 转成向量</text>
+<rect x="120" y="350" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="300" y="386" text-anchor="middle" class="label">加入位置信息</text>
+<rect x="120" y="420" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="300" y="456" text-anchor="middle" class="label">生成 Q / K / V</text>
+<rect x="120" y="490" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="300" y="526" text-anchor="middle" class="label">Attention: 计算关注权重</text>
+<rect x="800" y="70" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="980" y="106" text-anchor="middle" class="label">汇总上下文信息</text>
+<rect x="800" y="140" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="980" y="176" text-anchor="middle" class="label">Multi-Head: 多角度理解</text>
+<rect x="800" y="210" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="980" y="246" text-anchor="middle" class="label">FFN: 加工表示</text>
+<rect x="800" y="280" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="980" y="316" text-anchor="middle" class="label">Residual + LayerNorm: 稳定训练</text>
+<rect x="800" y="350" width="360" height="56" rx="12" fill="#FFFFFF" class="box"/>
+<text x="980" y="386" text-anchor="middle" class="label">堆叠多层 Transformer Block</text>
+<rect x="800" y="420" width="360" height="56" rx="12" fill="#EAF8EF" class="box"/>
+<text x="980" y="456" text-anchor="middle" class="label">输出下一个 token 概率</text>
+</svg>

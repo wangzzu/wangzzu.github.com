@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-06-22T16:51:13.494Z</updated>
+  <updated>2026-06-23T16:43:19.541Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,725 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (四)：Transformer 架构篇：大模型为什么选择了 Transformer</title>
+    <link href="http://matt33.com/2026/06/24/llm-transformer-architecture/"/>
+    <id>http://matt33.com/2026/06/24/llm-transformer-architecture/</id>
+    <published>2026-06-24T10:10:00.000Z</published>
+    <updated>2026-06-23T16:43:19.541Z</updated>
+    
+    <content type="html"><![CDATA[<p>前三篇文章里，我们已经分别从三个角度为理解大语言模型打了基础：第一篇看发展脉络，知道 LLM 是怎么一步步演进出来的；第二篇看数学基础，理解向量、概率、损失函数、梯度这些底层工具；第三篇看算法基础，从 NLP、词向量、感知机、神经网络，一路讲到 CNN、RNN 和双向 RNN。到了第四篇，我们终于可以进入现代大语言模型最核心的一块内容：<strong>Transformer</strong>。</p>
+<p>如果说前几篇是在回答“机器如何把语言变成可以计算的问题”，那么这一篇要回答的是另一个更关键的问题：<strong>为什么后来的主流大语言模型，几乎都选择了 Transformer 作为核心架构？</strong></p>
+<p>这篇文章仍然不是论文精读，也不会一上来就推公式。我们会继续站在普通开发者的视角，把 Transformer 拆成几个容易理解的部分：它想解决什么问题，Attention 到底在做什么，Self-Attention 为什么能理解上下文，Multi-Head Attention 为什么要从多个角度看文本，位置编码解决了什么问题，Transformer Block 又是如何一层层堆出大模型能力的。</p>
+<p>先不用急着记住每个概念的细节，可以先把下面这张表当成本文的地图：</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>它解决什么问题</strong></th>
+<th><strong>直觉理解</strong></th>
+<th><strong>和 LLM 的关系</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transformer</td>
+<td>重新设计序列建模方式</td>
+<td>不再一个词一个词慢慢传，而是让 token 直接建立关系</td>
+<td>现代 LLM 的核心架构</td>
+</tr>
+<tr>
+<td>Attention</td>
+<td>找到当前 token 应该关注谁</td>
+<td>读一句话时，自动把注意力放到相关词上</td>
+<td>Transformer 的核心机制</td>
+</tr>
+<tr>
+<td>Self-Attention</td>
+<td>让一句话内部 token 互相关注</td>
+<td>每个 token 都能参考其他 token</td>
+<td>理解上下文的关键</td>
+</tr>
+<tr>
+<td>Multi-Head Attention</td>
+<td>从多个角度看关系</td>
+<td>有的头看语法，有的头看指代，有的头看语义</td>
+<td>提升表达能力</td>
+</tr>
+<tr>
+<td>Positional Encoding</td>
+<td>补充位置信息</td>
+<td>告诉模型 token 的顺序</td>
+<td>让模型知道“狗咬人”和“人咬狗”不同</td>
+</tr>
+<tr>
+<td>Transformer Block</td>
+<td>把注意力、前馈网络、残差连接组合起来</td>
+<td>一个可重复堆叠的计算单元</td>
+<td>LLM 就是很多层 block 堆起来</td>
+</tr>
+<tr>
+<td>Decoder-only</td>
+<td>只根据前文预测后文</td>
+<td>不能偷看未来，只能一步步生成</td>
+<td>GPT 类模型的主流结构</td>
+</tr>
+</tbody>
+</table>
+<p>整体路线可以理解成这样：</p>
+<p><img src="/images/llm/llm-transformer-01.png" alt="Transformer 架构篇整体路线图"></p>
+<a id="more"></a>
+<h2 id="为什么需要-Transformer？"><a href="#为什么需要-Transformer？" class="headerlink" title="为什么需要 Transformer？"></a>为什么需要 Transformer？</h2><p>在第三篇文章里，我们讲过 RNN、LSTM、GRU、双向 RNN 这些经典序列模型。它们的共同特点是：按顺序处理文本。</p>
+<p>比如一句话：<code>我 今天 早上 喝 了 一杯 咖啡</code></p>
+<p>RNN 会从左到右一个 token 一个 token 地读，每一步都把前面读到的信息压缩进一个隐藏状态。</p>
+<p><img src="/images/llm/llm-transformer-02.png" alt="RNN 按顺序读取文本"></p>
+<p>这种方式很符合人类阅读的直觉，但对机器学习来说有几个明显问题：</p>
+<ol>
+<li><strong>信息传递路径太长</strong>：如果后面的词需要参考很前面的内容，信息要经过很多步传递。传得越远，越容易变弱。LSTM 和 GRU 虽然通过“门”机制缓解了这个问题，但没有彻底解决；</li>
+<li><strong>训练不易并行</strong>：RNN 的后一步依赖前一步。要算第 10 个 token，必须先算完前 9 个 token。这对大规模训练很不友好；</li>
+<li><strong>所有历史信息都被压缩进状态里</strong>：一段长文本里有很多细节，如果都压进一个隐藏状态，模型很容易丢失重要信息。</li>
+</ol>
+<p>Transformer 的思路完全不同：不要让信息一步步传递，而是让每个 token 都可以直接看见其他 token。</p>
+<p>可以把 RNN 和 Transformer 的区别理解成这样：</p>
+<p><img src="/images/llm/llm-transformer-03.png" alt="RNN 与 Transformer 序列建模方式对比"></p>
+<p>这就是 Transformer 的核心变化：</p>
+<ul>
+<li>它把“顺序传递信息”，改成了“直接计算 token 与 token 之间的关系”。</li>
+</ul>
+<p>这件事看起来简单，但非常关键。因为语言理解的本质，很多时候不是看单个词，而是看词和词之间的关系。</p>
+<p>比如：<code>苹果 发布 了 新产品</code></p>
+<p>如果模型要理解“苹果”，就不能只看这个词本身，还要看后面的“发布”“新产品”。这些上下文会告诉模型，这里的“苹果”更可能是公司，而不是水果。</p>
+<p>Transformer 之所以重要，就是因为它提供了一种更直接、更高效的方式，让模型在文本内部建立这种关系。</p>
+<h2 id="Attention：关注相关信息"><a href="#Attention：关注相关信息" class="headerlink" title="Attention：关注相关信息"></a>Attention：关注相关信息</h2><p>Attention，中文通常翻译为<strong>注意力机制</strong>。</p>
+<p>它的直觉很简单：当模型处理某个 token 时，不是平均看所有信息，而是自动判断哪些 token 更重要，然后重点参考它们。</p>
+<ol>
+<li><p>比如这句话：<code>苹果 发布 了 新产品</code></p>
+<ol>
+<li>当模型处理“苹果”时，它应该更多关注<code>发布</code> <code>新产品</code>，而不是只看<code>苹果</code>两个字。</li>
+</ol>
+</li>
+<li><p>再比如：<code>这家店 服务 真好，等了 两个小时 都没人 理我</code></p>
+<ol>
+<li>如果模型只看<code>服务</code> <code>真好</code>，可能会判断成正面评价。但如果它注意到后面的<code>等了两个小时</code> <code>没人理我</code>，就更容易理解这里其实是在表达不满。</li>
+</ol>
+</li>
+</ol>
+<p>Attention 的作用就是：<strong>给不同 token 分配不同权重，让模型知道当前应该重点看哪里。</strong></p>
+<p>可以把 Attention 理解成一个信息检索过程。模型面对一句话时，每个 token 都会做三件事：</p>
+<table>
+<thead>
+<tr>
+<th><strong>名称</strong></th>
+<th><strong>英文</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Query</td>
+<td>Q</td>
+<td>当前 token 想找什么信息</td>
+</tr>
+<tr>
+<td>Key</td>
+<td>K</td>
+<td>每个 token 可以被匹配的标签</td>
+</tr>
+<tr>
+<td>Value</td>
+<td>V</td>
+<td>每个 token 真正携带的信息内容</td>
+</tr>
+</tbody>
+</table>
+<p>用更通俗的话说：</p>
+<ol>
+<li>Query 像是“我现在想问什么问题”；</li>
+<li>Key 像是“我这里有什么信息可以被你匹配”；</li>
+<li>Value 像是“如果你觉得我重要，就从我这里取走的信息”；</li>
+</ol>
+<p>每个 token 的 embedding 会分别经过三组不同的参数变换，得到 <code>Q</code>、<code>K</code>、<code>V</code>。当前 token 会用自己的 Q 去和所有 token 的 K 做匹配，得到注意力分数；再经过 softmax 变成权重；最后用这些权重对所有 token 的 V 做加权求和，得到当前 token 的新表示。流程可以简化成这样：</p>
+<p><img src="/images/llm/llm-transformer-04.png" alt="Attention 的 QKV 计算流程"></p>
+<p>举个例子：句子：<code>苹果 发布 了 新产品</code></p>
+<p>当模型处理 <code>苹果</code> 这个 token 时，它不能只看<code>苹果</code>本身，还需要结合上下文判断它到底指什么。在这句话里，<code>发布</code> <code>新产品</code> 这些 token 对理解 <code>苹果</code> 更重要，所以模型会给它们更高的关注权重：</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>可能的关注程度</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>苹果</td>
+<td>中</td>
+</tr>
+<tr>
+<td>发布</td>
+<td>高</td>
+</tr>
+<tr>
+<td>了</td>
+<td>低</td>
+</tr>
+<tr>
+<td>新产品</td>
+<td>高</td>
+</tr>
+</tbody>
+</table>
+<p>经过 Attention 计算之后，<code>苹果</code> 的表示就不再只是一个孤立的词向量，而是融合了上下文信息的新表示。</p>
+<p>这也是 Attention 很关键的地方：同一个 token，在不同语境下可以得到不同的表示</p>
+<ul>
+<li>在<code>苹果很好吃</code>里，<code>苹果</code>的表示会靠近水果。</li>
+<li>在<code>苹果发布了新产品</code>里，<code>苹果</code>的表示会靠近公司。</li>
+</ul>
+<p>这一步，是从传统词向量走向现代语言模型的关键。</p>
+<h2 id="Self-Attention：理解上下文"><a href="#Self-Attention：理解上下文" class="headerlink" title="Self-Attention：理解上下文"></a>Self-Attention：理解上下文</h2><p>前面讲的 Attention，本质上是在说：当前 token 可以关注其他信息。那 Self-Attention 又是什么？</p>
+<p>Self-Attention 的意思是：一句话内部的 token 之间，互相计算注意力。</p>
+<p>这里的 Self，指的是 Query、Key、Value 都来自同一段输入文本。</p>
+<p>比如输入：<code>我 喜欢 机器 学习</code></p>
+<p>在 Self-Attention 里，每个 token 都会和其他 token 建立关系：</p>
+<p><img src="/images/llm/llm-transformer-05.png" alt="Self-Attention 更新 token 表示"></p>
+<p>注意这里的 <code>新的 token 表示</code> 很重要。进入 Self-Attention 之前，<code>学习</code> 只是一个 token 的向量。</p>
+<p>经过 Self-Attention 之后，<code>学习</code> 的表示已经融合了上下文，知道它前面有 <code>机器</code>，所以这里更可能指<code>机器学习</code>这个技术概念，而不是普通意义上的学习行为（在 Self-Attention 中，句子里的每个 token 的向量表示都会被更新，变成融合上下文的新表示）。</p>
+<p>Self-Attention 可以理解为给句子内部建立了一张关系网：</p>
+<p><img src="/images/llm/llm-transformer-06.png" alt="Self-Attention 句内关系网络"></p>
+<p>在真实模型里，这张关系网不是人工指定的，而是通过训练学出来的。模型会在大量文本中逐渐学会：</p>
+<ul>
+<li>哪些词之间经常有关联。</li>
+<li>哪些词决定语义。</li>
+<li>哪些词影响情感。</li>
+<li>哪些词表示指代关系。</li>
+<li>哪些词对预测下一个 token 更重要。</li>
+</ul>
+<p>不过，一个 Attention 视角可能还不够。语言关系很复杂，同一句话可以从不同角度理解。</p>
+<p>比如：<code>小明 把 书 放在 桌子 上，因为 它 很重</code></p>
+<p>这里的<code>它</code>可能需要结合上下文判断指代对象。模型可能需要同时关注语法结构、实体关系、位置关系、语义合理性。</p>
+<p>所以 Transformer 引入了 Multi-Head Attention，也就是<strong>多头注意力</strong>。</p>
+<p>多头注意力可以理解成：让模型用多个视角同时观察同一句话。</p>
+<table>
+<thead>
+<tr>
+<th><strong>注意力头</strong></th>
+<th><strong>可能关注的关系</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Head 1</td>
+<td>相邻词和短语搭配</td>
+</tr>
+<tr>
+<td>Head 2</td>
+<td>主语、谓语、宾语关系</td>
+</tr>
+<tr>
+<td>Head 3</td>
+<td>指代关系</td>
+</tr>
+<tr>
+<td>Head 4</td>
+<td>情感和语气</td>
+</tr>
+<tr>
+<td>Head 5</td>
+<td>长距离依赖</td>
+</tr>
+</tbody>
+</table>
+<p>这些分工不是人手写进去的，而是模型在训练过程中自己学出来的。</p>
+<p>可以简单理解成：</p>
+<ul>
+<li>单头 Attention 像一个人读句子。</li>
+<li>多头 Attention 像一组人从不同角度读同一句话，最后把各自看到的信息合起来。</li>
+</ul>
+<p><img src="/images/llm/llm-transformer-07.png" alt="Multi-Head Attention 多头视角"></p>
+<p>这就是 Transformer 表达能力强的重要原因之一：它不是只用一种方式理解文本，而是可以在多个语义空间里同时建模 token 之间的关系。</p>
+<h2 id="Transformer-Block：堆叠模型能力"><a href="#Transformer-Block：堆叠模型能力" class="headerlink" title="Transformer Block：堆叠模型能力"></a>Transformer Block：堆叠模型能力</h2><p>Attention 是 Transformer 的核心机制，但一个真正可训练、可堆叠的模型，不能只有 Attention。</p>
+<p>原因很简单：Attention 主要解决的是“当前 token 应该参考哪些上下文信息”。但拿到上下文信息之后，模型还需要继续加工这些信息、保留原始信息、稳定每一层的计算结果。否则，模型层数一深，训练就容易变得不稳定。</p>
+<p>所以在 Transformer 里，Attention 通常会被封装进一个更完整的基础模块中，这个模块就叫 <strong>Transformer Block</strong>。</p>
+<p>可以把 Transformer Block 理解为：<strong>Transformer 里可以反复堆叠的一层“语言理解单元”</strong>。</p>
+<p>每经过一个 Transformer Block，token 的表示都会被更新一次：先通过 Self-Attention 和上下文建立关系，再通过前馈网络进一步加工，最后输出给下一层。</p>
+<p>一个完整的 Transformer Block 通常包含几部分：</p>
+<table>
+<thead>
+<tr>
+<th><strong>组件</strong></th>
+<th><strong>作用</strong></th>
+<th><strong>直觉理解</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Multi-Head Self-Attention</td>
+<td>建模 token 之间的关系</td>
+<td>让每个 token 知道该看谁</td>
+</tr>
+<tr>
+<td>Feed Forward Network</td>
+<td>进一步加工 token 表示</td>
+<td>对上下文信息做消化和提炼</td>
+</tr>
+<tr>
+<td>Residual Connection</td>
+<td>保留原始信息</td>
+<td>避免层数太深时信息丢失</td>
+</tr>
+<tr>
+<td>LayerNorm</td>
+<td>稳定每层计算</td>
+<td>让训练过程更平稳</td>
+</tr>
+</tbody>
+</table>
+<p>整体结构如下所示：</p>
+<p><img src="/images/llm/llm-transformer-08.png" alt="Transformer Block 结构"></p>
+<p>这里有几个点特别重要。</p>
+<h3 id="Transformer-需要位置编码"><a href="#Transformer-需要位置编码" class="headerlink" title="Transformer 需要位置编码"></a>Transformer 需要位置编码</h3><p>Self-Attention 擅长计算 token 之间的关系，但它本身并不天然知道 token 的先后顺序。</p>
+<p>也就是说，如果只看 Self-Attention，模型更关心“哪些 token 之间有关联”，但还需要额外的信息告诉它：“谁在前，谁在后”。</p>
+<p>而语言里的顺序非常重要。比如：</p>
+<ul>
+<li><code>狗 咬 人</code></li>
+<li><code>人 咬 狗</code></li>
+</ul>
+<p>这两个句子使用的是同样的 token，但顺序不同，意思就完全变了。</p>
+<p>所以在 Transformer 中，模型需要引入位置信息。常见做法是在 token embedding 的基础上加入位置编码，或者在 Attention 计算过程中引入相对位置信息。可以先简单理解为：位置编码的作用，就是告诉模型每个 token 在句子中的位置，让模型能够区分不同顺序带来的语义差异。</p>
+<h3 id="Feed-Forward-Network-加工信息"><a href="#Feed-Forward-Network-加工信息" class="headerlink" title="Feed Forward Network 加工信息"></a>Feed Forward Network 加工信息</h3><p>Attention 主要解决“看谁”的问题。</p>
+<p>Feed Forward Network 更像是对每个 token 的表示做一次非线性加工，让模型有能力表达更复杂的模式。</p>
+<p>可以粗略理解为：</p>
+<ul>
+<li>Attention 负责汇总上下文。</li>
+<li>Feed Forward 负责消化和加工上下文。</li>
+</ul>
+<h3 id="残差连接和-LayerNorm-稳定训练"><a href="#残差连接和-LayerNorm-稳定训练" class="headerlink" title="残差连接和 LayerNorm 稳定训练"></a>残差连接和 LayerNorm 稳定训练</h3><p>现代 LLM 往往有很多层 Transformer Block。如果每一层都直接覆盖上一层的信息，训练会很不稳定，也容易出现梯度消失、信息丢失等问题。</p>
+<ul>
+<li>残差连接：不要让每一层从零开始重写信息，而是在原有信息基础上做增量修改。</li>
+<li>LayerNorm：把每一层的数值范围整理得更稳定，避免训练过程中数值忽大忽小。</li>
+</ul>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>所以，一个 Transformer Block 不是一个神秘黑盒，而是一组配合明确的组件：</p>
+<ol>
+<li>Attention 负责找关系。</li>
+<li>Feed Forward 负责加工表示。</li>
+<li>Position 负责补顺序。</li>
+<li>Residual 和 LayerNorm 负责让深层网络稳定训练。</li>
+</ol>
+<p>大模型就是把这样的 block 堆很多层。</p>
+<p><img src="/images/llm/llm-transformer-09.png" alt="多层 Transformer Block 堆叠"></p>
+<p>层数越多，参数越多，模型就越有机会学习更复杂的语言规律。当然，这也意味着需要更多数据、更大算力和更复杂的训练工程。</p>
+<h2 id="Transformer-如何跑起来？"><a href="#Transformer-如何跑起来？" class="headerlink" title="Transformer 如何跑起来？"></a>Transformer 如何跑起来？</h2><p>前面我们已经分别看了 Attention、Self-Attention、Multi-Head Attention、位置编码、Feed Forward Network、残差连接和 LayerNorm。到这里，读者可能会有一个很自然的问题：<strong>这些组件组合在一起之后，Transformer 到底是怎么处理一句话的？</strong></p>
+<p>这一节我们就把整个流程串起来。先不用纠结每一步背后的公式，只需要理解一件事：</p>
+<ul>
+<li>Transformer 的工作过程，就是不断更新每个 token 的表示，让它从一个孤立的词，逐渐变成融合上下文信息的语义表示。</li>
+</ul>
+<p>假设输入一句话：<code>我 喜欢 机器 学习</code></p>
+<p><strong>第一步，Tokenizer 会先把文本切成 token</strong>，并转换成 token id。</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>token id</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我</td>
+<td>101</td>
+</tr>
+<tr>
+<td>喜欢</td>
+<td>245</td>
+</tr>
+<tr>
+<td>机器</td>
+<td>830</td>
+</tr>
+<tr>
+<td>学习</td>
+<td>512</td>
+</tr>
+</tbody>
+</table>
+<p>这些 id 只是编号，本身没有语义。模型还不能直接理解它们。</p>
+<p><strong>第二步，Embedding 层会把每个 token id 转成向量</strong>。</p>
+<table>
+<thead>
+<tr>
+<th><strong>token</strong></th>
+<th><strong>初始向量直觉</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我</td>
+<td>和说话人、主体相关</td>
+</tr>
+<tr>
+<td>喜欢</td>
+<td>和情感、偏好相关</td>
+</tr>
+<tr>
+<td>机器</td>
+<td>和设备、技术相关</td>
+</tr>
+<tr>
+<td>学习</td>
+<td>和教育、训练、学习行为相关</td>
+</tr>
+</tbody>
+</table>
+<p>到这一步，每个 token 都有了一个初始表示，但它仍然比较孤立。比如 <code>学习</code>还不知道自己前面有<code>机器</code>，所以还不能确定这里是不是<code>机器学习</code>这个技术概念。</p>
+<p><strong>第三步，模型会加入位置信息</strong>。</p>
+<p>因为 Self-Attention 本身更擅长计算 token 之间的关系，但它并不天然知道顺序。加入位置信息后，模型才知道：</p>
+<ol>
+<li><code>我</code>在第 1 个位置；</li>
+<li><code>喜欢</code>在第 2 个位置；</li>
+<li><code>机器</code>在第 3 个位置；</li>
+<li><code>学习</code>在第 4 个位置。</li>
+</ol>
+<p>这一步很重要，因为<code>机器 学习</code>和<code>学习 机器</code>的含义并不一样。</p>
+<p><strong>第四步，进入 Self-Attention</strong>。</p>
+<p>每个 token 都会生成三类向量：<code>Q</code>、<code>K</code>、<code>V</code>。</p>
+<p>可以继续用前面的直觉理解：</p>
+<table>
+<thead>
+<tr>
+<th><strong>向量</strong></th>
+<th><strong>作用</strong></th>
+<th><strong>直觉</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q</td>
+<td>Query</td>
+<td>我想找什么信息</td>
+</tr>
+<tr>
+<td>K</td>
+<td>Key</td>
+<td>我有什么信息可被匹配</td>
+</tr>
+<tr>
+<td>V</td>
+<td>Value</td>
+<td>我真正提供什么内容</td>
+</tr>
+</tbody>
+</table>
+<p>以<code>学习</code>为例，它会用自己的 <code>Q</code> 去匹配其他 token 的 <code>K</code>，判断哪些 token 对理解自己更重要。</p>
+<table>
+<thead>
+<tr>
+<th><strong>被关注 token</strong></th>
+<th><strong>对理解<code>学习</code>的重要程度</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我</td>
+<td>低</td>
+</tr>
+<tr>
+<td>喜欢</td>
+<td>中</td>
+</tr>
+<tr>
+<td>机器</td>
+<td>高</td>
+</tr>
+<tr>
+<td>学习</td>
+<td>中</td>
+</tr>
+</tbody>
+</table>
+<p>因为<code>机器</code>和<code>学习</code>之间关系很强，所以<code>学习</code>会更多吸收<code>机器</code>的信息。经过这一步，<code>学习</code>的表示就不再只是普通的学习行为，而更接近<code>机器学习</code>这个技术概念。</p>
+<p><strong>第五步，Multi-Head Attention 会从多个角度重复这个过程</strong>。</p>
+<ul>
+<li>一个注意力头可能关注短语搭配，比如 <code>机器 + 学习</code>；</li>
+<li>另一个注意力头可能关注主谓关系，比如<code>我 + 喜欢</code>；</li>
+<li>还有的注意力头可能关注更长距离的语义关系。</li>
+</ul>
+<p>多个头的结果会被合并起来，形成更丰富的 token 表示。</p>
+<p><strong>第六步，Feed Forward Network 会继续加工每个 token 的表示</strong>。</p>
+<p>如果说 Attention 解决的是“应该看谁”，那么 FFN 更像是在做“看完之后怎么理解”。</p>
+<p>它会对每个 token 的表示做进一步变换，让模型有能力表达更复杂的语义模式。</p>
+<p><strong>第七步，残差连接和 LayerNorm 会帮助信息稳定传递</strong>。</p>
+<p>残差连接让模型不要每一层都完全重写信息，而是在原有表示上做增量修改。</p>
+<p>LayerNorm 则让每一层的数值分布更稳定，避免深层模型训练时出现数值波动太大的问题。</p>
+<p><strong>第八步，这样的 Transformer Block 会重复很多层</strong>。</p>
+<ul>
+<li>第一层可能更多学习局部词语关系；</li>
+<li>中间层可能学习短语、语法、指代关系；</li>
+<li>更高层可能学习语义、意图和任务模式。</li>
+</ul>
+<p>这不是人工规定的分工，而是模型在大量数据训练中逐渐形成的表示能力。</p>
+<p>最后，如果是 GPT 这类 Decoder-only 模型，最顶层会输出一个概率分布，用来预测下一个 token。</p>
+<p>比如输入：<code>我 喜欢 机器 学习</code></p>
+<p>模型可能预测：</p>
+<table>
+<thead>
+<tr>
+<th><strong>候选 token</strong></th>
+<th><strong>可能性</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>。</td>
+<td>高</td>
+</tr>
+<tr>
+<td>和</td>
+<td>中</td>
+</tr>
+<tr>
+<td>相关</td>
+<td>中</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<p>模型选择一个 token 之后，再把它拼回上下文，继续生成后面的内容。</p>
+<p>整个流程可以用一张图串起来：</p>
+<p><img src="/images/llm/llm-transformer-13.svg" alt="Transformer 完整运作流程"></p>
+<p>可以把这张图记成一句话：<strong>文本先变成 token，token 再变成向量，向量经过多层 Transformer Block 不断融合上下文，最后输出下一个 token 的概率</strong>。</p>
+<p>这样，Transformer 就不再是一堆独立概念，而是一条完整的计算链路。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>讲到这里，我们已经知道 Transformer 的核心能力是：通过 Attention，让文本中的 token 直接建立关系。</p>
+<p>但 Transformer 本身并不等同于 GPT，也不只用于生成式大语言模型。它更像是一套基础架构，可以根据任务目标，组合成不同类型的模型。常见的 Transformer 架构大致有三类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>架构</strong></th>
+<th><strong>代表模型</strong></th>
+<th><strong>适合任务</strong></th>
+<th><strong>特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Encoder-only</td>
+<td>BERT</td>
+<td>理解、分类、标注</td>
+<td>可以看完整上下文</td>
+</tr>
+<tr>
+<td>Decoder-only</td>
+<td>GPT</td>
+<td>文本生成、对话、代码生成</td>
+<td>只能看前文，预测后文</td>
+</tr>
+<tr>
+<td>Encoder-Decoder</td>
+<td>T5、早期翻译模型</td>
+<td>翻译、摘要</td>
+<td>一边理解输入，一边生成输出</td>
+</tr>
+</tbody>
+</table>
+<p>其中，GPT 这类大语言模型主要采用 Decoder-only 架构。</p>
+<p>这里需要区分训练阶段和生成阶段：生成时，模型确实是一个 token 一个 token 往后生成；但训练时，模型可以一次性看到一整段文本，并通过 Causal Mask 让每个位置只能关注它前面的 token，从而并行学习每个位置的“下一个 token”预测。</p>
+<p>原因也很直观：GPT 的核心任务是生成文本，而生成文本本质上就是不断预测下一个 token。</p>
+<p>比如输入：<code>我今天早上喝了一杯</code></p>
+<p>模型需要预测下一个最可能出现的 token：</p>
+<table>
+<thead>
+<tr>
+<th><strong>候选 token</strong></th>
+<th><strong>可能性</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>咖啡</td>
+<td>高</td>
+</tr>
+<tr>
+<td>水</td>
+<td>中</td>
+</tr>
+<tr>
+<td>茶</td>
+<td>中</td>
+</tr>
+<tr>
+<td>桌子</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<p>如果模型生成了“咖啡”，它会把“咖啡”拼回原来的上下文里，再继续预测下一个 token。</p>
+<p><img src="/images/llm/llm-transformer-11.png" alt="自回归生成流程"></p>
+<p>这就是<strong>自回归生成</strong>。</p>
+<p>所谓自回归，可以简单理解为：模型每次只生成一个 token，然后把这个 token 放回上下文，再继续生成下一个 token。</p>
+<p>这个过程看起来简单，但它带来了一个很重要的约束：模型在生成当前位置时，只能看到已经出现的内容，不能提前看到后面的答案。</p>
+<p>例如模型在预测 <code>咖啡</code>时，只能看到：<code>我今天早上喝了一杯</code>。它不能提前看到完整句子：<code>我今天早上喝了一杯咖啡。</code></p>
+<p>否则就相当于考试时提前看到了答案。</p>
+<p>为了保证这一点，Decoder-only Transformer 会使用 <strong>Causal Mask</strong>，也就是因果掩码。</p>
+<ul>
+<li>Causal Mask 的作用是：当前位置只能关注自己和前面的 token，不能关注后面的 token。</li>
+</ul>
+<p><img src="/images/llm/llm-transformer-12.png" alt="Causal Mask 因果掩码"></p>
+<p>这样一来，Decoder-only Transformer 就和语言模型的训练目标非常匹配：<strong>给定前文，预测下一个 token</strong>。</p>
+<p>现在我们就可以回到文章开头的问题：<strong>为什么大模型选择了 Transformer？</strong></p>
+<p>可以从五个角度理解：</p>
+<ol>
+<li><strong>Transformer 能直接建模 token 之间的关系</strong>：它不需要像 RNN 那样把信息一步步往后传，而是可以通过 Attention 让任意两个 token 直接建立联系。这让模型更容易捕捉长距离依赖和复杂上下文关系。</li>
+<li><strong>Transformer 更适合并行训练</strong>：RNN 需要按顺序一步步计算，而 Transformer 在训练阶段可以让一段文本里的 token 同时参与计算。这对大规模数据训练非常重要，也更适合 GPU 这类并行计算硬件。</li>
+<li><strong>Transformer 的表达能力更强</strong>：Self-Attention、Multi-Head Attention、多层 Transformer Block 叠加之后，模型可以从多个角度学习语言中的语义、语法、指代、上下文和任务模式。</li>
+<li><strong>Transformer 更适合规模化</strong>：现代 LLM 的一个重要特点是规模很大：数据多、参数多、训练计算量大。Transformer 架构在规模变大之后，仍然能持续受益于更多数据和更多参数，这让它成为大模型时代的基础架构。</li>
+<li><strong>Transformer 和“预测下一个 token”的目标非常契合</strong>：Decoder-only Transformer 天然适合自回归生成，而很多 NLP 任务都可以转换成文本生成任务。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th><strong>任务</strong></th>
+<th><strong>输入方式</strong></th>
+<th><strong>输出方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>翻译</td>
+<td>请把这句话翻译成英文</td>
+<td>生成译文</td>
+</tr>
+<tr>
+<td>摘要</td>
+<td>请总结这篇文章</td>
+<td>生成摘要</td>
+</tr>
+<tr>
+<td>问答</td>
+<td>根据材料回答问题</td>
+<td>生成答案</td>
+</tr>
+<tr>
+<td>分类</td>
+<td>判断这条评论是正面还是负面</td>
+<td>生成类别</td>
+</tr>
+<tr>
+<td>写代码</td>
+<td>根据需求写一个函数</td>
+<td>生成代码</td>
+</tr>
+</tbody>
+</table>
+<p>这就是 LLM 很重要的统一性： 很多看起来不同的任务，最后都可以变成“给定上下文，继续生成文本”。</p>
+<p>可以用一张图总结 Transformer 到 LLM 的整体流程：</p>
+<p><img src="/images/llm/llm-transformer-13.png" alt="Transformer 到 LLM 整体流程"></p>
+<p>所以，Transformer 不是大模型的全部，但它是现代大语言模型最核心的计算骨架。</p>
+<p>它解决的不是某一个单点问题，而是一组关键问题：</p>
+<table>
+<thead>
+<tr>
+<th><strong>关键问题</strong></th>
+<th><strong>Transformer 的解决方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>如何理解上下文？</td>
+<td>用 Attention 建立 token 之间的关系</td>
+</tr>
+<tr>
+<td>如何处理长距离依赖？</td>
+<td>让远距离 token 可以直接互相关注</td>
+</tr>
+<tr>
+<td>如何提升训练效率？</td>
+<td>支持更好的并行计算</td>
+</tr>
+<tr>
+<td>如何增强表达能力？</td>
+<td>通过多头注意力和多层 block 堆叠</td>
+</tr>
+<tr>
+<td>如何生成文本？</td>
+<td>用 Decoder-only 架构预测下一个 token</td>
+</tr>
+</tbody>
+</table>
+<p>理解了 Transformer，再看后面的预训练、指令微调、SFT、RLHF、RAG、Agent、多模态、推理模型，就会清楚很多。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;前三篇文章里，我们已经分别从三个角度为理解大语言模型打了基础：第一篇看发展脉络，知道 LLM 是怎么一步步演进出来的；第二篇看数学基础，理解向量、概率、损失函数、梯度这些底层工具；第三篇看算法基础，从 NLP、词向量、感知机、神经网络，一路讲到 CNN、RNN 和双向 RNN。到了第四篇，我们终于可以进入现代大语言模型最核心的一块内容：&lt;strong&gt;Transformer&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;如果说前几篇是在回答“机器如何把语言变成可以计算的问题”，那么这一篇要回答的是另一个更关键的问题：&lt;strong&gt;为什么后来的主流大语言模型，几乎都选择了 Transformer 作为核心架构？&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这篇文章仍然不是论文精读，也不会一上来就推公式。我们会继续站在普通开发者的视角，把 Transformer 拆成几个容易理解的部分：它想解决什么问题，Attention 到底在做什么，Self-Attention 为什么能理解上下文，Multi-Head Attention 为什么要从多个角度看文本，位置编码解决了什么问题，Transformer Block 又是如何一层层堆出大模型能力的。&lt;/p&gt;
+&lt;p&gt;先不用急着记住每个概念的细节，可以先把下面这张表当成本文的地图：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;概念&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;它解决什么问题&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;直觉理解&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;strong&gt;和 LLM 的关系&lt;/strong&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Transformer&lt;/td&gt;
+&lt;td&gt;重新设计序列建模方式&lt;/td&gt;
+&lt;td&gt;不再一个词一个词慢慢传，而是让 token 直接建立关系&lt;/td&gt;
+&lt;td&gt;现代 LLM 的核心架构&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Attention&lt;/td&gt;
+&lt;td&gt;找到当前 token 应该关注谁&lt;/td&gt;
+&lt;td&gt;读一句话时，自动把注意力放到相关词上&lt;/td&gt;
+&lt;td&gt;Transformer 的核心机制&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Self-Attention&lt;/td&gt;
+&lt;td&gt;让一句话内部 token 互相关注&lt;/td&gt;
+&lt;td&gt;每个 token 都能参考其他 token&lt;/td&gt;
+&lt;td&gt;理解上下文的关键&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Multi-Head Attention&lt;/td&gt;
+&lt;td&gt;从多个角度看关系&lt;/td&gt;
+&lt;td&gt;有的头看语法，有的头看指代，有的头看语义&lt;/td&gt;
+&lt;td&gt;提升表达能力&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Positional Encoding&lt;/td&gt;
+&lt;td&gt;补充位置信息&lt;/td&gt;
+&lt;td&gt;告诉模型 token 的顺序&lt;/td&gt;
+&lt;td&gt;让模型知道“狗咬人”和“人咬狗”不同&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Transformer Block&lt;/td&gt;
+&lt;td&gt;把注意力、前馈网络、残差连接组合起来&lt;/td&gt;
+&lt;td&gt;一个可重复堆叠的计算单元&lt;/td&gt;
+&lt;td&gt;LLM 就是很多层 block 堆起来&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Decoder-only&lt;/td&gt;
+&lt;td&gt;只根据前文预测后文&lt;/td&gt;
+&lt;td&gt;不能偷看未来，只能一步步生成&lt;/td&gt;
+&lt;td&gt;GPT 类模型的主流结构&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;整体路线可以理解成这样：&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/images/llm/llm-transformer-01.png&quot; alt=&quot;Transformer 架构篇整体路线图&quot;&gt;&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (三)：算法原理篇：机器是如何学会语言的</title>
@@ -4390,336 +5109,6 @@
     <summary type="html">
     
       &lt;p&gt;紧接上篇文章&lt;a href=&quot;http://matt33.com/2019/03/07/apache-calcite-process-flow/&quot;&gt;Apache Calcite 处理流程详解（一）&lt;/a&gt;，这里是 Calcite 系列文章的第二篇，后面还会有文章讲述 Cal
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="calcite" scheme="http://matt33.com/tags/calcite/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Apache Calcite 处理流程详解（一）</title>
-    <link href="http://matt33.com/2019/03/07/apache-calcite-process-flow/"/>
-    <id>http://matt33.com/2019/03/07/apache-calcite-process-flow/</id>
-    <published>2019-03-07T12:40:38.000Z</published>
-    <updated>2026-06-19T02:19:10.483Z</updated>
-    
-    <content type="html"><![CDATA[<p>关于 Apache Calcite 的简单介绍可以参考 <a href="https://www.infoq.cn/article/new-big-data-hadoop-query-engine-apache-calcite" target="_blank" rel="external">Apache Calcite：Hadoop 中新型大数据查询引擎</a> 这篇文章，Calcite 一开始设计的目标就是 <strong>one size fits all</strong>，它希望能为不同计算存储引擎提供统一的 SQL 查询引擎，当然 Calcite 并不仅仅是一个简单的 SQL 查询引擎，在论文 <a href="https://arxiv.org/pdf/1802.10233.pdf" target="_blank" rel="external">Apache Calcite: A Foundational Framework for Optimized Query Processing Over Heterogeneous Data Sources</a> 的摘要（摘要见下面）部分，关于 Calcite 的核心点有简单的介绍，Calcite 的架构有三个特点：flexible, embeddable, and extensible，就是灵活性、组件可插拔、可扩展，它的 SQL Parser 层、Optimizer 层等都可以单独使用，这也是 Calcite 受总多开源框架欢迎的原因之一。</p>
-<blockquote>
-<p>Apache Calcite is a foundational software framework that provides <strong>query processing, optimization, and query language</strong> support to many popular open-source data processing systems such as Apache Hive, Apache Storm, Apache Flink, Druid, and MapD. Calcite’s architecture consists of </p>
-<ol>
-<li>a modular and extensible query optimizer with hundreds of built-in optimization rules, </li>
-<li>a query processor capable of processing a variety of query languages, </li>
-<li>an adapter architecture designed for extensibility, </li>
-<li>and support for heterogeneous data models and stores (relational, semi-structured, streaming, and geospatial).<br><strong>This flexible, embeddable, and extensible architecture</strong> is what makes Calcite an attractive choice for adoption in bigdata frameworks. It is an active project that continues to introduce support for the new types of data sources, query languages, and approaches to query processing and optimization.</li>
-</ol>
-</blockquote>
-<h1 id="Calcite-概念"><a href="#Calcite-概念" class="headerlink" title="Calcite 概念"></a>Calcite 概念</h1><p>在介绍 Calcite 架构之前，先来看下与 Calcite 相关的基础性内容。</p>
-<h2 id="关系代数的基本知识"><a href="#关系代数的基本知识" class="headerlink" title="关系代数的基本知识"></a>关系代数的基本知识</h2><p>关系代数是关系型数据库操作的理论基础，关系代数支持并、差、笛卡尔积、投影和选择等基本运算。关系代数也是 Calcite 的核心，任何一个查询都可以表示成由关系运算符组成的树。在 Calcite 中，它会先将 SQL 转换成关系表达式（relational expression），然后通过规则匹配（rules match）进行相应的优化，优化会有一个成本（cost）模型为参考。</p>
-<p>这里先看下关系代数相关内容，这对于理解 Calcite 很有帮助，特别是 Calcite Optimizer 这块的内容，关系代数的基础可以参考这篇文章 <a href="https://blog.csdn.net/QuinnNorris/article/details/70739094" target="_blank" rel="external">SQL 形式化语言——关系代数</a>，简单总结如下：</p>
-<table>
-<thead>
-<tr>
-<th>名称</th>
-<th>英文</th>
-<th>符号</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>选择</td>
-<td>select</td>
-<td>σ</td>
-<td>类似于 SQL 中的 where</td>
-</tr>
-<tr>
-<td>投影</td>
-<td>project</td>
-<td>Π</td>
-<td>类似于 SQL 中的 select</td>
-</tr>
-<tr>
-<td>并</td>
-<td>union</td>
-<td>∪</td>
-<td>类似于 SQL 中的 union</td>
-</tr>
-<tr>
-<td>集合差</td>
-<td>set-difference</td>
-<td>-</td>
-<td>SQL中没有对应的操作符</td>
-</tr>
-<tr>
-<td>笛卡儿积</td>
-<td>Cartesian-product</td>
-<td>×</td>
-<td>类似于 SQL 中不带 on 条件的 inner join</td>
-</tr>
-<tr>
-<td>重命名</td>
-<td>rename</td>
-<td>ρ</td>
-<td>类似于 SQL 中的 as</td>
-</tr>
-<tr>
-<td>集合交</td>
-<td>intersection</td>
-<td>∩</td>
-<td>SQL中没有对应的操作符</td>
-</tr>
-<tr>
-<td>自然连接</td>
-<td>natural join</td>
-<td>⋈</td>
-<td>类似于 SQL 中的 inner join</td>
-</tr>
-<tr>
-<td>赋值</td>
-<td>assignment</td>
-<td>←</td>
-</tr>
-</tbody>
-</table>
-<h3 id="查询优化"><a href="#查询优化" class="headerlink" title="查询优化"></a>查询优化</h3><p>查询优化主要是围绕着 <strong>等价交换</strong> 的原则做相应的转换，这部分可以参考【《数据库系统概念（中文第六版）》第13章——查询优化】，关于查询优化理论知识，这里就不再详述，列出一些个人不错不错的博客，大家可以参考一下：</p>
-<ol>
-<li><a href="https://www.jianshu.com/p/edf503a2a1e7" target="_blank" rel="external">数据库查询优化入门: 代数与物理优化基础</a>；</li>
-<li><a href="https://blog.csdn.net/u013007900/article/details/78978271" target="_blank" rel="external">高级数据库十五：查询优化器（一）</a>；</li>
-<li><a href="https://blog.csdn.net/u013007900/article/details/78993101" target="_blank" rel="external">高级数据库十六：查询优化器（二）</a>；</li>
-<li><a href="http://www.ptbird.cn/optimization-of-relational-algebraic-expression.html" target="_blank" rel="external">「 数据库原理 」查询优化（关系代数表达式优化）</a>；</li>
-<li><a href="http://book.51cto.com/art/201306/400084.htm" target="_blank" rel="external">4.1.3 关系数据库系统的查询优化（1）</a>；</li>
-<li><a href="http://book.51cto.com/art/201306/400085.htm" target="_blank" rel="external">4.1.3 关系数据库系统的查询优化（10）</a>；</li>
-</ol>
-<h2 id="Calcite-中的一些概念"><a href="#Calcite-中的一些概念" class="headerlink" title="Calcite 中的一些概念"></a>Calcite 中的一些概念</h2><p>Calcite 抛出的概念非常多，笔者最开始在看代码时就被这些概念绕得云里雾里，这时候先从代码的细节里跳出来，先把这些概念理清楚、归归类后再去看代码，思路就清晰很多，因此，在介绍 Calcite 整体实现前，先把这些概念梳理一下，需要对这些概念有个基本的理解，相关的概念如下图所示：</p>
-<p><img src="/images/calcite/0-calcite.png" alt="calcite 基本概念"></p>
-<p>整理如下表所示：</p>
-<table>
-<thead>
-<tr>
-<th>类型</th>
-<th>描述</th>
-<th>特点</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>RelOptRule</td>
-<td>transforms an expression into another。对 expression 做等价转换</td>
-<td>根据传递给它的 RelOptRuleOperand 来对目标 RelNode 树进行规则匹配，匹配成功后，会再次调用 <code>matches()</code> 方法（默认返回真）进行进一步检查。如果 <code>mathes()</code> 结果为真，则调用 <code>onMatch()</code> 进行转换。</td>
-</tr>
-<tr>
-<td>ConverterRule</td>
-<td>Abstract base class for a rule which converts from one calling convention to another without changing semantics.</td>
-<td>它是 RelOptRule 的子类，专门用来做数据源之间的转换（Calling convention），<strong>ConverterRule 一般会调用对应的 Converter 来完成工作</strong>，比如说：JdbcToSparkConverterRule 调用 JdbcToSparkConverter 来完成对 JDBC Table 到 Spark RDD 的转换。</td>
-</tr>
-<tr>
-<td>RelNode</td>
-<td>relational expression，RelNode 会标识其 input RelNode 信息，这样就构成了一棵 RelNode 树</td>
-<td>代表了<strong>对数据的一个处理操作</strong>，常见的操作有 Sort、Join、Project、Filter、Scan 等。它蕴含的是对整个 Relation 的操作，而不是对具体数据的处理逻辑。</td>
-</tr>
-<tr>
-<td>Converter</td>
-<td>A relational expression implements the interface <code>Converter</code> to indicate that it converts a physical attribute, or RelTrait of a relational expression from one value to another.</td>
-<td><strong>用来把一种 RelTrait 转换为另一种 RelTrait 的 RelNode</strong>。如 JdbcToSparkConverter 可以把 JDBC 里的 table 转换为 Spark RDD。如果需要在一个 RelNode 中处理来源于异构系统的逻辑表，Calcite 要求先用 Converter 把异构系统的逻辑表转换为同一种 Convention。</td>
-</tr>
-<tr>
-<td>RexNode</td>
-<td>Row-level expression</td>
-<td>行表达式（标量表达式），蕴含的是对一行数据的处理逻辑。每个行表达式都有数据的类型。这是因为在 Valdiation 的过程中，编译器会推导出表达式的结果类型。常见的行表达式包括字面量 RexLiteral， 变量 RexVariable， 函数或操作符调用 RexCall 等。 RexNode 通过 RexBuilder 进行构建。</td>
-</tr>
-<tr>
-<td>RelTrait</td>
-<td>RelTrait represents the manifestation of a relational expression trait within a trait definition.</td>
-<td>用来定义逻辑表的物理相关属性（physical property），三种主要的 trait 类型是：Convention、RelCollation、RelDistribution；</td>
-</tr>
-<tr>
-<td>Convention</td>
-<td>Calling convention used to repressent a single data source, inputs must be in the same convention</td>
-<td>继承自 RelTrait，类型很少，代表一个单一的数据源，一个  relational expression 必须在同一个 convention 中；</td>
-</tr>
-<tr>
-<td>RelTraitDef</td>
-<td></td>
-<td>主要有三种：ConventionTraitDef：用来代表数据源 RelCollationTraitDef：用来定义参与排序的字段；RelDistributionTraitDef：用来定义数据在物理存储上的分布方式（比如：single、hash、range、random 等）；</td>
-</tr>
-<tr>
-<td>RelOptCluster</td>
-<td>An environment for related relational expressions during the optimization of a query.</td>
-<td>palnner 运行时的环境，保存上下文信息；</td>
-</tr>
-<tr>
-<td>RelOptPlanner</td>
-<td>A RelOptPlanner is a query optimizer: it transforms a relational expression into a semantically equivalent relational expression, according to a given set of rules and a cost model.</td>
-<td>也就是<strong>优化器</strong>，Calcite 支持RBO（Rule-Based Optimizer） 和 CBO（Cost-Based Optimizer）。Calcite 的 RBO （HepPlanner）称为启发式优化器（heuristic implementation ），它简单地按 AST 树结构匹配所有已知规则，直到没有规则能够匹配为止；Calcite 的 CBO 称为火山式优化器（VolcanoPlanner）成本优化器也会匹配并应用规则，当整棵树的成本降低趋于稳定后，优化完成，成本优化器依赖于比较准确的成本估算。RelOptCost 和 Statistic 与成本估算相关；</td>
-</tr>
-<tr>
-<td>RelOptCost</td>
-<td>defines an interface for optimizer cost in terms of number of rows processed, CPU cost, and I/O cost.</td>
-<td>优化器成本模型会依赖；</td>
-</tr>
-</tbody>
-</table>
-<h1 id="Calcite-架构"><a href="#Calcite-架构" class="headerlink" title="Calcite 架构"></a>Calcite 架构</h1><p>关于 Calcite 的架构，可以参考下图（图片来自前面那篇论文），它与传统数据库管理系统有一些相似之处，相比而言，它将数据存储、数据处理算法和元数据存储这些部分忽略掉了，这样设计带来的好处是：对于涉及多种数据源和多种计算引擎的应用而言，Calcite 因为可以兼容多种存储和计算引擎，使得 Calcite 可以提供统一查询服务，Calcite 将会是这些应用的最佳选择。</p>
-<p><img src="/images/calcite/1-calcite.png" alt="Calcite Architecture，图片来自论文"></p>
-<p>在 Calcite 架构中，最核心地方就是 Optimizer，也就是优化器，一个 Optimization Engine 包含三个组成部分：</p>
-<ol>
-<li>rules：也就是匹配规则，Calcite 内置上百种 Rules 来优化 relational expression，当然也支持自定义 rules；</li>
-<li>metadata providers：主要是向优化器提供信息，这些信息会有助于指导优化器向着目标（减少整体 cost）进行优化，信息可以包括行数、table 哪一列是唯一列等，也包括计算 RelNode 树中执行 subexpression cost 的函数；</li>
-<li>planner engines：它的主要目标是进行触发 rules 来达到指定目标，比如像 cost-based optimizer（CBO）的目标是减少cost（Cost 包括处理的数据行数、CPU cost、IO cost 等）。</li>
-</ol>
-<h1 id="Calcite-处理流程"><a href="#Calcite-处理流程" class="headerlink" title="Calcite 处理流程"></a>Calcite 处理流程</h1><p>Sql 的执行过程一般可以分为下图中的四个阶段，Calcite 同样也是这样：</p>
-<p><img src="/images/calcite/dataflow.png" alt="Sql 执行过程"></p>
-<p>但这里为了讲述方便，把 SQL 的执行分为下面五个阶段（跟上面比比又独立出了一个阶段）：</p>
-<ol>
-<li>解析 SQL， 把 SQL 转换成为 AST （抽象语法树），在 Calcite 中用 SqlNode 来表示；</li>
-<li>语法检查，根据数据库的元数据信息进行语法验证，验证之后还是用 SqlNode 表示 AST 语法树；</li>
-<li>语义分析，根据 SqlNode 及元信息构建 RelNode 树，也就是最初版本的逻辑计划（Logical Plan）；</li>
-<li>逻辑计划优化，优化器的核心，根据前面生成的逻辑计划按照相应的规则（Rule）进行优化；</li>
-<li>物理执行，生成物理计划，物理执行计划执行。</li>
-</ol>
-<p>这里我们只关注前四步的内容，会配合源码实现以及一个示例来讲解。</p>
-<h2 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h2><p>示例 SQL 如下：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> u.id <span class="keyword">as</span> user_id, u.name <span class="keyword">as</span> user_name, j.company <span class="keyword">as</span> user_company, u.age <span class="keyword">as</span> user_age </span><br><span class="line"><span class="keyword">from</span> <span class="keyword">users</span> u <span class="keyword">join</span> jobs j <span class="keyword">on</span> u.name=j.name</span><br><span class="line"><span class="keyword">where</span> u.age &gt; <span class="number">30</span> <span class="keyword">and</span> j.id&gt;<span class="number">10</span></span><br><span class="line"><span class="keyword">order</span> <span class="keyword">by</span> user_id</span><br></pre></td></tr></table></figure>
-<p>这里有两张表，其表各个字段及类型定义如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">SchemaPlus rootSchema = Frameworks.createRootSchema(<span class="keyword">true</span>);</span><br><span class="line">rootSchema.add(<span class="string">"USERS"</span>, <span class="keyword">new</span> AbstractTable() &#123; <span class="comment">//note: add a table</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> RelDataType <span class="title">getRowType</span><span class="params">(<span class="keyword">final</span> RelDataTypeFactory typeFactory)</span> </span>&#123;</span><br><span class="line">        RelDataTypeFactory.Builder builder = typeFactory.builder();</span><br><span class="line"></span><br><span class="line">        builder.add(<span class="string">"ID"</span>, <span class="keyword">new</span> BasicSqlType(<span class="keyword">new</span> RelDataTypeSystemImpl() &#123;&#125;, SqlTypeName.INTEGER));</span><br><span class="line">        builder.add(<span class="string">"NAME"</span>, <span class="keyword">new</span> BasicSqlType(<span class="keyword">new</span> RelDataTypeSystemImpl() &#123;&#125;, SqlTypeName.CHAR));</span><br><span class="line">        builder.add(<span class="string">"AGE"</span>, <span class="keyword">new</span> BasicSqlType(<span class="keyword">new</span> RelDataTypeSystemImpl() &#123;&#125;, SqlTypeName.INTEGER));</span><br><span class="line">        <span class="keyword">return</span> builder.build();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br><span class="line"></span><br><span class="line">rootSchema.add(<span class="string">"JOBS"</span>, <span class="keyword">new</span> AbstractTable() &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> RelDataType <span class="title">getRowType</span><span class="params">(<span class="keyword">final</span> RelDataTypeFactory typeFactory)</span> </span>&#123;</span><br><span class="line">        RelDataTypeFactory.Builder builder = typeFactory.builder();</span><br><span class="line"></span><br><span class="line">        builder.add(<span class="string">"ID"</span>, <span class="keyword">new</span> BasicSqlType(<span class="keyword">new</span> RelDataTypeSystemImpl() &#123;&#125;, SqlTypeName.INTEGER));</span><br><span class="line">        builder.add(<span class="string">"NAME"</span>, <span class="keyword">new</span> BasicSqlType(<span class="keyword">new</span> RelDataTypeSystemImpl() &#123;&#125;, SqlTypeName.CHAR));</span><br><span class="line">        builder.add(<span class="string">"COMPANY"</span>, <span class="keyword">new</span> BasicSqlType(<span class="keyword">new</span> RelDataTypeSystemImpl() &#123;&#125;, SqlTypeName.CHAR));</span><br><span class="line">        <span class="keyword">return</span> builder.build();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
-<h2 id="Step1-SQL-解析阶段（SQL–-gt-SqlNode）"><a href="#Step1-SQL-解析阶段（SQL–-gt-SqlNode）" class="headerlink" title="Step1: SQL 解析阶段（SQL–&gt;SqlNode）"></a>Step1: SQL 解析阶段（SQL–&gt;SqlNode）</h2><p>使用 Calcite 进行 Sql 解析的代码如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">SqlParser parser = SqlParser.create(sql, SqlParser.Config.DEFAULT);</span><br><span class="line">SqlNode sqlNode = parser.parseStmt();</span><br></pre></td></tr></table></figure>
-<p>Calcite 使用 JavaCC 做 SQL 解析，JavaCC 根据 Calcite 中定义的 <a href="https://github.com/apache/calcite/blob/master/core/src/main/codegen/templates/Parser.jj" target="_blank" rel="external">Parser.jj</a> 文件，生成一系列的 java 代码，生成的 Java 代码会把 SQL 转换成 AST 的数据结构（这里是 SqlNode 类型）。</p>
-<blockquote>
-<p>与 Javacc 相似的工具还有 ANTLR，JavaCC 中的 jj 文件也跟 ANTLR 中的 G4文件类似，Apache Spark 中使用这个工具做类似的事情。</p>
-</blockquote>
-<h3 id="Javacc"><a href="#Javacc" class="headerlink" title="Javacc"></a>Javacc</h3><p>关于 Javacc 内容可以参考下面这几篇文章，这里就不再详细展开，可以通过下面文章的例子把 JavaCC 的语法了解一下，这样我们也可以自己设计一个 DSL（Doomain Specific Language）。</p>
-<ul>
-<li><a href="https://www.cnblogs.com/Gavin_Liu/archive/2009/03/07/1405029.html" target="_blank" rel="external">JavaCC 研究与应用( 8000字 心得 源程序)</a>；</li>
-<li><a href="https://www.ibm.com/developerworks/cn/xml/x-javacc/part1/index.html" target="_blank" rel="external">JavaCC、解析树和 XQuery 语法，第 1 部分</a>；</li>
-<li><a href="https://www.ibm.com/developerworks/cn/xml/x-javacc/part2/index.html" target="_blank" rel="external">JavaCC、解析树和 XQuery 语法，第 2 部分</a>；</li>
-<li><a href="https://www.yangguo.info/2014/12/13/%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86-Javacc%E4%BD%BF%E7%94%A8/" target="_blank" rel="external">编译原理之Javacc使用</a>；</li>
-<li><a href="http://www.engr.mun.ca/~theo/JavaCC-Tutorial/javacc-tutorial.pdf" target="_blank" rel="external">javacc tutorial</a>；</li>
-</ul>
-<p>回到 Calcite，Javacc 这里要实现一个 SQL Parser，它的功能有以下两个，这里都是需要在 jj 文件中定义的。</p>
-<ol>
-<li>设计词法和语义，定义 SQL 中具体的元素；</li>
-<li>实现词法分析器（Lexer）和语法分析器（Parser），完成对 SQL 的解析，完成相应的转换。</li>
-</ol>
-<h3 id="SQL-Parser-流程"><a href="#SQL-Parser-流程" class="headerlink" title="SQL Parser 流程"></a>SQL Parser 流程</h3><p>当 SqlParser 调用 <code>parseStmt()</code> 方法后，其相应的逻辑如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// org.apache.calcite.sql.parser.SqlParser</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> SqlNode <span class="title">parseStmt</span><span class="params">()</span> <span class="keyword">throws</span> SqlParseException </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> parseQuery();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> SqlNode <span class="title">parseQuery</span><span class="params">()</span> <span class="keyword">throws</span> SqlParseException </span>&#123;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> parser.parseSqlStmtEof(); <span class="comment">//note: 解析sql语句</span></span><br><span class="line">  &#125; <span class="keyword">catch</span> (Throwable ex) &#123;</span><br><span class="line">    <span class="keyword">if</span> (ex <span class="keyword">instanceof</span> CalciteContextException) &#123;</span><br><span class="line">      <span class="keyword">final</span> String originalSql = parser.getOriginalSql();</span><br><span class="line">      <span class="keyword">if</span> (originalSql != <span class="keyword">null</span>) &#123;</span><br><span class="line">        ((CalciteContextException) ex).setOriginalStatement(originalSql);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">throw</span> parser.normalizeException(ex);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>其中 SqlParser 中 parser 指的是 <code>SqlParserImpl</code> 类（<code>SqlParser.Config.DEFAULT</code> 指定的），它就是由 JJ 文件生成的解析类，其处理流程如下，具体解析逻辑还是要看 JJ 文件中的定义。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//org.apache.calcite.sql.parser.impl.SqlParserImpl</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> SqlNode <span class="title">parseSqlStmtEof</span><span class="params">()</span> <span class="keyword">throws</span> Exception</span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="keyword">return</span> SqlStmtEof();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Parses an SQL statement followed by the end-of-file symbol.</span></span><br><span class="line"><span class="comment"> * note:解析SQL语句(后面有文件结束符号)</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">public</span> SqlNode <span class="title">SqlStmtEof</span><span class="params">()</span> <span class="keyword">throws</span> ParseException </span>&#123;</span><br><span class="line">  SqlNode stmt;</span><br><span class="line">  stmt = SqlStmt();</span><br><span class="line">  jj_consume_token(<span class="number">0</span>);</span><br><span class="line">      &#123;<span class="keyword">if</span> (<span class="keyword">true</span>) <span class="keyword">return</span> stmt;&#125;</span><br><span class="line">  <span class="keyword">throw</span> <span class="keyword">new</span> Error(<span class="string">"Missing return statement in function"</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"> <span class="comment">//note: 解析 SQL statement</span></span><br><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">public</span> SqlNode <span class="title">SqlStmt</span><span class="params">()</span> <span class="keyword">throws</span> ParseException </span>&#123;</span><br><span class="line">  SqlNode stmt;</span><br><span class="line">  <span class="keyword">if</span> (jj_2_34(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlSetOption(Span.of(), <span class="keyword">null</span>);</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_35(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlAlter();</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_36(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY);</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_37(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlExplain();</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_38(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlDescribe();</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_39(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlInsert();</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_40(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlDelete();</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_41(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlUpdate();</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_42(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlMerge();</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (jj_2_43(<span class="number">2</span>)) &#123;</span><br><span class="line">    stmt = SqlProcedureCall();</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    jj_consume_token(-<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> ParseException();</span><br><span class="line">  &#125;</span><br><span class="line">      &#123;<span class="keyword">if</span> (<span class="keyword">true</span>) <span class="keyword">return</span> stmt;&#125;</span><br><span class="line">  <span class="keyword">throw</span> <span class="keyword">new</span> Error(<span class="string">"Missing return statement in function"</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>示例中 SQL 经过前面的解析之后，会生成一个 SqlNode，这个 SqlNode 是一个 SqlOrder 类型，DEBUG 后的 SqlOrder 对象如下图所示。</p>
-<p><img src="/images/calcite/2-calciter.jpg" alt="SqlNode 结果"> </p>
-<h2 id="Step2-SqlNode-验证（SqlNode–-gt-SqlNode）"><a href="#Step2-SqlNode-验证（SqlNode–-gt-SqlNode）" class="headerlink" title="Step2: SqlNode 验证（SqlNode–&gt;SqlNode）"></a>Step2: SqlNode 验证（SqlNode–&gt;SqlNode）</h2><p>经过上面的第一步，会生成一个 SqlNode 对象，它是一个<strong>未经验证</strong>的抽象语法树，下面就进入了一个<strong>语法检查</strong>阶段，语法检查前需要知道元数据信息，这个检查会包括表名、字段名、函数名、数据类型的检查。进行语法检查的实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 二、sql validate（会先通过Catalog读取获取相应的metadata和namespace）</span></span><br><span class="line"><span class="comment">//note: get metadata and namespace</span></span><br><span class="line">SqlTypeFactoryImpl factory = <span class="keyword">new</span> SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);</span><br><span class="line">CalciteCatalogReader calciteCatalogReader = <span class="keyword">new</span> CalciteCatalogReader(</span><br><span class="line">    CalciteSchema.from(rootScheme),</span><br><span class="line">    CalciteSchema.from(rootScheme).path(<span class="keyword">null</span>),</span><br><span class="line">    factory,</span><br><span class="line">    <span class="keyword">new</span> CalciteConnectionConfigImpl(<span class="keyword">new</span> Properties()));</span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 校验（包括对表名，字段名，函数名，字段类型的校验。）</span></span><br><span class="line">SqlValidator validator = SqlValidatorUtil.newValidator(SqlStdOperatorTable.instance(), calciteCatalogReader, factory,</span><br><span class="line">    conformance(frameworkConfig));</span><br><span class="line">SqlNode validateSqlNode = validator.validate(sqlNode);</span><br></pre></td></tr></table></figure>
-<p>我们知道 Calcite 本身是不管理和存储元数据的，在检查之前，需要先把元信息注册到 Calcite 中，一般的操作方法是实现 SchemaFactory，由它去创建相应的 Schema，在 Schema 中可以注册相应的元数据信息（如：通过 <code>getTableMap()</code> 方法注册表信息），如下所示：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//org.apache.calcite.schema.impl.AbstractSchema</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Returns a map of tables in this schema by name.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;The implementations of &#123;<span class="doctag">@link</span> #getTableNames()&#125;</span></span><br><span class="line"><span class="comment"> * and &#123;<span class="doctag">@link</span> #getTable(String)&#125; depend on this map.</span></span><br><span class="line"><span class="comment"> * The default implementation of this method returns the empty map.</span></span><br><span class="line"><span class="comment"> * Override this method to change their behavior.&lt;/p&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> Map of tables in this schema by name</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> Map&lt;String, Table&gt; <span class="title">getTableMap</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> ImmutableMap.of();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//org.apache.calcite.adapter.csvorg.apache.calcite.adapter.csv.CsvSchemasvSchema</span></span><br><span class="line"><span class="comment">//note: 创建表</span></span><br><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">protected</span> Map&lt;String, Table&gt; <span class="title">getTableMap</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (tableMap == <span class="keyword">null</span>) &#123;</span><br><span class="line">    tableMap = createTableMap();</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> tableMap;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>CsvSchemasvSchema 中的 <code>getTableMap()</code> 方法通过 <code>createTableMap()</code> 来注册相应的表信息。</p>
-<p>结合前面的例子再来分析，在前面定义了 CalciteCatalogReader 实例，该实例就是用来读取 Schema 中的元数据信息的。真正检查的逻辑是在 <code>SqlValidatorImpl</code> 类中实现的，这个 check 的逻辑比较复杂，在看代码时通过两种手段来看：</p>
-<ol>
-<li>DEBUG 的方式，可以看到其方法调用的过程；</li>
-<li>测试程序中故意构造一些 Case，观察其异常栈。</li>
-</ol>
-<p>比如，在示例中 SQL 中，如果把一个字段名写错，写成 ids，其报错信息如下：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line">org.apache.calcite.runtime.CalciteContextException: From line 1, column 156 to line 1, column 158: Column <span class="string">'IDS'</span> not found <span class="keyword">in</span> table <span class="string">'J'</span></span><br><span class="line">    at sun.reflect.NativeConstructorAccessorImpl.newInstance0(Native Method)</span><br><span class="line">    at sun.reflect.NativeConstructorAccessorImpl.newInstance(NativeConstructorAccessorImpl.java:62)</span><br><span class="line">    at sun.reflect.DelegatingConstructorAccessorImpl.newInstance(DelegatingConstructorAccessorImpl.java:45)</span><br><span class="line">    at java.lang.reflect.Constructor.newInstance(Constructor.java:423)</span><br><span class="line">    at org.apache.calcite.runtime.Resources<span class="variable">$ExInstWithCause</span>.ex(Resources.java:463)</span><br><span class="line">    at org.apache.calcite.sql.SqlUtil.newContextException(SqlUtil.java:787)</span><br><span class="line">    at org.apache.calcite.sql.SqlUtil.newContextException(SqlUtil.java:772)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.newValidationError(SqlValidatorImpl.java:4788)</span><br><span class="line">    at org.apache.calcite.sql.validate.DelegatingScope.fullyQualify(DelegatingScope.java:439)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl<span class="variable">$Expander</span>.visit(SqlValidatorImpl.java:5683)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl<span class="variable">$Expander</span>.visit(SqlValidatorImpl.java:5665)</span><br><span class="line">    at org.apache.calcite.sql.SqlIdentifier.accept(SqlIdentifier.java:334)</span><br><span class="line">    at org.apache.calcite.sql.util.SqlShuttle<span class="variable">$CallCopyingArgHandler</span>.visitChild(SqlShuttle.java:134)</span><br><span class="line">    at org.apache.calcite.sql.util.SqlShuttle<span class="variable">$CallCopyingArgHandler</span>.visitChild(SqlShuttle.java:101)</span><br><span class="line">    at org.apache.calcite.sql.SqlOperator.acceptCall(SqlOperator.java:865)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl<span class="variable">$Expander</span>.visitScoped(SqlValidatorImpl.java:5701)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlScopedShuttle.visit(SqlScopedShuttle.java:50)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlScopedShuttle.visit(SqlScopedShuttle.java:33)</span><br><span class="line">    at org.apache.calcite.sql.SqlCall.accept(SqlCall.java:138)</span><br><span class="line">    at org.apache.calcite.sql.util.SqlShuttle<span class="variable">$CallCopyingArgHandler</span>.visitChild(SqlShuttle.java:134)</span><br><span class="line">    at org.apache.calcite.sql.util.SqlShuttle<span class="variable">$CallCopyingArgHandler</span>.visitChild(SqlShuttle.java:101)</span><br><span class="line">    at org.apache.calcite.sql.SqlOperator.acceptCall(SqlOperator.java:865)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl<span class="variable">$Expander</span>.visitScoped(SqlValidatorImpl.java:5701)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlScopedShuttle.visit(SqlScopedShuttle.java:50)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlScopedShuttle.visit(SqlScopedShuttle.java:33)</span><br><span class="line">    at org.apache.calcite.sql.SqlCall.accept(SqlCall.java:138)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.expand(SqlValidatorImpl.java:5272)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.validateWhereClause(SqlValidatorImpl.java:3977)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.validateSelect(SqlValidatorImpl.java:3305)</span><br><span class="line">    at org.apache.calcite.sql.validate.SelectNamespace.validateImpl(SelectNamespace.java:60)</span><br><span class="line">    at org.apache.calcite.sql.validate.AbstractNamespace.validate(AbstractNamespace.java:84)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.validateNamespace(SqlValidatorImpl.java:977)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.validateQuery(SqlValidatorImpl.java:953)</span><br><span class="line">    at org.apache.calcite.sql.SqlSelect.validate(SqlSelect.java:216)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.validateScopedExpression(SqlValidatorImpl.java:928)</span><br><span class="line">    at org.apache.calcite.sql.validate.SqlValidatorImpl.validate(SqlValidatorImpl.java:632)</span><br><span class="line">    at com.matt.test.calcite.test.SqlTest3.sqlToRelNode(SqlTest3.java:200)</span><br><span class="line">    at com.matt.test.calcite.test.SqlTest3.main(SqlTest3.java:117)</span><br><span class="line">Caused by: org.apache.calcite.sql.validate.SqlValidatorException: Column <span class="string">'IDS'</span> not found <span class="keyword">in</span> table <span class="string">'J'</span></span><br><span class="line">    at sun.reflect.NativeConstructorAccessorImpl.newInstance0(Native Method)</span><br><span class="line">    at sun.reflect.NativeConstructorAccessorImpl.newInstance(NativeConstructorAccessorImpl.java:62)</span><br><span class="line">    at sun.reflect.DelegatingConstructorAccessorImpl.newInstance(DelegatingConstructorAccessorImpl.java:45)</span><br><span class="line">    at java.lang.reflect.Constructor.newInstance(Constructor.java:423)</span><br><span class="line">    at org.apache.calcite.runtime.Resources<span class="variable">$ExInstWithCause</span>.ex(Resources.java:463)</span><br><span class="line">    at org.apache.calcite.runtime.Resources<span class="variable">$ExInst</span>.ex(Resources.java:572)</span><br><span class="line">    ... 33 more</span><br><span class="line">java.lang.NullPointerException</span><br><span class="line">    at org.apache.calcite.plan.hep.HepPlanner.addRelToGraph(HepPlanner.java:806)</span><br><span class="line">    at org.apache.calcite.plan.hep.HepPlanner.setRoot(HepPlanner.java:152)</span><br><span class="line">    at com.matt.test.calcite.test.SqlTest3.main(SqlTest3.java:124)</span><br></pre></td></tr></table></figure>
-<h3 id="SqlValidatorImpl-检查过程"><a href="#SqlValidatorImpl-检查过程" class="headerlink" title="SqlValidatorImpl 检查过程"></a>SqlValidatorImpl 检查过程</h3><p>语法检查验证是通过 SqlValidatorImpl 的 <code>validate()</code> 方法进行操作的，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">org.apache.calcite.sql.validate.SqlValidatorImpl</span><br><span class="line"><span class="comment">//note: 做相应的语法树校验</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> SqlNode <span class="title">validate</span><span class="params">(SqlNode topNode)</span> </span>&#123;</span><br><span class="line">  <span class="comment">//note: root 对应的 Scope</span></span><br><span class="line">  SqlValidatorScope scope = <span class="keyword">new</span> EmptyScope(<span class="keyword">this</span>);</span><br><span class="line">  scope = <span class="keyword">new</span> CatalogScope(scope, ImmutableList.of(<span class="string">"CATALOG"</span>));</span><br><span class="line">  <span class="comment">//note: 1.rewrite expression</span></span><br><span class="line">  <span class="comment">//note: 2.做相应的语法检查</span></span><br><span class="line">  <span class="keyword">final</span> SqlNode topNode2 = validateScopedExpression(topNode, scope); <span class="comment">//note: 验证</span></span><br><span class="line">  <span class="keyword">final</span> RelDataType type = getValidatedNodeType(topNode2);</span><br><span class="line">  Util.discard(type);</span><br><span class="line">  <span class="keyword">return</span> topNode2;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>主要的实现是在 <code>validateScopedExpression()</code> 方法中，其实现如下</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> SqlNode <span class="title">validateScopedExpression</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    SqlNode topNode,</span></span></span><br><span class="line"><span class="function"><span class="params">    SqlValidatorScope scope)</span> </span>&#123;</span><br><span class="line">  <span class="comment">//note: 1. rewrite expression，将其标准化，便于后面的逻辑计划优化</span></span><br><span class="line">  SqlNode outermostNode = performUnconditionalRewrites(topNode, <span class="keyword">false</span>);</span><br><span class="line">  cursorSet.add(outermostNode);</span><br><span class="line">  top = outermostNode;</span><br><span class="line">  TRACER.trace(<span class="string">"After unconditional rewrite: &#123;&#125;"</span>, outermostNode);</span><br><span class="line">  <span class="comment">//note: 2. Registers a query in a parent scope.</span></span><br><span class="line">  <span class="comment">//note: register scopes and namespaces implied a relational expression</span></span><br><span class="line">  <span class="keyword">if</span> (outermostNode.isA(SqlKind.TOP_LEVEL)) &#123;</span><br><span class="line">    registerQuery(scope, <span class="keyword">null</span>, outermostNode, outermostNode, <span class="keyword">null</span>, <span class="keyword">false</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//note: 3. catalog 验证，调用 SqlNode 的 validate 方法，</span></span><br><span class="line">  outermostNode.validate(<span class="keyword">this</span>, scope);</span><br><span class="line">  <span class="keyword">if</span> (!outermostNode.isA(SqlKind.TOP_LEVEL)) &#123;</span><br><span class="line">    <span class="comment">// force type derivation so that we can provide it to the</span></span><br><span class="line">    <span class="comment">// caller later without needing the scope</span></span><br><span class="line">    deriveType(scope, outermostNode);</span><br><span class="line">  &#125;</span><br><span class="line">  TRACER.trace(<span class="string">"After validation: &#123;&#125;"</span>, outermostNode);</span><br><span class="line">  <span class="keyword">return</span> outermostNode;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>它的处理逻辑主要分为三步：</p>
-<ol>
-<li>rewrite expression，将其标准化，便于后面的逻辑计划优化；</li>
-<li>注册这个 relational expression 的 scopes 和 namespaces（这两个对象代表了其元信息）；</li>
-<li>进行相应的验证，这里会依赖第二步注册的 scopes 和 namespaces 信息。</li>
-</ol>
-<h4 id="Rewrite"><a href="#Rewrite" class="headerlink" title="Rewrite"></a>Rewrite</h4><p>关于 Rewrite 这一步，一直困惑比较，因为根据 <code>After unconditional rewrite:</code> 这条日志的结果看，其实前后 SqlNode 并没有太大变化，看 <code>performUnconditionalRewrites()</code> 这部分代码时，看得不是很明白，不过还是注意到了 SqlOrderBy 的注释（注释如下），它的意思是 SqlOrderBy 通过 <code>performUnconditionalRewrites()</code> 方法已经被 SqlSelect 对象中的 <code>ORDER_OPERAND</code> 取代了。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Parse tree node that represents an &#123;<span class="doctag">@code</span> ORDER BY&#125; on a query other than a</span></span><br><span class="line"><span class="comment"> * &#123;<span class="doctag">@code</span> SELECT&#125; (e.g. &#123;<span class="doctag">@code</span> VALUES&#125; or &#123;<span class="doctag">@code</span> UNION&#125;).</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;It is a purely syntactic operator, and is eliminated by</span></span><br><span class="line"><span class="comment"> * &#123;<span class="doctag">@link</span> org.apache.calcite.sql.validate.SqlValidatorImpl#performUnconditionalRewrites&#125;</span></span><br><span class="line"><span class="comment"> * and replaced with the ORDER_OPERAND of SqlSelect.&lt;/p&gt;</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SqlOrderBy</span> <span class="keyword">extends</span> <span class="title">SqlCall</span> </span>&#123;</span><br></pre></td></tr></table></figure>
-<p>注意到 SqlOrderBy 的原因是因为在 <code>performUnconditionalRewrites()</code> 方法前面都是递归对每个对象进行处理，在后面进行真正的 ransform 时，主要在围绕着 ORDER_BY 这个类型做处理，而且从代码中可以看出，将其类型从 SqlOrderBy 转换成了 SqlSelect，BUDEG 前面的示例，发现 outermostNode 与 topNode 的类型确实发生了变化，如下图所示。</p>
-<p><img src="/images/calcite/3-calcite.png" alt="Rewrite 前后的对比"></p>
-<p>这个方法有个好的地方就是，在不改变原有 SQL Parser 的逻辑的情况下，可以在这个方法里做一些改动，当然如果 SQL Parser 的结果如果直接可用当然是最好的，就不需要再进行一次 Rewrite 了。</p>
-<h4 id="registerQuery"><a href="#registerQuery" class="headerlink" title="registerQuery"></a>registerQuery</h4><p>这里的功能主要就是将[元数据]转换成 SqlValidator 内部的 对象 进行表示，也就是 SqlValidatorScope 和 SqlValidatorNamespace 两种类型的对象：</p>
-<ol>
-<li>SqlValidatorNamespace：a description of a data source used in a query，它代表了 SQL 查询的数据源，它是一个逻辑上数据源，可以是一张表，也可以是一个子查询；</li>
-<li>SqlValidatorScope：describes the tables and columns accessible at a particular point in the query，代表了在某一个程序运行点，当前可见的字段名和表名。</li>
-</ol>
-<p>这个理解起来并不是那么容易，在 SelectScope 类中有一个示例讲述，这个示例对这两个概念的理解很有帮助。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * &lt;h3&gt;Scopes&lt;/h3&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;In the query&lt;/p&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;blockquote&gt;</span></span><br><span class="line"><span class="comment"> * &lt;pre&gt;</span></span><br><span class="line"><span class="comment"> * SELECT expr1</span></span><br><span class="line"><span class="comment"> * FROM t1,</span></span><br><span class="line"><span class="comment"> *     t2,</span></span><br><span class="line"><span class="comment"> *     (SELECT expr2 FROM t3) AS q3</span></span><br><span class="line"><span class="comment"> * WHERE c1 IN (SELECT expr3 FROM t4)</span></span><br><span class="line"><span class="comment"> * ORDER BY expr4&lt;/pre&gt;</span></span><br><span class="line"><span class="comment"> * &lt;/blockquote&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;The scopes available at various points of the query are as follows:&lt;/p&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;ul&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;expr1 can see t1, t2, q3&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;expr2 can see t3&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;expr3 can see t4, t1, t2&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;expr4 can see t1, t2, q3, plus (depending upon the dialect) any aliases</span></span><br><span class="line"><span class="comment"> * defined in the SELECT clause&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> * &lt;/ul&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;h3&gt;Namespaces&lt;/h3&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;In the above query, there are 4 namespaces:&lt;/p&gt;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;ul&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;t1&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;t2&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;(SELECT expr2 FROM t3) AS q3&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;(SELECT expr3 FROM t4)&lt;/li&gt;</span></span><br><span class="line"><span class="comment"> */</span></span><br></pre></td></tr></table></figure>
-<h4 id="validate-验证"><a href="#validate-验证" class="headerlink" title="validate 验证"></a>validate 验证</h4><p>接着回到最复杂的一步，就是 outermostNode 实例调用 <code>validate(this, scope)</code> 方法进行验证的部分，对于我们这个示例，这里最后调用的是 SqlSelect 的 <code>validate()</code> 方法，如下所示：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">validate</span><span class="params">(SqlValidator validator, SqlValidatorScope scope)</span> </span>&#123;</span><br><span class="line">  validator.validateQuery(<span class="keyword">this</span>, scope, validator.getUnknownType());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>它调用的是 SqlValidatorImpl 的 <code>validateQuery()</code> 方法</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">validateQuery</span><span class="params">(SqlNode node, SqlValidatorScope scope,</span></span></span><br><span class="line"><span class="function"><span class="params">    RelDataType targetRowType)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">final</span> SqlValidatorNamespace ns = getNamespace(node, scope);</span><br><span class="line">  <span class="keyword">if</span> (node.getKind() == SqlKind.TABLESAMPLE) &#123;</span><br><span class="line">    List&lt;SqlNode&gt; operands = ((SqlCall) node).getOperandList();</span><br><span class="line">    SqlSampleSpec sampleSpec = SqlLiteral.sampleValue(operands.get(<span class="number">1</span>));</span><br><span class="line">    <span class="keyword">if</span> (sampleSpec <span class="keyword">instanceof</span> SqlSampleSpec.SqlTableSampleSpec) &#123;</span><br><span class="line">      validateFeature(RESOURCE.sQLFeature_T613(), node.getParserPosition());</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (sampleSpec</span><br><span class="line">        <span class="keyword">instanceof</span> SqlSampleSpec.SqlSubstitutionSampleSpec) &#123;</span><br><span class="line">      validateFeature(RESOURCE.sQLFeatureExt_T613_Substitution(),</span><br><span class="line">          node.getParserPosition());</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  validateNamespace(ns, targetRowType);<span class="comment">//note: 检查</span></span><br><span class="line">  <span class="keyword">switch</span> (node.getKind()) &#123;</span><br><span class="line">  <span class="keyword">case</span> EXTEND:</span><br><span class="line">    <span class="comment">// Until we have a dedicated namespace for EXTEND</span></span><br><span class="line">    deriveType(scope, node);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (node == top) &#123;</span><br><span class="line">    validateModality(node);</span><br><span class="line">  &#125;</span><br><span class="line">  validateAccess(</span><br><span class="line">      node,</span><br><span class="line">      ns.getTable(),</span><br><span class="line">      SqlAccessEnum.SELECT);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Validates a namespace.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> namespace Namespace</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> targetRowType Desired row type, must not be null, may be the data</span></span><br><span class="line"><span class="comment"> *                      type 'unknown'.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">validateNamespace</span><span class="params">(<span class="keyword">final</span> SqlValidatorNamespace namespace,</span></span></span><br><span class="line"><span class="function"><span class="params">    RelDataType targetRowType)</span> </span>&#123;</span><br><span class="line">  namespace.validate(targetRowType);<span class="comment">//note: 验证</span></span><br><span class="line">  <span class="keyword">if</span> (namespace.getNode() != <span class="keyword">null</span>) &#123;</span><br><span class="line">    setValidatedNodeType(namespace.getNode(), namespace.getType());</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这部分的调用逻辑非常复杂，主要的语法验证是 SqlValidatorScope 部分（它里面有相应的表名、字段名等信息），而 namespace 表示需要进行验证的数据源，最开始的这个 SqlNode 有一个 root namespace，上面的 <code>validateNamespace()</code> 方法会首先调用其 namespace 的 <code>validate()</code> 方法进行验证，以前面的示例为例，这里是 SelectNamespace，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//org.apache.calcite.sql.validate.AbstractNamespace</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">validate</span><span class="params">(RelDataType targetRowType)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">switch</span> (status) &#123;</span><br><span class="line">  <span class="keyword">case</span> UNVALIDATED: <span class="comment">//note: 还没开始 check</span></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      status = SqlValidatorImpl.Status.IN_PROGRESS; <span class="comment">//note: 更新当前 namespace 的状态</span></span><br><span class="line">      Preconditions.checkArgument(rowType == <span class="keyword">null</span>,</span><br><span class="line">          <span class="string">"Namespace.rowType must be null before validate has been called"</span>);</span><br><span class="line">      RelDataType type = validateImpl(targetRowType); <span class="comment">//note: 检查验证</span></span><br><span class="line">      Preconditions.checkArgument(type != <span class="keyword">null</span>,</span><br><span class="line">          <span class="string">"validateImpl() returned null"</span>);</span><br><span class="line">      setType(type);</span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">      status = SqlValidatorImpl.Status.VALID;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">case</span> IN_PROGRESS: <span class="comment">//note: 已经开始 check 了，死循环了</span></span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> AssertionError(<span class="string">"Cycle detected during type-checking"</span>);</span><br><span class="line">  <span class="keyword">case</span> VALID:<span class="comment">//note: 检查结束</span></span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">  <span class="keyword">default</span>:</span><br><span class="line">    <span class="keyword">throw</span> Util.unexpected(status);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//org.apache.calcite.sql.validate.SelectNamespace</span></span><br><span class="line"><span class="comment">//note: 检查，还是调用 SqlValidatorImpl 的方法</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> RelDataType <span class="title">validateImpl</span><span class="params">(RelDataType targetRowType)</span> </span>&#123;</span><br><span class="line">  validator.validateSelect(select, targetRowType);</span><br><span class="line">  <span class="keyword">return</span> rowType;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>最后验证方法的实现是 SqlValidatorImpl 的 <code>validateSelect()</code> 方法（对本示例而言），其调用过程如下图所示：</p>
-<p><img src="/images/calcite/4-sqlvalidator.png" alt="验证部分的处理流程"> </p>
-<h2 id="Step3-语义分析（SqlNode–-gt-RelNode-RexNode）"><a href="#Step3-语义分析（SqlNode–-gt-RelNode-RexNode）" class="headerlink" title="Step3: 语义分析（SqlNode–&gt;RelNode/RexNode）"></a>Step3: 语义分析（SqlNode–&gt;RelNode/RexNode）</h2><p>经过第二步之后，这里的 SqlNode 就是经过语法校验的 SqlNode 树，接下来这一步就是将 SqlNode 转换成 RelNode/RexNode，也就是生成相应的逻辑计划（Logical Plan），示例的代码实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// create the rexBuilder</span></span><br><span class="line"><span class="keyword">final</span> RexBuilder rexBuilder =  <span class="keyword">new</span> RexBuilder(factory);</span><br><span class="line"><span class="comment">// init the planner</span></span><br><span class="line"><span class="comment">// 这里也可以注册 VolcanoPlanner，这一步 planner 并没有使用</span></span><br><span class="line">HepProgramBuilder builder = <span class="keyword">new</span> HepProgramBuilder();</span><br><span class="line">RelOptPlanner planner = <span class="keyword">new</span> HepPlanner(builder.build());</span><br><span class="line"></span><br><span class="line"><span class="comment">//note: init cluster: An environment for related relational expressions during the optimization of a query.</span></span><br><span class="line"><span class="keyword">final</span> RelOptCluster cluster = RelOptCluster.create(planner, rexBuilder);</span><br><span class="line"><span class="comment">//note: init SqlToRelConverter</span></span><br><span class="line"><span class="keyword">final</span> SqlToRelConverter.Config config = SqlToRelConverter.configBuilder()</span><br><span class="line">    .withConfig(frameworkConfig.getSqlToRelConverterConfig())</span><br><span class="line">    .withTrimUnusedFields(<span class="keyword">false</span>)</span><br><span class="line">    .withConvertTableAccess(<span class="keyword">false</span>)</span><br><span class="line">    .build(); <span class="comment">//note: config</span></span><br><span class="line"><span class="comment">// 创建 SqlToRelConverter 实例，cluster、calciteCatalogReader、validator 都传进去了，SqlToRelConverter 会缓存这些对象</span></span><br><span class="line"><span class="keyword">final</span> SqlToRelConverter sqlToRelConverter = <span class="keyword">new</span> SqlToRelConverter(<span class="keyword">new</span> DogView(), validator, calciteCatalogReader, cluster, StandardConvertletTable.INSTANCE, config);</span><br><span class="line"><span class="comment">// convert to RelNode</span></span><br><span class="line">RelRoot root = sqlToRelConverter.convertQuery(validateSqlNode, <span class="keyword">false</span>, <span class="keyword">true</span>);</span><br><span class="line"></span><br><span class="line">root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, <span class="keyword">true</span>));</span><br><span class="line"><span class="keyword">final</span> RelBuilder relBuilder = config.getRelBuilderFactory().create(cluster, <span class="keyword">null</span>);</span><br><span class="line">root = root.withRel(RelDecorrelator.decorrelateQuery(root.rel, relBuilder));</span><br><span class="line"></span><br><span class="line">RelNode relNode = root.rel;</span><br><span class="line"></span><br><span class="line"><span class="comment">//DogView 的实现</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">DogView</span> <span class="keyword">implements</span> <span class="title">RelOptTable</span>.<span class="title">ViewExpander</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">DogView</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> RelRoot <span class="title">expandView</span><span class="params">(RelDataType rowType, String queryString, List&lt;String&gt; schemaPath,</span></span></span><br><span class="line"><span class="function"><span class="params">                              List&lt;String&gt; viewPath)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>为了方便分析，这里也把上面的过程分为以下几步：</p>
-<ol>
-<li>初始化 RexBuilder；</li>
-<li>初始化 RelOptPlanner;</li>
-<li>初始化 RelOptCluster；</li>
-<li>初始化 SqlToRelConverter；</li>
-<li>进行转换；</li>
-</ol>
-<p>第1、2、4步在上述代码已经有相应的注释，这里不再介绍，下面从第三步开始讲述。</p>
-<h3 id="初始化-RelOptCluster"><a href="#初始化-RelOptCluster" class="headerlink" title="初始化 RelOptCluster"></a>初始化 RelOptCluster</h3><p>RelOptCluster 初始化的代码如下，这里基本都走默认的参数配置。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">org.apache.calcite.plan.RelOptCluster</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Creates a cluster. */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> RelOptCluster <span class="title">create</span><span class="params">(RelOptPlanner planner,</span></span></span><br><span class="line"><span class="function"><span class="params">    RexBuilder rexBuilder)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="keyword">new</span> RelOptCluster(planner, rexBuilder.getTypeFactory(),</span><br><span class="line">      rexBuilder, <span class="keyword">new</span> AtomicInteger(<span class="number">0</span>), <span class="keyword">new</span> HashMap&lt;&gt;());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Creates a cluster.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;For use only from &#123;<span class="doctag">@link</span> #create&#125; and &#123;<span class="doctag">@link</span> RelOptQuery&#125;.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">RelOptCluster(RelOptPlanner planner, RelDataTypeFactory typeFactory,</span><br><span class="line">    RexBuilder rexBuilder, AtomicInteger nextCorrel,</span><br><span class="line">    Map&lt;String, RelNode&gt; mapCorrelToRel) &#123;</span><br><span class="line">  <span class="keyword">this</span>.nextCorrel = nextCorrel;</span><br><span class="line">  <span class="keyword">this</span>.mapCorrelToRel = mapCorrelToRel;</span><br><span class="line">  <span class="keyword">this</span>.planner = Objects.requireNonNull(planner);</span><br><span class="line">  <span class="keyword">this</span>.typeFactory = Objects.requireNonNull(typeFactory);</span><br><span class="line">  <span class="keyword">this</span>.rexBuilder = rexBuilder;</span><br><span class="line">  <span class="keyword">this</span>.originalExpression = rexBuilder.makeLiteral(<span class="string">"?"</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// set up a default rel metadata provider,</span></span><br><span class="line">  <span class="comment">// giving the planner first crack at everything</span></span><br><span class="line">  <span class="comment">//note: 默认的 metadata provider</span></span><br><span class="line">  setMetadataProvider(DefaultRelMetadataProvider.INSTANCE);</span><br><span class="line">  <span class="comment">//note: trait（对于 HepPlaner 和 VolcanoPlanner 不一样)</span></span><br><span class="line">  <span class="keyword">this</span>.emptyTraitSet = planner.emptyTraitSet();</span><br><span class="line">  <span class="keyword">assert</span> emptyTraitSet.size() == planner.getRelTraitDefs().size();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h3 id="SqlToRelConverter-转换"><a href="#SqlToRelConverter-转换" class="headerlink" title="SqlToRelConverter 转换"></a>SqlToRelConverter 转换</h3><p>SqlToRelConverter 中的 <code>convertQuery()</code> 将 SqlNode 转换为 RelRoot，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Converts an unvalidated query's parse tree into a relational expression.</span></span><br><span class="line"><span class="comment"> * note：把一个 parser tree 转换为 relational expression</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> query           Query to convert</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> needsValidation Whether to validate the query before converting;</span></span><br><span class="line"><span class="comment"> *                        &lt;code&gt;false&lt;/code&gt; if the query has already been</span></span><br><span class="line"><span class="comment"> *                        validated.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> top             Whether the query is top-level, say if its result</span></span><br><span class="line"><span class="comment"> *                        will become a JDBC result set; &lt;code&gt;false&lt;/code&gt; if</span></span><br><span class="line"><span class="comment"> *                        the query will be part of a view.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> RelRoot <span class="title">convertQuery</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    SqlNode query,</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> <span class="keyword">boolean</span> needsValidation,</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> <span class="keyword">boolean</span> top)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (needsValidation) &#123; <span class="comment">//note: 是否需要做相应的校验（如果校验过了，这里就不需要了）</span></span><br><span class="line">    query = validator.validate(query);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//note: 设置 MetadataProvider</span></span><br><span class="line">  RelMetadataQuery.THREAD_PROVIDERS.set(</span><br><span class="line">      JaninoRelMetadataProvider.of(cluster.getMetadataProvider()));</span><br><span class="line">  <span class="comment">//note: 得到 RelNode(relational expression)</span></span><br><span class="line">  RelNode result = convertQueryRecursive(query, top, <span class="keyword">null</span>).rel;</span><br><span class="line">  <span class="keyword">if</span> (top) &#123;</span><br><span class="line">    <span class="keyword">if</span> (isStream(query)) &#123;<span class="comment">//note: 如果 stream 的话</span></span><br><span class="line">      result = <span class="keyword">new</span> LogicalDelta(cluster, result.getTraitSet(), result);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  RelCollation collation = RelCollations.EMPTY;</span><br><span class="line">  <span class="keyword">if</span> (!query.isA(SqlKind.DML)) &#123; <span class="comment">//note: 如果是 DML 语句</span></span><br><span class="line">    <span class="keyword">if</span> (isOrdered(query)) &#123; <span class="comment">//note: 如果需要做排序的话</span></span><br><span class="line">      collation = requiredCollation(result);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//note: 对转换前后的 RelDataType 做验证</span></span><br><span class="line">  checkConvertedType(query, result);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (SQL2REL_LOGGER.isDebugEnabled()) &#123;</span><br><span class="line">    SQL2REL_LOGGER.debug(</span><br><span class="line">        RelOptUtil.dumpPlan(<span class="string">"Plan after converting SqlNode to RelNode"</span>,</span><br><span class="line">            result, SqlExplainFormat.TEXT,</span><br><span class="line">            SqlExplainLevel.EXPPLAN_ATTRIBUTES));</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">final</span> RelDataType validatedRowType = validator.getValidatedNodeType(query);</span><br><span class="line">  <span class="keyword">return</span> RelRoot.of(result, validatedRowType, query.getKind())</span><br><span class="line">      .withCollation(collation);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>真正的实现是在 <code>convertQueryRecursive()</code> 方法中完成的，如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Recursively converts a query to a relational expression.</span></span><br><span class="line"><span class="comment"> * note：递归地讲一个 query 转换为 relational expression</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> query         Query</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> top           Whether this query is the top-level query of the</span></span><br><span class="line"><span class="comment"> *                      statement</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> targetRowType Target row type, or null</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> Relational expression</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> RelRoot <span class="title">convertQueryRecursive</span><span class="params">(SqlNode query, <span class="keyword">boolean</span> top,</span></span></span><br><span class="line"><span class="function"><span class="params">    RelDataType targetRowType)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">final</span> SqlKind kind = query.getKind();</span><br><span class="line">  <span class="keyword">switch</span> (kind) &#123;</span><br><span class="line">  <span class="keyword">case</span> SELECT:</span><br><span class="line">    <span class="keyword">return</span> RelRoot.of(convertSelect((SqlSelect) query, top), kind);</span><br><span class="line">  <span class="keyword">case</span> INSERT:</span><br><span class="line">    <span class="keyword">return</span> RelRoot.of(convertInsert((SqlInsert) query), kind);</span><br><span class="line">  <span class="keyword">case</span> DELETE:</span><br><span class="line">    <span class="keyword">return</span> RelRoot.of(convertDelete((SqlDelete) query), kind);</span><br><span class="line">  <span class="keyword">case</span> UPDATE:</span><br><span class="line">    <span class="keyword">return</span> RelRoot.of(convertUpdate((SqlUpdate) query), kind);</span><br><span class="line">  <span class="keyword">case</span> MERGE:</span><br><span class="line">    <span class="keyword">return</span> RelRoot.of(convertMerge((SqlMerge) query), kind);</span><br><span class="line">  <span class="keyword">case</span> UNION:</span><br><span class="line">  <span class="keyword">case</span> INTERSECT:</span><br><span class="line">  <span class="keyword">case</span> EXCEPT:</span><br><span class="line">    <span class="keyword">return</span> RelRoot.of(convertSetOp((SqlCall) query), kind);</span><br><span class="line">  <span class="keyword">case</span> WITH:</span><br><span class="line">    <span class="keyword">return</span> convertWith((SqlWith) query, top);</span><br><span class="line">  <span class="keyword">case</span> VALUES:</span><br><span class="line">    <span class="keyword">return</span> RelRoot.of(convertValues((SqlCall) query, targetRowType), kind);</span><br><span class="line">  <span class="keyword">default</span>:</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> AssertionError(<span class="string">"not a query: "</span> + query);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>依然以前面的示例为例，因为是 SqlSelect 类型，这里会调用下面的方法做相应的转换：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Converts a SELECT statement's parse tree into a relational expression.</span></span><br><span class="line"><span class="comment"> * note：将一个 Select parse tree 转换成一个关系表达式</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> RelNode <span class="title">convertSelect</span><span class="params">(SqlSelect select, <span class="keyword">boolean</span> top)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">final</span> SqlValidatorScope selectScope = validator.getWhereScope(select);</span><br><span class="line">  <span class="keyword">final</span> Blackboard bb = createBlackboard(selectScope, <span class="keyword">null</span>, top);</span><br><span class="line">  convertSelectImpl(bb, select);<span class="comment">//note: 做相应的转换</span></span><br><span class="line">  <span class="keyword">return</span> bb.root;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在 <code>convertSelectImpl()</code> 方法中会依次对 SqlSelect 的各个部分做相应转换，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Implementation of &#123;<span class="doctag">@link</span> #convertSelect(SqlSelect, boolean)&#125;;</span></span><br><span class="line"><span class="comment"> * derived class may override.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">convertSelectImpl</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> Blackboard bb,</span></span></span><br><span class="line"><span class="function"><span class="params">    SqlSelect select)</span> </span>&#123;</span><br><span class="line">  <span class="comment">//note: convertFrom</span></span><br><span class="line">  convertFrom(</span><br><span class="line">      bb,</span><br><span class="line">      select.getFrom());</span><br><span class="line">  <span class="comment">//note: convertWhere</span></span><br><span class="line">  convertWhere(</span><br><span class="line">      bb,</span><br><span class="line">      select.getWhere());</span><br><span class="line"></span><br><span class="line">  <span class="keyword">final</span> List&lt;SqlNode&gt; orderExprList = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line">  <span class="keyword">final</span> List&lt;RelFieldCollation&gt; collationList = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line">  <span class="comment">//note: 有 order by 操作时</span></span><br><span class="line">  gatherOrderExprs(</span><br><span class="line">      bb,</span><br><span class="line">      select,</span><br><span class="line">      select.getOrderList(),</span><br><span class="line">      orderExprList,</span><br><span class="line">      collationList);</span><br><span class="line">  <span class="keyword">final</span> RelCollation collation =</span><br><span class="line">      cluster.traitSet().canonize(RelCollations.of(collationList));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (validator.isAggregate(select)) &#123;</span><br><span class="line">    <span class="comment">//note: 当有聚合操作时，也就是含有 group by、having 或者 Select 和 order by 中含有聚合函数</span></span><br><span class="line">    convertAgg(</span><br><span class="line">        bb,</span><br><span class="line">        select,</span><br><span class="line">        orderExprList);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123; <span class="comment">//note: 对 select list 部分的处理</span></span><br><span class="line">    convertSelectList(</span><br><span class="line">        bb,</span><br><span class="line">        select,</span><br><span class="line">        orderExprList);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (select.isDistinct()) &#123; <span class="comment">//note: select 后面含有 DISTINCT 关键字时（去重）</span></span><br><span class="line">    distinctify(bb, <span class="keyword">true</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//note: Converts a query's ORDER BY clause, if any.</span></span><br><span class="line">  convertOrder(</span><br><span class="line">      select, bb, collation, orderExprList, select.getOffset(),</span><br><span class="line">      select.getFetch());</span><br><span class="line">  bb.setRoot(bb.root, <span class="keyword">true</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里以示例中的 From 部分为例介绍 SqlNode 到 RelNode 的逻辑，按照示例 DEUBG 后的结果如下图所示，因为 form 部分是一个 join 操作，会进入 join 相关的处理中。</p>
-<p><img src="/images/calcite/5-calcite.jpg" alt="convertFrom 之 Join 的情况"> </p>
-<p>这部分方法调用过程是：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">convertQuery --&gt;</span><br><span class="line">convertQueryRecursive --&gt;</span><br><span class="line">convertSelect --&gt;</span><br><span class="line">convertSelectImpl --&gt;</span><br><span class="line">convertFrom &amp; convertWhere &amp; convertSelectList</span><br></pre></td></tr></table></figure>
-<p>到这里 SqlNode 到 RelNode 过程就完成了，生成的逻辑计划如下：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">LogicalSort(sort0=[<span class="variable">$0</span>], dir0=[ASC])</span><br><span class="line">  LogicalProject(USER_ID=[<span class="variable">$0</span>], USER_NAME=[<span class="variable">$1</span>], USER_COMPANY=[<span class="variable">$5</span>], USER_AGE=[<span class="variable">$2</span>])</span><br><span class="line">    LogicalFilter(condition=[AND(&gt;(<span class="variable">$2</span>, 30), &gt;(<span class="variable">$3</span>, 10))])</span><br><span class="line">      LogicalJoin(condition=[=(<span class="variable">$1</span>, <span class="variable">$4</span>)], joinType=[inner])</span><br><span class="line">        LogicalTableScan(table=[[USERS]])</span><br><span class="line">        LogicalTableScan(table=[[JOBS]])</span><br></pre></td></tr></table></figure>
-<p>到这里前三步就算全部完成了。</p>
-<h2 id="Step4-优化阶段（RelNode–-gt-RelNode）"><a href="#Step4-优化阶段（RelNode–-gt-RelNode）" class="headerlink" title="Step4: 优化阶段（RelNode–&gt;RelNode）"></a>Step4: 优化阶段（RelNode–&gt;RelNode）</h2><p>终于来来到了第四阶段，也就是 Calcite 的核心所在，优化器进行优化的地方，前面 sql 中有一个明显可以优化的地方就是过滤条件的下压（push down），在进行 join 操作前，先进行 filter 操作，这样的话就不需要在 join 时进行全量 join，减少参与 join 的数据量。</p>
-<p>关于filter 操作下压，在 Calcite 中已经有相应的 Rule 实现，就是 <code>FilterJoinRule.FilterIntoJoinRule.FILTER_ON_JOIN</code>，这里使用 HepPlanner 作为示例的 planer，并注册 FilterIntoJoinRule 规则进行相应的优化，其代码实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">HepProgramBuilder builder = <span class="keyword">new</span> HepProgramBuilder();</span><br><span class="line">builder.addRuleInstance(FilterJoinRule.FilterIntoJoinRule.FILTER_ON_JOIN); <span class="comment">//note: 添加 rule</span></span><br><span class="line">HepPlanner hepPlanner = <span class="keyword">new</span> HepPlanner(builder.build());</span><br><span class="line">hepPlanner.setRoot(relNode);</span><br><span class="line">relNode = hepPlanner.findBestExp();</span><br></pre></td></tr></table></figure>
-<p>在 Calcite 中，提供了两种 planner：HepPlanner 和 VolcanoPlanner，关于这块内容可以参考【Drill/Calcite查询优化系列】这几篇文章（讲述得非常详细，赞），这里先简单介绍一下 HepPlanner 和 VolcanoPlanner，后面会关于这两个 planner 的代码实现做深入的讲述。</p>
-<h3 id="HepPlanner"><a href="#HepPlanner" class="headerlink" title="HepPlanner"></a>HepPlanner</h3><p>特点（来自 <a href="https://www.slideshare.net/JordanHalterman/introduction-to-apache-calcite" target="_blank" rel="external">Apache Calcite介绍</a>）：</p>
-<ol>
-<li>HepPlanner is a heuristic optimizer similar to Spark’s optimizer，与 spark 的优化器相似，HepPlanner 是一个 heuristic 优化器；</li>
-<li>Applies all matching rules until none can be applied：将会匹配所有的 rules 直到一个 rule 被满足；</li>
-<li>Heuristic optimization is faster than cost- based optimization：它比 CBO 更快；</li>
-<li>Risk of infinite recursion if rules make opposing changes to the plan：如果没有每次都不匹配规则，可能会有无限递归风险；</li>
-</ol>
-<h3 id="VolcanoPlanner"><a href="#VolcanoPlanner" class="headerlink" title="VolcanoPlanner"></a>VolcanoPlanner</h3><p>特点（来自 <a href="https://www.slideshare.net/JordanHalterman/introduction-to-apache-calcite" target="_blank" rel="external">Apache Calcite介绍</a>）：</p>
-<ol>
-<li>VolcanoPlanner is a cost-based optimizer：VolcanoPlanner是一个CBO优化器；</li>
-<li>Applies matching rules iteratively, selecting the plan with the cheapest cost on each iteration：迭代地应用 rules，直到找到cost最小的plan；</li>
-<li>Costs are provided by relational expressions；</li>
-<li>Not all possible plans can be computed：不会计算所有可能的计划；</li>
-<li>Stops optimization when the cost does not significantly improve through a determinable number of iterations：根据已知的情况，如果下面的迭代不能带来提升时，这些计划将会停止优化；</li>
-</ol>
-<h3 id="示例运行结果"><a href="#示例运行结果" class="headerlink" title="示例运行结果"></a>示例运行结果</h3><p>经过 HepPlanner 优化后的逻辑计划为：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">LogicalSort(sort0=[<span class="variable">$0</span>], dir0=[ASC])</span><br><span class="line">  LogicalProject(USER_ID=[<span class="variable">$0</span>], USER_NAME=[<span class="variable">$1</span>], USER_COMPANY=[<span class="variable">$5</span>], USER_AGE=[<span class="variable">$2</span>])</span><br><span class="line">    LogicalJoin(condition=[=(<span class="variable">$1</span>, <span class="variable">$4</span>)], joinType=[inner])</span><br><span class="line">      LogicalFilter(condition=[&gt;(<span class="variable">$2</span>, 30)])</span><br><span class="line">        EnumerableTableScan(table=[[USERS]])</span><br><span class="line">      LogicalFilter(condition=[&gt;(<span class="variable">$0</span>, 10)])</span><br><span class="line">        EnumerableTableScan(table=[[JOBS]])</span><br></pre></td></tr></table></figure>
-<p>可以看到优化的结果是符合我们预期的，HepPlanner 和 VolcanoPlanner 详细流程比较复杂，后面会有单独的文章进行讲述。</p>
-<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>Calcite 本身的架构比较好理解，但是具体到代码层面就不是那么好理解了，它抛出了很多的概念，如果不把这些概念搞明白，代码基本看得也是云里雾里，特别是之前没有接触过这块内容的同学（我最开始看 Calcite 代码时是真的头大），入门的门槛确实高一些，但是当这些流程梳理清楚之后，其实再回头看，也没有多少东西，在生产中用的时候主要也是针对具体的业务场景扩展相应的 SQL 语法、进行具体的规则优化。</p>
-<p>Calcite 架构设计得比较好，其中各个组件都可以单独使用，Rule（规则）扩展性很强，用户可以根据业务场景自定义相应的优化规则，它支持标准的 SQL，支持不同的存储和计算引擎，目前在业界应用也比较广泛，这也证明其牛叉之处。</p>
-<blockquote>
-<p>本文只是个人理解的总结，由于本人也是刚接触这块，理解有偏差的地方，欢迎指正~</p>
-</blockquote>
-<hr>
-<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><ol>
-<li><a href="https://www.infoq.cn/article/new-big-data-hadoop-query-engine-apache-calcite" target="_blank" rel="external">Apache Calcite：Hadoop 中新型大数据查询引擎</a>；</li>
-<li><a href="https://www.slideshare.net/JordanHalterman/introduction-to-apache-calcite" target="_blank" rel="external">Apache Calcite介绍</a>；</li>
-<li><a href="https://arxiv.org/pdf/1802.10233.pdf" target="_blank" rel="external">Apache Calcite: A Foundational Framework for Optimized Query Processing Over Heterogeneous Data Sources</a>；</li>
-<li><a href="http://calcite.apache.org/docs/tutorial.html" target="_blank" rel="external">Calcite Tutorial</a>；</li>
-</ol>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;关于 Apache Calcite 的简单介绍可以参考 &lt;a href=&quot;https://www.infoq.cn/article/new-big-data-hadoop-query-engine-apache-calcite&quot; target=&quot;_blank&quot; rel=&quot;e
     
     </summary>
     
