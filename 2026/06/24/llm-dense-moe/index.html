@@ -1,0 +1,449 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活</h1><div class="post-meta">Jun 24, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">5,762</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/06/24/llm-dense-moe/" href="/2026/06/24/llm-dense-moe/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Scaling-Law-带来的挑战"><span class="toc-number">1.</span> <span class="toc-text">Scaling Law 带来的挑战</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#参数扩展如何放大计算成本"><span class="toc-number">1.1.</span> <span class="toc-text">参数扩展如何放大计算成本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MoE-优化了哪里？"><span class="toc-number">1.2.</span> <span class="toc-text">MoE 优化了哪里？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Dense-Transformer：经典路线"><span class="toc-number">2.</span> <span class="toc-text">Dense Transformer：经典路线</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#稠密计算：每个-token-激活全部参数"><span class="toc-number">2.1.</span> <span class="toc-text">稠密计算：每个 token 激活全部参数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#规模化困境：能力变强，成本同步上升"><span class="toc-number">2.2.</span> <span class="toc-text">规模化困境：能力变强，成本同步上升</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#典型-Dense-模型"><span class="toc-number">2.3.</span> <span class="toc-text">典型 Dense 模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MoE：稀疏激活路线"><span class="toc-number">3.</span> <span class="toc-text">MoE：稀疏激活路线</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#核心架构：把一个-FFN-变成多个专家"><span class="toc-number">3.1.</span> <span class="toc-text">核心架构：把一个 FFN 变成多个专家</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MoE-如何降低单-token-计算成本"><span class="toc-number">3.2.</span> <span class="toc-text">MoE 如何降低单 token 计算成本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#典型-MoE-模型"><span class="toc-number">3.3.</span> <span class="toc-text">典型 MoE 模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MoE-的挑战：稀疏激活背后的训练与系统复杂度"><span class="toc-number">4.</span> <span class="toc-text">MoE 的挑战：稀疏激活背后的训练与系统复杂度</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#路由机制：token-应该交给哪个-expert？"><span class="toc-number">4.1.</span> <span class="toc-text">路由机制：token 应该交给哪个 expert？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#训练稳定性：专家塌缩与负载不均"><span class="toc-number">4.2.</span> <span class="toc-text">训练稳定性：专家塌缩与负载不均</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#内存压力：Active-少，不代表-Total-小"><span class="toc-number">4.3.</span> <span class="toc-text">内存压力：Active 少，不代表 Total 小</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#通信与推理：稀疏计算带来动态调度"><span class="toc-number">4.4.</span> <span class="toc-text">通信与推理：稀疏计算带来动态调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#小结：MoE-是架构问题，也是系统问题"><span class="toc-number">4.5.</span> <span class="toc-text">小结：MoE 是架构问题，也是系统问题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#未来趋势：从单一架构到混合架构"><span class="toc-number">5.</span> <span class="toc-text">未来趋势：从单一架构到混合架构</span></a></li></ol></div></div><div class="post-content"><p>过去几年，LLM 能力的提升很大程度上来自 <strong>Scaling Law</strong>：当模型参数量、训练数据规模和计算量持续扩大时，模型的 loss 往往会呈现较稳定的下降趋势，模型能力也会随之提升。简单来说，规模化训练证明了一件事：<strong>更大的模型、更大的数据、更大的算力，通常可以带来更强的模型能力。</strong></p>
+<p>但 Scaling Law 也带来了一个现实问题：如果能力提升依赖规模扩展，那么训练成本、推理成本、显存占用和部署复杂度也会同步上升。模型越大，每个 token 需要经过的参数越多；上下文越长，Attention 和 KV Cache 的压力越大；多模态输入又会引入更多 token 和更复杂的计算路径。</p>
+<a id="more"></a>
+<p>因此，在 Transformer 成为现代 LLM 的基础架构之后，新的问题开始出现：<strong>能不能让模型拥有更大的参数容量，但每次推理时只激活其中一部分计算？</strong></p>
+<p>围绕这个问题，大模型架构逐渐形成了两条重要路线：一条是经典的 <strong>Dense Transformer</strong>，每个 token 都经过完整模型参数；另一条是越来越重要的 <strong>MoE（Mixture of Experts，混合专家）</strong>，模型拥有更大的总参数量，但每个 token 只路由到少数专家模块中计算。</p>
+<p><img src="/images/llm/llm-dense-moe-01.png" alt="Dense Transformer 与 MoE 架构热度趋势（图片来自 GPT 5.5）"></p>
+<p><em>Dense Transformer 与 MoE 架构热度趋势（图片来自 GPT 5.5）</em></p>
+<p>这一篇，我们重点看清楚：Dense Transformer 和 MoE 到底差在哪里，MoE 解决了什么问题，以及为什么它正在成为很多头部基模的重要架构选择。</p>
+<h2 id="Scaling-Law-带来的挑战"><a href="#Scaling-Law-带来的挑战" class="headerlink" title="Scaling Law 带来的挑战"></a>Scaling Law 带来的挑战</h2><p>Scaling Law 给大模型发展指明了一条非常清晰的路径：继续扩大模型、数据和计算，通常可以换来更强的能力。但当这条路径进入工程落地阶段，问题就不再只是“模型能不能继续变大”，而是：<strong>模型变大之后，每一次训练和推理到底要付出多少计算成本？</strong></p>
+<p>对于传统 Transformer 路线来说，这个问题尤其关键：模型容量扩大时，单 token 的计算成本通常也会同步上升。换句话说，Scaling Law 推动模型继续变大，但 Dense 架构会把“更大容量”和“更高计算成本”绑定在一起。</p>
+<h3 id="参数扩展如何放大计算成本"><a href="#参数扩展如何放大计算成本" class="headerlink" title="参数扩展如何放大计算成本"></a>参数扩展如何放大计算成本</h3><p>在 LLM 中，我们常说的“参数”，主要指模型训练过程中学出来的权重，而不是人工配置项。以 Transformer 为例，参数主要分布在几个位置：</p>
+<table>
+<thead>
+<tr>
+<th><strong>参数位置</strong></th>
+<th><strong>主要内容</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Embedding</td>
+<td>token embedding</td>
+<td>把 token 转成向量表示</td>
+</tr>
+<tr>
+<td>Attention</td>
+<td>Q/K/V/O 投影矩阵</td>
+<td>建模 token 之间的上下文关系</td>
+</tr>
+<tr>
+<td>FFN</td>
+<td>Up / Gate / Down 等线性变换矩阵</td>
+<td>对每个 token 的表示做非线性特征变换</td>
+</tr>
+<tr>
+<td>LayerNorm/RMSNorm</td>
+<td>归一化缩放参数，用于稳定训练</td>
+<td>稳定训练过程中的数值分布</td>
+</tr>
+<tr>
+<td>Output Head</td>
+<td>输出词表投影矩阵</td>
+<td>把 hidden state 转成下一个 token 的概率分布</td>
+</tr>
+</tbody>
+</table>
+<p>一般来说模型变大，通常不是简单地“多存了一些数字”，而是意味着模型结构里的几个关键维度一起变大：</p>
+<table>
+<thead>
+<tr>
+<th><strong>扩展方式</strong></th>
+<th><strong>对计算量的影响</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>层数更多</td>
+<td>每个 token 要经过更多 Transformer Block</td>
+</tr>
+<tr>
+<td>FFN 中间维度更大</td>
+<td>FFN 参数量和计算量显著增加</td>
+</tr>
+<tr>
+<td>Attention head / hidden size 配套扩大</td>
+<td>投影矩阵和注意力计算都会增加</td>
+</tr>
+<tr>
+<td>上下文更长</td>
+<td>Attention 和 KV Cache 压力上升</td>
+</tr>
+</tbody>
+</table>
+<p>尤其是 hidden size 的扩大，会显著放大计算量。因为 Transformer 里的核心计算大多是矩阵乘法，矩阵规模变大时，计算量不是线性增加，而是接近按平方级增长。</p>
+<p>以 FFN 为例， hidden size 是 <code>d</code>，FFN 中间维度是 <code>4d</code>，其计算量如下所示：</p>
+<p><img src="/images/llm/llm-dense-moe-02.png" alt="FNN 计算量"></p>
+<p><em>FNN 计算量</em></p>
+<p>这意味着，当 <code>d</code> 变成原来的 2 倍时，FFN 的参数量和矩阵计算量大约会变成原来的 4 倍。</p>
+<blockquote>
+<p>前馈网络（Feed-Forward Network, FFN）是在 Attention 完成上下文信息聚合之后，对每个 token 的 hidden state 进行进一步特征变换的模块。经典的 FFN 通常由两层线性变换和一个非线性激活函数组成：先把 hidden size 扩展到更高维度，再投影回原来的维度。由于这个“升维再降维”的过程会引入大规模矩阵计算，FFN 往往占据 Transformer Block 中很大一部分参数和计算量。在 Dense Transformer 中，每一层只有一个共享 FFN，所有 token 无论语义和任务类型如何，都会经过同一组 FFN 参数。</p>
+</blockquote>
+<h3 id="MoE-优化了哪里？"><a href="#MoE-优化了哪里？" class="headerlink" title="MoE 优化了哪里？"></a>MoE 优化了哪里？</h3><p>在 Transformer Block 中，Attention 和 FFN 都会消耗计算，但二者的角色不同。Attention 负责让 token 之间交换信息，而 FFN 更像是对每个 token 的表示做进一步加工。更重要的是，FFN 通常占据了大量参数和计算量，并且它是 <strong>逐 token 独立计算</strong> 的：一个 token 经过 FFN 时，不需要和其他 token 交互。</p>
+<p>这就给架构优化留下了空间：<strong>如果 FFN 主要是对每个 token 独立做特征变换，那么能不能不要让所有 token 都经过同一个巨大的 FFN，而是为不同 token 选择不同的 FFN 子网络？</strong> 这就是 MoE 的核心思路。</p>
+<p><img src="/images/llm/llm-dense-moe-03.png" alt="Dense Transformer  VS MOE"></p>
+<p><em>Dense Transformer  VS MOE</em></p>
+<p>MoE 不是把 Transformer 推翻，而是把原来的 Dense FFN 拆成多个 expert。这样的话，模型可以拥有很多 expert，也就是更大的 <strong>Total Parameters</strong>；但每个 token 只激活少数 expert，也就是更小的 <strong>Active Parameters</strong>。</p>
+<table>
+<thead>
+<tr>
+<th><strong>架构</strong></th>
+<th><strong>参数关系</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dense</td>
+<td>Total Parameters ≈ Active Parameters</td>
+<td>与模型参数强绑定（主要指 Transformer Block 主体计算路径）</td>
+</tr>
+<tr>
+<td>MoE</td>
+<td>Total Parameters &gt;&gt; Active Parameters</td>
+<td>模型容量很大，但每次只用一部分</td>
+</tr>
+</tbody>
+</table>
+<p>Scaling Law 继续推动模型变大，但 Dense 架构让成本同步上涨。MoE 则是在 Scaling Law 压力下，对“容量”和“计算成本”进行解耦的一种架构尝试。</p>
+<h2 id="Dense-Transformer：经典路线"><a href="#Dense-Transformer：经典路线" class="headerlink" title="Dense Transformer：经典路线"></a>Dense Transformer：经典路线</h2><p>Dense Transformer 是现代 LLM 最经典的架构路线。它延续了《Attention Is All You Need》提出的 Transformer 思想：用一个完整、连续的神经网络来处理每个 token，让所有参数共同参与表示学习和上下文建模。</p>
+<h3 id="稠密计算：每个-token-激活全部参数"><a href="#稠密计算：每个-token-激活全部参数" class="headerlink" title="稠密计算：每个 token 激活全部参数"></a>稠密计算：每个 token 激活全部参数</h3><p>Dense Transformer 中的 <strong>Dense</strong>，指的是一种“稠密计算”方式：每个 token 在经过模型时，都会依次通过所有 Transformer Block，并使用每一层里的完整参数。</p>
+<p>在这个范式中，Attention 负责让 token 与上下文交互，FFN 负责对每个 token 的 hidden state 做进一步非线性变换。对于 Dense Transformer 来说，无论输入的是哪个 token，它都会经过同样的 Attention、同样的 FFN、同样的层数。如下图所示：</p>
+<p><img src="/images/llm/llm-dense-moe-04.png" alt="Dense Transformer 流程"></p>
+<p><em>Dense Transformer 流程</em></p>
+<p>因此 Dense 模型里的一个重要特点是：<strong><code>Total Parameters ≈ Active Parameters</code></strong>（主要指 Transformer Block 主体计算路径）</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total Parameters</td>
+<td>模型拥有的总参数量</td>
+</tr>
+<tr>
+<td>Active Parameters</td>
+<td>每个 token 实际参与计算的参数量</td>
+</tr>
+</tbody>
+</table>
+<p>在 Dense Transformer 中，模型有多少主体参数，每次前向计算基本就要使用多少主体参数。这种方式非常直接，也非常稳定：所有参数共同参与学习，模型内部没有路由选择，也没有专家分配，训练和推理路径都比较固定。</p>
+<p>这也是 Dense Transformer 长期成为主流架构的原因：结构清晰、训练稳定、工程实现成熟。</p>
+<h3 id="规模化困境：能力变强，成本同步上升"><a href="#规模化困境：能力变强，成本同步上升" class="headerlink" title="规模化困境：能力变强，成本同步上升"></a>规模化困境：能力变强，成本同步上升</h3><p>Dense Transformer 的核心问题是：<strong>模型容量和计算成本强绑定</strong>。模型越大，能力通常越强，但训练、推理和部署成本也会同步上升，主要体现在几个方面：</p>
+<ol>
+<li><strong>训练 FLOPs 增加</strong>：参数量越大，前向传播和反向传播的矩阵计算越重，完整训练一次模型需要更多 GPU 时间；</li>
+<li><strong>显存占用增加</strong>：模型参数、梯度、优化器状态都需要占用显存，使用 Adam 这类优化器时，显存压力会进一步放大；</li>
+<li><strong>分布式训练更复杂</strong>：超大模型通常需要数据并行、张量并行、流水线并行等组合，GPU 间通信成本和调度复杂度上升；</li>
+<li><strong>推理成本和延迟变高</strong>： LLM 是一个 token 一个 token 生成的。即使有 KV Cache 减少重复计算，每生成一个新 token，模型仍然要经过所有层的 Attention 和 FFN，因此模型越大，在线服务的成本和延迟压力越明显；</li>
+<li>服务成本上升：在线服务需要同时处理大量请求，大模型会带来更高 GPU 资源消耗和更低吞吐；</li>
+<li>长上下文压力更明显：上下文越长，KV Cache 占用越大，显存和带宽压力越高；</li>
+<li>多模态进一步放大成本：图像、音频、视频会引入更多 token 或特征表示，使计算路径更复杂。</li>
+</ol>
+<p>可以用一句话总结：Dense Transformer 的问题不是不能继续变大，而是<strong>每一次变大都会让训练和推理成本一起变大</strong>。</p>
+<h3 id="典型-Dense-模型"><a href="#典型-Dense-模型" class="headerlink" title="典型 Dense 模型"></a>典型 Dense 模型</h3><p>Dense Transformer 的代表模型非常多。早期最有影响力的路线，是 OpenAI 的 GPT 系列，尤其是 GPT-3。</p>
+<ul>
+<li><strong>OpenAI GPT-3</strong>：GPT-3 是 Dense Transformer 规模化路线中最具代表性的早期模型之一，采用 Decoder-only Transformer 架构，参数规模达到 175B。它的重要意义不只是“模型很大”，而是验证了大规模预训练带来的 few-shot learning 能力：模型不需要针对每个任务单独微调，只通过 prompt 中的少量示例，就能完成翻译、问答、文本生成等任务。GPT-3 让行业真正看到：Dense Transformer 在规模化之后，可以从“专用 NLP 模型”走向“通用语言模型”。</li>
+<li><strong>Meta Llama 2</strong>：Llama 2 是 Meta 推出的开放权重 Dense 模型家族，参数规模覆盖 7B、13B、70B。它遵循标准的自回归 Dense Transformer 架构，同时使用 RoPE、SwiGLU、RMSNorm 等现代 LLM 常见设计。Llama 2 对行业的影响在于，它把高质量基模能力带入开放生态，让开发者可以基于开放权重进行本地部署、指令微调、领域适配和二次训练，极大推动了开源 LLM 生态的发展。</li>
+<li><strong>Qwen Dense 系列</strong>：Qwen 系列中包含多种 Dense 基模，覆盖不同参数规模，并在中文、代码、数学、工具调用和多语言任务上持续增强。它的意义在于推动了中文和多语言 LLM 生态的发展，也让 Dense 基模在企业落地中有了更多选择：既可以选择较小模型做本地部署，也可以选择较大模型做复杂任务和行业应用。</li>
+</ul>
+<p>Dense Transformer 是大模型规模化的经典起点，也是今天很多高质量基模仍然依赖的稳定底座。MoE 的出现，并不是否定 Dense，而是在更大规模和更高成本压力下，对 Dense 路线的一种架构扩展。</p>
+<h2 id="MoE：稀疏激活路线"><a href="#MoE：稀疏激活路线" class="headerlink" title="MoE：稀疏激活路线"></a>MoE：稀疏激活路线</h2><p>如果说 Dense Transformer 的特点是“所有 token 都走同一条完整计算路径”，那么 MoE 的核心思路就是“让不同 token 走不同的专家路径”。MoE 在 Transformer Block 内部引入稀疏激活机制：模型可以拥有更多参数，但每个 token 只调用其中一部分。</p>
+<h3 id="核心架构：把一个-FFN-变成多个专家"><a href="#核心架构：把一个-FFN-变成多个专家" class="headerlink" title="核心架构：把一个 FFN 变成多个专家"></a>核心架构：把一个 FFN 变成多个专家</h3><p>MoE，全称是 <strong>Mixture of Experts</strong>，直译是“专家混合模型”。在 LLM 中，MoE 通常不是替换整个 Transformer，而是主要改造 Transformer Block 里的 <strong>FFN / MLP 层</strong>。Dense Transformer 中，每一层通常只有一个共享 FFN，所有 token 都经过同一组 FFN 参数。而 MoE 的做法是：把这个 FFN 替换成多个独立的 FFN 子网络，每个子网络就是一个 <strong>expert</strong>。如下图所示：</p>
+<p><img src="/images/llm/llm-dense-moe-05.png" alt="MoE 架构图"></p>
+<p>MoE 的核心架构设计可以概括为 5 点：</p>
+<ol>
+<li><strong>Expert 化</strong>： 把原来的单个 FFN 拆成多个独立 FFN，每个 FFN 是一个 expert；</li>
+<li><strong>Router 路由</strong>：为每个 token 计算 expert 分数，决定它应该交给哪些 expert；</li>
+<li><strong>Top-k 激活</strong>：每个 token 只选择分数最高的 k 个 expert，而不是使用全部 expert；</li>
+<li><strong>Gate 加权</strong>：被选中的 expert 输出会按 router 权重加权合并；</li>
+<li><strong>负载均衡</strong>：通过 aux loss、capacity factor 等机制，避免 token 都挤到少数 expert。</li>
+</ol>
+<h3 id="MoE-如何降低单-token-计算成本"><a href="#MoE-如何降低单-token-计算成本" class="headerlink" title="MoE 如何降低单 token 计算成本"></a>MoE 如何降低单 token 计算成本</h3><p>MoE 解决的核心问题是：<strong>解耦模型总容量和单 token 计算成本</strong>。</p>
+<ul>
+<li>在 Dense Transformer 中：<strong><code>Total Parameters ≈ Active Parameters</code></strong>（主要指 Transformer Block 主体计算路径）；</li>
+<li>在 MoE 中：<strong><code>Total Parameters &gt;&gt; Active Parameters</code></strong>。</li>
+</ul>
+<p>模型可以拥有大量 expert，形成很大的总参数量；但每个 token 只经过少数 expert，因此实际参与计算的参数量远小于总参数量。</p>
+<p>举个例子：以 400B 参数模型为例，在主体计算路径上，一个 400B Dense 模型的单 token 计算会接近总参数规模；而 400B MoE 模型通常只激活少量 expert 参数，再加上共享 Attention、共享层等模块。</p>
+<p>这样模型拥有更大的容量，但推理时的计算量接近一个小得多的 active model。所以 MoE 的低成本来自三个方面：</p>
+<ol>
+<li><strong>稀疏激活</strong>： 每个 token 只计算少数 expert，避免全量参数参与计算；</li>
+<li><strong>扩大容量</strong>：通过增加 expert 扩大总参数量，而不让单 token 计算同步增长；</li>
+<li><strong>专家分工</strong>：不同 expert 有机会学习不同模式，提高参数利用效率。</li>
+</ol>
+<p>但 MoE 的代价也很明显：</p>
+<ol>
+<li>显存仍然高：总参数仍然需要存储；</li>
+<li>通信更复杂：token 需要被路由到不同 expert，分布式场景会产生 all-to-all 通信；</li>
+<li>训练更难稳定：需要处理 expert collapse、负载不均、路由抖动等问题；</li>
+<li>部署更复杂：推理延迟可能受路由分布和 expert 热点影响。</li>
+</ol>
+<p>因此，MoE 的本质不是“免费变大”，而是：用更复杂的路由和系统调度，换取更高的模型容量与更好的性能成本比。</p>
+<h3 id="典型-MoE-模型"><a href="#典型-MoE-模型" class="headerlink" title="典型 MoE 模型"></a>典型 MoE 模型</h3><ul>
+<li><strong>Mixtral 8x7B</strong>：Mixtral 是 Mistral AI 推出的典型 Sparse MoE 模型。它在每一层设置 8 个 FFN experts，每个 token 选择其中 2 个 expert 参与计算。它的重要意义在于，把 MoE 从研究路线推进到高性能开放模型生态中，让业界直观看到：MoE 可以在较低 active parameters 下，获得接近甚至超过更大 Dense 模型的效果。</li>
+<li><strong>DeepSeek-V3</strong>：DeepSeek-V3 是近年来 MoE 路线中非常有代表性的模型之一，总参数达到 671B，但每个 token 只激活约 37B 参数。它采用 DeepSeekMoE 架构，并结合 MLA、负载均衡优化、多 token prediction 等设计。它对行业的影响在于证明：MoE 不只是“参数更多”，还可以通过系统级训练和推理优化，把大规模模型的性能成本比做到非常激进。</li>
+<li><strong>Qwen3 MoE</strong>：Qwen3 同时发布 Dense 与 MoE 模型，其中 MoE 模型包括 Qwen3-30B-A3B 和 Qwen3-235B-A22B。这里的 <code>A3B</code>、<code>A22B</code> 指 activated parameters，也就是每个 token 实际激活的参数量。Qwen3 的意义在于，它把 Dense 和 MoE 放在同一代模型体系中，让开发者可以根据成本、延迟和能力需求选择不同架构路线。</li>
+<li><strong>Llama 4</strong>：Llama 4 是 Meta Llama 系列首次明确转向 MoE 的重要节点。比如 Llama 4 Scout 是 17B active parameters、16 experts；Llama 4 Maverick 是 17B active parameters、128 experts、400B total parameters。它的行业意义在于，Meta 这样的头部开源生态也开始把 MoE 作为下一代基模的重要架构选择，尤其结合多模态和长上下文能力。</li>
+<li><strong>Gemini 1.5</strong>：Google 在 Gemini 1.5 中明确提到使用 MoE 架构，以提升训练和服务效率，并支持更长上下文能力。它说明 MoE 不只用于开源模型，也已经成为闭源头部模型在长上下文、多模态和高效推理方向上的重要架构选择。</li>
+</ul>
+<h2 id="MoE-的挑战：稀疏激活背后的训练与系统复杂度"><a href="#MoE-的挑战：稀疏激活背后的训练与系统复杂度" class="headerlink" title="MoE 的挑战：稀疏激活背后的训练与系统复杂度"></a>MoE 的挑战：稀疏激活背后的训练与系统复杂度</h2><p>MoE 的核心价值，是用稀疏激活降低单 token 的计算成本。但它并不是“免费变大”。相比 Dense Transformer，MoE 把问题从单纯的矩阵计算，转移到了 <strong>路由稳定性、专家负载、显存管理、跨卡通信和推理调度</strong> 上。</p>
+<h3 id="路由机制：token-应该交给哪个-expert？"><a href="#路由机制：token-应该交给哪个-expert？" class="headerlink" title="路由机制：token 应该交给哪个 expert？"></a>路由机制：token 应该交给哪个 expert？</h3><p>MoE 的关键是 Router。它会根据 token 的 hidden state 计算 expert 分数，并选择 Top-k 个 expert：<code>selected_experts = TopK(router(x))</code>。</p>
+<p>这带来的问题是：路由选择是动态的，不同 token 会走不同 expert。训练早期 Router 还不稳定，可能导致 token 分配剧烈波动，进而影响模型收敛。</p>
+<table>
+<thead>
+<tr>
+<th><strong>挑战</strong></th>
+<th><strong>说明</strong></th>
+<th><strong>常见方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>路由不稳定</td>
+<td>token 在不同 expert 之间频繁跳动</td>
+<td>router 正则、noisy routing</td>
+</tr>
+<tr>
+<td>专家选择过早固化</td>
+<td>Router 很早偏向少数 expert</td>
+<td>加噪声、温度控制、负载均衡约束</td>
+</tr>
+<tr>
+<td>梯度稀疏</td>
+<td>只有被选中的 expert 得到更新</td>
+<td>top-2 routing、shared expert</td>
+</tr>
+</tbody>
+</table>
+<h3 id="训练稳定性：专家塌缩与负载不均"><a href="#训练稳定性：专家塌缩与负载不均" class="headerlink" title="训练稳定性：专家塌缩与负载不均"></a>训练稳定性：专家塌缩与负载不均</h3><p>MoE 最典型的问题是 <strong>expert collapse</strong>：大量 token 被路由到少数 expert，其他 expert 几乎没有训练机会。这会造成两个后果：一是热门 expert 过载，训练效率下降；二是冷门 expert 学不到东西，模型容量被浪费。</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>影响</strong></th>
+<th><strong>常见方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Expert Collapse</td>
+<td>少数 expert 被过度使用</td>
+<td>auxiliary load balancing loss</td>
+</tr>
+<tr>
+<td>负载不均</td>
+<td>GPU 利用率不均，训练吞吐下降</td>
+<td>capacity factor、expert bias</td>
+</tr>
+<tr>
+<td>Token Dropping</td>
+<td>expert 超载时部分 token 被丢弃</td>
+<td>dropless MoE、block-sparse kernel</td>
+</tr>
+<tr>
+<td>主任务受干扰</td>
+<td>负载均衡 loss 可能影响语言建模目标</td>
+<td>auxiliary-loss-free balancing</td>
+</tr>
+</tbody>
+</table>
+<p>MoE 为了解决专家负载不均，早期常见做法是在主训练目标之外加入 <strong>auxiliary load balancing loss</strong>，用一个额外的损失项鼓励 token 更均匀地分配到不同 expert。这样可以缓解 expert collapse，但也会带来一个副作用：辅助损失可能和语言建模主目标产生拉扯，影响模型最终效果。</p>
+<p>因此，后来一些 MoE 模型开始探索更弱侵入的负载均衡方法。例如 DeepSeek-V3 使用了 <strong>auxiliary-loss-free load balancing</strong>，不再简单依赖额外的辅助损失来约束路由，而是通过更细的路由调节机制，让 expert 使用保持均衡，同时尽量减少对主任务训练目标的干扰。</p>
+<h3 id="内存压力：Active-少，不代表-Total-小"><a href="#内存压力：Active-少，不代表-Total-小" class="headerlink" title="内存压力：Active 少，不代表 Total 小"></a>内存压力：Active 少，不代表 Total 小</h3><p>这是 MoE 很容易被误解的一点。MoE 的优势是：<code>每个 token 只激活少量 expert</code>。</p>
+<p>但它的问题是：<code>所有 expert 参数仍然需要存储</code>。</p>
+<p>也就是说，MoE 用稀疏激活降低了单 token 的计算 FLOPs，但它并没有消除大模型的存储成本。模型总参数、expert 权重、优化器状态、路由缓存和跨卡通信 buffer，都会带来额外的内存和系统复杂度。</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>常见方案</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>总参数太大</td>
+<td>Expert Parallelism / Expert Sharding</td>
+<td>把不同 expert 分布到不同 GPU，避免单卡存完整模型</td>
+</tr>
+<tr>
+<td>训练显存高</td>
+<td>ZeRO / FSDP</td>
+<td>切分参数、梯度和优化器状态，降低单卡显存压力</td>
+</tr>
+<tr>
+<td>激活值占用大</td>
+<td>Activation Checkpointing</td>
+<td>反向传播时重新计算部分激活，换显存为计算</td>
+</tr>
+<tr>
+<td>参数和计算精度高</td>
+<td>BF16 / FP8 / Quantization</td>
+<td>降低权重、激活和计算的显存占用</td>
+</tr>
+<tr>
+<td>路由通信开销大</td>
+<td>All-to-All Overlap / Dispatch 优化</td>
+<td>将 token 分发通信和 expert 计算尽量重叠</td>
+</tr>
+<tr>
+<td>expert 热点</td>
+<td>Expert Replication / Load Balancing</td>
+<td>对热门 expert 做副本或调节路由，避免单点瓶颈</td>
+</tr>
+</tbody>
+</table>
+<h3 id="通信与推理：稀疏计算带来动态调度"><a href="#通信与推理：稀疏计算带来动态调度" class="headerlink" title="通信与推理：稀疏计算带来动态调度"></a>通信与推理：稀疏计算带来动态调度</h3><p>MoE 在分布式训练和推理时，需要把 token 分发到不同 expert 所在的 GPU 上：</p>
+<p><img src="/images/llm/llm-dense-moe-06.png" alt="MoE 中 token 计算"></p>
+<p><em>MoE 中 token 计算</em></p>
+<p>这会引入明显的通信和调度复杂度：</p>
+<table>
+<thead>
+<tr>
+<th><strong>挑战</strong></th>
+<th><strong>说明</strong></th>
+<th><strong>常见方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>All-to-All 通信</td>
+<td>token 需要跨 GPU 分发</td>
+<td>通信计算重叠</td>
+</tr>
+<tr>
+<td>动态 shape</td>
+<td>每个 expert 接收 token 数不同</td>
+<td>grouped GEMM、block-sparse kernel</td>
+</tr>
+<tr>
+<td>热点 expert</td>
+<td>某些 expert 被频繁调用</td>
+<td>expert replication、负载均衡</td>
+</tr>
+<tr>
+<td>延迟抖动</td>
+<td>不同请求路由不同，耗时不稳定</td>
+<td>router-aware batching</td>
+</tr>
+<tr>
+<td>小 batch 低效</td>
+<td>在线推理 batch 小，expert 利用率低</td>
+<td>continuous batching、缓存优化</td>
+</tr>
+</tbody>
+</table>
+<p>因此，MoE 的推理优化不是只看 active parameters，还要看系统能不能高效完成 token dispatch、expert 计算和结果聚合。</p>
+<h3 id="小结：MoE-是架构问题，也是系统问题"><a href="#小结：MoE-是架构问题，也是系统问题" class="headerlink" title="小结：MoE 是架构问题，也是系统问题"></a>小结：MoE 是架构问题，也是系统问题</h3><p>简单总结一下：MoE 用稀疏激活降低了单 token 计算成本，但代价是引入了更复杂的训练稳定性、内存管理和分布式调度问题。它不是简单的模型结构优化，而是模型架构和系统工程共同演进的结果。</p>
+<table>
+<thead>
+<tr>
+<th><strong>挑战</strong></th>
+<th><strong>本质</strong></th>
+<th><strong>技术方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>路由稳定性</td>
+<td>token 如何稳定选择 expert</td>
+<td>noisy routing、router z-loss、top-k</td>
+</tr>
+<tr>
+<td>训练稳定性</td>
+<td>expert 是否都能有效学习</td>
+<td>aux loss、expert bias、shared expert</td>
+</tr>
+<tr>
+<td>内存压力</td>
+<td>total parameters 很大</td>
+<td>expert parallel、参数切分、量化</td>
+</tr>
+<tr>
+<td>通信开销</td>
+<td>token 需要跨卡分发</td>
+<td>all-to-all overlap、grouped GEMM</td>
+</tr>
+<tr>
+<td>推理复杂度</td>
+<td>动态路径导致延迟不稳定</td>
+<td>expert placement、hot expert replication</td>
+</tr>
+</tbody>
+</table>
+<h2 id="未来趋势：从单一架构到混合架构"><a href="#未来趋势：从单一架构到混合架构" class="headerlink" title="未来趋势：从单一架构到混合架构"></a>未来趋势：从单一架构到混合架构</h2><p>Dense Transformer 和 MoE 并不是大模型架构演进的终点。Dense 更稳定，MoE 更适合扩展容量，但两者都有各自的成本和边界。未来的大模型架构，大概率会走向更灵活的混合形态。</p>
+<table>
+<thead>
+<tr>
+<th><strong>方向</strong></th>
+<th><strong>核心思路</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dense + MoE 混合</td>
+<td>部分层保持 Dense，保证训练稳定和通用能力；部分层使用 MoE，提升容量和效率</td>
+</tr>
+<tr>
+<td>更细粒度专家</td>
+<td>expert 数量更多、粒度更小，让路由选择更灵活，专家分工更细</td>
+</tr>
+<tr>
+<td>动态计算路径</td>
+<td>根据 token 类型、任务难度或推理阶段，动态决定激活多少计算</td>
+</tr>
+<tr>
+<td>多模态 MoE</td>
+<td>文本、图像、语音、视频可能路由到不同 expert，提高多模态处理效率</td>
+</tr>
+<tr>
+<td>推理模型结合 MoE</td>
+<td>简单问题走轻量路径，复杂推理激活更多专家或更长计算过程</td>
+</tr>
+</tbody>
+</table>
+<p>从 Dense 到 MoE，本质上是大模型从“全量计算”走向“按需计算”的开始。Dense Transformer 代表最稳定、最成熟的规模化路线；MoE 则代表在成本压力下，通过稀疏激活扩展模型容量的方向。</p>
+<p>未来的大模型不会只有一种架构答案，而是在能力、成本、延迟、稳定性和部署复杂度之间不断做权衡。理解 Dense 与 MoE 的差异，也就理解了现代基模架构演进中最重要的一条主线。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/06/24/llm-dense-moe/" data-id="cmqrycy39000139lwkseh85vc" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/06/23/llm-transformer-architecture/" class="next">LLM 系列 (四)：Transformer 架构篇：大模型为什么选择了 Transformer</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/06/24/llm-dense-moe/';
+var disqus_title = 'LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活';
+var disqus_url = 'http://matt33.com/2026/06/24/llm-dense-moe/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/06/24/llm-dense-moe/">LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/23/llm-transformer-architecture/">LLM 系列 (四)：Transformer 架构篇：大模型为什么选择了 Transformer</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/22/llm-algorithm-principles/">LLM 系列 (三)：算法原理篇：机器是如何学会语言的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/21/llm-math-basics/">LLM 系列 (二)：机器如何把语言变成数学</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/19/llm-ai-to-llm/">LLM 系列 (一)：从 AI 到 LLM</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/31/statefun-serverless-internals/">Stateful Serverless 背后的 Flink StateFun 内部机制实现【译】</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/25/statefun-introduce/">Flink StateFun 2.0 浅谈</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/08/02/kubernetes-start/">Kubenetes 之新手入门篇</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/04/16/cpu-branch-predictor/">浅谈 CPU 分支预测技术</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/20/flink-task-mailbox/">Flink 基于 MailBox 实现的 StreamTask 线程模型</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
