@@ -80,7 +80,7 @@
 </table>
 <p><img src="/images/llm/llm-math-01.png" alt="LLM 数学基础图"></p>
 <p>可以把 LLM 的数学主线先简化成下面这张图：</p>
-<p><img src="/images/llm/llm-math-02.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-02.png" alt="LLM 训练中核心计算流程"></p>
 <p>LLM 本质上是在做一件事：先把语言翻译成数字，再用数学计算关系，最后用错误信号反过来修正模型。</p>
 <p>总而言之，LLM 的数学不是抽象公式，而是一套让机器理解语言的翻译系统：NLP 告诉我们语言问题难在哪里，线性代数把文字变成向量，Transformer 用 Attention 计算上下文关系，概率论把生成变成“预测下一个 token”，微积分把错误转化为梯度，优化方法则推动模型在一次次更新中变得更好。</p>
 <blockquote>
@@ -108,7 +108,7 @@
 </ul>
 <p>也可能被切成更细的片段。</p>
 <p>在模型内部，每个 token 会先被转换成一个编号，再进一步转换成向量。</p>
-<p><img src="/images/llm/llm-math-03.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-03.png" alt="文本的 Tokenization 过程"></p>
 <p>Token 是 LLM 处理语言的基本单位，文本必须先被切成 token，才能继续变成向量并进入模型计算（后面我们讲 embedding、向量空间、Attention、预测下一个 token，都是建立在 token 这个基本单位之上的）。</p>
 <h3 id="语言的表示：从-token-到向量空间"><a href="#语言的表示：从-token-到向量空间" class="headerlink" title="语言的表示：从 token 到向量空间"></a>语言的表示：从 token 到向量空间</h3><p>计算机并不真正认识“猫”“狗”“咖啡”这些词。对机器来说，它们必须先变成数字，才能参与计算。在线性代数里，最常见的四个对象是：</p>
 <table>
@@ -143,7 +143,7 @@
 </tbody>
 </table>
 <p>这里也用一张图来理解它们的样式：</p>
-<p><img src="/images/llm/llm-math-04.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-04.png" alt="线性代数中的常见对象"></p>
 <p>也就是说，LLM 里大多数计算，本质上不是在处理“文字”，而是在处理这些数字结构。</p>
 <blockquote>
 <p>当然只有 token embedding 还不够，Transformer 还需要位置表示，让模型知道 token 在句子中的顺序，否则“我喜欢你”和“你喜欢我”在词集合上很像，但语义完全不同（这部分会在下一篇文章中介绍）。</p>
@@ -206,7 +206,7 @@
 </table>
 <p>这些数字不是人工写死的，而是在训练过程中学出来的。它们的目标是让语义相近的词，在向量空间里也更接近。</p>
 <h4 id="向量：语义的坐标"><a href="#向量：语义的坐标" class="headerlink" title="向量：语义的坐标"></a>向量：语义的坐标</h4><p>可以把 embedding 想成一个语义地图：</p>
-<p><img src="/images/llm/llm-math-05.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-05.png" alt="语言的 Embedding"></p>
 <p>真实 embedding 当然不是二维，而可能是几百、几千甚至更高维。但直觉类似：语义相近的 token，向量位置也更接近。</p>
 <p>向量化之后，很多语言的问题也变成了数学问题：</p>
 <ol>
@@ -216,7 +216,7 @@
 </ol>
 <h4 id="矩阵：表示变换器"><a href="#矩阵：表示变换器" class="headerlink" title="矩阵：表示变换器"></a>矩阵：表示变换器</h4><p>向量表示一个对象，矩阵表示一种变换。在 Transformer 里，很多操作都可以理解成：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新表示 = 旧表示 × 参数矩阵</span><br></pre></td></tr></table></figure>
-<p><img src="/images/llm/llm-math-06.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-06.png" alt="Transformer 中三个核心矩阵"></p>
 <p>Transformer 中的 <code>Wq/Wk/Wv</code> 是参数矩阵，<code>Q/K/V</code>是 token 向量经过这些矩阵线性投影后得到的表示：</p>
 <table>
 <thead>
@@ -248,7 +248,7 @@
 <h4 id="张量：把一批句子组织起来"><a href="#张量：把一批句子组织起来" class="headerlink" title="张量：把一批句子组织起来"></a>张量：把一批句子组织起来</h4><p>当我们只看一个 token，它是向量。当我们看一句话，它是矩阵。当我们一次处理多句话，它就变成了张量。下面举个例子：</p>
 <figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">batch_size</span> <span class="string">=</span> <span class="number">4</span></span><br><span class="line"><span class="string">sequence_length</span> <span class="string">=</span> <span class="number">128</span></span><br><span class="line"><span class="string">hidden_dim</span> <span class="string">=</span> <span class="number">768</span></span><br></pre></td></tr></table></figure>
 <p>可以理解为：一次处理 4 句话、每句话 128 个 token、每个 token 用 768 维向量表示。如下图所示：</p>
-<p><img src="/images/llm/llm-math-07.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-07.png" alt="张量结构"></p>
 <h3 id="关系的计算：从相似度到-Attention"><a href="#关系的计算：从相似度到-Attention" class="headerlink" title="关系的计算：从相似度到 Attention"></a>关系的计算：从相似度到 Attention</h3><h4 id="相似度：模型怎么判断“像不像”"><a href="#相似度：模型怎么判断“像不像”" class="headerlink" title="相似度：模型怎么判断“像不像”"></a>相似度：模型怎么判断“像不像”</h4><p>当词变成向量之后，模型就可以计算它们之间的关系。常见的相似度计算方式有：</p>
 <table>
 <thead>
@@ -305,7 +305,7 @@
 </tr>
 </tbody>
 </table>
-<p><img src="/images/llm/llm-math-08.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-08.png" alt="复杂矩阵处理的主要方向"></p>
 <h4 id="关系的计算：相似度与-Attention"><a href="#关系的计算：相似度与-Attention" class="headerlink" title="关系的计算：相似度与 Attention"></a>关系的计算：相似度与 Attention</h4><p>线性代数让 token 有了向量。接下来，模型要回答两个更关键的问题：</p>
 <ul>
 <li>当前 token 应该从上下文里看哪些 token？</li>
@@ -340,7 +340,7 @@
 </tbody>
 </table>
 <p>放回刚才的句子，可以这样理解：</p>
-<p><img src="/images/llm/llm-math-09.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-09.png" alt="示例的 Attention 权重分配"></p>
 <p>这不是说模型一定永远这样判断，而是展示 Attention 权重的阅读方式：权重越高，当前 token 从那里拿到的信息越多。</p>
 <h5 id="什么是-Attention（注意力机制）"><a href="#什么是-Attention（注意力机制）" class="headerlink" title="什么是 Attention（注意力机制）"></a>什么是 Attention（注意力机制）</h5><p>继续用上面的示例：小明把书放进书包，因为它太重了。</p>
 <p>当人类理解“它”时，会自然回头看前面的词，并判断“它”更可能指向“书”，而不是“小明”或“放进”。这说明，一个词的含义往往不是孤立决定的，而是<strong>由上下文共同决定的</strong>。</p>
@@ -381,7 +381,7 @@
 </tbody>
 </table>
 <p>从数学上看，Q、K、V 本质上都是矩阵乘法（Transformer 内部的机制这里先不做过多赘述，简单有一个了解即可，重点关注背后的数学原理）。</p>
-<p><img src="/images/llm/llm-math-10.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-10.png" alt="Q/K/V 的核心工作原理"></p>
 <h5 id="Softmax：把分数变成权重"><a href="#Softmax：把分数变成权重" class="headerlink" title="Softmax：把分数变成权重"></a>Softmax：把分数变成权重</h5><p>在 Transformer 中，用 Q 和 K 计算完相关性后，会得到一组分数。比如当前 token 在看其他 token 时，可能得到这样的分数：</p>
 <table>
 <thead>
@@ -440,7 +440,7 @@
 <p>所以，Softmax 背后的数学概念很简单：它把一组“相关性分数”，转换成一组“信息分配权重”。</p>
 <h2 id="预测与评估：概率、Softmax-与交叉熵"><a href="#预测与评估：概率、Softmax-与交叉熵" class="headerlink" title="预测与评估：概率、Softmax 与交叉熵"></a>预测与评估：概率、Softmax 与交叉熵</h2><p>前面我们讲了：语言会先变成 token，再变成向量，模型通过矩阵乘法、相似度、Attention 等方式计算上下文关系。但计算完关系之后，模型最终还是要回答一个非常具体的问题：<strong>在当前上下文后面，下一个 token 最可能是什么？</strong></p>
 <p>可以先看一张总图：</p>
-<p><img src="/images/llm/llm-math-11.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-11.png" alt="LLM 中 Token 如何预测"></p>
 <p>在本章节中，重点会介绍的数学概念，及 LLM 中的应用如下：</p>
 <table>
 <thead>
@@ -570,7 +570,7 @@
 </table>
 <p>这也是为什么 prompt 很重要。</p>
 <p>prompt 本质上是在改变上下文，而上下文会改变后续 token 的概率分布。</p>
-<p><img src="/images/llm/llm-math-12.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-12.png" alt="prompt 对模型结果的影响"></p>
 <p>举个例子：</p>
 <table>
 <thead>
@@ -746,7 +746,7 @@
 </tbody>
 </table>
 <p>这不是模型在查字典，而是上下文改变了不同含义的概率。</p>
-<p><img src="/images/llm/llm-math-13.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-13.png" alt="贝叶斯"></p>
 <p>所以，贝叶斯思想对理解 LLM 很有帮助：模型不是一次性固定答案，而是在不断根据上下文更新“接下来什么更可能”。</p>
 <h3 id="交叉熵与最大似然：怎么衡量模型预测得好不好"><a href="#交叉熵与最大似然：怎么衡量模型预测得好不好" class="headerlink" title="交叉熵与最大似然：怎么衡量模型预测得好不好"></a>交叉熵与最大似然：怎么衡量模型预测得好不好</h3><p>有了概率之后，训练还需要回答另一个问题：模型这次预测，到底错了多少？假设真实答案是“咖啡”，模型给出下面的概率：</p>
 <table>
@@ -1012,7 +1012,7 @@
 <p>简单写成：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">如果 L 依赖 y，y 又依赖 x，</span><br><span class="line">那么 L 对 x 的影响可以拆成：</span><br><span class="line"></span><br><span class="line">dL/dx = dL/dy × dy/dx （dy/dx 表示 y 对 x 求导数）</span><br></pre></td></tr></table></figure>
 <p>放到神经网络里反向传播的路径是 <code>Loss → 输出层 → 中间层 → Embedding 层</code>，如下图所示：</p>
-<p><img src="/images/llm/llm-math-14.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-14.png" alt="Transformer 中反向传播应用"></p>
 <table>
 <thead>
 <tr>

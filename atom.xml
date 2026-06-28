@@ -1230,7 +1230,6 @@
 <p>因此，在 Transformer 成为现代 LLM 的基础架构之后，新的问题开始出现：<strong>能不能让模型拥有更大的参数容量，但每次推理时只激活其中一部分计算？</strong></p>
 <p>围绕这个问题，大模型架构逐渐形成了两条重要路线：一条是经典的 <strong>Dense Transformer</strong>，每个 token 都经过完整模型参数；另一条是越来越重要的 <strong>MoE（Mixture of Experts，混合专家）</strong>，模型拥有更大的总参数量，但每个 token 只路由到少数专家模块中计算。</p>
 <p><img src="/images/llm/llm-dense-moe-01.png" alt="Dense Transformer 与 MoE 架构热度趋势（图片来自 GPT 5.5）"></p>
-<p><em>Dense Transformer 与 MoE 架构热度趋势（图片来自 GPT 5.5）</em></p>
 <p>这一篇，我们重点看清楚：Dense Transformer 和 MoE 到底差在哪里，MoE 解决了什么问题，以及为什么它正在成为很多头部基模的重要架构选择。</p>
 <h2 id="Scaling-Law-带来的挑战"><a href="#Scaling-Law-带来的挑战" class="headerlink" title="Scaling Law 带来的挑战"></a>Scaling Law 带来的挑战</h2><p>Scaling Law 给大模型发展指明了一条非常清晰的路径：继续扩大模型、数据和计算，通常可以换来更强的能力。但当这条路径进入工程落地阶段，问题就不再只是“模型能不能继续变大”，而是：<strong>模型变大之后，每一次训练和推理到底要付出多少计算成本？</strong></p>
 <p>对于传统 Transformer 路线来说，这个问题尤其关键：模型容量扩大时，单 token 的计算成本通常也会同步上升。换句话说，Scaling Law 推动模型继续变大，但 Dense 架构会把“更大容量”和“更高计算成本”绑定在一起。</p>
@@ -1301,7 +1300,6 @@
 <p>尤其是 hidden size 的扩大，会显著放大计算量。因为 Transformer 里的核心计算大多是矩阵乘法，矩阵规模变大时，计算量不是线性增加，而是接近按平方级增长。</p>
 <p>以 FFN 为例， hidden size 是 <code>d</code>，FFN 中间维度是 <code>4d</code>，其计算量如下所示：</p>
 <p><img src="/images/llm/llm-dense-moe-02.png" alt="FNN 计算量"></p>
-<p><em>FNN 计算量</em></p>
 <p>这意味着，当 <code>d</code> 变成原来的 2 倍时，FFN 的参数量和矩阵计算量大约会变成原来的 4 倍。</p>
 <blockquote>
 <p>前馈网络（Feed-Forward Network, FFN）是在 Attention 完成上下文信息聚合之后，对每个 token 的 hidden state 进行进一步特征变换的模块。经典的 FFN 通常由两层线性变换和一个非线性激活函数组成：先把 hidden size 扩展到更高维度，再投影回原来的维度。由于这个“升维再降维”的过程会引入大规模矩阵计算，FFN 往往占据 Transformer Block 中很大一部分参数和计算量。在 Dense Transformer 中，每一层只有一个共享 FFN，所有 token 无论语义和任务类型如何，都会经过同一组 FFN 参数。</p>
@@ -1309,7 +1307,6 @@
 <h3 id="MoE-优化了哪里？"><a href="#MoE-优化了哪里？" class="headerlink" title="MoE 优化了哪里？"></a>MoE 优化了哪里？</h3><p>在 Transformer Block 中，Attention 和 FFN 都会消耗计算，但二者的角色不同。Attention 负责让 token 之间交换信息，而 FFN 更像是对每个 token 的表示做进一步加工。更重要的是，FFN 通常占据了大量参数和计算量，并且它是 <strong>逐 token 独立计算</strong> 的：一个 token 经过 FFN 时，不需要和其他 token 交互。</p>
 <p>这就给架构优化留下了空间：<strong>如果 FFN 主要是对每个 token 独立做特征变换，那么能不能不要让所有 token 都经过同一个巨大的 FFN，而是为不同 token 选择不同的 FFN 子网络？</strong> 这就是 MoE 的核心思路。</p>
 <p><img src="/images/llm/llm-dense-moe-03.png" alt="Dense Transformer  VS MOE"></p>
-<p><em>Dense Transformer  VS MOE</em></p>
 <p>MoE 不是把 Transformer 推翻，而是把原来的 Dense FFN 拆成多个 expert。这样的话，模型可以拥有很多 expert，也就是更大的 <strong>Total Parameters</strong>；但每个 token 只激活少数 expert，也就是更小的 <strong>Active Parameters</strong>。</p>
 <table>
 <thead>
@@ -1337,7 +1334,6 @@
 <h3 id="稠密计算：每个-token-激活全部参数"><a href="#稠密计算：每个-token-激活全部参数" class="headerlink" title="稠密计算：每个 token 激活全部参数"></a>稠密计算：每个 token 激活全部参数</h3><p>Dense Transformer 中的 <strong>Dense</strong>，指的是一种“稠密计算”方式：每个 token 在经过模型时，都会依次通过所有 Transformer Block，并使用每一层里的完整参数。</p>
 <p>在这个范式中，Attention 负责让 token 与上下文交互，FFN 负责对每个 token 的 hidden state 做进一步非线性变换。对于 Dense Transformer 来说，无论输入的是哪个 token，它都会经过同样的 Attention、同样的 FFN、同样的层数。如下图所示：</p>
 <p><img src="/images/llm/llm-dense-moe-04.png" alt="Dense Transformer 流程"></p>
-<p><em>Dense Transformer 流程</em></p>
 <p>因此 Dense 模型里的一个重要特点是：<strong><code>Total Parameters ≈ Active Parameters</code></strong>（主要指 Transformer Block 主体计算路径）</p>
 <table>
 <thead>
@@ -1525,7 +1521,6 @@
 </table>
 <h3 id="通信与推理：稀疏计算带来动态调度"><a href="#通信与推理：稀疏计算带来动态调度" class="headerlink" title="通信与推理：稀疏计算带来动态调度"></a>通信与推理：稀疏计算带来动态调度</h3><p>MoE 在分布式训练和推理时，需要把 token 分发到不同 expert 所在的 GPU 上：</p>
 <p><img src="/images/llm/llm-dense-moe-06.png" alt="MoE 中 token 计算"></p>
-<p><em>MoE 中 token 计算</em></p>
 <p>这会引入明显的通信和调度复杂度：</p>
 <table>
 <thead>
@@ -3014,7 +3009,7 @@
     <link href="http://matt33.com/2026/06/21/llm-math-basics/"/>
     <id>http://matt33.com/2026/06/21/llm-math-basics/</id>
     <published>2026-06-21T10:10:00.000Z</published>
-    <updated>2026-06-22T02:14:26.061Z</updated>
+    <updated>2026-06-28T15:28:01.040Z</updated>
     
     <content type="html"><![CDATA[<p>上一篇我们从大模型的发展脉络出发，回顾了语言模型如何从早期的统计方法，一步步走向 Transformer、GPT，以及今天无处不在的大模型应用。如果说第一篇回答的是“LLM 是怎么发展到今天的”，那么这一篇想往下多走一层，回答一个更底层的问题：<strong>LLM 为什么能被训练出来？机器到底是怎样把语言变成可计算、可优化、可生成的东西？</strong></p>
 <p>无论是 Transformer 里的 Attention，预训练里的 loss，微调时的梯度更新，RAG 里的向量检索，还是 LoRA 里的低秩矩阵，本质上都绕不开几类基础数学概念。不过，这篇并不是要把大家重新拉回大学数学课堂。我们不会从定理证明开始，也不会堆大量公式。更重要的是建立一套直觉：<strong>机器如何把文字变成向量，如何计算词与词之间的关系，如何预测下一个 token，又如何通过错误和梯度一步步修正自己</strong>。</p>
@@ -3098,7 +3093,7 @@
 </table>
 <p><img src="/images/llm/llm-math-01.png" alt="LLM 数学基础图"></p>
 <p>可以把 LLM 的数学主线先简化成下面这张图：</p>
-<p><img src="/images/llm/llm-math-02.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-02.png" alt="LLM 训练中核心计算流程"></p>
 <p>LLM 本质上是在做一件事：先把语言翻译成数字，再用数学计算关系，最后用错误信号反过来修正模型。</p>
 <p>总而言之，LLM 的数学不是抽象公式，而是一套让机器理解语言的翻译系统：NLP 告诉我们语言问题难在哪里，线性代数把文字变成向量，Transformer 用 Attention 计算上下文关系，概率论把生成变成“预测下一个 token”，微积分把错误转化为梯度，优化方法则推动模型在一次次更新中变得更好。</p>
 <blockquote>
@@ -3126,7 +3121,7 @@
 </ul>
 <p>也可能被切成更细的片段。</p>
 <p>在模型内部，每个 token 会先被转换成一个编号，再进一步转换成向量。</p>
-<p><img src="/images/llm/llm-math-03.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-03.png" alt="文本的 Tokenization 过程"></p>
 <p>Token 是 LLM 处理语言的基本单位，文本必须先被切成 token，才能继续变成向量并进入模型计算（后面我们讲 embedding、向量空间、Attention、预测下一个 token，都是建立在 token 这个基本单位之上的）。</p>
 <h3 id="语言的表示：从-token-到向量空间"><a href="#语言的表示：从-token-到向量空间" class="headerlink" title="语言的表示：从 token 到向量空间"></a>语言的表示：从 token 到向量空间</h3><p>计算机并不真正认识“猫”“狗”“咖啡”这些词。对机器来说，它们必须先变成数字，才能参与计算。在线性代数里，最常见的四个对象是：</p>
 <table>
@@ -3161,7 +3156,7 @@
 </tbody>
 </table>
 <p>这里也用一张图来理解它们的样式：</p>
-<p><img src="/images/llm/llm-math-04.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-04.png" alt="线性代数中的常见对象"></p>
 <p>也就是说，LLM 里大多数计算，本质上不是在处理“文字”，而是在处理这些数字结构。</p>
 <blockquote>
 <p>当然只有 token embedding 还不够，Transformer 还需要位置表示，让模型知道 token 在句子中的顺序，否则“我喜欢你”和“你喜欢我”在词集合上很像，但语义完全不同（这部分会在下一篇文章中介绍）。</p>
@@ -3224,7 +3219,7 @@
 </table>
 <p>这些数字不是人工写死的，而是在训练过程中学出来的。它们的目标是让语义相近的词，在向量空间里也更接近。</p>
 <h4 id="向量：语义的坐标"><a href="#向量：语义的坐标" class="headerlink" title="向量：语义的坐标"></a>向量：语义的坐标</h4><p>可以把 embedding 想成一个语义地图：</p>
-<p><img src="/images/llm/llm-math-05.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-05.png" alt="语言的 Embedding"></p>
 <p>真实 embedding 当然不是二维，而可能是几百、几千甚至更高维。但直觉类似：语义相近的 token，向量位置也更接近。</p>
 <p>向量化之后，很多语言的问题也变成了数学问题：</p>
 <ol>
@@ -3234,7 +3229,7 @@
 </ol>
 <h4 id="矩阵：表示变换器"><a href="#矩阵：表示变换器" class="headerlink" title="矩阵：表示变换器"></a>矩阵：表示变换器</h4><p>向量表示一个对象，矩阵表示一种变换。在 Transformer 里，很多操作都可以理解成：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新表示 = 旧表示 × 参数矩阵</span><br></pre></td></tr></table></figure>
-<p><img src="/images/llm/llm-math-06.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-06.png" alt="Transformer 中三个核心矩阵"></p>
 <p>Transformer 中的 <code>Wq/Wk/Wv</code> 是参数矩阵，<code>Q/K/V</code>是 token 向量经过这些矩阵线性投影后得到的表示：</p>
 <table>
 <thead>
@@ -3266,7 +3261,7 @@
 <h4 id="张量：把一批句子组织起来"><a href="#张量：把一批句子组织起来" class="headerlink" title="张量：把一批句子组织起来"></a>张量：把一批句子组织起来</h4><p>当我们只看一个 token，它是向量。当我们看一句话，它是矩阵。当我们一次处理多句话，它就变成了张量。下面举个例子：</p>
 <figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">batch_size</span> <span class="string">=</span> <span class="number">4</span></span><br><span class="line"><span class="string">sequence_length</span> <span class="string">=</span> <span class="number">128</span></span><br><span class="line"><span class="string">hidden_dim</span> <span class="string">=</span> <span class="number">768</span></span><br></pre></td></tr></table></figure>
 <p>可以理解为：一次处理 4 句话、每句话 128 个 token、每个 token 用 768 维向量表示。如下图所示：</p>
-<p><img src="/images/llm/llm-math-07.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-07.png" alt="张量结构"></p>
 <h3 id="关系的计算：从相似度到-Attention"><a href="#关系的计算：从相似度到-Attention" class="headerlink" title="关系的计算：从相似度到 Attention"></a>关系的计算：从相似度到 Attention</h3><h4 id="相似度：模型怎么判断“像不像”"><a href="#相似度：模型怎么判断“像不像”" class="headerlink" title="相似度：模型怎么判断“像不像”"></a>相似度：模型怎么判断“像不像”</h4><p>当词变成向量之后，模型就可以计算它们之间的关系。常见的相似度计算方式有：</p>
 <table>
 <thead>
@@ -3323,7 +3318,7 @@
 </tr>
 </tbody>
 </table>
-<p><img src="/images/llm/llm-math-08.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-08.png" alt="复杂矩阵处理的主要方向"></p>
 <h4 id="关系的计算：相似度与-Attention"><a href="#关系的计算：相似度与-Attention" class="headerlink" title="关系的计算：相似度与 Attention"></a>关系的计算：相似度与 Attention</h4><p>线性代数让 token 有了向量。接下来，模型要回答两个更关键的问题：</p>
 <ul>
 <li>当前 token 应该从上下文里看哪些 token？</li>
@@ -3358,7 +3353,7 @@
 </tbody>
 </table>
 <p>放回刚才的句子，可以这样理解：</p>
-<p><img src="/images/llm/llm-math-09.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-09.png" alt="示例的 Attention 权重分配"></p>
 <p>这不是说模型一定永远这样判断，而是展示 Attention 权重的阅读方式：权重越高，当前 token 从那里拿到的信息越多。</p>
 <h5 id="什么是-Attention（注意力机制）"><a href="#什么是-Attention（注意力机制）" class="headerlink" title="什么是 Attention（注意力机制）"></a>什么是 Attention（注意力机制）</h5><p>继续用上面的示例：小明把书放进书包，因为它太重了。</p>
 <p>当人类理解“它”时，会自然回头看前面的词，并判断“它”更可能指向“书”，而不是“小明”或“放进”。这说明，一个词的含义往往不是孤立决定的，而是<strong>由上下文共同决定的</strong>。</p>
@@ -3399,7 +3394,7 @@
 </tbody>
 </table>
 <p>从数学上看，Q、K、V 本质上都是矩阵乘法（Transformer 内部的机制这里先不做过多赘述，简单有一个了解即可，重点关注背后的数学原理）。</p>
-<p><img src="/images/llm/llm-math-10.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-10.png" alt="Q/K/V 的核心工作原理"></p>
 <h5 id="Softmax：把分数变成权重"><a href="#Softmax：把分数变成权重" class="headerlink" title="Softmax：把分数变成权重"></a>Softmax：把分数变成权重</h5><p>在 Transformer 中，用 Q 和 K 计算完相关性后，会得到一组分数。比如当前 token 在看其他 token 时，可能得到这样的分数：</p>
 <table>
 <thead>
@@ -3458,7 +3453,7 @@
 <p>所以，Softmax 背后的数学概念很简单：它把一组“相关性分数”，转换成一组“信息分配权重”。</p>
 <h2 id="预测与评估：概率、Softmax-与交叉熵"><a href="#预测与评估：概率、Softmax-与交叉熵" class="headerlink" title="预测与评估：概率、Softmax 与交叉熵"></a>预测与评估：概率、Softmax 与交叉熵</h2><p>前面我们讲了：语言会先变成 token，再变成向量，模型通过矩阵乘法、相似度、Attention 等方式计算上下文关系。但计算完关系之后，模型最终还是要回答一个非常具体的问题：<strong>在当前上下文后面，下一个 token 最可能是什么？</strong></p>
 <p>可以先看一张总图：</p>
-<p><img src="/images/llm/llm-math-11.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-11.png" alt="LLM 中 Token 如何预测"></p>
 <p>在本章节中，重点会介绍的数学概念，及 LLM 中的应用如下：</p>
 <table>
 <thead>
@@ -3588,7 +3583,7 @@
 </table>
 <p>这也是为什么 prompt 很重要。</p>
 <p>prompt 本质上是在改变上下文，而上下文会改变后续 token 的概率分布。</p>
-<p><img src="/images/llm/llm-math-12.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-12.png" alt="prompt 对模型结果的影响"></p>
 <p>举个例子：</p>
 <table>
 <thead>
@@ -3764,7 +3759,7 @@
 </tbody>
 </table>
 <p>这不是模型在查字典，而是上下文改变了不同含义的概率。</p>
-<p><img src="/images/llm/llm-math-13.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-13.png" alt="贝叶斯"></p>
 <p>所以，贝叶斯思想对理解 LLM 很有帮助：模型不是一次性固定答案，而是在不断根据上下文更新“接下来什么更可能”。</p>
 <h3 id="交叉熵与最大似然：怎么衡量模型预测得好不好"><a href="#交叉熵与最大似然：怎么衡量模型预测得好不好" class="headerlink" title="交叉熵与最大似然：怎么衡量模型预测得好不好"></a>交叉熵与最大似然：怎么衡量模型预测得好不好</h3><p>有了概率之后，训练还需要回答另一个问题：模型这次预测，到底错了多少？假设真实答案是“咖啡”，模型给出下面的概率：</p>
 <table>
@@ -4030,7 +4025,7 @@
 <p>简单写成：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">如果 L 依赖 y，y 又依赖 x，</span><br><span class="line">那么 L 对 x 的影响可以拆成：</span><br><span class="line"></span><br><span class="line">dL/dx = dL/dy × dy/dx （dy/dx 表示 y 对 x 求导数）</span><br></pre></td></tr></table></figure>
 <p>放到神经网络里反向传播的路径是 <code>Loss → 输出层 → 中间层 → Embedding 层</code>，如下图所示：</p>
-<p><img src="/images/llm/llm-math-14.png" alt="LLM 数学基础图"></p>
+<p><img src="/images/llm/llm-math-14.png" alt="Transformer 中反向传播应用"></p>
 <table>
 <thead>
 <tr>
