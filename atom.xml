@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-06-28T02:30:00.000Z</updated>
+  <updated>2026-06-29T12:10:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,382 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (九)：推理服务：大模型如何高效生成 Token</title>
+    <link href="http://matt33.com/2026/06/29/llm-inference-serving/"/>
+    <id>http://matt33.com/2026/06/29/llm-inference-serving/</id>
+    <published>2026-06-29T12:10:00.000Z</published>
+    <updated>2026-06-29T12:10:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。</p>
+<p>这里的“推理”需要先做一个区分。它既可以指 <strong>Inference Serving</strong>，也可以指 <strong>Reasoning Model</strong>。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。</p>
+<p>本文讨论的是第一种：<strong>推理服务</strong>。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。</p>
+<a id="more"></a>
+<p>简单来说，推理服务的本质，<strong>是在模型参数固定的情况下，把自回归 token 生成过程组织成高吞吐、低延迟、低成本、可扩展的在线系统</strong>。</p>
+<h2 id="从训练到推理"><a href="#从训练到推理" class="headerlink" title="从训练到推理"></a>从训练到推理</h2><p>训练和推理最大的区别是：<strong>训练会更新参数，推理不会更新参数</strong>。训练阶段，模型通过前向传播计算 loss，再通过反向传播更新参数；推理阶段，模型参数已经固定，系统只是在给定 prompt 的情况下调用模型，让它生成下一个 token。如下图所示：</p>
+<p><img src="/images/llm/llm-inference-serving-01.png" alt="训练 vs 推理"></p>
+<p>从函数角度看，训练完成后的大模型可以理解为一个固定函数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fθ(context) -&gt; P(next token | context)</span><br></pre></td></tr></table></figure>
+<p>其中，<code>θ</code> 是训练好的模型参数，<code>context</code> 是当前上下文。模型每次读取上下文，输出下一个 token 在整个词表上的概率分布；解码策略再从这个分布中选出具体 token。一次生成过程大致如下：</p>
+<p><img src="/images/llm/llm-inference-serving-02.png" alt="自回归生成流程"></p>
+<p>因此，推理服务不是一次性生成完整答案，而是一个不断循环的过程：<strong><code>上下文 -&gt; 概率分布 -&gt; 选择 token -&gt; 更新上下文 -&gt; 继续生成</code>。</strong>这正是大模型推理服务的工程难点来源：每生成一个 token，都要调度一次模型前向计算；每多一个用户请求，系统就多一份上下文和缓存压力；每拉长一次上下文，首 token 延迟和显存占用都会上升。</p>
+<p>线上推理服务通常关注以下指标：</p>
+<table>
+<thead>
+<tr>
+<th><strong>指标</strong></th>
+<th><strong>含义</strong></th>
+<th><strong>影响体验</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TTFT</td>
+<td>Time To First Token，首 token 延迟</td>
+<td>用户多久能看到第一个输出</td>
+</tr>
+<tr>
+<td>TPOT / ITL</td>
+<td>每个输出 token 的生成间隔</td>
+<td>流式输出是否顺滑</td>
+</tr>
+<tr>
+<td>Latency</td>
+<td>请求从开始到结束的总耗时</td>
+<td>端到端体验</td>
+</tr>
+<tr>
+<td>Throughput</td>
+<td>单位时间生成 token 数</td>
+<td>系统吞吐和服务成本</td>
+</tr>
+<tr>
+<td>Concurrency</td>
+<td>同时服务的请求数量</td>
+<td>高峰期承载能力</td>
+</tr>
+</tbody>
+</table>
+<p>这些指标之间存在天然权衡：</p>
+<ul>
+<li>吞吐 vs 延迟： batch 越大，GPU 利用率可能越高，但单个请求等待时间可能变长；</li>
+<li>长上下文 vs 成本： 上下文越长，能力可能越强，但 prefill 计算和 KV cache 显存都会增加；</li>
+<li>输出长度 vs 响应速度：输出越长，decode 步数越多，总耗时越高；</li>
+<li>并发能力 vs 显存占用：并发越高，每个请求的 KV cache 会叠加，占用更多显存。</li>
+</ul>
+<p>所以，推理服务真正要解决的问题，不只是“模型能不能生成答案”，而是：<strong>如何在固定模型参数下，把自回归生成过程调度成一个低延迟、高吞吐、低成本的在线系统</strong>。</p>
+<h2 id="推理成本：Prefill、Decode-与-KV-Cache"><a href="#推理成本：Prefill、Decode-与-KV-Cache" class="headerlink" title="推理成本：Prefill、Decode 与 KV Cache"></a>推理成本：Prefill、Decode 与 KV Cache</h2><p>理解推理服务，最关键的是先把一次请求拆开看。大模型生成答案不是一次性完成的，而是分成两个阶段：<strong>Prefill</strong> 和 <strong>Decode</strong>。前者负责“读懂输入”，后者负责“逐字生成”。这两个阶段的计算形态完全不同，也决定了推理服务的主要成本来源。</p>
+<p><img src="/images/llm/llm-inference-serving-03.png" alt="推理服务中的 Prefill 和 Decode"></p>
+<h3 id="Prefill-阶段：先读完上下文"><a href="#Prefill-阶段：先读完上下文" class="headerlink" title="Prefill 阶段：先读完上下文"></a>Prefill 阶段：先读完上下文</h3><p>Prefill 阶段负责处理用户输入的完整 prompt。由于输入 token 都是已知的，模型可以一次性并行计算它们的 attention、MLP 和 hidden states，并生成后续 Decode 阶段要复用的 KV Cache。可以把 Prefill 理解为 <strong><code>读题</code></strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">prompt 越长 -&gt; 输入 token 越多 -&gt; prefill 计算越多 -&gt; TTFT 越高</span><br></pre></td></tr></table></figure>
+<p>这就是为什么长文档问答、代码仓库分析、多轮长对话的首 token 往往更慢。模型不是“不想回答”，而是必须先把上下文完整读进去。</p>
+<p>从计算特征看，Prefill 更接近一次大规模矩阵-矩阵乘法，GPU 并行度高，通常属于 <strong>计算密集型（Compute-Bound）</strong> 阶段。它的速度主要受 GPU 算力影响，能够比较充分地利用硬件。Prefill 的最终产出主要有两个：</p>
+<ul>
+<li>完整 prompt 对应的 <strong>KV Cache</strong>；</li>
+<li>第一个生成 token 的概率分布。</li>
+</ul>
+<h3 id="Decode：逐-token-生成答案"><a href="#Decode：逐-token-生成答案" class="headerlink" title="Decode：逐 token 生成答案"></a>Decode：逐 token 生成答案</h3><p>Decode 阶段负责真正生成回答。它是<strong>自回归</strong>的：第 <code>t+1</code> 个 token 必须等第 <code>t</code> 个 token 生成之后才能继续。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">token_1 -&gt; token_2 -&gt; token_3 -&gt; ... -&gt; token_n</span><br></pre></td></tr></table></figure>
+<p>这带来一个天然限制：输出越长，decode step 越多，总耗时越高。即使每一步都很快，长答案也必须一步一步生成。可以把 Decode 理解为 <strong><code>写答案</code></strong>：Prefill 决定用户多久看到第一个 token，Decode 决定后续流式输出是否顺滑。</p>
+<table>
+<thead>
+<tr>
+<th><strong>指标</strong></th>
+<th><strong>主要受什么影响</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TTFT</td>
+<td>Prefill 成本、排队时间、prompt 长度</td>
+</tr>
+<tr>
+<td>TPOT / ITL</td>
+<td>Decode 速度、batch 调度、KV Cache 访问效率</td>
+</tr>
+</tbody>
+</table>
+<p>从计算特征看，Decode 每一步只处理最新生成的一个 token，并读取所有历史上下文的 KV Cache。这更接近矩阵-向量计算，batch 较小时并行度不高。因此，Decode 通常是 <strong>内存带宽密集型（Memory-Bandwidth Bound）</strong> 阶段。它的瓶颈往往不是 GPU 算力不够，而是需要不断从 HBM（High Bandwidth Memory，高带宽显存）读取模型权重和不断增长的 KV Cache，再送入片上 SRAM（Static Random Access Memory，静态随机存取存储器）参与计算。</p>
+<p>这也是为什么 Decode 阶段经常出现一种现象：GPU 计算单元并没有完全吃满，但生成速度仍然上不去。瓶颈不在“算得慢”，而在“数据搬得慢”。</p>
+<h3 id="KV-Cache：用显存换计算"><a href="#KV-Cache：用显存换计算" class="headerlink" title="KV Cache：用显存换计算"></a>KV Cache：用显存换计算</h3><p>Transformer 在生成新 token 时，需要关注前面所有历史 token。如果每一步都重新计算历史上下文的 Key 和 Value，计算成本会非常高。因此，推理系统会引入 <strong>KV Cache</strong>：把历史 token 在各层 attention 中的 Key / Value 缓存下来，后续 Decode 时直接复用。</p>
+<p><img src="/images/llm/llm-inference-serving-04.png" alt="KV Cache 作用"></p>
+<p>KV Cache 的核心价值是：<strong>用显存换计算</strong>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">没有 KV Cache：每一步都重新计算历史上下文的 K/V</span><br><span class="line">有 KV Cache：只计算新 token 的 K/V，并复用历史 K/V</span><br></pre></td></tr></table></figure>
+<p>这样可以避免大量重复计算，让 Decode 阶段从“反复处理整个历史上下文”，变成“处理新 token + 读取历史缓存”。但 KV Cache 也带来了新的瓶颈：<strong>显存占用</strong>。它的大小可以粗略估算为（实际单卡显存还会受 Tensor Parallel、Pipeline Parallel、GQA/MQA、beam search、多采样等因素影响）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KV Cache ≈ 2 × layers × tokens × kv_heads × head_dim × bytes × batch_size</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<ul>
+<li><code>2</code> 表示 Key 和 Value；</li>
+<li><code>layers</code> 是模型层数；</li>
+<li><code>tokens</code> 是上下文长度，包括 prompt 和已生成 token；</li>
+<li><code>kv_heads</code> 是 KV head 数量；</li>
+<li><code>head_dim</code> 是每个 head 的维度；</li>
+<li><code>bytes</code> 是每个数值占用的字节数；</li>
+<li><code>batch_size</code> 表示并发 batch 中的请求规模。</li>
+</ul>
+<p>这个公式说明：上下文越长、输出越长、并发越高，KV Cache 越大。对于长上下文任务，KV Cache 的显存占用甚至可能接近或超过模型权重本身。</p>
+<table>
+<thead>
+<tr>
+<th><strong>场景</strong></th>
+<th><strong>为什么 KV Cache 压力大</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>长 prompt</td>
+<td>Prefill 后初始 KV Cache 就很长</td>
+</tr>
+<tr>
+<td>长输出</td>
+<td>每生成一个 token，都要追加新的 K/V</td>
+</tr>
+<tr>
+<td>高并发</td>
+<td>每个请求都要维护自己的 KV Cache</td>
+</tr>
+<tr>
+<td>多轮对话</td>
+<td>历史消息越长，缓存越大</td>
+</tr>
+<tr>
+<td>多采样 / beam search</td>
+<td>多条候选路径会增加缓存管理压力</td>
+</tr>
+</tbody>
+</table>
+<p>所以，KV Cache 既是优化，也是新的瓶颈。它解决了重复计算问题，却把压力转移到了显存容量、显存带宽和缓存调度上。现代推理优化，很大一部分都围绕 KV Cache 展开：</p>
+<ol>
+<li><strong>PagedAttention</strong>： 像操作系统分页一样管理 KV Cache，减少显存碎片；</li>
+<li><strong>KV Cache 量化</strong>：用 INT8 / INT4 等低精度存储 K/V，降低显存占用；</li>
+<li><strong>KV Cache 压缩</strong>：通过低秩、稀疏化或聚合方法减少缓存规模；</li>
+<li><strong>选择性保留</strong>：只保留更重要的历史 token 或注意力信息；</li>
+<li><strong>Prefix Cache</strong>：复用相同系统提示词、长文档前缀或多轮对话前缀；</li>
+<li><strong>Chunked Prefill</strong>：把长 prompt 分块处理，降低首 token 阻塞和调度压力。</li>
+</ol>
+<p>因此，推理服务的关键问题不是“模型能不能跑起来”，而是：<strong>如何在长上下文、高并发、长输出的情况下，高效管理 KV Cache，并把 Prefill 和 Decode 调度好</strong>。</p>
+<h2 id="服务系统：如何把-GPU-用满？"><a href="#服务系统：如何把-GPU-用满？" class="headerlink" title="服务系统：如何把 GPU 用满？"></a>服务系统：如何把 GPU 用满？</h2><p>前面讲的是单个请求的成本结构：Prefill 负责读上下文，Decode 负责逐 token 生成，KV Cache 决定长上下文和高并发的显存压力。但线上推理服务真正难的是：请求不是一个一个安静排队来的，而是同时到达、长度不同、输出不同、优先级不同。系统既要让单个用户感觉快，又要让整体 GPU 利用率足够高。推理服务要解决的核心矛盾是：</p>
+<ul>
+<li>单个请求希望低延迟；</li>
+<li>整体系统希望高吞吐；</li>
+<li>GPU 希望持续满载；</li>
+<li>显存希望尽量不碎片化。</li>
+</ul>
+<p>所以，推理服务系统的关键能力，不只是“跑模型”，而是 <strong>batching、调度、缓存管理和解码优化</strong>。</p>
+<p><img src="/images/llm/llm-inference-serving-05.png" alt="在线推理系统优化方向"></p>
+<h3 id="Batching：把请求合起来算"><a href="#Batching：把请求合起来算" class="headerlink" title="Batching：把请求合起来算"></a>Batching：把请求合起来算</h3><p>GPU 擅长大规模并行计算。如果一个请求一个请求跑，矩阵规模小，GPU 利用率会很低。Batching 的核心思想是：把多个请求合并成一个 batch，一起送进模型计算。</p>
+<table>
+<thead>
+<tr>
+<th><strong>方式</strong></th>
+<th><strong>核心思路</strong></th>
+<th><strong>适用性</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>静态 batching</td>
+<td>等一批请求凑齐后一起计算</td>
+<td>离线任务更适合，在线延迟较差</td>
+</tr>
+<tr>
+<td>动态 batching</td>
+<td>在短时间窗口内合并请求</td>
+<td>在线服务常用，需要调度策略</td>
+</tr>
+<tr>
+<td>Continuous batching</td>
+<td>Decode 过程中持续加入新请求</td>
+<td>适合 LLM 流式生成</td>
+</tr>
+<tr>
+<td>In-flight batching</td>
+<td>正在生成的 batch 中动态增删请求</td>
+<td>更适合高并发在线推理</td>
+</tr>
+</tbody>
+</table>
+<p>静态 batching 和早期动态 batching 最大的问题是：batch 一旦形成，内部请求长度不一致就会造成浪费。短请求先结束，但长请求还在生成，GPU slot 不能被及时复用。Continuous batching 这里的思想是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">请求结束 -&gt; 释放 slot</span><br><span class="line">新请求到来 -&gt; 立即补进 batch</span><br></pre></td></tr></table></figure>
+<p>这样可以让 Decode 阶段的 batch 始终保持较高利用率，显著提升吞吐。</p>
+<blockquote>
+<p>在很多语境下，Continuous Batching 和 In-flight Batching 都是在描述“生成过程中动态加入/移除请求”的迭代级调度思想，不同框架叫法和实现细节略有差异。</p>
+</blockquote>
+<h3 id="PagedAttention：管理-KV-Cache-的碎片"><a href="#PagedAttention：管理-KV-Cache-的碎片" class="headerlink" title="PagedAttention：管理 KV Cache 的碎片"></a>PagedAttention：管理 KV Cache 的碎片</h3><p>Batching 提高了 GPU 计算利用率，但也放大了 KV Cache 的管理问题。不同请求的 prompt 长度、输出长度都不一样，KV Cache 会在生成过程中动态增长；有的请求已经结束并释放缓存，有的请求还在继续生成。如果要求 KV Cache 在显存中连续存放，就很容易产生碎片：表面上还有剩余显存，但找不到足够大的连续空间容纳新请求。</p>
+<p>PagedAttention 的思路来自操作系统的虚拟内存管理：不再把每个请求的 KV Cache 当作一整段连续显存，而是切分成许多固定大小的 block。逻辑上，一个序列的 KV Cache 仍然是连续的；物理上，这些 block 可以分散存放在 GPU 显存的不同位置，并通过 block table 完成逻辑块到物理块的映射。这样做的价值很直接：</p>
+<ul>
+<li>减少 KV Cache 显存碎片；</li>
+<li>支持不同长度请求混合调度；</li>
+<li>方便请求结束后回收 block；</li>
+<li>支持更大的 batch 和更高并发；</li>
+<li>在 beam search / parallel sampling 中更容易共享前缀缓存。</li>
+</ul>
+<p>vLLM 的核心贡献就在这里：通过 PagedAttention，把 KV Cache 管理从“连续显存分配”变成“分页式块管理”。在论文实验中，这种方式显著降低了显存浪费，并带来了数倍级吞吐提升。</p>
+<p><img src="/images/llm/llm-inference-serving-06.png" alt="PagedAttention"></p>
+<h3 id="Speculative-Decoding：减少大模型解码步数"><a href="#Speculative-Decoding：减少大模型解码步数" class="headerlink" title="Speculative Decoding：减少大模型解码步数"></a>Speculative Decoding：减少大模型解码步数</h3><p>Decode 慢的根本原因是自回归串行生成：大模型每一步通常只确认一个 token。Speculative Decoding，也叫投机解码，试图减少大模型的串行 decode 轮次。它的基本流程是：</p>
+<ol>
+<li>用一个较小的 Draft Model 先快速生成多个候选 token；</li>
+<li>用目标大模型 Target Model 一次性并行验证这些 token；</li>
+<li>被接受的 token 直接输出；</li>
+<li>如果某个 token 被拒绝，就从该位置回退并重新采样。</li>
+</ol>
+<p><img src="/images/llm/llm-inference-serving-07.png" alt="Speculative Decoding"></p>
+<p>它的优势是：如果 Draft Model 质量足够好，目标模型一次可以接受多个 token，生成速度会明显提升。但它也有代价：</p>
+<ul>
+<li>Draft Model 质量：质量越好，接受率越高；</li>
+<li>Draft Model 成本：草稿模型本身也要消耗算力；</li>
+<li>验证实现：需要额外调度和并行验证逻辑；</li>
+<li>任务类型：创造性强或分布不稳定的任务接受率可能下降。</li>
+</ul>
+<p>所以，投机解码不是“免费加速”，而是用一个便宜模型和更复杂的系统，换取目标大模型更少的 decode 轮次。</p>
+<h3 id="量化与低精度推理：降低单位-token-成本"><a href="#量化与低精度推理：降低单位-token-成本" class="headerlink" title="量化与低精度推理：降低单位 token 成本"></a>量化与低精度推理：降低单位 token 成本</h3><p>量化的目标很直接：用更低的数值精度存储或计算模型权重、激活和 KV Cache，从而降低显存占用、提升吞吐、降低成本。</p>
+<table>
+<thead>
+<tr>
+<th><strong>方案</strong></th>
+<th><strong>特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP16 / BF16</td>
+<td>常见推理精度，稳定性好</td>
+</tr>
+<tr>
+<td>FP8</td>
+<td>显存和吞吐更优，对硬件、校准和算子支持要求更高</td>
+</tr>
+<tr>
+<td>INT8</td>
+<td>常见部署量化方案，质量损失通常可控</td>
+</tr>
+<tr>
+<td>INT4 / GPTQ / AWQ</td>
+<td>显存节省明显，适合成本敏感场景，但质量风险更高</td>
+</tr>
+<tr>
+<td>KV Cache INT8 / INT4</td>
+<td>直接降低长上下文和高并发的缓存压力</td>
+</tr>
+</tbody>
+</table>
+<p>量化的本质是权衡：<code>更低显存 + 更高吞吐 + 更低成本</code> VS <code>校准复杂度 + 数值误差 + 可能的质量损失</code>。对推理服务来说，量化不仅是“模型变小”，更重要的是降低单位 token 成本。尤其在长上下文和高并发场景下，KV Cache 量化往往和权重量化一样关键。</p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>这一节的核心可以压缩成一句话：Batching 解决 GPU 利用率，PagedAttention 解决 KV Cache 管理，Speculative Decoding 解决 Decode 串行瓶颈，量化解决单位 token 成本。</p>
+<h2 id="主流推理框架"><a href="#主流推理框架" class="headerlink" title="主流推理框架"></a>主流推理框架</h2><p>一个成熟的推理系统，本质上是在做四件事：</p>
+<ol>
+<li><strong>让 GPU 尽量满</strong>：通过 batching、调度和并行执行提高硬件利用率；</li>
+<li><strong>让 KV Cache 尽量省</strong>：通过分页管理、压缩、量化和复用降低显存压力；</li>
+<li><strong>让请求调度尽量稳</strong>：在不同长度、不同优先级、不同 SLA 的请求之间做资源分配；</li>
+<li><strong>让单位 token 成本尽量低</strong>：通过量化、低精度、多机并行和模型路由降低服务成本。</li>
+</ol>
+<p>因此，推理框架不是简单的 HTTP server，而是把模型执行、KV Cache 管理、batch 调度、解码策略、量化、多卡并行和资源隔离组织成一个在线系统。不同框架的设计哲学不同，适合的场景也不同。</p>
+<table>
+<thead>
+<tr>
+<th><strong>框架</strong></th>
+<th><strong>核心取向</strong></th>
+<th><strong>关键技术</strong></th>
+<th><strong>优势</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vLLM</td>
+<td>用高效 KV Cache 管理换高吞吐</td>
+<td>PagedAttention、Continuous Batching</td>
+<td>吞吐高，社区活跃，易用性好，支持 NVIDIA / AMD 等多种硬件</td>
+<td>高并发、吞吐敏感的在线服务</td>
+</tr>
+<tr>
+<td>TensorRT-LLM</td>
+<td>榨干 NVIDIA GPU 性能</td>
+<td>TensorRT 编译、kernel fusion、FP8 / INT4、in-flight batching</td>
+<td>NVIDIA 硬件上性能极强，和 Triton / CUDA 生态结合紧密</td>
+<td>NVIDIA 技术栈下的极致性能部署</td>
+</tr>
+<tr>
+<td>Hugging Face TGI</td>
+<td>Hugging Face 生态早期重要 serving 框架</td>
+<td>Continuous Batching、Tensor Parallel、Rust 服务核心</td>
+<td>和 HF Hub / Transformers 生态集成好，但当前已进入维护模式</td>
+<td>快速上线、标准模型服务、HF 生态用户</td>
+</tr>
+<tr>
+<td>SGLang</td>
+<td>面向复杂生成工作流的 runtime</td>
+<td>RadixAttention、结构化生成、并发调度</td>
+<td>适合多轮、多分支、工具调用和复杂 prompt workflow</td>
+<td>Agent、结构化输出、复杂 serving workflow</td>
+</tr>
+<tr>
+<td>llama.cpp</td>
+<td>本地/边缘/低成本推理</td>
+<td>GGUF、CPU/GPU 混合、INT4/INT8 量化</td>
+<td>轻量、可本地运行，硬件门槛低</td>
+<td>本地部署、边缘设备、个人推理服务</td>
+</tr>
+</tbody>
+</table>
+<p>这些框架体现的是工程里的典型权衡：<strong>性能（Performance）、生产力（Productivity）和可移植性（Portability）</strong> 很难同时拉满。更准确地说，推理框架没有绝对最优，只有场景最优：如果目标是高并发在线吞吐，优先看 vLLM；如果目标是在 NVIDIA GPU 上追求极致性能，TensorRT-LLM 更合适；如果模型和部署链路都在 Hugging Face 生态里，TGI 上手最快；如果要做复杂 Agent runtime 或结构化生成，SGLang 更有优势；如果是本地、边缘或低成本部署，llama.cpp 是最轻量的选择。</p>
+<h2 id="行业演进：推理服务往哪里走？"><a href="#行业演进：推理服务往哪里走？" class="headerlink" title="行业演进：推理服务往哪里走？"></a>行业演进：推理服务往哪里走？</h2><p>推理服务正在从“把模型跑起来”，走向“把每个 token 的成本、延迟和稳定性做到极致”。早期部署一个模型，重点是能不能加载权重、能不能返回结果。现在的推理服务要面对更复杂的场景：长上下文、多轮对话、多工具调用、多模态输入、Agent 任务流，以及不断增长的并发和成本压力。</p>
+<p><img src="/images/llm/llm-inference-serving-08.png" alt="推理服务演进"></p>
+<table>
+<thead>
+<tr>
+<th><strong>趋势</strong></th>
+<th><strong>核心变化</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KV Cache 成为一等公民</td>
+<td>长上下文和高并发让缓存管理成为系统核心</td>
+</tr>
+<tr>
+<td>Prefill / Decode 分离</td>
+<td>两个阶段资源特征不同，可能采用不同调度和硬件策略</td>
+</tr>
+<tr>
+<td>投机解码常态化</td>
+<td>用 draft model 或 draft head 换更低 decode 延迟</td>
+</tr>
+<tr>
+<td>低精度深入部署</td>
+<td>FP8、INT8、INT4、KV 量化会按场景分层使用</td>
+</tr>
+<tr>
+<td>Agent Runtime 融合</td>
+<td>模型不只生成文本，还要调用工具、维护状态、执行任务</td>
+</tr>
+</tbody>
+</table>
+<p>未来推理服务比拼的，不再是单个模型“能不能跑起来”或“单次生成有多快”，而是整体系统效率：</p>
+<ol>
+<li>同样 GPU，谁能服务更多 token；</li>
+<li>同样延迟，谁能支持更长上下文；</li>
+<li>同样成本，谁能提供更稳定的体验；</li>
+<li>同样模型，谁能把调度、缓存和解码优化得更好。</li>
+</ol>
+<p>所以，推理服务的本质不是部署一个模型 API，而是把模型权重、KV Cache、batch 调度、解码策略、量化、多机并行和线上 SLA 组织成一个稳定、可扩展、可控成本的在线系统。</p>
+<p>放回整个 LLM 训练与服务链路中看：<strong>预训练和后训练决定模型能力，分布式训练决定模型如何被训练出来，而推理服务决定这些能力能否以可承受的成本、稳定地交付给真实用户</strong>。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。&lt;/p&gt;
+&lt;p&gt;这里的“推理”需要先做一个区分。它既可以指 &lt;strong&gt;Inference Serving&lt;/strong&gt;，也可以指 &lt;strong&gt;Reasoning Model&lt;/strong&gt;。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。&lt;/p&gt;
+&lt;p&gt;本文讨论的是第一种：&lt;strong&gt;推理服务&lt;/strong&gt;。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (八)：分布式训练：千卡集群如何训大模型</title>
@@ -5919,116 +6295,6 @@
     <summary type="html">
     
       &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第二篇，将会给大家讲述一个 Flink 作业（DataStream 高阶 API 为例的作业）是如何转换为 StreamGraph 的, StreamGraph 可以认为是一个还未经过优化处理的逻辑计划，它完
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="flink" scheme="http://matt33.com/tags/flink/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Apache Flink 初探</title>
-    <link href="http://matt33.com/2019/11/23/flink-learn-start-1/"/>
-    <id>http://matt33.com/2019/11/23/flink-learn-start-1/</id>
-    <published>2019-11-23T10:49:56.000Z</published>
-    <updated>2026-06-19T02:19:10.483Z</updated>
-    
-    <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第一篇，最近计划花个一到两个月的时间以最新的 Flink-1.9 代码为例把 Flink 的主要内容梳理一遍，这个系列文章的主要内容见 <a href="https://github.com/wangzzu/awesome/issues/28" target="_blank" rel="external">Flink 源码分析</a>，这个 issue 拖了好几个月，现在终于开动了，不容易。梳理的过程也是个人强化学习的过程，博客中有问题的地方也欢迎各位指正（邮件联系 or disqus 评论都行，我这边都会及时回复）。</p>
-<p>本篇的题目是 <strong>Apache Flink 初探</strong>，比较适合对 Flink 不是很了解，想进一步了解的同学，主要会讲述一下流计算的基本知识，以及对 Flink 做了一个简单的介绍，算是这个系列的开胃小菜。</p>
-<h2 id="流计算的基础知识"><a href="#流计算的基础知识" class="headerlink" title="流计算的基础知识"></a>流计算的基础知识</h2><p>关于流计算，业内有一本口碑神一般存在的书，那就是大名名鼎鼎的《Streaming Systems》，这本书对流计算领域的问题及技术做了很深的讨论，如果你看过相关的内容，你就会发现 Flink 实际上就是开源届里实现最接近 DataFlow 模型的框架，这里先给大家介绍一下流计算相关的背景知识，对于后面理解 Flink 的设计，特别是高阶 API 的设计（实际上 DataStream API 就是为 DataFlow 模型而开发的）。</p>
-<h3 id="数据流"><a href="#数据流" class="headerlink" title="数据流"></a>数据流</h3><p>计算的数据源可以有很多种类型，比如：电商的交易数据、用户行为日志、物联网数据等，这些数据集可以分为两类：</p>
-<ol>
-<li>有边界数据集（Bounded dataset）: A type of dataset that is finite in size;</li>
-<li>无边界数据集（Unbounded dataset）: A type of dataset that is infinite in size;</li>
-</ol>
-<p>从另一个角度来看，无边界数据集更符合现实中数据的产生方式，这样的话，就可以认为有边界数据集是无边界数据集的一个特例或一个子集。</p>
-<h3 id="时间域"><a href="#时间域" class="headerlink" title="时间域"></a>时间域</h3><p>在分布式计算中，关于时间域有两种类型：</p>
-<ol>
-<li>Event Time（事件时间）: This is the time at which events actually occurred；</li>
-<li>Processing Time（处理时间）: This is the time at  witch events are observed in the system。</li>
-</ol>
-<p>简单来说，事件时间是事件真实发生的时间，而处理时间是事件在计算引擎中被处理的时间，理想情况下，两者是相等的，但在实际情况下，它们之间差距的影响因素非常多，可能跟软件、硬件或数据有关，并且这个差距毫无规律可言，如下如图所示：</p>
-<p><img src="/images/flink/1-1.png" alt="Event time VS Processing time（图片来自 《Streaming Systems》）"> </p>
-<p>上面的问题给流计算带来了很多的问题，而且由于数据的无边界特性，业内通常的做法是将输入数据进行 window 操作（本质上还是按照时间切片），而对于一些关注 Event Time 的应用来说，按照 Processing Time 做 window 是完全无法满足需求的（流计算之前困扰大家最大的问题之一就是这个准确性的问题）。</p>
-<h3 id="Window-amp-Watermark"><a href="#Window-amp-Watermark" class="headerlink" title="Window &amp; Watermark"></a>Window &amp; Watermark</h3><p>目前常用的 window 类型有以下几种：</p>
-<p><img src="/images/flink/1-2.png" alt="Window Strategies（图片来自 《Streaming Systems》）"> </p>
-<ol>
-<li>Fixed Window：按时间切成固定大小的 window，是 aligned window 的一种；</li>
-<li>Sliding Window：也是一种 Fixed Window，但它有 fixed length 和 fixed period 两个设置；</li>
-<li>Sessions：一种 unaligned window，长度是未知的，一种动态的 window，比如分析用户的行为等。</li>
-</ol>
-<p>Window 在 Event time 和 Processing time 下都是有意义的，只是适用于不同的应用场景而已，而对于 Event time 场景，如何来保证一个窗口数据的完整性呢？而窗口数据的完整性又确定了数据的准确性。</p>
-<p>Watermark 就是来就解决这个问题的，它用于界定什么时间(时间戳)认为一个时间窗口内的数据已经全部到齐，之后晚于该 watermark 到达的数据则为迟到数据。</p>
-<h3 id="有状态计算"><a href="#有状态计算" class="headerlink" title="有状态计算"></a>有状态计算</h3><p>计算任务可以分为有状态计算和无状态计算：</p>
-<ol>
-<li>无状态计算：如果处理一个事件（或一条数据）的结果只跟该事件本身有关；</li>
-<li>有状态计算：计算结果还和之前处理过的事件有关，比如说基本的聚合计算，就是有状态计算。</li>
-</ol>
-<p>对于批处理，每次处理的都是全量数据，所以就不用考虑状态这个问题。而流处理，一般会借助外部存储系统实现状态保存（这个对应的 Flink 中 State 模块的内容）。</p>
-<h3 id="容错"><a href="#容错" class="headerlink" title="容错"></a>容错</h3><p>流计算另一个难点的是容错恢复，如何保证恢复之后作业状态的一致性，目前业内通用的解决方案采用的是 Chandy-Lamport 算法（有兴趣的可以看下 <a href="http://matt33.com/2019/10/27/paper-chandy-lamport/">Paper 阅读: Distributed Snapshots: Determining Global States of Distributed Systems</a>），包括 Structured Streaming 也采用的这个方案。</p>
-<p>到这里，把流计算的基础知识简单过了一下，想了解更多的同学，建议阅读一下 Google DataFlow 那篇论文或者《Streaming Systems》这本书（<a href="https://mp.weixin.qq.com/s/oBmRhRA-52CLRLXp6sZwEw" target="_blank" rel="external">Apache Flink 零基础入门（一）：基础概念解析</a> 这篇讲述得也不错）。</p>
-<h2 id="Why-Flink"><a href="#Why-Flink" class="headerlink" title="Why Flink?"></a>Why Flink?</h2><p>流计算领域的开源框架，不可谓不多，但到现在还能让大家记住的（或者对业内产生巨大影响的）其实并不多，通常大家对比的也就是：Storm/Spark Streaming/Flink。在 17 年之前，我们在面临流计算技术选型时还可能会徘徊一下，但如果放在现在，你会发现，几乎没有太大可比性，几个引擎的差距已经很大，简单对比一下（只列出了流计算中重点关注的特性，只是粗略的比较，勿喷）：</p>
-<ol>
-<li>Storm：没有 SQL 和高阶 API 的支持、无法支持 exactly once；</li>
-<li>Spark Streaming：对实时计算来说，微批处理天生是有架构上的缺陷；</li>
-<li>Structured Streaming：完全处于初级阶段，没有经过大规模生产业务的验证；</li>
-<li>Kafka Streams：目前没有自己的调度框架，不知道未来 on k8s 会不会在架构上做支持，要不然 kafka streams 要想应用大规模业务场景，维护成本太高，社区最好是能给出一套统一的解决方案，但是如果业务规模比较小，其实选 kafka streams 也不错，只维护一套系统，维护成本会低一些；</li>
-<li>Flink: 有 Streaming SQL 的支持，支持 exactly once 等等；</li>
-</ol>
-<p>一圈比较下来，你会发现 Flink 真的是流计算的最佳选择，当然选择 Flink 还有其他很多的原因，可以参考阿里官方给出这两篇文章：</p>
-<ol>
-<li><a href="https://mp.weixin.qq.com/s/AoSDPDKbTbjH9rviioK-5Q" target="_blank" rel="external">阿里巴巴为什么选择Apache Flink？</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/rt6nmSyU0IBZ8XPtcG9IPw" target="_blank" rel="external">Apache Flink，流计算？不仅仅是流计算！</a>；</li>
-</ol>
-<h2 id="Flink-架构"><a href="#Flink-架构" class="headerlink" title="Flink 架构"></a>Flink 架构</h2><p>Apache Flink 采用经典的分布式架构设计 —— Master/Slave 架构，Flink 集群的架构图如下图所示，这张图展示了其整体结构，但是很多内部细节并没有展示，我也翻了很多的博客，也没有找到一张特别满意的架构图。</p>
-<p><img src="/images/flink/1-3.png" alt="Flink 架构图（图片来自 Flink 官网）"> </p>
-<p>一个 Flink 集群，主要包含了两个核心组件：</p>
-<ol>
-<li>JobManager（master）：它会负责整个任务的协调工作，包括：调度 task、触发协调 Tasks 做 Checkpoint、协调容错恢复等等（HA 模式下，一个集群会启动多个 JobManager，但只会有一个处在 leader 状态，其他处在热备状态 —— standby）；</li>
-<li>TaskManager（workers）：负责执行一个 DataFlow Graph 的各个 tasks 以及 data streams 的 buffer 和数据交换。</li>
-</ol>
-<p>JobManager/TaskManager 都是进程级别，TaskManager 在启动时，会根据配置将其内部的资源分为多个 slot，每个 slot 只会启动一个 Task，Task 是线程级别，从这里可以看出 Flink 是多线程调度模型，一个 TM 中可能会有来自多个任务的 task，从资源利用的角度看，这样的设计是有一些收益的，但是从资源隔离的角度看，这种设计就不是那么好了，不过好在现在业内的使用方式基本都是 On Yarn 的单集群单作业模式，相当于把资源隔离这个问题避过去了，但不可否认，这种设计是有缺陷的。</p>
-<h3 id="Flink-部署"><a href="#Flink-部署" class="headerlink" title="Flink 部署"></a>Flink 部署</h3><p>关于 Flink 的部署，这里推荐一下这几篇文章，本文就没有必要再整理了：</p>
-<ol>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.8/ops/deployment/cluster_setup.html" target="_blank" rel="external">Standalone Cluster</a>；</li>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.8/ops/deployment/yarn_setup.html" target="_blank" rel="external">YARN Setup</a>;</li>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.8/ops/deployment/kubernetes.html" target="_blank" rel="external">Kubernetes Setup</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/PlcxA0jXgNO7E3xhUpLPTg" target="_blank" rel="external">Flink CookBook-环境准备</a>；</li>
-<li><a href="https://www.infoq.cn/article/zbBAGroBgtytDiBs*Xq9" target="_blank" rel="external">Apache Flink 零基础入门（二）：开发环境搭建和应用的配置、部署及运行</a>；</li>
-</ol>
-<h3 id="编译-Flink-源码"><a href="#编译-Flink-源码" class="headerlink" title="编译 Flink 源码"></a>编译 Flink 源码</h3><p>如果你想自己编译 Flink 安装包的话，可以参考 <a href="https://github.com/apache/flink#building-apache-flink-from-source" target="_blank" rel="external">Flink Readme - Building Apache Flink from Source</a>，这里给了几个不同的编译命令，最终的结果是一样，都可以正常编译出安装包：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 删除已有的 build，编译 flink binary</span></span><br><span class="line"><span class="comment"># 会执行测试 case，编译速度会比较慢</span></span><br><span class="line">mvn clean install/package</span><br><span class="line"></span><br><span class="line"><span class="comment"># 不编译 tests、QA plugins 和 JavaDocs，因此编译要更快一些</span></span><br><span class="line">mvn clean install/package -DskipTests -Dfast</span><br><span class="line"></span><br><span class="line"><span class="comment"># 如果你需要使用指定 hadoop 的版本，可以通过指定“-Dhadoop.version”来设置</span></span><br><span class="line">mvn clean instal/packagel -DskipTests -Dhadoop.version=2.6.1</span><br></pre></td></tr></table></figure>
-<p>最后生成的安装包就在 <code>flink-dist/target/flink-1.9-SNAPSHOT-bin</code> 下，在 flink 目录下也会生成一个 <code>build-target</code> 的软连。</p>
-<h2 id="Flink-示例"><a href="#Flink-示例" class="headerlink" title="Flink 示例"></a>Flink 示例</h2><p>这里有一个示例，见 <a href="https://github.com/wangzzu/flink/blob/1.9-note/flink-examples/flink-examples-streaming/src/main/java/org/apache/flink/streaming/examples/matt/RandomWordCount.java" target="_blank" rel="external">RandomWordCount</a>（后面的文章也会以这个示例讲述），这个示例比较简单，就是先模拟两个数据源，再对流做 union， 再做过滤，最后再做 WorkCount，这个作业可以在 Flink 工程中直接运行。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">RandomWordCount</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="comment">// get the execution environment</span></span><br><span class="line">        <span class="keyword">final</span> StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note 模拟两个数据源，它们会生成一行随机单词组（单词之间是空格分隔）</span></span><br><span class="line">        DataStream&lt;String&gt; inputStream = env.addSource(<span class="keyword">new</span> RandomWordCount.RandomStringSource());</span><br><span class="line">        DataStream&lt;String&gt; inputStream2 = env.addSource(<span class="keyword">new</span> RandomWordCount.RandomStringSource());</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 先对流做 union，然后做一个过滤后，做 word-count</span></span><br><span class="line">        inputStream.union(inputStream2)</span><br><span class="line">            .flatMap(<span class="keyword">new</span> FlatMapFunction&lt;String, Tuple2&lt;String, Integer&gt;&gt;() &#123;</span><br><span class="line">                <span class="meta">@Override</span></span><br><span class="line">                <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">flatMap</span><span class="params">(String value, Collector&lt;Tuple2&lt;String, Integer&gt;&gt; out)</span> </span>&#123;</span><br><span class="line">                    <span class="keyword">for</span> (String word : value.split(<span class="string">"\\s"</span>)) &#123;</span><br><span class="line">                        out.collect(Tuple2.of(word, <span class="number">1</span>));</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;)</span><br><span class="line">            .shuffle()</span><br><span class="line">            .filter(<span class="keyword">new</span> FilterFunction&lt;Tuple2&lt;String, Integer&gt;&gt;() &#123;</span><br><span class="line">                <span class="meta">@Override</span></span><br><span class="line">                <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">filter</span><span class="params">(Tuple2&lt;String, Integer&gt; value)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">                    <span class="keyword">if</span> (value.f0.startsWith(<span class="string">"a"</span>)) &#123;</span><br><span class="line">                        <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">                    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;).keyBy(<span class="number">0</span>).sum(<span class="number">1</span>)</span><br><span class="line">            .print()</span><br><span class="line">            .setParallelism(<span class="number">8</span>);</span><br><span class="line">        env.execute(<span class="string">"Random WordCount"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>开胃小菜到这里就结束了，后面会逐步给大家剖析 Flink 的内部实现原理与机制，其实整个 Flink 的代码可以三大块：</p>
-<ol>
-<li>分布式框架相关的内容，这块的内容，其实你会感觉很多系统有一些相似的地方，但是每套系统又只能自己去开发一遍，像 JobManager/TaskManager 之间的交互、内存管理、IO 管理等都属于这一部分；</li>
-<li>Flink 专门去解决 Streaming Process 问题而实现的设计，其实也就是 DataFlow 模型如何在 Flink 上实现的；</li>
-<li>SQL：这块比较特殊，算是比较单独的一块。</li>
-</ol>
-<hr>
-<h2 id="参考："><a href="#参考：" class="headerlink" title="参考："></a>参考：</h2><ol>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.9/concepts/programming-model.html" target="_blank" rel="external">Dataflow Programming Model</a>；</li>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.9/concepts/runtime.html" target="_blank" rel="external">Distributed Runtime Environment</a>；</li>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.9/internals/components.html" target="_blank" rel="external">Component Stack</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/TBzzGTNFTzVLjFQdzz-LuQ" target="_blank" rel="external">Apache Flink 进阶（一）：Runtime 核心机制剖析 ​</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/oBmRhRA-52CLRLXp6sZwEw" target="_blank" rel="external">Apache Flink 零基础入门（一）：基础概念解析</a>；</li>
-<li><a href="https://www.infoq.cn/article/zbBAGroBgtytDiBs*Xq9" target="_blank" rel="external">Apache Flink 零基础入门（二）：开发环境搭建和应用的配置、部署及运行</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/UeoOYX1n6pnedHh8VcY8OQ" target="_blank" rel="external">Flink SQL 系列 | 5 个 TableEnvironment 我该用哪个？</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/PlcxA0jXgNO7E3xhUpLPTg" target="_blank" rel="external">Flink CookBook-环境准备</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/l-x3wSxuIvPMgxZzwYxZkA" target="_blank" rel="external">Flink CookBook—Apach Flink核心知识介绍</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/FaAHwRV8AQgNFd7SB4BVMQ" target="_blank" rel="external">Flink CookBook—流式计算介绍</a>；</li>
-<li><a href="http://wuchong.me/blog/2016/05/03/flink-internals-overview/" target="_blank" rel="external">Flink 原理与实现：架构和拓扑概览</a>；</li>
-</ol>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第一篇，最近计划花个一到两个月的时间以最新的 Flink-1.9 代码为例把 Flink 的主要内容梳理一遍，这个系列文章的主要内容见 &lt;a href=&quot;https://github.com/wangzzu/
     
     </summary>
     

@@ -1,0 +1,391 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (九)：推理服务：大模型如何高效生成 Token | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</h1><div class="post-meta">Jun 29, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">4,969</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/06/29/llm-inference-serving/" href="/2026/06/29/llm-inference-serving/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#从训练到推理"><span class="toc-number">1.</span> <span class="toc-text">从训练到推理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#推理成本：Prefill、Decode-与-KV-Cache"><span class="toc-number">2.</span> <span class="toc-text">推理成本：Prefill、Decode 与 KV Cache</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Prefill-阶段：先读完上下文"><span class="toc-number">2.1.</span> <span class="toc-text">Prefill 阶段：先读完上下文</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Decode：逐-token-生成答案"><span class="toc-number">2.2.</span> <span class="toc-text">Decode：逐 token 生成答案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#KV-Cache：用显存换计算"><span class="toc-number">2.3.</span> <span class="toc-text">KV Cache：用显存换计算</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#服务系统：如何把-GPU-用满？"><span class="toc-number">3.</span> <span class="toc-text">服务系统：如何把 GPU 用满？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Batching：把请求合起来算"><span class="toc-number">3.1.</span> <span class="toc-text">Batching：把请求合起来算</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PagedAttention：管理-KV-Cache-的碎片"><span class="toc-number">3.2.</span> <span class="toc-text">PagedAttention：管理 KV Cache 的碎片</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Speculative-Decoding：减少大模型解码步数"><span class="toc-number">3.3.</span> <span class="toc-text">Speculative Decoding：减少大模型解码步数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#量化与低精度推理：降低单位-token-成本"><span class="toc-number">3.4.</span> <span class="toc-text">量化与低精度推理：降低单位 token 成本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#小结"><span class="toc-number">3.5.</span> <span class="toc-text">小结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#主流推理框架"><span class="toc-number">4.</span> <span class="toc-text">主流推理框架</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#行业演进：推理服务往哪里走？"><span class="toc-number">5.</span> <span class="toc-text">行业演进：推理服务往哪里走？</span></a></li></ol></div></div><div class="post-content"><p>如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。</p>
+<p>这里的“推理”需要先做一个区分。它既可以指 <strong>Inference Serving</strong>，也可以指 <strong>Reasoning Model</strong>。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。</p>
+<p>本文讨论的是第一种：<strong>推理服务</strong>。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。</p>
+<a id="more"></a>
+<p>简单来说，推理服务的本质，<strong>是在模型参数固定的情况下，把自回归 token 生成过程组织成高吞吐、低延迟、低成本、可扩展的在线系统</strong>。</p>
+<h2 id="从训练到推理"><a href="#从训练到推理" class="headerlink" title="从训练到推理"></a>从训练到推理</h2><p>训练和推理最大的区别是：<strong>训练会更新参数，推理不会更新参数</strong>。训练阶段，模型通过前向传播计算 loss，再通过反向传播更新参数；推理阶段，模型参数已经固定，系统只是在给定 prompt 的情况下调用模型，让它生成下一个 token。如下图所示：</p>
+<p><img src="/images/llm/llm-inference-serving-01.png" alt="训练 vs 推理"></p>
+<p>从函数角度看，训练完成后的大模型可以理解为一个固定函数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fθ(context) -&gt; P(next token | context)</span><br></pre></td></tr></table></figure>
+<p>其中，<code>θ</code> 是训练好的模型参数，<code>context</code> 是当前上下文。模型每次读取上下文，输出下一个 token 在整个词表上的概率分布；解码策略再从这个分布中选出具体 token。一次生成过程大致如下：</p>
+<p><img src="/images/llm/llm-inference-serving-02.png" alt="自回归生成流程"></p>
+<p>因此，推理服务不是一次性生成完整答案，而是一个不断循环的过程：<strong><code>上下文 -&gt; 概率分布 -&gt; 选择 token -&gt; 更新上下文 -&gt; 继续生成</code>。</strong>这正是大模型推理服务的工程难点来源：每生成一个 token，都要调度一次模型前向计算；每多一个用户请求，系统就多一份上下文和缓存压力；每拉长一次上下文，首 token 延迟和显存占用都会上升。</p>
+<p>线上推理服务通常关注以下指标：</p>
+<table>
+<thead>
+<tr>
+<th><strong>指标</strong></th>
+<th><strong>含义</strong></th>
+<th><strong>影响体验</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TTFT</td>
+<td>Time To First Token，首 token 延迟</td>
+<td>用户多久能看到第一个输出</td>
+</tr>
+<tr>
+<td>TPOT / ITL</td>
+<td>每个输出 token 的生成间隔</td>
+<td>流式输出是否顺滑</td>
+</tr>
+<tr>
+<td>Latency</td>
+<td>请求从开始到结束的总耗时</td>
+<td>端到端体验</td>
+</tr>
+<tr>
+<td>Throughput</td>
+<td>单位时间生成 token 数</td>
+<td>系统吞吐和服务成本</td>
+</tr>
+<tr>
+<td>Concurrency</td>
+<td>同时服务的请求数量</td>
+<td>高峰期承载能力</td>
+</tr>
+</tbody>
+</table>
+<p>这些指标之间存在天然权衡：</p>
+<ul>
+<li>吞吐 vs 延迟： batch 越大，GPU 利用率可能越高，但单个请求等待时间可能变长；</li>
+<li>长上下文 vs 成本： 上下文越长，能力可能越强，但 prefill 计算和 KV cache 显存都会增加；</li>
+<li>输出长度 vs 响应速度：输出越长，decode 步数越多，总耗时越高；</li>
+<li>并发能力 vs 显存占用：并发越高，每个请求的 KV cache 会叠加，占用更多显存。</li>
+</ul>
+<p>所以，推理服务真正要解决的问题，不只是“模型能不能生成答案”，而是：<strong>如何在固定模型参数下，把自回归生成过程调度成一个低延迟、高吞吐、低成本的在线系统</strong>。</p>
+<h2 id="推理成本：Prefill、Decode-与-KV-Cache"><a href="#推理成本：Prefill、Decode-与-KV-Cache" class="headerlink" title="推理成本：Prefill、Decode 与 KV Cache"></a>推理成本：Prefill、Decode 与 KV Cache</h2><p>理解推理服务，最关键的是先把一次请求拆开看。大模型生成答案不是一次性完成的，而是分成两个阶段：<strong>Prefill</strong> 和 <strong>Decode</strong>。前者负责“读懂输入”，后者负责“逐字生成”。这两个阶段的计算形态完全不同，也决定了推理服务的主要成本来源。</p>
+<p><img src="/images/llm/llm-inference-serving-03.png" alt="推理服务中的 Prefill 和 Decode"></p>
+<h3 id="Prefill-阶段：先读完上下文"><a href="#Prefill-阶段：先读完上下文" class="headerlink" title="Prefill 阶段：先读完上下文"></a>Prefill 阶段：先读完上下文</h3><p>Prefill 阶段负责处理用户输入的完整 prompt。由于输入 token 都是已知的，模型可以一次性并行计算它们的 attention、MLP 和 hidden states，并生成后续 Decode 阶段要复用的 KV Cache。可以把 Prefill 理解为 <strong><code>读题</code></strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">prompt 越长 -&gt; 输入 token 越多 -&gt; prefill 计算越多 -&gt; TTFT 越高</span><br></pre></td></tr></table></figure>
+<p>这就是为什么长文档问答、代码仓库分析、多轮长对话的首 token 往往更慢。模型不是“不想回答”，而是必须先把上下文完整读进去。</p>
+<p>从计算特征看，Prefill 更接近一次大规模矩阵-矩阵乘法，GPU 并行度高，通常属于 <strong>计算密集型（Compute-Bound）</strong> 阶段。它的速度主要受 GPU 算力影响，能够比较充分地利用硬件。Prefill 的最终产出主要有两个：</p>
+<ul>
+<li>完整 prompt 对应的 <strong>KV Cache</strong>；</li>
+<li>第一个生成 token 的概率分布。</li>
+</ul>
+<h3 id="Decode：逐-token-生成答案"><a href="#Decode：逐-token-生成答案" class="headerlink" title="Decode：逐 token 生成答案"></a>Decode：逐 token 生成答案</h3><p>Decode 阶段负责真正生成回答。它是<strong>自回归</strong>的：第 <code>t+1</code> 个 token 必须等第 <code>t</code> 个 token 生成之后才能继续。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">token_1 -&gt; token_2 -&gt; token_3 -&gt; ... -&gt; token_n</span><br></pre></td></tr></table></figure>
+<p>这带来一个天然限制：输出越长，decode step 越多，总耗时越高。即使每一步都很快，长答案也必须一步一步生成。可以把 Decode 理解为 <strong><code>写答案</code></strong>：Prefill 决定用户多久看到第一个 token，Decode 决定后续流式输出是否顺滑。</p>
+<table>
+<thead>
+<tr>
+<th><strong>指标</strong></th>
+<th><strong>主要受什么影响</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TTFT</td>
+<td>Prefill 成本、排队时间、prompt 长度</td>
+</tr>
+<tr>
+<td>TPOT / ITL</td>
+<td>Decode 速度、batch 调度、KV Cache 访问效率</td>
+</tr>
+</tbody>
+</table>
+<p>从计算特征看，Decode 每一步只处理最新生成的一个 token，并读取所有历史上下文的 KV Cache。这更接近矩阵-向量计算，batch 较小时并行度不高。因此，Decode 通常是 <strong>内存带宽密集型（Memory-Bandwidth Bound）</strong> 阶段。它的瓶颈往往不是 GPU 算力不够，而是需要不断从 HBM（High Bandwidth Memory，高带宽显存）读取模型权重和不断增长的 KV Cache，再送入片上 SRAM（Static Random Access Memory，静态随机存取存储器）参与计算。</p>
+<p>这也是为什么 Decode 阶段经常出现一种现象：GPU 计算单元并没有完全吃满，但生成速度仍然上不去。瓶颈不在“算得慢”，而在“数据搬得慢”。</p>
+<h3 id="KV-Cache：用显存换计算"><a href="#KV-Cache：用显存换计算" class="headerlink" title="KV Cache：用显存换计算"></a>KV Cache：用显存换计算</h3><p>Transformer 在生成新 token 时，需要关注前面所有历史 token。如果每一步都重新计算历史上下文的 Key 和 Value，计算成本会非常高。因此，推理系统会引入 <strong>KV Cache</strong>：把历史 token 在各层 attention 中的 Key / Value 缓存下来，后续 Decode 时直接复用。</p>
+<p><img src="/images/llm/llm-inference-serving-04.png" alt="KV Cache 作用"></p>
+<p>KV Cache 的核心价值是：<strong>用显存换计算</strong>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">没有 KV Cache：每一步都重新计算历史上下文的 K/V</span><br><span class="line">有 KV Cache：只计算新 token 的 K/V，并复用历史 K/V</span><br></pre></td></tr></table></figure>
+<p>这样可以避免大量重复计算，让 Decode 阶段从“反复处理整个历史上下文”，变成“处理新 token + 读取历史缓存”。但 KV Cache 也带来了新的瓶颈：<strong>显存占用</strong>。它的大小可以粗略估算为（实际单卡显存还会受 Tensor Parallel、Pipeline Parallel、GQA/MQA、beam search、多采样等因素影响）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KV Cache ≈ 2 × layers × tokens × kv_heads × head_dim × bytes × batch_size</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<ul>
+<li><code>2</code> 表示 Key 和 Value；</li>
+<li><code>layers</code> 是模型层数；</li>
+<li><code>tokens</code> 是上下文长度，包括 prompt 和已生成 token；</li>
+<li><code>kv_heads</code> 是 KV head 数量；</li>
+<li><code>head_dim</code> 是每个 head 的维度；</li>
+<li><code>bytes</code> 是每个数值占用的字节数；</li>
+<li><code>batch_size</code> 表示并发 batch 中的请求规模。</li>
+</ul>
+<p>这个公式说明：上下文越长、输出越长、并发越高，KV Cache 越大。对于长上下文任务，KV Cache 的显存占用甚至可能接近或超过模型权重本身。</p>
+<table>
+<thead>
+<tr>
+<th><strong>场景</strong></th>
+<th><strong>为什么 KV Cache 压力大</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>长 prompt</td>
+<td>Prefill 后初始 KV Cache 就很长</td>
+</tr>
+<tr>
+<td>长输出</td>
+<td>每生成一个 token，都要追加新的 K/V</td>
+</tr>
+<tr>
+<td>高并发</td>
+<td>每个请求都要维护自己的 KV Cache</td>
+</tr>
+<tr>
+<td>多轮对话</td>
+<td>历史消息越长，缓存越大</td>
+</tr>
+<tr>
+<td>多采样 / beam search</td>
+<td>多条候选路径会增加缓存管理压力</td>
+</tr>
+</tbody>
+</table>
+<p>所以，KV Cache 既是优化，也是新的瓶颈。它解决了重复计算问题，却把压力转移到了显存容量、显存带宽和缓存调度上。现代推理优化，很大一部分都围绕 KV Cache 展开：</p>
+<ol>
+<li><strong>PagedAttention</strong>： 像操作系统分页一样管理 KV Cache，减少显存碎片；</li>
+<li><strong>KV Cache 量化</strong>：用 INT8 / INT4 等低精度存储 K/V，降低显存占用；</li>
+<li><strong>KV Cache 压缩</strong>：通过低秩、稀疏化或聚合方法减少缓存规模；</li>
+<li><strong>选择性保留</strong>：只保留更重要的历史 token 或注意力信息；</li>
+<li><strong>Prefix Cache</strong>：复用相同系统提示词、长文档前缀或多轮对话前缀；</li>
+<li><strong>Chunked Prefill</strong>：把长 prompt 分块处理，降低首 token 阻塞和调度压力。</li>
+</ol>
+<p>因此，推理服务的关键问题不是“模型能不能跑起来”，而是：<strong>如何在长上下文、高并发、长输出的情况下，高效管理 KV Cache，并把 Prefill 和 Decode 调度好</strong>。</p>
+<h2 id="服务系统：如何把-GPU-用满？"><a href="#服务系统：如何把-GPU-用满？" class="headerlink" title="服务系统：如何把 GPU 用满？"></a>服务系统：如何把 GPU 用满？</h2><p>前面讲的是单个请求的成本结构：Prefill 负责读上下文，Decode 负责逐 token 生成，KV Cache 决定长上下文和高并发的显存压力。但线上推理服务真正难的是：请求不是一个一个安静排队来的，而是同时到达、长度不同、输出不同、优先级不同。系统既要让单个用户感觉快，又要让整体 GPU 利用率足够高。推理服务要解决的核心矛盾是：</p>
+<ul>
+<li>单个请求希望低延迟；</li>
+<li>整体系统希望高吞吐；</li>
+<li>GPU 希望持续满载；</li>
+<li>显存希望尽量不碎片化。</li>
+</ul>
+<p>所以，推理服务系统的关键能力，不只是“跑模型”，而是 <strong>batching、调度、缓存管理和解码优化</strong>。</p>
+<p><img src="/images/llm/llm-inference-serving-05.png" alt="在线推理系统优化方向"></p>
+<h3 id="Batching：把请求合起来算"><a href="#Batching：把请求合起来算" class="headerlink" title="Batching：把请求合起来算"></a>Batching：把请求合起来算</h3><p>GPU 擅长大规模并行计算。如果一个请求一个请求跑，矩阵规模小，GPU 利用率会很低。Batching 的核心思想是：把多个请求合并成一个 batch，一起送进模型计算。</p>
+<table>
+<thead>
+<tr>
+<th><strong>方式</strong></th>
+<th><strong>核心思路</strong></th>
+<th><strong>适用性</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>静态 batching</td>
+<td>等一批请求凑齐后一起计算</td>
+<td>离线任务更适合，在线延迟较差</td>
+</tr>
+<tr>
+<td>动态 batching</td>
+<td>在短时间窗口内合并请求</td>
+<td>在线服务常用，需要调度策略</td>
+</tr>
+<tr>
+<td>Continuous batching</td>
+<td>Decode 过程中持续加入新请求</td>
+<td>适合 LLM 流式生成</td>
+</tr>
+<tr>
+<td>In-flight batching</td>
+<td>正在生成的 batch 中动态增删请求</td>
+<td>更适合高并发在线推理</td>
+</tr>
+</tbody>
+</table>
+<p>静态 batching 和早期动态 batching 最大的问题是：batch 一旦形成，内部请求长度不一致就会造成浪费。短请求先结束，但长请求还在生成，GPU slot 不能被及时复用。Continuous batching 这里的思想是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">请求结束 -&gt; 释放 slot</span><br><span class="line">新请求到来 -&gt; 立即补进 batch</span><br></pre></td></tr></table></figure>
+<p>这样可以让 Decode 阶段的 batch 始终保持较高利用率，显著提升吞吐。</p>
+<blockquote>
+<p>在很多语境下，Continuous Batching 和 In-flight Batching 都是在描述“生成过程中动态加入/移除请求”的迭代级调度思想，不同框架叫法和实现细节略有差异。</p>
+</blockquote>
+<h3 id="PagedAttention：管理-KV-Cache-的碎片"><a href="#PagedAttention：管理-KV-Cache-的碎片" class="headerlink" title="PagedAttention：管理 KV Cache 的碎片"></a>PagedAttention：管理 KV Cache 的碎片</h3><p>Batching 提高了 GPU 计算利用率，但也放大了 KV Cache 的管理问题。不同请求的 prompt 长度、输出长度都不一样，KV Cache 会在生成过程中动态增长；有的请求已经结束并释放缓存，有的请求还在继续生成。如果要求 KV Cache 在显存中连续存放，就很容易产生碎片：表面上还有剩余显存，但找不到足够大的连续空间容纳新请求。</p>
+<p>PagedAttention 的思路来自操作系统的虚拟内存管理：不再把每个请求的 KV Cache 当作一整段连续显存，而是切分成许多固定大小的 block。逻辑上，一个序列的 KV Cache 仍然是连续的；物理上，这些 block 可以分散存放在 GPU 显存的不同位置，并通过 block table 完成逻辑块到物理块的映射。这样做的价值很直接：</p>
+<ul>
+<li>减少 KV Cache 显存碎片；</li>
+<li>支持不同长度请求混合调度；</li>
+<li>方便请求结束后回收 block；</li>
+<li>支持更大的 batch 和更高并发；</li>
+<li>在 beam search / parallel sampling 中更容易共享前缀缓存。</li>
+</ul>
+<p>vLLM 的核心贡献就在这里：通过 PagedAttention，把 KV Cache 管理从“连续显存分配”变成“分页式块管理”。在论文实验中，这种方式显著降低了显存浪费，并带来了数倍级吞吐提升。</p>
+<p><img src="/images/llm/llm-inference-serving-06.png" alt="PagedAttention"></p>
+<h3 id="Speculative-Decoding：减少大模型解码步数"><a href="#Speculative-Decoding：减少大模型解码步数" class="headerlink" title="Speculative Decoding：减少大模型解码步数"></a>Speculative Decoding：减少大模型解码步数</h3><p>Decode 慢的根本原因是自回归串行生成：大模型每一步通常只确认一个 token。Speculative Decoding，也叫投机解码，试图减少大模型的串行 decode 轮次。它的基本流程是：</p>
+<ol>
+<li>用一个较小的 Draft Model 先快速生成多个候选 token；</li>
+<li>用目标大模型 Target Model 一次性并行验证这些 token；</li>
+<li>被接受的 token 直接输出；</li>
+<li>如果某个 token 被拒绝，就从该位置回退并重新采样。</li>
+</ol>
+<p><img src="/images/llm/llm-inference-serving-07.png" alt="Speculative Decoding"></p>
+<p>它的优势是：如果 Draft Model 质量足够好，目标模型一次可以接受多个 token，生成速度会明显提升。但它也有代价：</p>
+<ul>
+<li>Draft Model 质量：质量越好，接受率越高；</li>
+<li>Draft Model 成本：草稿模型本身也要消耗算力；</li>
+<li>验证实现：需要额外调度和并行验证逻辑；</li>
+<li>任务类型：创造性强或分布不稳定的任务接受率可能下降。</li>
+</ul>
+<p>所以，投机解码不是“免费加速”，而是用一个便宜模型和更复杂的系统，换取目标大模型更少的 decode 轮次。</p>
+<h3 id="量化与低精度推理：降低单位-token-成本"><a href="#量化与低精度推理：降低单位-token-成本" class="headerlink" title="量化与低精度推理：降低单位 token 成本"></a>量化与低精度推理：降低单位 token 成本</h3><p>量化的目标很直接：用更低的数值精度存储或计算模型权重、激活和 KV Cache，从而降低显存占用、提升吞吐、降低成本。</p>
+<table>
+<thead>
+<tr>
+<th><strong>方案</strong></th>
+<th><strong>特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP16 / BF16</td>
+<td>常见推理精度，稳定性好</td>
+</tr>
+<tr>
+<td>FP8</td>
+<td>显存和吞吐更优，对硬件、校准和算子支持要求更高</td>
+</tr>
+<tr>
+<td>INT8</td>
+<td>常见部署量化方案，质量损失通常可控</td>
+</tr>
+<tr>
+<td>INT4 / GPTQ / AWQ</td>
+<td>显存节省明显，适合成本敏感场景，但质量风险更高</td>
+</tr>
+<tr>
+<td>KV Cache INT8 / INT4</td>
+<td>直接降低长上下文和高并发的缓存压力</td>
+</tr>
+</tbody>
+</table>
+<p>量化的本质是权衡：<code>更低显存 + 更高吞吐 + 更低成本</code> VS <code>校准复杂度 + 数值误差 + 可能的质量损失</code>。对推理服务来说，量化不仅是“模型变小”，更重要的是降低单位 token 成本。尤其在长上下文和高并发场景下，KV Cache 量化往往和权重量化一样关键。</p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>这一节的核心可以压缩成一句话：Batching 解决 GPU 利用率，PagedAttention 解决 KV Cache 管理，Speculative Decoding 解决 Decode 串行瓶颈，量化解决单位 token 成本。</p>
+<h2 id="主流推理框架"><a href="#主流推理框架" class="headerlink" title="主流推理框架"></a>主流推理框架</h2><p>一个成熟的推理系统，本质上是在做四件事：</p>
+<ol>
+<li><strong>让 GPU 尽量满</strong>：通过 batching、调度和并行执行提高硬件利用率；</li>
+<li><strong>让 KV Cache 尽量省</strong>：通过分页管理、压缩、量化和复用降低显存压力；</li>
+<li><strong>让请求调度尽量稳</strong>：在不同长度、不同优先级、不同 SLA 的请求之间做资源分配；</li>
+<li><strong>让单位 token 成本尽量低</strong>：通过量化、低精度、多机并行和模型路由降低服务成本。</li>
+</ol>
+<p>因此，推理框架不是简单的 HTTP server，而是把模型执行、KV Cache 管理、batch 调度、解码策略、量化、多卡并行和资源隔离组织成一个在线系统。不同框架的设计哲学不同，适合的场景也不同。</p>
+<table>
+<thead>
+<tr>
+<th><strong>框架</strong></th>
+<th><strong>核心取向</strong></th>
+<th><strong>关键技术</strong></th>
+<th><strong>优势</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vLLM</td>
+<td>用高效 KV Cache 管理换高吞吐</td>
+<td>PagedAttention、Continuous Batching</td>
+<td>吞吐高，社区活跃，易用性好，支持 NVIDIA / AMD 等多种硬件</td>
+<td>高并发、吞吐敏感的在线服务</td>
+</tr>
+<tr>
+<td>TensorRT-LLM</td>
+<td>榨干 NVIDIA GPU 性能</td>
+<td>TensorRT 编译、kernel fusion、FP8 / INT4、in-flight batching</td>
+<td>NVIDIA 硬件上性能极强，和 Triton / CUDA 生态结合紧密</td>
+<td>NVIDIA 技术栈下的极致性能部署</td>
+</tr>
+<tr>
+<td>Hugging Face TGI</td>
+<td>Hugging Face 生态早期重要 serving 框架</td>
+<td>Continuous Batching、Tensor Parallel、Rust 服务核心</td>
+<td>和 HF Hub / Transformers 生态集成好，但当前已进入维护模式</td>
+<td>快速上线、标准模型服务、HF 生态用户</td>
+</tr>
+<tr>
+<td>SGLang</td>
+<td>面向复杂生成工作流的 runtime</td>
+<td>RadixAttention、结构化生成、并发调度</td>
+<td>适合多轮、多分支、工具调用和复杂 prompt workflow</td>
+<td>Agent、结构化输出、复杂 serving workflow</td>
+</tr>
+<tr>
+<td>llama.cpp</td>
+<td>本地/边缘/低成本推理</td>
+<td>GGUF、CPU/GPU 混合、INT4/INT8 量化</td>
+<td>轻量、可本地运行，硬件门槛低</td>
+<td>本地部署、边缘设备、个人推理服务</td>
+</tr>
+</tbody>
+</table>
+<p>这些框架体现的是工程里的典型权衡：<strong>性能（Performance）、生产力（Productivity）和可移植性（Portability）</strong> 很难同时拉满。更准确地说，推理框架没有绝对最优，只有场景最优：如果目标是高并发在线吞吐，优先看 vLLM；如果目标是在 NVIDIA GPU 上追求极致性能，TensorRT-LLM 更合适；如果模型和部署链路都在 Hugging Face 生态里，TGI 上手最快；如果要做复杂 Agent runtime 或结构化生成，SGLang 更有优势；如果是本地、边缘或低成本部署，llama.cpp 是最轻量的选择。</p>
+<h2 id="行业演进：推理服务往哪里走？"><a href="#行业演进：推理服务往哪里走？" class="headerlink" title="行业演进：推理服务往哪里走？"></a>行业演进：推理服务往哪里走？</h2><p>推理服务正在从“把模型跑起来”，走向“把每个 token 的成本、延迟和稳定性做到极致”。早期部署一个模型，重点是能不能加载权重、能不能返回结果。现在的推理服务要面对更复杂的场景：长上下文、多轮对话、多工具调用、多模态输入、Agent 任务流，以及不断增长的并发和成本压力。</p>
+<p><img src="/images/llm/llm-inference-serving-08.png" alt="推理服务演进"></p>
+<table>
+<thead>
+<tr>
+<th><strong>趋势</strong></th>
+<th><strong>核心变化</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KV Cache 成为一等公民</td>
+<td>长上下文和高并发让缓存管理成为系统核心</td>
+</tr>
+<tr>
+<td>Prefill / Decode 分离</td>
+<td>两个阶段资源特征不同，可能采用不同调度和硬件策略</td>
+</tr>
+<tr>
+<td>投机解码常态化</td>
+<td>用 draft model 或 draft head 换更低 decode 延迟</td>
+</tr>
+<tr>
+<td>低精度深入部署</td>
+<td>FP8、INT8、INT4、KV 量化会按场景分层使用</td>
+</tr>
+<tr>
+<td>Agent Runtime 融合</td>
+<td>模型不只生成文本，还要调用工具、维护状态、执行任务</td>
+</tr>
+</tbody>
+</table>
+<p>未来推理服务比拼的，不再是单个模型“能不能跑起来”或“单次生成有多快”，而是整体系统效率：</p>
+<ol>
+<li>同样 GPU，谁能服务更多 token；</li>
+<li>同样延迟，谁能支持更长上下文；</li>
+<li>同样成本，谁能提供更稳定的体验；</li>
+<li>同样模型，谁能把调度、缓存和解码优化得更好。</li>
+</ol>
+<p>所以，推理服务的本质不是部署一个模型 API，而是把模型权重、KV Cache、batch 调度、解码策略、量化、多机并行和线上 SLA 组织成一个稳定、可扩展、可控成本的在线系统。</p>
+<p>放回整个 LLM 训练与服务链路中看：<strong>预训练和后训练决定模型能力，分布式训练决定模型如何被训练出来，而推理服务决定这些能力能否以可承受的成本、稳定地交付给真实用户</strong>。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/06/29/llm-inference-serving/" data-id="cmqzfdxwu0000aklwcbr6oi1s" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/06/28/llm-distributed-training/" class="next">LLM 系列 (八)：分布式训练：千卡集群如何训大模型</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/06/29/llm-inference-serving/';
+var disqus_title = 'LLM 系列 (九)：推理服务：大模型如何高效生成 Token';
+var disqus_url = 'http://matt33.com/2026/06/29/llm-inference-serving/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/06/29/llm-inference-serving/">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/28/llm-distributed-training/">LLM 系列 (八)：分布式训练：千卡集群如何训大模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/27/llm-post-training-alignment/">LLM 系列 (七)：后训练与对齐：从续写器到协作者</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/26/llm-pretraining/">LLM 系列 (六)：预训练的本质：从预测下一个 Token 到通用能力</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/24/llm-dense-moe/">LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/23/llm-transformer-architecture/">LLM 系列 (四)：Transformer 架构篇：大模型为什么选择了 Transformer</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/22/llm-algorithm-principles/">LLM 系列 (三)：算法原理篇：机器是如何学会语言的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/21/llm-math-basics/">LLM 系列 (二)：机器如何把语言变成数学</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/19/llm-ai-to-llm/">LLM 系列 (一)：从 AI 到 LLM</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/10/31/statefun-serverless-internals/">Stateful Serverless 背后的 Flink StateFun 内部机制实现【译】</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
