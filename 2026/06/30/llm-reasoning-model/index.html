@@ -1,0 +1,238 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (十)：推理模型：大模型如何从回答走向思考 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (十)：推理模型：大模型如何从回答走向思考</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (十)：推理模型：大模型如何从回答走向思考</h1><div class="post-meta">Jun 30, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">3,833</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/06/30/llm-reasoning-model/" href="/2026/06/30/llm-reasoning-model/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么需要推理模型？"><span class="toc-number">1.</span> <span class="toc-text">为什么需要推理模型？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#推理模型的本质：从答案生成到计算展开"><span class="toc-number">2.</span> <span class="toc-text">推理模型的本质：从答案生成到计算展开</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#主流技术路线：CoT、Verifier-与-RLVR"><span class="toc-number">3.</span> <span class="toc-text">主流技术路线：CoT、Verifier 与 RLVR</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CoT：让模型学会展开步骤"><span class="toc-number">3.1.</span> <span class="toc-text">CoT：让模型学会展开步骤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Verifier：从“像对”走向“真的对”"><span class="toc-number">3.2.</span> <span class="toc-text">Verifier：从“像对”走向“真的对”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RLVR：用可验证奖励强化推理策略"><span class="toc-number">3.3.</span> <span class="toc-text">RLVR：用可验证奖励强化推理策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Distillation：把强推理能力迁移给小模型"><span class="toc-number">3.4.</span> <span class="toc-text">Distillation：把强推理能力迁移给小模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Thinking-Budget：按任务分配思考成本"><span class="toc-number">3.5.</span> <span class="toc-text">Thinking Budget：按任务分配思考成本</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#业内实践与核心挑战"><span class="toc-number">4.</span> <span class="toc-text">业内实践与核心挑战</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#未来演进与总结：从会思考到会行动"><span class="toc-number">5.</span> <span class="toc-text">未来演进与总结：从会思考到会行动</span></a></li></ol></div></div><div class="post-content"><p>如果说推理服务回答的是“模型如何更快、更便宜地生成 token”，那么推理模型回答的就是另一个更接近能力本质的问题：模型如何在复杂任务中不急着给出结论，而是先分解问题、展开推导、检查约束、验证结果，再输出更可靠的答案。</p>
+<p>这里的“推理”不再是 <strong>Inference Serving</strong>，而是 <strong>Reasoning</strong>。前者关注系统效率：吞吐、延迟、KV Cache、batch 调度和单位 token 成本；后者关注能力机制：模型为什么愿意多想几步，为什么数学、代码、逻辑和规划任务需要更多 test-time compute，为什么 DeepSeek-R1、OpenAI o 系列、Qwen3 thinking mode 都把“思考过程”和“推理预算”变成核心能力。</p>
+<a id="more"></a>
+<p>简单来说，推理模型的本质，是把一部分能力提升从训练阶段转移到推理阶段，让模型用更多生成、搜索、验证和反思，换取更高的问题求解质量。</p>
+<h2 id="为什么需要推理模型？"><a href="#为什么需要推理模型？" class="headerlink" title="为什么需要推理模型？"></a>为什么需要推理模型？</h2><p>普通 Chat Model 解决的是“如何快速给出一个符合用户意图的回答”，但很多复杂任务并不是看到问题就能直接输出结论。数学证明、代码修复、复杂规划、科研分析、长链工具调用，本质上都需要一个过程：</p>
+<ul>
+<li><strong>理解问题 -&gt; 分解目标 -&gt; 推导中间步骤 -&gt; 检查约束 -&gt; 验证结果 -&gt; 修正答案</strong></li>
+</ul>
+<p>传统 Chat Model 的问题在于：它往往会直接把最终回答生成出来。这个回答可能很流畅、很像正确答案，但中间推导并不稳定。一旦某个中间步骤出错，后续生成仍然可能沿着错误方向继续补全，最后得到一个“表达完整但逻辑错误”的结果。这就是推理模型出现的背景：<strong>大模型已经具备了很多知识和模式，但在复杂任务上，缺少稳定展开、验证和修正的机制。</strong></p>
+<p><img src="/images/llm/llm-reasoning-model-01.png" alt="普通 Chat Model vs Reasoning Model"></p>
+<p>从任务类型看，推理模型更适合处理那些 <strong>不能一步到位、必须保持约束、需要验证结果</strong> 的任务：</p>
+<ol>
+<li><strong>数学推导</strong>：不能只猜最终答案，中间步骤必须成立，需要公式变换、多步推导和答案校验；</li>
+<li><strong>代码生成</strong>：不能只生成“看起来像代码”的文本，还要满足需求约束、边界条件和可运行性；</li>
+<li><strong>逻辑推理</strong>：前提、结论和中间状态必须一致，不能在多步推导中自相矛盾；</li>
+<li><strong>Agent 任务</strong>：需要计划、执行、观察反馈，并根据环境结果调整下一步动作；</li>
+<li><strong>科研分析</strong>：需要提出假设、整合证据、检查反例，并明确不确定性。</li>
+</ol>
+<h2 id="推理模型的本质：从答案生成到计算展开"><a href="#推理模型的本质：从答案生成到计算展开" class="headerlink" title="推理模型的本质：从答案生成到计算展开"></a>推理模型的本质：从答案生成到计算展开</h2><p>大模型的底层形式仍然是自回归生成器：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(next token | context)</span><br></pre></td></tr></table></figure>
+<p>也就是说，模型每一步做的事情，仍然是根据当前上下文预测下一个 token。推理模型并没有脱离这个基本机制，它改变的是 <strong>生成过程的组织方式</strong>。普通回答模式更像：</p>
+<ul>
+<li>问题 -&gt; 直接生成答案</li>
+</ul>
+<p>推理模型则把一次回答展开成更长的计算过程：</p>
+<ul>
+<li>问题 -&gt; 问题分解 -&gt; 中间推导 -&gt; 检查 / 验证 -&gt; 最终答案</li>
+</ul>
+<p>可以把它理解成一种 <strong>test-time compute scaling</strong>：模型在推理阶段投入更多 token、更多时间和更多计算，用更高的推理成本换取复杂任务上更高的成功率。</p>
+<p><img src="/images/llm/llm-reasoning-model-02.png" alt="推理模型计算过程"></p>
+<p><em>推理模型计算过程</em></p>
+<p>推理模型本质上仍然是在生成 token。只是经过特定的后训练、强化学习和推理策略之后，模型学会在困难任务中先生成有助于求解的中间状态，再输出最终答案。推理模型的能力提升通常来自三个机制：</p>
+<ol>
+<li>中间步骤展开： 把复杂问题拆成更小、更容易求解的子问题；</li>
+<li>自我检查 / 外部验证：判断推导是否满足约束，结果是否正确；</li>
+<li>推理预算扩展：对困难任务投入更多 token、时间和计算。</li>
+</ol>
+<p>这也解释了为什么推理模型通常更慢。它不是直接从问题跳到答案，而是在输出前后做了更多中间计算。简单问题上，这种额外计算可能显得多余；复杂问题上，它往往能显著提高稳定性和正确率。</p>
+<p>所以，推理模型的本质不是“神秘地拥有思考”，而是：<strong>把原本一次性的答案生成，改造成一个可展开、可检查、可修正的计算过程</strong>。</p>
+<h2 id="主流技术路线：CoT、Verifier-与-RLVR"><a href="#主流技术路线：CoT、Verifier-与-RLVR" class="headerlink" title="主流技术路线：CoT、Verifier 与 RLVR"></a>主流技术路线：CoT、Verifier 与 RLVR</h2><p>Prompt 可以诱发模型展开步骤，但真正稳定的推理模型，通常依赖后训练、可验证反馈、强化学习和推理时计算共同塑形。它背后通常是一整套后训练机制：</p>
+<ul>
+<li>先让模型学会展开中间步骤；</li>
+<li>再让模型知道哪些结果是对的；</li>
+<li>最后用可验证奖励强化更有效的推理策略。</li>
+</ul>
+<p>可以把主流路线概括成五个环节：</p>
+<p><img src="/images/llm/llm-reasoning-model-03.png" alt="推理增强路径"></p>
+<h3 id="CoT：让模型学会展开步骤"><a href="#CoT：让模型学会展开步骤" class="headerlink" title="CoT：让模型学会展开步骤"></a>CoT：让模型学会展开步骤</h3><p>CoT（Chain-of-Thought，思维链）让模型在回答前生成中间推理步骤：</p>
+<ul>
+<li>问题 -&gt; 分析步骤 -&gt; 中间结论 -&gt; 最终答案</li>
+</ul>
+<p>它的价值是降低复杂任务“一步到位”的难度。模型不必直接从问题跳到答案，而是可以把问题拆成多个中间状态，逐步逼近结果。但 CoT 不是万能的：</p>
+<ul>
+<li>会写步骤，不代表步骤一定正确；</li>
+<li>中间过程可能自洽，但事实或计算是错的；</li>
+<li>推理链越长，越可能引入新错误；</li>
+<li>完整暴露思维链还会带来安全、隐私和可控性问题。</li>
+</ul>
+<p>所以，现代推理模型通常不会只依赖 CoT，而会进一步引入验证器和强化学习。</p>
+<h3 id="Verifier：从“像对”走向“真的对”"><a href="#Verifier：从“像对”走向“真的对”" class="headerlink" title="Verifier：从“像对”走向“真的对”"></a>Verifier：从“像对”走向“真的对”</h3><p>Verifier 的作用是<strong>验证结果</strong>，而不是判断回答风格。对于数学、代码、逻辑和工具任务，很多结果可以被自动检查：</p>
+<ul>
+<li>数学： 最终答案是否匹配，推导是否满足约束；</li>
+<li>代码：单元测试、编译检查、静态分析；</li>
+<li>逻辑题：是否违反规则或前提；</li>
+<li>工具调用：API 参数是否正确，执行结果是否符合目标；</li>
+<li>检索问答：答案是否被证据支持。</li>
+</ul>
+<p><img src="/images/llm/llm-reasoning-model-04.png" alt="Verifier 流程"></p>
+<p>这一步非常关键，因为语言模型天然擅长生成“看起来像正确答案”的文本，但推理任务真正需要的是结果满足约束。</p>
+<h3 id="RLVR：用可验证奖励强化推理策略"><a href="#RLVR：用可验证奖励强化推理策略" class="headerlink" title="RLVR：用可验证奖励强化推理策略"></a>RLVR：用可验证奖励强化推理策略</h3><p>RLVR，即 <strong>Reinforcement Learning with Verifiable Rewards</strong>，可以翻译为“可验证奖励强化学习”。它的核心思想是：如果一个任务的结果可以自动判断对错，就可以把验证结果转成 reward，让模型通过强化学习学会更有效的推理策略。</p>
+<p><img src="/images/llm/llm-reasoning-model-05.png" alt="RLVR 用可验证反馈训练模型"></p>
+<p>DeepSeek-R1 的关键启发就在这里。公开报告中，R1-Zero 在没有 SFT 冷启动的情况下，直接通过大规模 RL 激发出推理行为，出现了反思、回溯和自我修正等现象；但它也存在可读性差、语言混杂等问题。DeepSeek-R1 再引入 cold-start 数据和多阶段训练，改善了可读性和综合表现。</p>
+<p>这说明一个重要趋势：当 reward 足够明确时，强化学习不只是对齐话术，也可以放大数学、代码和复杂推理能力（不过，RLVR 适合结果可自动验证的任务，比如数学、代码等；但是像开放写作、价值判断和复杂产品体验仍然需要偏好模型、人类评估或多维 reward）。</p>
+<h3 id="Distillation：把强推理能力迁移给小模型"><a href="#Distillation：把强推理能力迁移给小模型" class="headerlink" title="Distillation：把强推理能力迁移给小模型"></a>Distillation：把强推理能力迁移给小模型</h3><p>强推理模型通常推理成本高、延迟高、部署贵。因此，行业常用蒸馏把强模型的推理能力迁移给更小模型。典型流程是：</p>
+<ol>
+<li>强推理模型生成高质量推理轨迹；</li>
+<li>用 verifier / 测试器过滤正确样本；</li>
+<li>用这些样本微调小模型；</li>
+<li>小模型获得部分推理能力。</li>
+</ol>
+<p>这也是 DeepSeek-R1 Distill 系列和很多开源推理模型的重要路线。<strong>蒸馏的价值是降低部署成本</strong>，但它也有边界：小模型可以模仿强模型的推理轨迹，却不一定完整继承强模型的搜索能力、纠错能力和复杂任务泛化能力。</p>
+<h3 id="Thinking-Budget：按任务分配思考成本"><a href="#Thinking-Budget：按任务分配思考成本" class="headerlink" title="Thinking Budget：按任务分配思考成本"></a>Thinking Budget：按任务分配思考成本</h3><p>不是所有问题都需要深度思考，比如：</p>
+<ul>
+<li>“北京今天几点？” -&gt; 快速回答；</li>
+<li>“证明这个算法复杂度” -&gt; 多步推理；</li>
+<li>“修复这个代码仓库 bug” -&gt; 计划 + 工具 + 验证。</li>
+</ul>
+<p>因此，推理模型还需要学会控制“思考成本”。简单问题快速回答，复杂问题分配更多 token、更多时间和更多验证步骤。</p>
+<p>Qwen3 的 thinking / non-thinking 统一框架和 thinking budget 就体现了这个方向：模型不应该所有问题都慢慢想，而应该根据任务复杂度动态分配推理预算。</p>
+<p>简单总结一下：CoT 解决“怎么展开”，Verifier 解决“怎么判断对错”，RLVR 解决“怎么把正确反馈变成能力”，Distillation 解决“怎么降低成本”，Thinking Budget 解决“什么时候该想多久”。</p>
+<h2 id="业内实践与核心挑战"><a href="#业内实践与核心挑战" class="headerlink" title="业内实践与核心挑战"></a>业内实践与核心挑战</h2><p>推理模型的发展，不是单个模型突然“变聪明”的故事，而是一条技术路线逐渐清晰的过程：从让模型写出推理步骤，到用验证器判断结果，再到用强化学习把“可验证正确”变成训练信号，最后进一步控制推理成本。</p>
+<table>
+<thead>
+<tr>
+<th><strong>模型 / 工作</strong></th>
+<th><strong>关键设计</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>行业启发</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI o 系列</td>
+<td>强调 reasoning、test-time compute 和更高推理预算</td>
+<td>复杂数学、代码、科学问题不能只靠快速生成</td>
+<td>推理时计算成为能力扩展的新维度</td>
+</tr>
+<tr>
+<td>DeepSeek-R1-Zero</td>
+<td>不经过 SFT 冷启动，直接用大规模 RL 激发推理</td>
+<td>证明 RL 可以诱导反思、回溯、自我修正等行为</td>
+<td>可验证 reward 能显著放大推理能力</td>
+</tr>
+<tr>
+<td>DeepSeek-R1</td>
+<td>cold-start 数据 + 多阶段 RL + 蒸馏</td>
+<td>解决 R1-Zero 可读性差、语言混杂等问题</td>
+<td>纯 RL 有潜力，但工业可用仍需要工程化训练流程</td>
+</tr>
+<tr>
+<td>Qwen3</td>
+<td>thinking / non-thinking 统一，支持 thinking budget</td>
+<td>不是所有问题都需要深度思考</td>
+<td>推理能力开始和推理成本控制绑定</td>
+</tr>
+<tr>
+<td>R1 Distill / 开源推理模型</td>
+<td>用强模型生成推理轨迹，再蒸馏到小模型</td>
+<td>强推理模型成本高、部署贵</td>
+<td>推理能力可以部分迁移，但小模型不一定继承完整搜索能力</td>
+</tr>
+</tbody>
+</table>
+<p>这些实践说明，推理模型已经形成三条主线：</p>
+<ol>
+<li><strong>能力增强</strong>：通过 CoT、RLVR、Verifier，让模型在数学、代码、逻辑任务上更可靠；</li>
+<li><strong>成本控制</strong>：通过 thinking budget、蒸馏、小模型，把深度推理变得可部署；</li>
+<li><strong>任务扩展</strong>：从文本推理走向工具调用、代码执行、多模态理解和 Agent 任务。</li>
+</ol>
+<p>但推理模型并不是免费午餐。它带来的能力提升，本质上是用更多训练成本和推理成本换来的。当前仍然面临几类核心挑战：</p>
+<ol>
+<li><p><strong>过度思考</strong>：简单问题也生成很长推理过程，导致延迟和成本上升。</p>
+<ol>
+<li>解决方向是 thinking budget、动态路由、快慢模式切换，让模型根据任务难度决定是否深度思考。</li>
+</ol>
+</li>
+<li><p><strong>推理幻觉</strong>：推理链看似严密，但事实、计算或逻辑可能是错的。</p>
+<ol>
+<li>解决方向是 verifier、工具调用、检索增强和结果校验，把“看起来合理”拉回到“结果正确”。</li>
+</ol>
+</li>
+<li><p><strong>奖励黑客</strong>：模型可能学会钻 reward 漏洞，而不是真正解决问题。</p>
+<ol>
+<li>解决方向是多 reward、过程监督、红队评测，避免模型只优化评分表面特征。</li>
+</ol>
+</li>
+<li><p><strong>训练成本高</strong>：RL、长推理轨迹、验证数据和多阶段训练都很贵。</p>
+<ol>
+<li>解决方向是蒸馏、样本筛选、小模型继承，把强模型的推理能力迁移到更低成本模型上。</li>
+</ol>
+</li>
+<li><p><strong>推理成本高</strong>：thinking token 越多，延迟和费用越高。</p>
+<ol>
+<li>解决方向是推理预算控制、早停机制、分层模型路由，让简单任务少想，复杂任务多想。</li>
+</ol>
+</li>
+<li><p><strong>可控性问题</strong>：长链推理可能带来不可预测输出，也可能暴露不该展示的中间过程。</p>
+<ol>
+<li>解决方向是隐式 reasoning、安全约束、输出边界控制，只把必要结论和可解释摘要暴露给用户。</li>
+</ol>
+</li>
+<li><p><strong>安全风险</strong>：更强推理能力也可能增强危险任务的规划和执行能力。</p>
+<ol>
+<li>解决方向是 deliberative alignment、安全 reward、风险分类器和场景化拒答策略。</li>
+</ol>
+</li>
+</ol>
+<p>这里最重要的判断是：推理模型不是让模型“凭空变聪明”，而是让模型学会在困难任务上投入更多计算，并把这些计算组织成可检查、可修正的过程。</p>
+<p>所以推理模型的核心权衡是：</p>
+<ul>
+<li>准确率 vs 延迟</li>
+<li>深度思考 vs 成本</li>
+<li>长链推理 vs 可控性</li>
+<li>能力增强 vs 安全风险</li>
+</ul>
+<p>推理模型真正难的地方，不只是让模型“想得更久”，而是让它知道 <strong>什么时候该想、想到什么程度、如何验证、何时停止</strong>。</p>
+<h2 id="未来演进与总结：从会思考到会行动"><a href="#未来演进与总结：从会思考到会行动" class="headerlink" title="未来演进与总结：从会思考到会行动"></a>未来演进与总结：从会思考到会行动</h2><p>推理模型的未来，不是简单生成更长的 CoT，而是构建更可靠的计算过程。真正重要的不是“想得更长”，而是“想得更对、能验证、能修正、能行动”。</p>
+<p><img src="/images/llm/llm-reasoning-model-06.png" alt="推理模型演进"></p>
+<p>未来趋势可以概括为五点：</p>
+<ol>
+<li>从 CoT 到可验证推理： 不只生成中间过程，还要验证结果是否正确；</li>
+<li>从固定深度到动态预算：简单任务快答，复杂任务分配更多 thinking token 和验证步骤；</li>
+<li>从文本推理到工具推理：搜索、代码执行、计算器、数据库等工具参与推理过程；</li>
+<li>从单模态到多模态推理：图像、表格、视频、屏幕状态进入推理链路；</li>
+<li>从回答到 Agentic Reasoning：模型不只给答案，还要计划、执行、观察、修正。</li>
+</ol>
+<p>可以看到，推理模型正在从 <strong><code>Question -&gt; Answer</code></strong> 走向 <strong><code>Goal -&gt; Think -&gt; Act -&gt; Observe -&gt; Verify -&gt; Revise -&gt; Result</code></strong>。</p>
+<p>也就是说，推理模型不是系列终点，而是 Agent 的能力底座。Agent 不是只需要会调用工具，更需要在多步任务中持续判断：下一步做什么、结果是否可信、是否需要修正计划、什么时候停止。</p>
+<p>总结一下，推理模型的本质，不是让模型说出更长的过程，而是把一次生成变成可分解、可验证、可修正、可行动的求解过程。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/06/30/llm-reasoning-model/" data-id="cmr0skut300005elwzuleb0wh" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/06/29/llm-inference-serving/" class="next">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/06/30/llm-reasoning-model/';
+var disqus_title = 'LLM 系列 (十)：推理模型：大模型如何从回答走向思考';
+var disqus_url = 'http://matt33.com/2026/06/30/llm-reasoning-model/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/06/30/llm-reasoning-model/">LLM 系列 (十)：推理模型：大模型如何从回答走向思考</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/29/llm-inference-serving/">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/28/llm-distributed-training/">LLM 系列 (八)：分布式训练：千卡集群如何训大模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/27/llm-post-training-alignment/">LLM 系列 (七)：后训练与对齐：从续写器到协作者</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/26/llm-pretraining/">LLM 系列 (六)：预训练的本质：从预测下一个 Token 到通用能力</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/24/llm-dense-moe/">LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/23/llm-transformer-architecture/">LLM 系列 (四)：Transformer 架构篇：大模型为什么选择了 Transformer</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/22/llm-algorithm-principles/">LLM 系列 (三)：算法原理篇：机器是如何学会语言的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/21/llm-math-basics/">LLM 系列 (二)：机器如何把语言变成数学</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/19/llm-ai-to-llm/">LLM 系列 (一)：从 AI 到 LLM</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

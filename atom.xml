@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-06-29T12:10:00.000Z</updated>
+  <updated>2026-06-30T15:30:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,228 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (十)：推理模型：大模型如何从回答走向思考</title>
+    <link href="http://matt33.com/2026/06/30/llm-reasoning-model/"/>
+    <id>http://matt33.com/2026/06/30/llm-reasoning-model/</id>
+    <published>2026-06-30T15:30:00.000Z</published>
+    <updated>2026-06-30T15:30:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>如果说推理服务回答的是“模型如何更快、更便宜地生成 token”，那么推理模型回答的就是另一个更接近能力本质的问题：模型如何在复杂任务中不急着给出结论，而是先分解问题、展开推导、检查约束、验证结果，再输出更可靠的答案。</p>
+<p>这里的“推理”不再是 <strong>Inference Serving</strong>，而是 <strong>Reasoning</strong>。前者关注系统效率：吞吐、延迟、KV Cache、batch 调度和单位 token 成本；后者关注能力机制：模型为什么愿意多想几步，为什么数学、代码、逻辑和规划任务需要更多 test-time compute，为什么 DeepSeek-R1、OpenAI o 系列、Qwen3 thinking mode 都把“思考过程”和“推理预算”变成核心能力。</p>
+<a id="more"></a>
+<p>简单来说，推理模型的本质，是把一部分能力提升从训练阶段转移到推理阶段，让模型用更多生成、搜索、验证和反思，换取更高的问题求解质量。</p>
+<h2 id="为什么需要推理模型？"><a href="#为什么需要推理模型？" class="headerlink" title="为什么需要推理模型？"></a>为什么需要推理模型？</h2><p>普通 Chat Model 解决的是“如何快速给出一个符合用户意图的回答”，但很多复杂任务并不是看到问题就能直接输出结论。数学证明、代码修复、复杂规划、科研分析、长链工具调用，本质上都需要一个过程：</p>
+<ul>
+<li><strong>理解问题 -&gt; 分解目标 -&gt; 推导中间步骤 -&gt; 检查约束 -&gt; 验证结果 -&gt; 修正答案</strong></li>
+</ul>
+<p>传统 Chat Model 的问题在于：它往往会直接把最终回答生成出来。这个回答可能很流畅、很像正确答案，但中间推导并不稳定。一旦某个中间步骤出错，后续生成仍然可能沿着错误方向继续补全，最后得到一个“表达完整但逻辑错误”的结果。这就是推理模型出现的背景：<strong>大模型已经具备了很多知识和模式，但在复杂任务上，缺少稳定展开、验证和修正的机制。</strong></p>
+<p><img src="/images/llm/llm-reasoning-model-01.png" alt="普通 Chat Model vs Reasoning Model"></p>
+<p>从任务类型看，推理模型更适合处理那些 <strong>不能一步到位、必须保持约束、需要验证结果</strong> 的任务：</p>
+<ol>
+<li><strong>数学推导</strong>：不能只猜最终答案，中间步骤必须成立，需要公式变换、多步推导和答案校验；</li>
+<li><strong>代码生成</strong>：不能只生成“看起来像代码”的文本，还要满足需求约束、边界条件和可运行性；</li>
+<li><strong>逻辑推理</strong>：前提、结论和中间状态必须一致，不能在多步推导中自相矛盾；</li>
+<li><strong>Agent 任务</strong>：需要计划、执行、观察反馈，并根据环境结果调整下一步动作；</li>
+<li><strong>科研分析</strong>：需要提出假设、整合证据、检查反例，并明确不确定性。</li>
+</ol>
+<h2 id="推理模型的本质：从答案生成到计算展开"><a href="#推理模型的本质：从答案生成到计算展开" class="headerlink" title="推理模型的本质：从答案生成到计算展开"></a>推理模型的本质：从答案生成到计算展开</h2><p>大模型的底层形式仍然是自回归生成器：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(next token | context)</span><br></pre></td></tr></table></figure>
+<p>也就是说，模型每一步做的事情，仍然是根据当前上下文预测下一个 token。推理模型并没有脱离这个基本机制，它改变的是 <strong>生成过程的组织方式</strong>。普通回答模式更像：</p>
+<ul>
+<li>问题 -&gt; 直接生成答案</li>
+</ul>
+<p>推理模型则把一次回答展开成更长的计算过程：</p>
+<ul>
+<li>问题 -&gt; 问题分解 -&gt; 中间推导 -&gt; 检查 / 验证 -&gt; 最终答案</li>
+</ul>
+<p>可以把它理解成一种 <strong>test-time compute scaling</strong>：模型在推理阶段投入更多 token、更多时间和更多计算，用更高的推理成本换取复杂任务上更高的成功率。</p>
+<p><img src="/images/llm/llm-reasoning-model-02.png" alt="推理模型计算过程"></p>
+<p><em>推理模型计算过程</em></p>
+<p>推理模型本质上仍然是在生成 token。只是经过特定的后训练、强化学习和推理策略之后，模型学会在困难任务中先生成有助于求解的中间状态，再输出最终答案。推理模型的能力提升通常来自三个机制：</p>
+<ol>
+<li>中间步骤展开： 把复杂问题拆成更小、更容易求解的子问题；</li>
+<li>自我检查 / 外部验证：判断推导是否满足约束，结果是否正确；</li>
+<li>推理预算扩展：对困难任务投入更多 token、时间和计算。</li>
+</ol>
+<p>这也解释了为什么推理模型通常更慢。它不是直接从问题跳到答案，而是在输出前后做了更多中间计算。简单问题上，这种额外计算可能显得多余；复杂问题上，它往往能显著提高稳定性和正确率。</p>
+<p>所以，推理模型的本质不是“神秘地拥有思考”，而是：<strong>把原本一次性的答案生成，改造成一个可展开、可检查、可修正的计算过程</strong>。</p>
+<h2 id="主流技术路线：CoT、Verifier-与-RLVR"><a href="#主流技术路线：CoT、Verifier-与-RLVR" class="headerlink" title="主流技术路线：CoT、Verifier 与 RLVR"></a>主流技术路线：CoT、Verifier 与 RLVR</h2><p>Prompt 可以诱发模型展开步骤，但真正稳定的推理模型，通常依赖后训练、可验证反馈、强化学习和推理时计算共同塑形。它背后通常是一整套后训练机制：</p>
+<ul>
+<li>先让模型学会展开中间步骤；</li>
+<li>再让模型知道哪些结果是对的；</li>
+<li>最后用可验证奖励强化更有效的推理策略。</li>
+</ul>
+<p>可以把主流路线概括成五个环节：</p>
+<p><img src="/images/llm/llm-reasoning-model-03.png" alt="推理增强路径"></p>
+<h3 id="CoT：让模型学会展开步骤"><a href="#CoT：让模型学会展开步骤" class="headerlink" title="CoT：让模型学会展开步骤"></a>CoT：让模型学会展开步骤</h3><p>CoT（Chain-of-Thought，思维链）让模型在回答前生成中间推理步骤：</p>
+<ul>
+<li>问题 -&gt; 分析步骤 -&gt; 中间结论 -&gt; 最终答案</li>
+</ul>
+<p>它的价值是降低复杂任务“一步到位”的难度。模型不必直接从问题跳到答案，而是可以把问题拆成多个中间状态，逐步逼近结果。但 CoT 不是万能的：</p>
+<ul>
+<li>会写步骤，不代表步骤一定正确；</li>
+<li>中间过程可能自洽，但事实或计算是错的；</li>
+<li>推理链越长，越可能引入新错误；</li>
+<li>完整暴露思维链还会带来安全、隐私和可控性问题。</li>
+</ul>
+<p>所以，现代推理模型通常不会只依赖 CoT，而会进一步引入验证器和强化学习。</p>
+<h3 id="Verifier：从“像对”走向“真的对”"><a href="#Verifier：从“像对”走向“真的对”" class="headerlink" title="Verifier：从“像对”走向“真的对”"></a>Verifier：从“像对”走向“真的对”</h3><p>Verifier 的作用是<strong>验证结果</strong>，而不是判断回答风格。对于数学、代码、逻辑和工具任务，很多结果可以被自动检查：</p>
+<ul>
+<li>数学： 最终答案是否匹配，推导是否满足约束；</li>
+<li>代码：单元测试、编译检查、静态分析；</li>
+<li>逻辑题：是否违反规则或前提；</li>
+<li>工具调用：API 参数是否正确，执行结果是否符合目标；</li>
+<li>检索问答：答案是否被证据支持。</li>
+</ul>
+<p><img src="/images/llm/llm-reasoning-model-04.png" alt="Verifier 流程"></p>
+<p>这一步非常关键，因为语言模型天然擅长生成“看起来像正确答案”的文本，但推理任务真正需要的是结果满足约束。</p>
+<h3 id="RLVR：用可验证奖励强化推理策略"><a href="#RLVR：用可验证奖励强化推理策略" class="headerlink" title="RLVR：用可验证奖励强化推理策略"></a>RLVR：用可验证奖励强化推理策略</h3><p>RLVR，即 <strong>Reinforcement Learning with Verifiable Rewards</strong>，可以翻译为“可验证奖励强化学习”。它的核心思想是：如果一个任务的结果可以自动判断对错，就可以把验证结果转成 reward，让模型通过强化学习学会更有效的推理策略。</p>
+<p><img src="/images/llm/llm-reasoning-model-05.png" alt="RLVR 用可验证反馈训练模型"></p>
+<p>DeepSeek-R1 的关键启发就在这里。公开报告中，R1-Zero 在没有 SFT 冷启动的情况下，直接通过大规模 RL 激发出推理行为，出现了反思、回溯和自我修正等现象；但它也存在可读性差、语言混杂等问题。DeepSeek-R1 再引入 cold-start 数据和多阶段训练，改善了可读性和综合表现。</p>
+<p>这说明一个重要趋势：当 reward 足够明确时，强化学习不只是对齐话术，也可以放大数学、代码和复杂推理能力（不过，RLVR 适合结果可自动验证的任务，比如数学、代码等；但是像开放写作、价值判断和复杂产品体验仍然需要偏好模型、人类评估或多维 reward）。</p>
+<h3 id="Distillation：把强推理能力迁移给小模型"><a href="#Distillation：把强推理能力迁移给小模型" class="headerlink" title="Distillation：把强推理能力迁移给小模型"></a>Distillation：把强推理能力迁移给小模型</h3><p>强推理模型通常推理成本高、延迟高、部署贵。因此，行业常用蒸馏把强模型的推理能力迁移给更小模型。典型流程是：</p>
+<ol>
+<li>强推理模型生成高质量推理轨迹；</li>
+<li>用 verifier / 测试器过滤正确样本；</li>
+<li>用这些样本微调小模型；</li>
+<li>小模型获得部分推理能力。</li>
+</ol>
+<p>这也是 DeepSeek-R1 Distill 系列和很多开源推理模型的重要路线。<strong>蒸馏的价值是降低部署成本</strong>，但它也有边界：小模型可以模仿强模型的推理轨迹，却不一定完整继承强模型的搜索能力、纠错能力和复杂任务泛化能力。</p>
+<h3 id="Thinking-Budget：按任务分配思考成本"><a href="#Thinking-Budget：按任务分配思考成本" class="headerlink" title="Thinking Budget：按任务分配思考成本"></a>Thinking Budget：按任务分配思考成本</h3><p>不是所有问题都需要深度思考，比如：</p>
+<ul>
+<li>“北京今天几点？” -&gt; 快速回答；</li>
+<li>“证明这个算法复杂度” -&gt; 多步推理；</li>
+<li>“修复这个代码仓库 bug” -&gt; 计划 + 工具 + 验证。</li>
+</ul>
+<p>因此，推理模型还需要学会控制“思考成本”。简单问题快速回答，复杂问题分配更多 token、更多时间和更多验证步骤。</p>
+<p>Qwen3 的 thinking / non-thinking 统一框架和 thinking budget 就体现了这个方向：模型不应该所有问题都慢慢想，而应该根据任务复杂度动态分配推理预算。</p>
+<p>简单总结一下：CoT 解决“怎么展开”，Verifier 解决“怎么判断对错”，RLVR 解决“怎么把正确反馈变成能力”，Distillation 解决“怎么降低成本”，Thinking Budget 解决“什么时候该想多久”。</p>
+<h2 id="业内实践与核心挑战"><a href="#业内实践与核心挑战" class="headerlink" title="业内实践与核心挑战"></a>业内实践与核心挑战</h2><p>推理模型的发展，不是单个模型突然“变聪明”的故事，而是一条技术路线逐渐清晰的过程：从让模型写出推理步骤，到用验证器判断结果，再到用强化学习把“可验证正确”变成训练信号，最后进一步控制推理成本。</p>
+<table>
+<thead>
+<tr>
+<th><strong>模型 / 工作</strong></th>
+<th><strong>关键设计</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>行业启发</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI o 系列</td>
+<td>强调 reasoning、test-time compute 和更高推理预算</td>
+<td>复杂数学、代码、科学问题不能只靠快速生成</td>
+<td>推理时计算成为能力扩展的新维度</td>
+</tr>
+<tr>
+<td>DeepSeek-R1-Zero</td>
+<td>不经过 SFT 冷启动，直接用大规模 RL 激发推理</td>
+<td>证明 RL 可以诱导反思、回溯、自我修正等行为</td>
+<td>可验证 reward 能显著放大推理能力</td>
+</tr>
+<tr>
+<td>DeepSeek-R1</td>
+<td>cold-start 数据 + 多阶段 RL + 蒸馏</td>
+<td>解决 R1-Zero 可读性差、语言混杂等问题</td>
+<td>纯 RL 有潜力，但工业可用仍需要工程化训练流程</td>
+</tr>
+<tr>
+<td>Qwen3</td>
+<td>thinking / non-thinking 统一，支持 thinking budget</td>
+<td>不是所有问题都需要深度思考</td>
+<td>推理能力开始和推理成本控制绑定</td>
+</tr>
+<tr>
+<td>R1 Distill / 开源推理模型</td>
+<td>用强模型生成推理轨迹，再蒸馏到小模型</td>
+<td>强推理模型成本高、部署贵</td>
+<td>推理能力可以部分迁移，但小模型不一定继承完整搜索能力</td>
+</tr>
+</tbody>
+</table>
+<p>这些实践说明，推理模型已经形成三条主线：</p>
+<ol>
+<li><strong>能力增强</strong>：通过 CoT、RLVR、Verifier，让模型在数学、代码、逻辑任务上更可靠；</li>
+<li><strong>成本控制</strong>：通过 thinking budget、蒸馏、小模型，把深度推理变得可部署；</li>
+<li><strong>任务扩展</strong>：从文本推理走向工具调用、代码执行、多模态理解和 Agent 任务。</li>
+</ol>
+<p>但推理模型并不是免费午餐。它带来的能力提升，本质上是用更多训练成本和推理成本换来的。当前仍然面临几类核心挑战：</p>
+<ol>
+<li><p><strong>过度思考</strong>：简单问题也生成很长推理过程，导致延迟和成本上升。</p>
+<ol>
+<li>解决方向是 thinking budget、动态路由、快慢模式切换，让模型根据任务难度决定是否深度思考。</li>
+</ol>
+</li>
+<li><p><strong>推理幻觉</strong>：推理链看似严密，但事实、计算或逻辑可能是错的。</p>
+<ol>
+<li>解决方向是 verifier、工具调用、检索增强和结果校验，把“看起来合理”拉回到“结果正确”。</li>
+</ol>
+</li>
+<li><p><strong>奖励黑客</strong>：模型可能学会钻 reward 漏洞，而不是真正解决问题。</p>
+<ol>
+<li>解决方向是多 reward、过程监督、红队评测，避免模型只优化评分表面特征。</li>
+</ol>
+</li>
+<li><p><strong>训练成本高</strong>：RL、长推理轨迹、验证数据和多阶段训练都很贵。</p>
+<ol>
+<li>解决方向是蒸馏、样本筛选、小模型继承，把强模型的推理能力迁移到更低成本模型上。</li>
+</ol>
+</li>
+<li><p><strong>推理成本高</strong>：thinking token 越多，延迟和费用越高。</p>
+<ol>
+<li>解决方向是推理预算控制、早停机制、分层模型路由，让简单任务少想，复杂任务多想。</li>
+</ol>
+</li>
+<li><p><strong>可控性问题</strong>：长链推理可能带来不可预测输出，也可能暴露不该展示的中间过程。</p>
+<ol>
+<li>解决方向是隐式 reasoning、安全约束、输出边界控制，只把必要结论和可解释摘要暴露给用户。</li>
+</ol>
+</li>
+<li><p><strong>安全风险</strong>：更强推理能力也可能增强危险任务的规划和执行能力。</p>
+<ol>
+<li>解决方向是 deliberative alignment、安全 reward、风险分类器和场景化拒答策略。</li>
+</ol>
+</li>
+</ol>
+<p>这里最重要的判断是：推理模型不是让模型“凭空变聪明”，而是让模型学会在困难任务上投入更多计算，并把这些计算组织成可检查、可修正的过程。</p>
+<p>所以推理模型的核心权衡是：</p>
+<ul>
+<li>准确率 vs 延迟</li>
+<li>深度思考 vs 成本</li>
+<li>长链推理 vs 可控性</li>
+<li>能力增强 vs 安全风险</li>
+</ul>
+<p>推理模型真正难的地方，不只是让模型“想得更久”，而是让它知道 <strong>什么时候该想、想到什么程度、如何验证、何时停止</strong>。</p>
+<h2 id="未来演进与总结：从会思考到会行动"><a href="#未来演进与总结：从会思考到会行动" class="headerlink" title="未来演进与总结：从会思考到会行动"></a>未来演进与总结：从会思考到会行动</h2><p>推理模型的未来，不是简单生成更长的 CoT，而是构建更可靠的计算过程。真正重要的不是“想得更长”，而是“想得更对、能验证、能修正、能行动”。</p>
+<p><img src="/images/llm/llm-reasoning-model-06.png" alt="推理模型演进"></p>
+<p>未来趋势可以概括为五点：</p>
+<ol>
+<li>从 CoT 到可验证推理： 不只生成中间过程，还要验证结果是否正确；</li>
+<li>从固定深度到动态预算：简单任务快答，复杂任务分配更多 thinking token 和验证步骤；</li>
+<li>从文本推理到工具推理：搜索、代码执行、计算器、数据库等工具参与推理过程；</li>
+<li>从单模态到多模态推理：图像、表格、视频、屏幕状态进入推理链路；</li>
+<li>从回答到 Agentic Reasoning：模型不只给答案，还要计划、执行、观察、修正。</li>
+</ol>
+<p>可以看到，推理模型正在从 <strong><code>Question -&gt; Answer</code></strong> 走向 <strong><code>Goal -&gt; Think -&gt; Act -&gt; Observe -&gt; Verify -&gt; Revise -&gt; Result</code></strong>。</p>
+<p>也就是说，推理模型不是系列终点，而是 Agent 的能力底座。Agent 不是只需要会调用工具，更需要在多步任务中持续判断：下一步做什么、结果是否可信、是否需要修正计划、什么时候停止。</p>
+<p>总结一下，推理模型的本质，不是让模型说出更长的过程，而是把一次生成变成可分解、可验证、可修正、可行动的求解过程。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;如果说推理服务回答的是“模型如何更快、更便宜地生成 token”，那么推理模型回答的就是另一个更接近能力本质的问题：模型如何在复杂任务中不急着给出结论，而是先分解问题、展开推导、检查约束、验证结果，再输出更可靠的答案。&lt;/p&gt;
+&lt;p&gt;这里的“推理”不再是 &lt;strong&gt;Inference Serving&lt;/strong&gt;，而是 &lt;strong&gt;Reasoning&lt;/strong&gt;。前者关注系统效率：吞吐、延迟、KV Cache、batch 调度和单位 token 成本；后者关注能力机制：模型为什么愿意多想几步，为什么数学、代码、逻辑和规划任务需要更多 test-time compute，为什么 DeepSeek-R1、OpenAI o 系列、Qwen3 thinking mode 都把“思考过程”和“推理预算”变成核心能力。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (九)：推理服务：大模型如何高效生成 Token</title>
@@ -6210,91 +6432,6 @@
     <summary type="html">
     
       &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第三篇，紧接着上一篇文章，本文主要讲述 StreamGraph 是如何转换成 JobGraph 的，在前面的文章中，我们知道 StreamGraph 是根据用户作业的处理逻生成初始的逻辑计划，它并没有做任何的
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="flink" scheme="http://matt33.com/tags/flink/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Flink DataStream API 概述及作业如何转换为 StreamGraph</title>
-    <link href="http://matt33.com/2019/12/08/flink-stream-graph-2/"/>
-    <id>http://matt33.com/2019/12/08/flink-stream-graph-2/</id>
-    <published>2019-12-08T03:03:50.000Z</published>
-    <updated>2026-06-19T02:19:10.483Z</updated>
-    
-    <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第二篇，将会给大家讲述一个 Flink 作业（DataStream 高阶 API 为例的作业）是如何转换为 StreamGraph 的, StreamGraph 可以认为是一个还未经过优化处理的逻辑计划，它完全是在 Client 端生成的。StreamGraph 然后再经过优化转换为 JobGraph，Client 端向 JobManager 提交的作业就是以 JobGraph 的形式提交的，也就是说对于 JobManager 来说，它从客户端接收的作业实际上就是一个 JobGraph，然后它再对 JobGraph 做相应处理，生成具体的物理执行计划进行调度。</p>
-<p>关于分布式计算中的 Graph，对于很多人来说，最开始接触和理解这个概念应该还是在 Spark 中。Spark 中有个 DAG （Directed Acyclic Graph，有向无环图）的概念，它包括一些边和一些顶点，其中边代表了 RDD（Spark 中对数据的封装和抽象）、顶点代表了 RDD 上的 Operator，在一个作业中，一旦有 Action 被调用，创建的 DAG 就会被提交到 DAG Scheduler，它会将这个 graph 以 task 的形式调度到不同的节点上去执行计算。Spark 在 MapReduce 的基础上提出了 DAG 的概念，带来了很多的好处，比如：更方便对复杂作业（复杂的 DAG）做全局优化、通过 DAG 恢复丢失的 RDD 等等。Apache Flink 在设计实现中，也借鉴了这个设计，Flink 中的每个作业在调度时都是一个 Graph（Flink 一般叫 DataFlow Graph，Spark 中一般叫作 DAG）。另外，Google 的 Beam 也是类似的概念，Collection 和 Transformation 对数据和操作的最基本抽象，Graph 由 Collection 和 Transformation 构成。</p>
-<p>一个 Flink 作业（Steaming 作业），从 Client 端提交到最后真正调度执行，其 Graph 的转换会经过下面三个阶段（第四个阶段是作业真正执行时的状态，都是以 task 的形式在 TM 中运行）：</p>
-<ol>
-<li>StreamGraph：根据编写的代码生成最初的 Graph，它表示最初的拓扑结构；</li>
-<li>JobGraph：这里会对前面生成的 Graph，做一些优化操作（比如: operator chain 等），最后会提交给 JobManager；</li>
-<li>ExecutionGraph：JobManager 根据 JobGraph 生成 ExecutionGraph，是 Flink 调度时依赖的核心数据结构；</li>
-<li>物理执行图：JobManager 根据生成的 ExecutionGraph 对 Job 进行调度后，在各个 TM 上部署 Task 后形成的一张虚拟图。</li>
-</ol>
-<p>这整个转换的内容还是比较多的，也考虑到单篇文章的篇幅问题，这里会先给大家讲述第一部分的转换，也就是 StreamGraph 的转换，同时也会给大家把基本的概念理清楚，便于后面的讲解。</p>
-<h2 id="DataSteam-API"><a href="#DataSteam-API" class="headerlink" title="DataSteam API"></a>DataSteam API</h2><p>如果想对后面的内容理解更清楚，首先需要对 DataStream API 的基本概念有一定的理解，Apache Flink 自从 1.0 开始推出 DataStream API 后，经过最近几年的演化，这部分的代码已经变得比较复杂了，有些地方个人感觉还是有些冗余的，这里尽量给大家梳理清楚。</p>
-<h3 id="DataStream"><a href="#DataStream" class="headerlink" title="DataStream"></a>DataStream</h3><p>A DataStream represents a stream of elements of the same type. A DataStream can be transformed into another DataStream by applying a transformation.</p>
-<p>上面是 DataStream 的定义，从这个叙述中，可以看出，DataStream 实际上就是对相同类型数据流做的封装，它的主要作用就是可以用通过 Transformation 操作将其转换为另一个 DataStream，DataStream 向用户提供非常简单的 API 操作，比如 <code>map()</code>、<code>filter()</code>、<code>flatMap()</code> 等，目前 Flink 1.9 的代码里提供的 DataStream 实现如下：</p>
-<p><img src="/images/flink/2-DataStream.png" alt="DataStream 实现"> </p>
-<h3 id="Transformation"><a href="#Transformation" class="headerlink" title="Transformation"></a>Transformation</h3><p>A Transformation represents the operation that creates a DataStream。Transformation 代表创建 DataStream 的一个 operation，这里举一个示例，看一下下面的代码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();</span><br><span class="line"><span class="comment">// source 节点，随机产生一行一行的英文语句</span></span><br><span class="line">DataStream&lt;String&gt; inputStream = env.addSource(<span class="keyword">new</span> RandomWordCount.RandomStringSource());</span><br><span class="line"><span class="comment">// wordCount 里的第一步，将单词拆分</span></span><br><span class="line">inputStream.flatMap(<span class="keyword">new</span> FlatMapFunction&lt;String, Tuple2&lt;String, Integer&gt;&gt;() &#123;</span><br><span class="line">                <span class="meta">@Override</span></span><br><span class="line">                <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">flatMap</span><span class="params">(String value, Collector&lt;Tuple2&lt;String, Integer&gt;&gt; out)</span> </span>&#123;</span><br><span class="line">                    <span class="keyword">for</span> (String word : value.split(<span class="string">"\\s"</span>)) &#123;</span><br><span class="line">                        out.collect(Tuple2.of(word, <span class="number">1</span>));</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br></pre></td></tr></table></figure>
-<p>这段代码首先会执行 <code>addSource()</code> 操作，它会创建一个 DataStreamSource 节点， 只有创建了 Source 的 DataStream 节点，后面才能对这个 DataStream 做相应的 Transformation 操作（实际上 DataStreamSource 节点也会有一个对应的 SourceTransformation 对象）。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> &lt;OUT&gt; <span class="function">DataStreamSource&lt;OUT&gt; <span class="title">addSource</span><span class="params">(SourceFunction&lt;OUT&gt; function)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> addSource(function, <span class="string">"Custom Source"</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 创建一个 DataStreamSource</span></span><br><span class="line"><span class="keyword">public</span> &lt;OUT&gt; <span class="function">DataStreamSource&lt;OUT&gt; <span class="title">addSource</span><span class="params">(SourceFunction&lt;OUT&gt; function, String sourceName, TypeInformation&lt;OUT&gt; typeInfo)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (function <span class="keyword">instanceof</span> ResultTypeQueryable) &#123;</span><br><span class="line">        typeInfo = ((ResultTypeQueryable&lt;OUT&gt;) function).getProducedType();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//note: 找到相应的 TypeInformation</span></span><br><span class="line">    <span class="keyword">if</span> (typeInfo == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            typeInfo = TypeExtractor.createTypeInfo(</span><br><span class="line">                    SourceFunction.class,</span><br><span class="line">                    function.getClass(), <span class="number">0</span>, <span class="keyword">null</span>, <span class="keyword">null</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (<span class="keyword">final</span> InvalidTypesException e) &#123;</span><br><span class="line">            typeInfo = (TypeInformation&lt;OUT&gt;) <span class="keyword">new</span> MissingTypeInfo(sourceName, e);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">boolean</span> isParallel = function <span class="keyword">instanceof</span> ParallelSourceFunction;</span><br><span class="line"></span><br><span class="line">    clean(function);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建一个 Operator</span></span><br><span class="line">    <span class="keyword">final</span> StreamSource&lt;OUT, ?&gt; sourceOperator = <span class="keyword">new</span> StreamSource&lt;&gt;(function);</span><br><span class="line">    <span class="comment">//note: 创建 DataStreamSource（这里再创建 DataStreamSource 对象时，会创建一个 SourceTransformation 对象）</span></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> DataStreamSource&lt;&gt;(<span class="keyword">this</span>, typeInfo, sourceOperator, isParallel, sourceName);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>接下来再看 <code>flatMap()</code> 方法，这个实现其实跟前面的实现有一些类似之处，如下所示：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> &lt;R&gt; <span class="function">SingleOutputStreamOperator&lt;R&gt; <span class="title">flatMap</span><span class="params">(FlatMapFunction&lt;T, R&gt; flatMapper)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    TypeInformation&lt;R&gt; outType = TypeExtractor.getFlatMapReturnTypes(clean(flatMapper),</span><br><span class="line">            getType(), Utils.getCallLocationName(), <span class="keyword">true</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> transform(<span class="string">"Flat Map"</span>, outType, <span class="keyword">new</span> StreamFlatMap&lt;&gt;(clean(flatMapper)));</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> &lt;R&gt; <span class="function">SingleOutputStreamOperator&lt;R&gt; <span class="title">transform</span><span class="params">(String operatorName, TypeInformation&lt;R&gt; outTypeInfo, OneInputStreamOperator&lt;T, R&gt; operator)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// read the output type of the input Transform to coax out errors about MissingTypeInfo</span></span><br><span class="line">    transformation.getOutputType();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note： 新的 transformation 会连接上当前 DataStream 中的 transformation，从而构建成一棵树</span></span><br><span class="line">    OneInputTransformation&lt;T, R&gt; resultTransform = <span class="keyword">new</span> OneInputTransformation&lt;&gt;(</span><br><span class="line">            <span class="keyword">this</span>.transformation, <span class="comment">//note: 记录这个 transformation 的输入  transformation</span></span><br><span class="line">            operatorName,</span><br><span class="line">            operator,</span><br><span class="line">            outTypeInfo,</span><br><span class="line">            environment.getParallelism());</span><br><span class="line"></span><br><span class="line">    <span class="meta">@SuppressWarnings</span>(&#123; <span class="string">"unchecked"</span>, <span class="string">"rawtypes"</span> &#125;)</span><br><span class="line">    SingleOutputStreamOperator&lt;R&gt; returnStream = <span class="keyword">new</span> SingleOutputStreamOperator(environment, resultTransform);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 所有的 transformation 都会存到 env 中</span></span><br><span class="line">    getExecutionEnvironment().addOperator(resultTransform);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> returnStream;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>分析到这里，那么 Transformation 到底是什么呢？这里之所以给大家举这个示例，也是为了让大家对 Transformation 有更深入的了解。这里看下下面这一张图，最开始是一个 SourceTransformation，然后又创建一个 OneInputTransformation 对象（这张图就是这里我们举的示例）：</p>
-<p><img src="/images/flink/2-graph-transform.png" alt="Transformation 转换图"> </p>
-<p>实际上，一个 Transformation ，它是对 StreamOperator 的一个封装（而 StreamOperator 又是对 Function 的一个封装，真正的处理逻辑是在 Function 实现的，当然并不一定所有的 Operator 都会有 Function，这里为了便于理解，就按照这个来讲述了），并且会记录它前面的 Transformation，只有这样才能把这个 Job 的完整 graph 构建出来。这里也可以看到，所有对 DataStream 的操作，最终都是以 Transformation 体现的，DataStream 仅仅是暴露给用户的一套操作 API，用于简化数据处理的实现。</p>
-<h3 id="StreamOperator"><a href="#StreamOperator" class="headerlink" title="StreamOperator"></a>StreamOperator</h3><p>Operator 最基本类的是 StreamOperator，从名字也能看出来，它表示的是对 Stream 的一个 operation，它主要的实现类如下：</p>
-<p><img src="/images/flink/2-StreamOperator.png" alt="StreamOperator 的实现"> </p>
-<ul>
-<li>AbstractUdfStreamOperator：会封装一个 Function，真正的操作是在 Function 中的实现，它主要是在最基础的方法实现上也会相应地调用对应 Function 的实现，比如：<code>open/close</code>方法也会调用 Function 的对应实现等；</li>
-<li>OneInputStreamOperator：如果这个 Operator 只有一个输入，实现这个接口即可， 这个 <code>processElement()</code> 方法需要自己去实现；</li>
-<li>TwoInputStreamOperator：如果这个 Operator 是一个二元操作符，是对两个流的处理，比如：双流 join，那么实现这个接口即可，用户需要自己去实现 <code>processElement1()</code> 和 <code>processElement2()</code> 方法。</li>
-</ul>
-<h3 id="Function"><a href="#Function" class="headerlink" title="Function"></a>Function</h3><p>Function 是 Transformation 最底层的封装，用户真正的处理逻辑是在这个里面实现的，包括前面示例中实现的 FlatMapFunction 对象。</p>
-<p><img src="/images/flink/2-Function.png" alt="Function 的实现"> </p>
-<p>到这里，终于把最基本这些概念介绍完了，只有对这些概念有了相应的理解之后，阅读源码时才不至于被绕进去。</p>
-<h2 id="如何生成-StreamGraph"><a href="#如何生成-StreamGraph" class="headerlink" title="如何生成 StreamGraph"></a>如何生成 StreamGraph</h2><p>这里在讲述一个作业转换为 StreamGraph 的细节时，依然以上一篇文章中的示例 —— <a href="https://github.com/wangzzu/flink/blob/1.9-note/flink-examples/flink-examples-streaming/src/main/java/org/apache/flink/streaming/examples/matt/RandomWordCount.java" target="_blank" rel="external">RandomWordCount</a> 来讲述。在执行 <code>env.getStreamGraph().getStreamingPlanAsJSON()</code> 后，这个 StreamGraph 将会以 JSON 的格式输出出来，输出结果如下：</p>
-<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;<span class="attr">"nodes"</span>:[&#123;<span class="attr">"id"</span>:<span class="number">1</span>,<span class="attr">"type"</span>:<span class="string">"Source: Custom Source"</span>,<span class="attr">"pact"</span>:<span class="string">"Data Source"</span>,<span class="attr">"contents"</span>:<span class="string">"Source: Custom Source"</span>,<span class="attr">"parallelism"</span>:<span class="number">1</span>&#125;,&#123;<span class="attr">"id"</span>:<span class="number">2</span>,<span class="attr">"type"</span>:<span class="string">"Source: Custom Source"</span>,<span class="attr">"pact"</span>:<span class="string">"Data Source"</span>,<span class="attr">"contents"</span>:<span class="string">"Source: Custom Source"</span>,<span class="attr">"parallelism"</span>:<span class="number">1</span>&#125;,&#123;<span class="attr">"id"</span>:<span class="number">4</span>,<span class="attr">"type"</span>:<span class="string">"Flat Map"</span>,<span class="attr">"pact"</span>:<span class="string">"Operator"</span>,<span class="attr">"contents"</span>:<span class="string">"Flat Map"</span>,<span class="attr">"parallelism"</span>:<span class="number">8</span>,<span class="attr">"predecessors"</span>:[&#123;<span class="attr">"id"</span>:<span class="number">1</span>,<span class="attr">"ship_strategy"</span>:<span class="string">"REBALANCE"</span>,<span class="attr">"side"</span>:<span class="string">"second"</span>&#125;,&#123;<span class="attr">"id"</span>:<span class="number">2</span>,<span class="attr">"ship_strategy"</span>:<span class="string">"REBALANCE"</span>,<span class="attr">"side"</span>:<span class="string">"second"</span>&#125;]&#125;,&#123;<span class="attr">"id"</span>:<span class="number">6</span>,<span class="attr">"type"</span>:<span class="string">"Filter"</span>,<span class="attr">"pact"</span>:<span class="string">"Operator"</span>,<span class="attr">"contents"</span>:<span class="string">"Filter"</span>,<span class="attr">"parallelism"</span>:<span class="number">8</span>,<span class="attr">"predecessors"</span>:[&#123;<span class="attr">"id"</span>:<span class="number">4</span>,<span class="attr">"ship_strategy"</span>:<span class="string">"SHUFFLE"</span>,<span class="attr">"side"</span>:<span class="string">"second"</span>&#125;]&#125;,&#123;<span class="attr">"id"</span>:<span class="number">8</span>,<span class="attr">"type"</span>:<span class="string">"Keyed Aggregation"</span>,<span class="attr">"pact"</span>:<span class="string">"Operator"</span>,<span class="attr">"contents"</span>:<span class="string">"Keyed Aggregation"</span>,<span class="attr">"parallelism"</span>:<span class="number">8</span>,<span class="attr">"predecessors"</span>:[&#123;<span class="attr">"id"</span>:<span class="number">6</span>,<span class="attr">"ship_strategy"</span>:<span class="string">"HASH"</span>,<span class="attr">"side"</span>:<span class="string">"second"</span>&#125;]&#125;,&#123;<span class="attr">"id"</span>:<span class="number">9</span>,<span class="attr">"type"</span>:<span class="string">"Sink: Print to Std. Out"</span>,<span class="attr">"pact"</span>:<span class="string">"Data Sink"</span>,<span class="attr">"contents"</span>:<span class="string">"Sink: Print to Std. Out"</span>,<span class="attr">"parallelism"</span>:<span class="number">2</span>,<span class="attr">"predecessors"</span>:[&#123;<span class="attr">"id"</span>:<span class="number">8</span>,<span class="attr">"ship_strategy"</span>:<span class="string">"REBALANCE"</span>,<span class="attr">"side"</span>:<span class="string">"second"</span>&#125;]&#125;]&#125;</span><br></pre></td></tr></table></figure>
-<p>在 <a href="https://flink.apache.org/visualizer/" target="_blank" rel="external">Flink Plan Visualizer</a>中可以看到 StreamGraph 可视化之后 graph（用 Chrome 打开可能会显示不全，可以试下 Firefox），如下如所示：</p>
-<p><img src="/images/flink/2-stream-graph.png" alt="StreamGraph 展示"> </p>
-<p>接下来，详细介绍一下 StreamGraph 是如何转换的。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// StreamExecutionEnvironment</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Getter of the &#123;<span class="doctag">@link</span> org.apache.flink.streaming.api.graph.StreamGraph&#125; of the streaming job.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> The streamgraph representing the transformations</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">@Internal</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> StreamGraph <span class="title">getStreamGraph</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> getStreamGraphGenerator().generate();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> StreamGraphGenerator <span class="title">getStreamGraphGenerator</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (transformations.size() &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"No operators defined in streaming topology. Cannot execute."</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//note: 数据处理操作都在这个 transformations 列表里</span></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> StreamGraphGenerator(transformations, config, checkpointCfg) <span class="comment">//note: ExecutionConfig/CheckpointConfig</span></span><br><span class="line">        .setStateBackend(defaultStateBackend) <span class="comment">//note: StateBackend = null</span></span><br><span class="line">        .setChaining(isChainingEnabled) <span class="comment">//note: isChainingEnabled = true</span></span><br><span class="line">        .setUserArtifacts(cacheFile)</span><br><span class="line">        .setTimeCharacteristic(timeCharacteristic) <span class="comment">//note: TimeCharacteristic = ProcessingTime</span></span><br><span class="line">        .setDefaultBufferTimeout(bufferTimeout); <span class="comment">//note: default 100</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>StreamGraph 最后是通过 StreamGraphGenerator 的 <code>generate()</code> 方法生成的，那这个方法到底做了什么事情呢？其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 构建 stream graph</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> StreamGraph <span class="title">generate</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    streamGraph = <span class="keyword">new</span> StreamGraph(executionConfig, checkpointConfig);</span><br><span class="line">    streamGraph.setStateBackend(stateBackend);</span><br><span class="line">    streamGraph.setChaining(chaining);</span><br><span class="line">    streamGraph.setScheduleMode(scheduleMode);</span><br><span class="line">    streamGraph.setUserArtifacts(userArtifacts);</span><br><span class="line">    streamGraph.setTimeCharacteristic(timeCharacteristic);</span><br><span class="line">    streamGraph.setJobName(jobName);</span><br><span class="line">    streamGraph.setBlockingConnectionsBetweenChains(blockingConnectionsBetweenChains);</span><br><span class="line"></span><br><span class="line">    alreadyTransformed = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 自底向上(先遍历 input transformations)对转换树的每个 transformation 进行转换</span></span><br><span class="line">    <span class="keyword">for</span> (Transformation&lt;?&gt; transformation: transformations) &#123;</span><br><span class="line">        transform(transformation);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> StreamGraph builtStreamGraph = streamGraph;</span><br><span class="line"></span><br><span class="line">    alreadyTransformed.clear();</span><br><span class="line">    alreadyTransformed = <span class="keyword">null</span>;</span><br><span class="line">    streamGraph = <span class="keyword">null</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> builtStreamGraph;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>最关键的还是 <code>transform()</code> 方法的实现，这里会根据 Transformation 的类型对其做相应的转换，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Transforms one &#123;<span class="doctag">@code</span> Transformation&#125;.</span></span><br><span class="line"><span class="comment"> * note：对具体的一个 transformation 进行转换，转换成 StreamGraph 中的 StreamNode 和 StreamEdge</span></span><br><span class="line"><span class="comment"> * note：返回值为该 transform 的 id 集合，通常大小为1个（除 FeedbackTransformation）</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;This checks whether we already transformed it and exits early in that case. If not it</span></span><br><span class="line"><span class="comment"> * delegates to one of the transformation specific methods.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Collection&lt;Integer&gt; <span class="title">transform</span><span class="params">(Transformation&lt;?&gt; transform)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 已经 Transform 的 Transformation 会放在这个集合中</span></span><br><span class="line">    <span class="keyword">if</span> (alreadyTransformed.containsKey(transform)) &#123;</span><br><span class="line">        <span class="keyword">return</span> alreadyTransformed.get(transform);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    LOG.debug(<span class="string">"Transforming "</span> + transform);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (transform.getMaxParallelism() &lt;= <span class="number">0</span>) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// if the max parallelism hasn't been set, then first use the job wide max parallelism</span></span><br><span class="line">        <span class="comment">// from the ExecutionConfig.</span></span><br><span class="line">        <span class="comment">//note: 如果 MaxParallelism 没有设置，使用 job 的 MaxParallelism 设置</span></span><br><span class="line">        <span class="keyword">int</span> globalMaxParallelismFromConfig = executionConfig.getMaxParallelism();</span><br><span class="line">        <span class="keyword">if</span> (globalMaxParallelismFromConfig &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            transform.setMaxParallelism(globalMaxParallelismFromConfig);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// call at least once to trigger exceptions about MissingTypeInfo</span></span><br><span class="line">    <span class="comment">//note: 如果是 MissingTypeInfo 类型（类型不确定），将会触发异常</span></span><br><span class="line">    transform.getOutputType();</span><br><span class="line"></span><br><span class="line">    Collection&lt;Integer&gt; transformedIds;</span><br><span class="line">    <span class="comment">//note: 根据 transform 的类型，做相应不同的转换</span></span><br><span class="line">    <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> OneInputTransformation&lt;?, ?&gt;) &#123;</span><br><span class="line">        transformedIds = transformOneInputTransform((OneInputTransformation&lt;?, ?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> TwoInputTransformation&lt;?, ?, ?&gt;) &#123;</span><br><span class="line">        transformedIds = transformTwoInputTransform((TwoInputTransformation&lt;?, ?, ?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> SourceTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformSource((SourceTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> SinkTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformSink((SinkTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> UnionTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformUnion((UnionTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> SplitTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformSplit((SplitTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> SelectTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformSelect((SelectTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> FeedbackTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformFeedback((FeedbackTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> CoFeedbackTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformCoFeedback((CoFeedbackTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> PartitionTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformPartition((PartitionTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (transform <span class="keyword">instanceof</span> SideOutputTransformation&lt;?&gt;) &#123;</span><br><span class="line">        transformedIds = transformSideOutput((SideOutputTransformation&lt;?&gt;) transform);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Unknown transformation: "</span> + transform);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// need this check because the iterate transformation adds itself before</span></span><br><span class="line">    <span class="comment">// transforming the feedback edges</span></span><br><span class="line">    <span class="keyword">if</span> (!alreadyTransformed.containsKey(transform)) &#123;</span><br><span class="line">        alreadyTransformed.put(transform, transformedIds);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 将这个 Transform 相关的信息记录到 StreamGraph 中</span></span><br><span class="line">    <span class="keyword">if</span> (transform.getBufferTimeout() &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">        streamGraph.setBufferTimeout(transform.getId(), transform.getBufferTimeout());</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        streamGraph.setBufferTimeout(transform.getId(), defaultBufferTimeout);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (transform.getUid() != <span class="keyword">null</span>) &#123;</span><br><span class="line">        streamGraph.setTransformationUID(transform.getId(), transform.getUid());</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (transform.getUserProvidedNodeHash() != <span class="keyword">null</span>) &#123;</span><br><span class="line">        streamGraph.setTransformationUserHash(transform.getId(), transform.getUserProvidedNodeHash());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!streamGraph.getExecutionConfig().hasAutoGeneratedUIDsEnabled()) &#123;</span><br><span class="line">        <span class="keyword">if</span> (transform.getUserProvidedNodeHash() == <span class="keyword">null</span> &amp;&amp; transform.getUid() == <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Auto generated UIDs have been disabled "</span> +</span><br><span class="line">                <span class="string">"but no UID or hash has been assigned to operator "</span> + transform.getName());</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (transform.getMinResources() != <span class="keyword">null</span> &amp;&amp; transform.getPreferredResources() != <span class="keyword">null</span>) &#123;</span><br><span class="line">        streamGraph.setResources(transform.getId(), transform.getMinResources(), transform.getPreferredResources());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> transformedIds;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里以 <code>transformOneInputTransform()</code> 的实现来举个相应的例子，它会给这个 Transformation 创建相应的 StreamNode，并且创建 StreamEdge 来连接前后的 StreamNode：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> &lt;IN, OUT&gt; <span class="function">Collection&lt;Integer&gt; <span class="title">transformOneInputTransform</span><span class="params">(OneInputTransformation&lt;IN, OUT&gt; transform)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 递归调用，input 的 Transformation 处理完后才能处理后面</span></span><br><span class="line">    Collection&lt;Integer&gt; inputIds = transform(transform.getInput());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// the recursive call might have already transformed this</span></span><br><span class="line">    <span class="keyword">if</span> (alreadyTransformed.containsKey(transform)) &#123;</span><br><span class="line">        <span class="keyword">return</span> alreadyTransformed.get(transform);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 获取 share group</span></span><br><span class="line">    String slotSharingGroup = determineSlotSharingGroup(transform.getSlotSharingGroup(), inputIds);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 添加一个 Operator（streamGraph 端会添加一个 StreamNode）</span></span><br><span class="line">    streamGraph.addOperator(transform.getId(),</span><br><span class="line">            slotSharingGroup,</span><br><span class="line">            transform.getCoLocationGroupKey(),</span><br><span class="line">            transform.getOperatorFactory(),</span><br><span class="line">            transform.getInputType(),</span><br><span class="line">            transform.getOutputType(),</span><br><span class="line">            transform.getName());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (transform.getStateKeySelector() != <span class="keyword">null</span>) &#123;</span><br><span class="line">        TypeSerializer&lt;?&gt; keySerializer = transform.getStateKeyType().createSerializer(executionConfig);</span><br><span class="line">        streamGraph.setOneInputStateKey(transform.getId(), transform.getStateKeySelector(), keySerializer);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span> parallelism = transform.getParallelism() != ExecutionConfig.PARALLELISM_DEFAULT ?</span><br><span class="line">        transform.getParallelism() : executionConfig.getParallelism();</span><br><span class="line">    streamGraph.setParallelism(transform.getId(), parallelism);</span><br><span class="line">    streamGraph.setMaxParallelism(transform.getId(), transform.getMaxParallelism());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (Integer inputId: inputIds) &#123;</span><br><span class="line">        <span class="comment">//note: 根据输入的 id，给这个 node 在 graph 中设置相应的 graph</span></span><br><span class="line">        streamGraph.addEdge(inputId, transform.getId(), <span class="number">0</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> Collections.singleton(transform.getId());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>经过上面的 <code>transform()</code> 操作，最后生成的 StreamGraph 样板如下图所示：</p>
-<p><img src="/images/flink/2-StreamGraph.png" alt="StreamGraph"> </p>
-<p>关于上面的 <code>transform()</code> ，还有一个需要注意的是：这三个实现方法 <code>transformSelect()</code>、<code>transformPartition()</code>、<code>transformSideOutput()</code> 在操作时，并不会创建真正的 StreamNode 节点，它们会创建一个虚拟节点，将相应的配置赋给对应的 StreamEdge 即可。另外对于 <code>transformUnion()</code> 方法，它连虚拟节点也不会创建，原因其实看源码也能明白，它们并不包含具体的处理操作。</p>
-<p>到这里，StreamGraph 的创建过程就分析完了，如果理解了 Flink 基本对象的抽象后，再去看这部分代码，实际上并不复杂，这里是对用户的作业逻辑做了一个最简单的转换，并没做什么优化操作，相当于还是原生的用户作业逻辑。</p>
-<hr>
-<p>参考</p>
-<ul>
-<li><a href="http://asterios.katsifodimos.com/assets/publications/flink-deb.pdf" target="_blank" rel="external">Apache Flink: Stream and Batch Processing in a Single Engine</a>；</li>
-<li><a href="https://data-flair.training/blogs/dag-in-apache-spark/" target="_blank" rel="external">Directed Acyclic Graph DAG in Apache Spark</a>；</li>
-<li><a href="http://chenyuzhao.me/2016/12/03/Flink%E5%9F%BA%E6%9C%AC%E7%BB%84%E4%BB%B6%E5%92%8C%E9%80%BB%E8%BE%91%E8%AE%A1%E5%88%92/" target="_blank" rel="external">Flink 集群构建 &amp; 逻辑计划生成</a>；</li>
-<li><a href="http://chenyuzhao.me/2017/02/08/flink%E7%AE%97%E5%AD%90%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F/" target="_blank" rel="external">Flink Operator 的生命周期</a>；</li>
-<li><a href="http://wuchong.me/blog/2016/05/03/flink-internals-overview/" target="_blank" rel="external">Flink 原理与实现：架构和拓扑概览</a>；</li>
-<li><a href="http://wuchong.me/blog/2016/05/04/flink-internal-how-to-build-streamgraph/" target="_blank" rel="external">Flink 原理与实现：如何生成 StreamGraph</a>；</li>
-<li><a href="http://wuchong.me/blog/2016/05/10/flink-internals-how-to-build-jobgraph/" target="_blank" rel="external">Flink 原理与实现：如何生成 JobGraph</a>；</li>
-<li><a href="https://zhuanlan.zhihu.com/p/22736103" target="_blank" rel="external">Flink源码解析-从API到JobGraph</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/tmB7q9MTg3c_uhI51ZDAWQ" target="_blank" rel="external">Apache Flink 进阶（六）：Flink 作业执行深度解析</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/l-x3wSxuIvPMgxZzwYxZkA" target="_blank" rel="external">Flink CookBook—Apach Flink核心知识介绍</a>；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第二篇，将会给大家讲述一个 Flink 作业（DataStream 高阶 API 为例的作业）是如何转换为 StreamGraph 的, StreamGraph 可以认为是一个还未经过优化处理的逻辑计划，它完
     
     </summary>
     
