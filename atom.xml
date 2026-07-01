@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-01T12:10:00.000Z</updated>
+  <updated>2026-07-02T12:10:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,1061 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (十二)：预训练数据工程：大模型的燃料是如何炼成的</title>
+    <link href="http://matt33.com/2026/07/02/llm-pretraining-data-engineering/"/>
+    <id>http://matt33.com/2026/07/02/llm-pretraining-data-engineering/</id>
+    <published>2026-07-02T12:10:00.000Z</published>
+    <updated>2026-07-02T12:10:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>前面几篇我们已经把 LLM 的几条主线串起来了：从 AI 到 LLM，理解大模型为什么会出现；从数学、算法、Transformer 到 Dense/MoE，理解模型结构和学习机制；再到预训练、后训练、分布式训练、推理服务和长上下文，理解一套大模型系统如何被训练出来、部署出去。到了这里，还有一个更底层的问题需要单独展开：模型训练时，究竟吃了什么？</p>
+<p>很多人讨论大模型时，容易把注意力放在参数量、GPU 数量、训练框架、Attention 结构、MoE 路由和推理加速上。但如果把大模型训练看成一条生产线，数据才是最早进入系统的原材料。没有好的数据，再大的模型也只是在更大规模地学习噪声；没有合理的数据配比，模型就会偏科；没有去重和去污染，模型可能只是记住了训练集和评测答案；没有隐私、安全、版权和版本治理，模型能力越强，风险也越难控制。</p>
+<p>所以这篇文章想讲的，不是“怎么多收集一些文本”，而是预训练数据工程如何把互联网、书籍、代码、论文、百科、问答和合成样本，炼成一个可学习、可控制、可评估的数据分布。它贯穿数据来源、解析抽取、清洗规范化、去重、质量过滤、安全过滤、数据配比、采样、tokenization、packing、评测去污染、合成数据和版本治理，最终决定模型会学到什么、偏向什么、遗漏什么。</p>
+<a id="more"></a>
+<h2 id="数据决定能力"><a href="#数据决定能力" class="headerlink" title="数据决定能力"></a>数据决定能力</h2><p>讨论预训练时，我们经常会听到三个词：<strong><code>模型、算力、数据</code></strong>。模型决定表达能力，算力决定训练规模，数据决定模型学习的对象。可以把这三者想象成做饭：</p>
+<table>
+<thead>
+<tr>
+<th><strong>训练要素</strong></th>
+<th><strong>类比</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型架构</td>
+<td>锅和厨具</td>
+<td>决定能处理什么样的食材、能做多复杂的菜</td>
+</tr>
+<tr>
+<td>算力</td>
+<td>火力和时间</td>
+<td>决定能处理多少食材、能训练多久</td>
+</tr>
+<tr>
+<td>数据</td>
+<td>食材</td>
+<td>决定最后做出来的味道和营养</td>
+</tr>
+</tbody>
+</table>
+<p>锅再好，火再猛，如果食材是坏的，最后也只是更大规模地把坏味道炖出来。大模型训练也是一样：架构和算力决定“能不能学”，数据决定“学什么、学得偏不偏、学到的是知识还是噪声”。</p>
+<h3 id="预训练数据工程的知识地图"><a href="#预训练数据工程的知识地图" class="headerlink" title="预训练数据工程的知识地图"></a>预训练数据工程的知识地图</h3><p>在进入细节前，可以先用一张图建立整体视角。预训练数据工程不是某一个清洗脚本，而是一条从数据来源到模型能力的完整链路。</p>
+<p><img src="/images/llm/llm-pretraining-data-01.png" alt="预训练数据工程知识地图"></p>
+<p>这张图的主线很简单：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">原始内容世界 -&gt; 数据工程流水线 -&gt; 训练数据分布 -&gt; 模型参数 -&gt; 模型能力</span><br></pre></td></tr></table></figure>
+<p>也就是说，模型最后表现出来的能力差异，很多时候都可以沿着这条链路往回追：它看过什么数据，数据质量如何，哪些数据被放大，哪些数据被过滤，哪些数据污染了评测，哪些数据根本没有进入训练。</p>
+<h3 id="核心概念"><a href="#核心概念" class="headerlink" title="核心概念"></a>核心概念</h3><p>后面会不断提到数据分布、去重、配比、污染、合成数据等词。先把这些概念放在这里，后面读起来会更顺。</p>
+<table>
+<thead>
+<tr>
+<th><strong>概念</strong></th>
+<th><strong>含义</strong></th>
+<th><strong>为什么重要</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Corpus</td>
+<td>语料库，一批用于训练或评估的文本、代码、图文等数据集合</td>
+<td>它是模型学习的原材料</td>
+</tr>
+<tr>
+<td>Document</td>
+<td>一个文档单元，可以是一篇网页、一章书、一个 README、一个代码文件</td>
+<td>数据处理通常以文档为基本单位</td>
+</tr>
+<tr>
+<td>Token</td>
+<td>模型处理文本的基本单位，可能是字、词、子词或符号片段</td>
+<td>预训练最终是在 token 序列上进行</td>
+</tr>
+<tr>
+<td>Data Distribution</td>
+<td>数据分布，指训练数据中不同内容、语言、领域、质量的整体比例</td>
+<td>决定模型更常见什么、忽略什么</td>
+</tr>
+<tr>
+<td>Data Mixture</td>
+<td>数据混合配比，例如网页、代码、数学、多语言各占多少</td>
+<td>本质上是模型能力的配方表</td>
+</tr>
+<tr>
+<td>Deduplication</td>
+<td>去重，删除完全重复或高度相似的内容</td>
+<td>减少无效训练和记忆风险</td>
+</tr>
+<tr>
+<td>Quality Filtering</td>
+<td>质量过滤，把乱码、广告、采集页、低信息密度文本过滤掉</td>
+<td>提升有效 token 密度</td>
+</tr>
+<tr>
+<td>PII</td>
+<td>个人可识别信息，例如手机号、邮箱、身份证号等</td>
+<td>涉及隐私和合规风险</td>
+</tr>
+<tr>
+<td>Data Contamination</td>
+<td>数据污染，训练集中包含评测集、答案或高度相似样本</td>
+<td>会让 benchmark 分数失真</td>
+</tr>
+<tr>
+<td>Packing</td>
+<td>把多个较短样本拼接成接近上下文长度的训练序列</td>
+<td>提高训练效率</td>
+</tr>
+<tr>
+<td>Synthetic Data</td>
+<td>合成数据，由模型、规则、程序或人机协作生成的数据</td>
+<td>可以补齐自然数据不足，但需要验证</td>
+</tr>
+<tr>
+<td>Data Ablation</td>
+<td>数据消融实验，移除或改变某类数据，观察模型能力变化</td>
+<td>用来判断某类数据是否真的有价值</td>
+</tr>
+</tbody>
+</table>
+<h3 id="模型学到的是数据分布"><a href="#模型学到的是数据分布" class="headerlink" title="模型学到的是数据分布"></a>模型学到的是数据分布</h3><p>自回归语言模型的训练目标，是根据前文预测下一个 token：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(x_t | x_1, x_2, ..., x_&#123;t-1&#125;)</span><br></pre></td></tr></table></figure>
+<p>这意味着模型在预训练时，并不是被直接灌输“正确知识”，而是在不断学习训练语料中的统计规律。</p>
+<ul>
+<li>如果训练数据里有大量高质量教材、论文和技术文章，模型更容易学到清晰的概念表达、结构化推理和专业术语。</li>
+<li>如果训练数据里有大量代码仓库、issue、文档和测试用例，模型更容易学到编程模式、API 使用和调试习惯。</li>
+<li>如果训练数据里有大量重复、广告、低质 SEO 页面和采集站，模型也会把这些表达模式学进去。</li>
+</ul>
+<p>所以，数据工程的第一个意义是：<strong>它控制模型能看见什么世界</strong>。</p>
+<h3 id="数据不是越多越好，而是“有效-token”越多越好"><a href="#数据不是越多越好，而是“有效-token”越多越好" class="headerlink" title="数据不是越多越好，而是“有效 token”越多越好"></a>数据不是越多越好，而是“有效 token”越多越好</h3><p>早期大家容易把预训练规模简单理解成：<code>token 越多 -&gt; 模型越强</code>。但真正做数据时会发现，token 和 token 的价值并不一样。比如下面三类文本：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">高质量教材：</span><br><span class="line">反向传播的核心思想，是用链式法则把输出误差逐层传回每一层参数。</span><br><span class="line"></span><br><span class="line">低质量重复页：</span><br><span class="line">点击这里，免费下载，最新最全，点击这里，免费下载，最新最全。</span><br><span class="line"></span><br><span class="line">乱码页面：</span><br><span class="line">Ã¥Â¤Â§Ã¦Â¨Â¡Ã¥ÂžÂ‹ ### $$$ undefined undefined</span><br></pre></td></tr></table></figure>
+<p>它们都能产生 token，但学习价值完全不同。更准确的说法应该是：<strong>高质量、多样、低重复、低污染、配比合理的有效 token，才真正提升模型能力</strong>。</p>
+<p>这也是为什么数据工程不能只统计 token 总量，还要统计质量、来源、重复率、语言分布、领域分布和污染风险。</p>
+<h3 id="数据决定模型的“偏科”"><a href="#数据决定模型的“偏科”" class="headerlink" title="数据决定模型的“偏科”"></a>数据决定模型的“偏科”</h3><p>大模型的能力往往不是均匀发展的，而是和数据分布强相关。</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据问题</strong></th>
+<th><strong>可能表现</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码数据少</td>
+<td>写代码、读报错、理解工程结构能力弱</td>
+</tr>
+<tr>
+<td>数学推导少</td>
+<td>多步推理、公式变换、证明能力弱</td>
+</tr>
+<tr>
+<td>高质量中文少</td>
+<td>中文表达不自然，中文事实知识薄</td>
+</tr>
+<tr>
+<td>长文档少</td>
+<td>长上下文里容易丢主题、丢约束</td>
+</tr>
+<tr>
+<td>专业领域数据少</td>
+<td>医疗、法律、金融、芯片等领域容易泛泛而谈</td>
+</tr>
+<tr>
+<td>低质网页过多</td>
+<td>输出啰嗦、模板化、广告腔、信息密度低</td>
+</tr>
+<tr>
+<td>重复数据过多</td>
+<td>容易记忆样本，泛化能力不一定提升</td>
+</tr>
+<tr>
+<td>评测数据泄露</td>
+<td>benchmark 分数虚高，但真实能力不足</td>
+</tr>
+</tbody>
+</table>
+<p>这也是为什么不同模型即使参数规模接近，能力画像也可能差别很大。背后不只是架构不同，也可能是数据来源、清洗策略、配比策略、去污染策略和后训练数据不同。</p>
+<h2 id="预训练数据从哪里来？"><a href="#预训练数据从哪里来？" class="headerlink" title="预训练数据从哪里来？"></a>预训练数据从哪里来？</h2><p>预训练数据来源通常非常复杂。一个大模型看到的“世界”，不是单一数据集，而是很多来源混合后的结果。常见来源可以分成几类：</p>
+<table>
+<thead>
+<tr>
+<th>数据来源</th>
+<th>典型内容</th>
+<th>优点</th>
+<th>风险</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>网页语料</td>
+<td>新闻、博客、论坛、百科、文档站、问答页面</td>
+<td>覆盖广、规模大、更新快</td>
+<td>噪声多、重复多、广告多、版权和隐私复杂</td>
+</tr>
+<tr>
+<td>书籍</td>
+<td>教材、小说、科普、专业书</td>
+<td>长文结构好，语言质量高</td>
+<td>授权和版权要求高，领域覆盖有限</td>
+</tr>
+<tr>
+<td>论文</td>
+<td>arXiv、会议论文、技术报告</td>
+<td>知识密度高，结构严谨</td>
+<td>解析难，公式图表处理复杂</td>
+</tr>
+<tr>
+<td>代码</td>
+<td>Git 仓库、文档、issue、测试用例</td>
+<td>提升编程能力和工具使用能力</td>
+<td>许可证、重复仓库、自动生成代码、密钥泄露</td>
+</tr>
+<tr>
+<td>百科</td>
+<td>Wikipedia、专业百科</td>
+<td>实体知识密集，格式相对规范</td>
+<td>更新频率、覆盖偏差、多语言质量差异</td>
+</tr>
+<tr>
+<td>问答社区</td>
+<td>Stack Overflow、知乎式问答、论坛讨论</td>
+<td>问题-答案结构天然适合任务学习</td>
+<td>质量波动、主观内容多、噪声和过时答案</td>
+</tr>
+<tr>
+<td>多语言数据</td>
+<td>各语言网页、书籍、新闻和社区内容</td>
+<td>提升跨语言和本地化能力</td>
+<td>低资源语言数据稀缺，机器翻译腔问题</td>
+</tr>
+<tr>
+<td>领域数据</td>
+<td>法律条文、医疗文献、金融研报、企业文档</td>
+<td>提升专业能力</td>
+<td>合规、权限、隐私、专业质量评估难</td>
+</tr>
+<tr>
+<td>合成数据</td>
+<td>模型生成的题目、解释、代码、推理过程</td>
+<td>可控、可扩展、可针对短板补齐</td>
+<td>错误放大、风格单一、分布失真</td>
+</tr>
+</tbody>
+</table>
+<p>预训练数据不是一个“文件夹”，而是一个经过选择、过滤、混合和治理的数据生态。</p>
+<h3 id="网页数据：规模最大，也最脏"><a href="#网页数据：规模最大，也最脏" class="headerlink" title="网页数据：规模最大，也最脏"></a>网页数据：规模最大，也最脏</h3><p>网页是大模型预训练最重要的数据来源之一。它的优点是规模巨大、覆盖广泛，从新闻、博客、论坛、产品文档、百科到教程都能找到。但网页数据也很脏。一篇网页里真正有价值的正文，可能只占很小一部分，其余都是：</p>
+<ul>
+<li>导航栏</li>
+<li>页脚</li>
+<li>相关推荐</li>
+<li>广告</li>
+<li>登录弹窗</li>
+<li>评论模板</li>
+<li>版权声明</li>
+<li>cookie 提示</li>
+<li>站点统计代码</li>
+<li>重复转载内容</li>
+</ul>
+<p>如果直接把 HTML 扔给模型，模型会学到大量无意义模板。所以网页数据工程的第一步，通常不是“清洗文本”，而是：<strong><code>从网页中抽取真正的正文</code></strong>。</p>
+<p>这一步做不好，后面的过滤再复杂，也会被前面的脏解析拖累。</p>
+<h3 id="代码数据：训练代码能力，也训练结构化思维"><a href="#代码数据：训练代码能力，也训练结构化思维" class="headerlink" title="代码数据：训练代码能力，也训练结构化思维"></a>代码数据：训练代码能力，也训练结构化思维</h3><p>代码数据不只是让模型会写 Python、Java、C++。它还会让模型学到很多结构化能力：</p>
+<ul>
+<li>变量命名和抽象</li>
+<li>函数拆分</li>
+<li>API 调用模式</li>
+<li>类型约束</li>
+<li>测试用例</li>
+<li>错误处理</li>
+<li>依赖关系</li>
+<li>注释与实现的对应关系</li>
+<li>issue、PR、commit message 里的问题描述和修复过程</li>
+</ul>
+<p>这就是为什么代码数据对大模型很重要。它不只是“编程语料”，也是一种高密度的形式化语言和问题解决数据。但代码数据也有风险：</p>
+<ul>
+<li>大量 fork 仓库会造成重复。</li>
+<li>minified JS、自动生成代码、lock 文件学习价值低。</li>
+<li>许可证不一致，不能随意使用。</li>
+<li>仓库里可能包含密钥、token、邮箱、内部地址等敏感信息。</li>
+<li>测试集或面试题泄露会导致评测失真。</li>
+</ul>
+<p>所以代码数据工程通常要额外做许可证过滤、仓库级去重、文件类型过滤、密钥扫描和近似重复检测。</p>
+<h3 id="高质量长文：决定模型能不能学会完整表达"><a href="#高质量长文：决定模型能不能学会完整表达" class="headerlink" title="高质量长文：决定模型能不能学会完整表达"></a>高质量长文：决定模型能不能学会完整表达</h3><p>书籍、论文、长篇教程、技术文档、规范文档有一个很重要的价值：<strong>它们天然包含长距离结构。</strong>一篇好文章会有主题、章节、递进、论证和总结；一本书会有完整的知识体系；一篇论文会有问题、方法、实验、结论。这些长文档对模型很重要，因为它们训练的不只是局部 token 预测，还包括：</p>
+<ul>
+<li>长距离主题一致性</li>
+<li>章节结构</li>
+<li>概念逐步铺垫</li>
+<li>论证链条</li>
+<li>前后引用</li>
+<li>摘要和展开之间的对应关系</li>
+</ul>
+<p>长上下文能力不只是把位置编码拉长，还要让模型在训练中见过足够多高质量的长结构数据。</p>
+<h2 id="预训练数据流水线"><a href="#预训练数据流水线" class="headerlink" title="预训练数据流水线"></a>预训练数据流水线</h2><p>从原始数据到训练样本，中间不是简单地“下载文本 -&gt; 喂给模型”，而是一条很长的数据工程流水线。它看起来像传统 ETL，但目标不是生成报表，而是构造一个适合模型学习的数据分布。</p>
+<p><img src="/images/llm/llm-pretraining-data-02.png" alt="预训练数据流水线"></p>
+<p>这条链路里，每一步都会改变模型最终看到的世界。解析错了，模型会学到乱码；去重没做好，模型会反复背同一批内容；质量过滤过狠，模型语言风格会变窄；格式设计不好，后面的训练、采样、追踪和复现实验都会变困难。</p>
+<h3 id="抓取与解析：先把世界变成文档"><a href="#抓取与解析：先把世界变成文档" class="headerlink" title="抓取与解析：先把世界变成文档"></a>抓取与解析：先把世界变成文档</h3><p>第一步是把不同来源的数据变成统一的文档对象。网页通常来自 Common Crawl、站点抓取或内部数据湖；代码来自 Git 仓库、包管理平台和 issue/PR；论文可能来自 arXiv、PDF、LaTeX 源文件；企业数据则可能来自文档系统、工单、IM、知识库和代码仓库。</p>
+<p>业内常见做法不是直接保存一段纯文本，而是保留正文和元数据：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;id&quot;: &quot;web_20260601_xxx&quot;,</span><br><span class="line">  &quot;text&quot;: &quot;...正文...&quot;,</span><br><span class="line">  &quot;source&quot;: &quot;common_crawl&quot;,</span><br><span class="line">  &quot;url&quot;: &quot;https://example.com/a.html&quot;,</span><br><span class="line">  &quot;language&quot;: &quot;zh&quot;,</span><br><span class="line">  &quot;created_at&quot;: &quot;2026-06-01&quot;,</span><br><span class="line">  &quot;license&quot;: &quot;unknown&quot;,</span><br><span class="line">  &quot;metadata&quot;: &#123;</span><br><span class="line">    &quot;title&quot;: &quot;...&quot;,</span><br><span class="line">    &quot;domain&quot;: &quot;example.com&quot;,</span><br><span class="line">    &quot;content_type&quot;: &quot;web_page&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>解析阶段的关键是“抽正文、保结构、去噪声”。网页要去掉导航栏、广告、脚本、页脚和相关推荐；PDF 要处理换行、分栏、公式、表格和引用；代码要保留文件路径、语言、缩进、注释和许可证；书籍和长文档要保留章节层级。</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据类型</strong></th>
+<th><strong>业内常见方案</strong></th>
+<th><strong>关键问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>网页</td>
+<td>WARC 解析、HTML boilerplate removal、Readability/Trafilatura 类正文抽取</td>
+<td>广告、导航、模板、乱码</td>
+</tr>
+<tr>
+<td>PDF/论文</td>
+<td>GROBID、Nougat、Marker、Docling、LaTeX 解析</td>
+<td>公式、表格、分栏、引用</td>
+</tr>
+<tr>
+<td>代码</td>
+<td>Git clone/archive、Tree-sitter、语言检测、license 扫描、secret 扫描</td>
+<td>fork、生成代码、密钥、许可证</td>
+</tr>
+<tr>
+<td>企业文档</td>
+<td>权限导出、格式转换、脱敏、版本快照</td>
+<td>权限、隐私、过期内容</td>
+</tr>
+<tr>
+<td>问答社区</td>
+<td>HTML/Markdown 解析、问答结构保留、投票/时间元数据</td>
+<td>低质回答、过时答案、主观内容</td>
+</tr>
+</tbody>
+</table>
+<p>这一层最容易被低估。很多模型输出里的奇怪换行、广告腔、代码缩进错误，往往不是模型“突然犯病”，而是训练数据在解析阶段就坏了。</p>
+<h3 id="清洗与语言识别：稳定文本，但不要抹掉结构"><a href="#清洗与语言识别：稳定文本，但不要抹掉结构" class="headerlink" title="清洗与语言识别：稳定文本，但不要抹掉结构"></a>清洗与语言识别：稳定文本，但不要抹掉结构</h3><p>清洗的目标不是把文本变得“统一好看”，而是减少无意义噪声，同时保留对学习有价值的结构。</p>
+<table>
+<thead>
+<tr>
+<th><strong>内容</strong></th>
+<th><strong>处理方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTML 标签、脚本、样式</td>
+<td>删除</td>
+</tr>
+<tr>
+<td>广告、导航、重复页脚</td>
+<td>删除</td>
+</tr>
+<tr>
+<td>标题、段落、列表</td>
+<td>保留</td>
+</tr>
+<tr>
+<td>Markdown 结构</td>
+<td>保留</td>
+</tr>
+<tr>
+<td>代码缩进</td>
+<td>必须保留</td>
+</tr>
+<tr>
+<td>数学公式</td>
+<td>尽量保留或转成稳定格式</td>
+</tr>
+<tr>
+<td>表格</td>
+<td>转成 Markdown 或结构化文本</td>
+</tr>
+<tr>
+<td>异常空白、不可见字符、乱码</td>
+<td>规范化或过滤</td>
+</tr>
+</tbody>
+</table>
+<p>语言识别也很关键。多语言模型不是把所有语言混在一起就行，而是要知道每篇文档主要是什么语言，再根据语言控制采样比例、过滤规则和质量阈值。业内常见方案是用 fastText、CLD3、langid、lingua 这类语言识别器，再结合字符集、词表、停用词和脚本比例做二次校验。</p>
+<p>低资源语言尤其麻烦。采样太少，模型学不到；过度上采样，又会反复训练少量样本，造成记忆和过拟合。所以语言识别不只是清洗步骤，也是后面数据配比的基础。</p>
+<h3 id="去重：SimHash、MinHash-与“虚假的规模”"><a href="#去重：SimHash、MinHash-与“虚假的规模”" class="headerlink" title="去重：SimHash、MinHash 与“虚假的规模”"></a>去重：SimHash、MinHash 与“虚假的规模”</h3><p>去重是预训练数据工程里最硬核、也最值钱的一步。互联网上重复内容非常多：转载文章、镜像站、采集站、多个 URL 指向同一篇正文、GitHub fork、模板页、重复页脚、同一段说明出现在大量文档里。如果不去重，训练集看起来很大，实际是在反复训练相同内容。这会带来三个问题：</p>
+<ul>
+<li>浪费训练 token。</li>
+<li>增加模型记忆风险。</li>
+<li>让某些站点、模板、题库或 benchmark 被过度放大。</li>
+</ul>
+<p>去重一般分三层：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>方法</strong></th>
+<th><strong>解决什么问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>精确去重</td>
+<td>MD5/SHA/BLAKE3 hash</td>
+<td>完全一样的文档或片段</td>
+</tr>
+<tr>
+<td>近似去重</td>
+<td>SimHash、MinHash + LSH</td>
+<td>转载、改写、插入广告、格式变化</td>
+</tr>
+<tr>
+<td>语义去重</td>
+<td>Embedding + ANN 聚类</td>
+<td>表达不同但语义高度重复的内容</td>
+</tr>
+</tbody>
+</table>
+<p>精确去重最简单：对规范化后的正文算 hash，相同 hash 只保留一份。NVIDIA NeMo Curator 的 exact dedup 就是这类思路，用文档文本的 MD5 来识别完全重复文档。</p>
+<p>近似去重要复杂得多。这里最常见的是 SimHash 和 MinHash。</p>
+<p><strong>SimHash</strong> 的思路是：把文档拆成特征，比如词、字符 n-gram、token n-gram；每个特征 hash 成一个 bit 向量，再按权重累加，最后得到一个 64-bit 或 128-bit 指纹。两个文档的 SimHash 如果汉明距离很小，就认为它们很相似。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">文档 -&gt; 特征集合 -&gt; 特征 hash -&gt; 加权求和 -&gt; SimHash 指纹 -&gt; 比较汉明距离</span><br></pre></td></tr></table></figure>
+<p>SimHash 的优点是快、指纹小、适合大规模网页近似去重，尤其适合发现模板页、轻微改写页、正文大体相同的转载页。缺点是它更像“快速相似度指纹”，对阈值比较敏感，遇到长文局部重复或结构变化时不一定足够稳。</p>
+<p><strong>MinHash</strong> 更常用于大规模文本 near-dedup。它先把文档切成 shingle，比如字符 5-gram、词 3-gram、token n-gram，然后把文档表示成一个集合。两个文档的 Jaccard 相似度越高，说明它们共享的 shingle 越多。MinHash 用一组最小 hash 值近似估计 Jaccard 相似度，再用 LSH 把相似文档快速分桶。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">文档 -&gt; shingles -&gt; MinHash signatures -&gt; LSH 分桶 -&gt; 候选相似对 -&gt; 聚类 -&gt; 删除重复</span><br></pre></td></tr></table></figure>
+<p>MinHash + LSH 的优点是更适合处理“正文大部分相同但有增删改”的文档，也是现在很多开源数据清洗管线采用的主力方案。NeMo Curator 的 fuzzy dedup 就使用 MinHash 和 LSH 来找近似重复文档；FineWeb、Dolma、DataTrove 这类开放数据工程也都非常重视 dedup 和 filtering 的组合。</p>
+<p>去重时还有一个工程细节：发现重复簇后，不能随机删。通常会保留质量更高、来源更可信、时间更新、正文更完整、元数据更清晰的那一份。</p>
+<h3 id="质量、安全与版权过滤：判断哪些内容值得学"><a href="#质量、安全与版权过滤：判断哪些内容值得学" class="headerlink" title="质量、安全与版权过滤：判断哪些内容值得学"></a>质量、安全与版权过滤：判断哪些内容值得学</h3><p>去重之后，还要判断一段文本值不值得模型学习。质量过滤通常不是单一模型完成，而是多层信号组合：</p>
+<table>
+<thead>
+<tr>
+<th><strong>信号</strong></th>
+<th><strong>可能说明</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文档太短</td>
+<td>可能是导航页、碎片页</td>
+</tr>
+<tr>
+<td>重复 <code>n-gram</code> 很多</td>
+<td>可能是模板、广告、采集页</td>
+</tr>
+<tr>
+<td>标点比例异常</td>
+<td>可能是乱码、列表堆叠</td>
+</tr>
+<tr>
+<td>链接比例过高</td>
+<td>可能是目录页或聚合页</td>
+</tr>
+<tr>
+<td>困惑度异常高</td>
+<td>不像自然语言，可能解析失败</td>
+</tr>
+<tr>
+<td>困惑度异常低</td>
+<td>可能是模板化重复内容</td>
+</tr>
+<tr>
+<td>分类器质量分低</td>
+<td>可能是垃圾、成人、恶意或低质量内容</td>
+</tr>
+<tr>
+<td>教育价值分高</td>
+<td>适合保留或上采样</td>
+</tr>
+</tbody>
+</table>
+<p>业内常见做法是“<strong>规则过滤 + 模型过滤 + 抽样人工审查</strong>”。规则过滤负责便宜、稳定、可解释的信号，比如长度、重复率、字符比例；模型过滤负责更抽象的质量判断，比如教育价值、毒性、成人内容、垃圾内容；人工抽检负责校准阈值，避免过滤器把某些语言、领域或表达风格误伤。</p>
+<p>安全和版权过滤也要在这一层做。常见处理包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>风险</strong></th>
+<th><strong>解决方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PII 隐私信息</td>
+<td>正则、NER、Presidio 类脱敏工具、抽样审计</td>
+</tr>
+<tr>
+<td>代码密钥</td>
+<td>secret scanner、token pattern、熵检测</td>
+</tr>
+<tr>
+<td>有害内容</td>
+<td>安全分类器、黑白名单、策略规则</td>
+</tr>
+<tr>
+<td>版权风险</td>
+<td>robots、terms、license 元数据和来源白名单等风险控制策略</td>
+</tr>
+<tr>
+<td>benchmark 污染</td>
+<td>精确匹配、n-gram 匹配、近似匹配、来源排除</td>
+</tr>
+</tbody>
+</table>
+<p>这里有一个重要平衡：过滤不是越狠越好。只保留“像百科”的文本，模型可能会变得不会聊天；只保留高学历文本，会损失口语、社区知识和真实用户表达。好的数据工程是在干净、多样、真实之间做取舍。</p>
+<h3 id="训练数据格式：从文档到可训练的数据流"><a href="#训练数据格式：从文档到可训练的数据流" class="headerlink" title="训练数据格式：从文档到可训练的数据流"></a>训练数据格式：从文档到可训练的数据流</h3><p>数据清洗完，还要选择训练数据格式。这一步很容易被忽略，但它会直接影响训练吞吐、随机访问、断点恢复、数据版本管理和问题追踪。可以把格式分成三层：</p>
+<table>
+<thead>
+<tr>
+<th><strong>阶段</strong></th>
+<th><strong>常见格式</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原始归档层</td>
+<td>WARC、PDF、HTML、Git archive、对象存储原文件</td>
+<td>保留原始证据，方便复查</td>
+</tr>
+<tr>
+<td>清洗文档层</td>
+<td>JSONL、Parquet、Arrow、Iceberg/Delta 表</td>
+<td>数据分析、过滤、去重、配比、版本管理</td>
+</tr>
+<tr>
+<td>训练样本层</td>
+<td>tokenized binary、Megatron .bin/.idx、MDS、WebDataset、TFRecord</td>
+<td>高吞吐训练、流式读取、分布式采样</td>
+</tr>
+</tbody>
+</table>
+<p>小规模实验可以用 JSONL，因为直观、好调试。但到大规模预训练，JSONL 的压缩、列裁剪、扫描效率和 schema 管理都不够理想。工业里更常见的是 Parquet/Arrow 这类列式格式：Parquet 适合数据湖存储和大规模扫描，Arrow 适合本地缓存和高效内存映射。Hugging Face Datasets 使用 Arrow 做本地 cache 和 memory mapping，就是为了让大数据集不必一次性加载进内存。</p>
+<p>清洗后的文档层通常会包含这些字段：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;id&quot;: &quot;...&quot;,</span><br><span class="line">  &quot;text&quot;: &quot;...&quot;,</span><br><span class="line">  &quot;source&quot;: &quot;web&quot;,</span><br><span class="line">  &quot;language&quot;: &quot;zh&quot;,</span><br><span class="line">  &quot;domain&quot;: &quot;technical_blog&quot;,</span><br><span class="line">  &quot;quality_score&quot;: 0.91,</span><br><span class="line">  &quot;dedup_cluster_id&quot;: &quot;cluster_123&quot;,</span><br><span class="line">  &quot;license&quot;: &quot;unknown&quot;,</span><br><span class="line">  &quot;pii_flags&quot;: [],</span><br><span class="line">  &quot;token_count_estimate&quot;: 2048</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>真正进入训练前，还要 tokenization 和 packing。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">文档文本 -&gt; tokenizer -&gt; token ids -&gt; 加 EOD -&gt; 切分/拼接 -&gt; 固定长度训练序列</span><br></pre></td></tr></table></figure>
+<p>以 Megatron-LM 系训练为例，常见做法是把 tokenized 数据写成 <code>.bin/.idx</code>：<code>.bin</code> 存 token id，<code>.idx</code> 存长度、offset、文档边界等索引信息，方便训练时高效随机访问。NeMo Curator 也提供了直接导出 Megatron <code>.bin/.idx</code> 的 writer。</p>
+<p>Packing 也有讲究。为了提高 GPU 利用率，短文档通常会被拼接到接近上下文长度。但不能无脑拼：文档之间要加 EOD token；长文档要考虑是否跨段保留结构；代码、数学、长上下文样本有时要单独处理，避免被普通网页样本稀释。</p>
+<p>最终，一个成熟的数据流不是“一个大文件”，而是一组可追踪、可采样、可复现的训练 shard：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">dataset_v12/</span><br><span class="line">  metadata.json</span><br><span class="line">  mixture.yaml</span><br><span class="line">  tokenizer.json</span><br><span class="line">  shards/</span><br><span class="line">    web_00001.bin</span><br><span class="line">    web_00001.idx</span><br><span class="line">    code_00001.bin</span><br><span class="line">    code_00001.idx</span><br><span class="line">    math_00001.bin</span><br><span class="line">    math_00001.idx</span><br></pre></td></tr></table></figure>
+<h3 id="评估回流：数据流水线不是一次性的"><a href="#评估回流：数据流水线不是一次性的" class="headerlink" title="评估回流：数据流水线不是一次性的"></a>评估回流：数据流水线不是一次性的</h3><p>数据工程不是训练前做完就结束。模型训练后，评测结果和错误案例要回流到数据侧。</p>
+<ul>
+<li>如果模型代码能力差，可能要检查代码数据比例、许可证过滤、生成代码比例、测试样本质量。</li>
+<li>如果中文表达弱，可能要检查高质量中文数据量、中文网页过滤是否过狠、中文长文档是否不足。</li>
+<li>如果长上下文容易丢约束，可能要检查训练中是否有足够真实长文档，而不只是短文本 packing。</li>
+<li>如果 benchmark 分数异常高，要反查是否存在数据污染。  </li>
+</ul>
+<p>成熟团队会把这件事做成闭环：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">训练结果 -&gt; 能力评测 -&gt; 错误分析 -&gt; 数据归因 -&gt; 调整过滤/配比/采样 -&gt; 下一轮训练</span><br></pre></td></tr></table></figure>
+<p>所以，预训练数据流水线真正的目标不是产出一个“干净数据集”，而是建立一个可以持续迭代的能力工厂。</p>
+<h2 id="数据配比：能力的配方表"><a href="#数据配比：能力的配方表" class="headerlink" title="数据配比：能力的配方表"></a>数据配比：能力的配方表</h2><p>当数据经过解析、清洗、去重和过滤之后，还有一个更关键的问题：<strong>训练时，各类数据应该按什么比例出现？</strong>这就是<strong>数据配比</strong>。</p>
+<p>数据配比不是简单地把所有数据混在一起，也不是谁的数据量大谁就占比高。真实的训练数据分布，往往是人为设计出来的学习分布：哪些数据多看一点，哪些数据少看一点，哪些数据放到后期再看，都会影响模型最后形成的能力形状。可以先用一张图理解：</p>
+<p><img src="/images/llm/llm-pretraining-data-03.png" alt="数据配比决定模型在不同能力方向上的学习权重"></p>
+<p>一句话理解：训练数据分布不是原始互联网分布，而是<strong>根据质量、能力目标和风险控制重新调配后的学习分布</strong>。</p>
+<h3 id="数据配比决定模型偏向什么"><a href="#数据配比决定模型偏向什么" class="headerlink" title="数据配比决定模型偏向什么"></a>数据配比决定模型偏向什么</h3><p>不同类型的数据，对模型能力的影响是不一样的。</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据类型</strong></th>
+<th><strong>对能力的影响</strong></th>
+<th><strong>配比过低的问题</strong></th>
+<th><strong>配比过高的问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>通用网页</td>
+<td>常识、语言覆盖、世界知识</td>
+<td>知识面窄，表达不自然</td>
+<td>噪声和低质内容风险高</td>
+</tr>
+<tr>
+<td>高质量书籍/教程</td>
+<td>长文结构、概念解释、稳定表达</td>
+<td>文章组织和系统讲解能力弱</td>
+<td>风格可能过于书面</td>
+</tr>
+<tr>
+<td>代码</td>
+<td>编程、API、结构化推理</td>
+<td>代码能力弱</td>
+<td>普通语言里可能混入代码式表达</td>
+</tr>
+<tr>
+<td>数学/推理</td>
+<td>多步推理、符号操作、证明</td>
+<td>复杂推理能力弱</td>
+<td>如果质量差，容易学到伪推理</td>
+</tr>
+<tr>
+<td>多语言</td>
+<td>跨语言、本地文化、翻译</td>
+<td>非英语能力弱</td>
+<td>低质量语言数据会放大噪声</td>
+</tr>
+<tr>
+<td>长文档</td>
+<td>长上下文、章节结构、长期依赖</td>
+<td>长文本里容易丢信息</td>
+<td>packing 和训练效率压力大</td>
+</tr>
+<tr>
+<td>领域数据</td>
+<td>医疗、法律、金融、企业知识等专业能力</td>
+<td>专业问答空泛</td>
+<td>可能损伤通用能力或引入合规风险</td>
+</tr>
+<tr>
+<td>合成数据</td>
+<td>针对性补短板</td>
+<td>无法补齐稀缺能力</td>
+<td>风格收缩、错误放大</td>
+</tr>
+</tbody>
+</table>
+<p>可以把它想象成一个“能力调音台”：</p>
+<p><img src="/images/llm/llm-pretraining-data-04.png" alt="数据配比像能力调音台，会影响模型最终的能力画像"></p>
+<p>所以，两个模型即使参数规模接近，能力表现也可能很不一样。一个更会写代码，一个更会中文表达，一个更擅长数学，一个更适合企业知识问答，背后往往不只是架构差异，也可能是数据配比差异。</p>
+<h3 id="配比不是静态的，而是分阶段变化的"><a href="#配比不是静态的，而是分阶段变化的" class="headerlink" title="配比不是静态的，而是分阶段变化的"></a>配比不是静态的，而是分阶段变化的</h3><p>预训练不一定从头到尾都使用同一套数据比例。一种常见思路是分阶段调整：</p>
+<ol>
+<li>早期：覆盖广，多样性强，让模型先学语言、常识和基本模式；</li>
+<li>中期：提高高质量知识、代码、数学、长文档比例；</li>
+<li>后期：加入更难、更高质量、更任务相关的数据做能力打磨。</li>
+</ol>
+<p>这有点像人的学习过程：</p>
+<ol>
+<li>先广泛阅读，建立语言和常识底座；</li>
+<li>再学习教材、代码和专业材料；</li>
+<li>最后做更难的题和更复杂的项目。</li>
+</ol>
+<p>如下图所示：</p>
+<p><img src="/images/llm/llm-pretraining-data-05.png" alt="预训练数据配比通常会随训练阶段动态调整"></p>
+<p>这里的关键理解一个原则：<strong>数据顺序和数据比例，会影响模型最后形成的能力路径</strong>。如果早期低质网页太多，模型可能先学到很多噪声模式；如果后期没有足够高质量数据，模型能力可能停留在“会说很多话”，但不够准确、不够结构化、不够专业。</p>
+<h3 id="上采样与下采样：让重要数据被模型看见"><a href="#上采样与下采样：让重要数据被模型看见" class="headerlink" title="上采样与下采样：让重要数据被模型看见"></a>上采样与下采样：让重要数据被模型看见</h3><p>有些数据很重要，但天然规模小。例如高质量数学题、低资源语言、专业领域文档、长上下文问答。如果完全按原始数据量采样，它们在训练中出现得太少，模型几乎学不到。于是工程上会对这些数据做上采样。相反，有些数据规模巨大但质量一般，例如低质网页、采集站内容、模板化页面，就需要下采样。</p>
+<blockquote>
+<ul>
+<li>上采样：重要但少的数据，多看几遍；</li>
+<li>下采样：多但价值低的数据，少看一点；</li>
+</ul>
+</blockquote>
+<p><img src="/images/llm/llm-pretraining-data-06.png" alt="上采样和下采样让重要数据被模型更充分地看见"></p>
+<p>可以用一个简单公式理解：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">最终采样权重 = 原始规模权重 × 质量权重 × 能力目标权重 × 风险控制权重</span><br></pre></td></tr></table></figure>
+<p>举个例子：</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据</strong></th>
+<th><strong>原始规模</strong></th>
+<th><strong>质量</strong></th>
+<th><strong>能力价值</strong></th>
+<th><strong>采样策略</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>普通网页</td>
+<td>很大</td>
+<td>中等</td>
+<td>常识覆盖</td>
+<td>下采样</td>
+</tr>
+<tr>
+<td>高质量教材</td>
+<td>中等</td>
+<td>高</td>
+<td>概念解释</td>
+<td>上采样</td>
+</tr>
+<tr>
+<td>数学推导</td>
+<td>较小</td>
+<td>高</td>
+<td>推理能力</td>
+<td>上采样</td>
+</tr>
+<tr>
+<td>低质采集页</td>
+<td>很大</td>
+<td>低</td>
+<td>价值低</td>
+<td>强过滤或下采样</td>
+</tr>
+<tr>
+<td>低资源语言</td>
+<td>很小</td>
+<td>不稳定</td>
+<td>多语言能力</td>
+<td>清洗后适度上采样</td>
+</tr>
+<tr>
+<td>企业领域文档</td>
+<td>小</td>
+<td>高</td>
+<td>专业能力</td>
+<td>权限过滤后上采样</td>
+</tr>
+</tbody>
+</table>
+<p>这说明，模型训练看到的世界，并不是数据自然存在的比例，而是工程师重新设计后的比例。</p>
+<h3 id="配比要写进配置，而不是写在脑子里"><a href="#配比要写进配置，而不是写在脑子里" class="headerlink" title="配比要写进配置，而不是写在脑子里"></a>配比要写进配置，而不是写在脑子里</h3><p>成熟的数据工程里，配比通常不会靠口头约定，而是写成可追踪、可复现的配置。例如可以有一个类似这样的 <code>mixture.yaml</code>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">dataset_mixture:</span><br><span class="line">  web_general:</span><br><span class="line">    weight: 0.45</span><br><span class="line">    min_quality_score: 0.65</span><br><span class="line">  books_and_tutorials:</span><br><span class="line">    weight: 0.15</span><br><span class="line">    min_quality_score: 0.80</span><br><span class="line">  code:</span><br><span class="line">    weight: 0.15</span><br><span class="line">    license_filter: true</span><br><span class="line">    secret_scan: true</span><br><span class="line">  math_reasoning:</span><br><span class="line">    weight: 0.08</span><br><span class="line">    verified_only: true</span><br><span class="line">  multilingual:</span><br><span class="line">    weight: 0.08</span><br><span class="line">    balance_by_language: true</span><br><span class="line">  long_context:</span><br><span class="line">    weight: 0.05</span><br><span class="line">    preserve_document_structure: true</span><br><span class="line">  domain_data:</span><br><span class="line">    weight: 0.03</span><br><span class="line">    pii_filter: true</span><br><span class="line">  synthetic_data:</span><br><span class="line">    weight: 0.01</span><br><span class="line">    validation_required: true</span><br></pre></td></tr></table></figure>
+<p>这个配置不一定代表真实模型比例，只是说明一个重要思想：<strong>数据配比应该是工程资产</strong>，而不是拍脑袋经验。</p>
+<p>这样团队才能回答：</p>
+<ul>
+<li>这次模型用了哪些数据？</li>
+<li>每类数据占比多少？</li>
+<li>哪些数据被上采样？</li>
+<li>哪些数据被下采样？</li>
+<li>配比变化后，哪些能力变好了？</li>
+<li>哪些能力被牺牲了？</li>
+</ul>
+<h3 id="数据消融：配比调整必须能被验证"><a href="#数据消融：配比调整必须能被验证" class="headerlink" title="数据消融：配比调整必须能被验证"></a>数据消融：配比调整必须能被验证</h3><p>如果一个团队说：我们把数学数据加到 10%，模型推理更强了。这句话要可信，至少需要配套实验。</p>
+<table>
+<thead>
+<tr>
+<th><strong>要检查的问题</strong></th>
+<th><strong>为什么重要</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>其他训练条件是否基本一致</td>
+<td>避免把训练步数、学习率、batch size 的影响误认为数据效果</td>
+</tr>
+<tr>
+<td>数学评测是否提升</td>
+<td>验证目标能力是否真的增强</td>
+</tr>
+<tr>
+<td>通用问答是否下降</td>
+<td>检查是否牺牲通用能力</td>
+</tr>
+<tr>
+<td>代码能力有没有变化</td>
+<td>防止数据挤占导致其他能力退化</td>
+</tr>
+<tr>
+<td>中文能力有没有变化</td>
+<td>检查语言分布是否被稀释</td>
+</tr>
+<tr>
+<td>提升来自数据质量还是数据数量</td>
+<td>判断是“更好数据”还是“更多 token”带来的收益</td>
+</tr>
+<tr>
+<td>是否存在评测污染</td>
+<td>防止模型只是看过题目</td>
+</tr>
+</tbody>
+</table>
+<p>这就是数据消融实验：只改变某类数据，观察模型能力变化。如下图所示：</p>
+<p><img src="/images/llm/llm-pretraining-data-07.png" alt="数据消融"></p>
+<p>没有数据消融，配比调整就很容易变成玄学。看起来是在优化模型，实际可能只是把某类 benchmark 刷高了，或者用一个能力的提升换来了另一个能力的下降。</p>
+<h3 id="小结：配比决定模型的能力形状"><a href="#小结：配比决定模型的能力形状" class="headerlink" title="小结：配比决定模型的能力形状"></a>小结：配比决定模型的能力形状</h3><p>数据配比不是简单的百分比问题，而是模型能力设计问题。它决定了模型：</p>
+<ul>
+<li>更熟悉哪类知识。</li>
+<li>更擅长哪种语言。</li>
+<li>是否会写代码。</li>
+<li>是否能做数学推理。</li>
+<li>是否能读长文档。</li>
+<li>是否懂某个专业领域。</li>
+<li>是否容易学到低质表达。</li>
+<li>是否会在某些能力上偏科。</li>
+</ul>
+<p>最后可以用一句话总结：<strong>数据清洗决定模型少学坏东西，数据配比决定模型重点学什么</strong>。配比设计得越清楚，模型能力画像就越可控。</p>
+<h2 id="评测污染、合成数据与长上下文：数据工程的三个高级问题"><a href="#评测污染、合成数据与长上下文：数据工程的三个高级问题" class="headerlink" title="评测污染、合成数据与长上下文：数据工程的三个高级问题"></a>评测污染、合成数据与长上下文：数据工程的三个高级问题</h2><p>前面讲的数据来源、清洗、去重、过滤和配比，更多是在解决“训练数据怎么变干净、怎么变有效”的问题。但数据工程还不止这些。越往后走，会遇到三个更高级的问题：</p>
+<ol>
+<li>评测是否可信？</li>
+<li>自然数据不够怎么办？</li>
+<li>模型如何真正学会长上下文？</li>
+</ol>
+<p>这三个问题分别对应评测污染、合成数据和长上下文数据工程。它们决定的不是数据集表面有多大，而是模型能力到底能不能被真实验证、能不能持续扩展、能不能处理更复杂的信息结构。</p>
+<h3 id="评测污染：分数可信吗？"><a href="#评测污染：分数可信吗？" class="headerlink" title="评测污染：分数可信吗？"></a>评测污染：分数可信吗？</h3><p>预训练数据工程里有一个非常重要但常被忽略的问题：<strong>训练集是否包含了评测集？</strong>如果包含了，模型在 benchmark 上表现很好，不一定代表它真的具备泛化能力，也可能只是训练时见过题目、答案或解析。这就是<strong>数据污染</strong>。</p>
+<p>数据污染很容易发生，因为很多评测集本身是公开的。一旦公开，它们就可能被放进 GitHub 仓库，被博客讲解，被论坛讨论，被论文引用，被教程整理，也可能被数据集镜像站收录。然后这些内容又会进入网页语料、代码语料或论文语料。污染路径如下所示：</p>
+<p><img src="/images/llm/llm-pretraining-data-08.png" alt="评测污染会让 benchmark 分数偏离真实泛化能力"></p>
+<p>去污染通常要分几层做：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>做法</strong></th>
+<th><strong>解决什么问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>精确匹配</td>
+<td>搜索评测题文本、答案文本</td>
+<td>原题和答案直接泄露</td>
+</tr>
+<tr>
+<td>n-gram 匹配</td>
+<td>找出和评测样本高度重合的片段</td>
+<td>局部复制、题目解析泄露</td>
+</tr>
+<tr>
+<td>近似匹配</td>
+<td>检测改写、转载、格式变化后的相似样本</td>
+<td>改写版题目和镜像内容</td>
+</tr>
+<tr>
+<td>元数据过滤</td>
+<td>排除 benchmark 仓库、评测代码目录、数据集镜像站</td>
+<td>来源级污染</td>
+</tr>
+<tr>
+<td>时间切分</td>
+<td>使用训练截止时间之后的新评测</td>
+<td>降低提前见过的概率</td>
+</tr>
+<tr>
+<td>私有评测</td>
+<td>保留不公开的内部评测集</td>
+<td>验证真实泛化能力</td>
+</tr>
+</tbody>
+</table>
+<p>去污染不是为了让数字难看，而是为了<strong>让数字可信</strong>。如果一个模型在干净评测上提升，说明它更可能真的学会了能力；如果只在可能泄露的 benchmark 上提升，结果就要谨慎解释。</p>
+<p>这里还要<strong>区分记忆和泛化</strong>。大模型当然会记住一些内容，训练数据里反复出现的事实、代码片段、文章、题库，都可能被模型记忆。问题不在于模型是否完全不记忆，而在于：</p>
+<ul>
+<li>它是否能把训练中学到的规律，迁移到没见过的问题上？</li>
+</ul>
+<p>数据工程要做的，是减少无意义记忆，提高可泛化学习：减少重复样本，提高数据多样性，控制 benchmark 泄露，让评测覆盖新问题，并用消融实验判断能力来源。</p>
+<h3 id="合成数据：可控扩展，但必须验证"><a href="#合成数据：可控扩展，但必须验证" class="headerlink" title="合成数据：可控扩展，但必须验证"></a>合成数据：可控扩展，但必须验证</h3><p>传统预训练主要依赖人类已经产生的数据：网页、书籍、代码、论文、百科和问答。但随着模型能力增强，越来越多训练数据开始由模型参与生成，这就是合成数据。合成数据的核心价值是：当自然数据不够、太脏、太贵或不够可控时，用模型、规则、程序或人机协作生成更有目标的数据。它既可以进入继续预训练，也更常出现在后训练、推理数据和评测构造中，关键区别在于目标、格式和验证方式。</p>
+<p>它特别适合补齐那些稀缺、昂贵、需要结构化验证的数据短板。</p>
+<table>
+<thead>
+<tr>
+<th><strong>场景</strong></th>
+<th><strong>为什么适合合成</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数学题</td>
+<td>可以生成题目、步骤、答案，并用规则或程序验证</td>
+</tr>
+<tr>
+<td>代码题</td>
+<td>可以生成函数、测试用例、修复任务，并运行测试验证</td>
+</tr>
+<tr>
+<td>指令数据</td>
+<td>可以围绕任务类型批量生成问答和解释</td>
+</tr>
+<tr>
+<td>长上下文任务</td>
+<td>可以构造长文档、跨段落问题和引用答案</td>
+</tr>
+<tr>
+<td>多语言迁移</td>
+<td>可以翻译、改写、对齐多语言内容</td>
+</tr>
+<tr>
+<td>领域数据增强</td>
+<td>可以把专业资料改写成问答、摘要、案例</td>
+</tr>
+<tr>
+<td>安全数据</td>
+<td>可以生成拒答、边界、风险识别样本</td>
+</tr>
+</tbody>
+</table>
+<p>合成数据的优势是可控。想要更多数学证明，可以生成数学证明；想要更多代码调试，可以生成 bug-fix 样本；想要更多长文问答，可以基于长文构造问题。</p>
+<p>但<strong>合成数据必须有验证</strong>。模型会编，也会把编出来的东西包装得很像真的。所以合成数据不能只看“像不像”，还要看“对不对”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据类型</strong></th>
+<th><strong>验证方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数学</td>
+<td>规则校验、符号计算、答案一致性、多模型交叉验证</td>
+</tr>
+<tr>
+<td>代码</td>
+<td>单元测试、编译、静态检查、运行结果</td>
+</tr>
+<tr>
+<td>知识问答</td>
+<td>检索证据、来源引用、事实一致性检查</td>
+</tr>
+<tr>
+<td>长文问答</td>
+<td>答案必须能在原文定位，引用段落可追踪</td>
+</tr>
+<tr>
+<td>安全样本</td>
+<td>人工审核、策略规则、红队测试</td>
+</tr>
+<tr>
+<td>领域样本</td>
+<td>专家审核、术语一致性、来源追溯</td>
+</tr>
+</tbody>
+</table>
+<p>当模型足够强之后，会形成一种数据飞轮：</p>
+<p><img src="/images/llm/llm-pretraining-data-09.png" alt="合成数据飞轮"></p>
+<p>这个飞轮的关键不在“模型生成”，而在“<strong>验证筛选</strong>”。如果只是让模型无限生成，再拿生成内容继续训练，可能会导致错误被放大、表达风格变窄、数据多样性下降，模型也会越来越擅长模仿模型，而不是理解真实世界。</p>
+<p>健康的数据飞轮应该是：</p>
+<ul>
+<li>生成更多候选 -&gt; 用更强验证筛掉坏样本 -&gt; 只把高价值样本放回训练。</li>
+</ul>
+<blockquote>
+<p>合成数据既可以进入继续预训练，也更常出现在后训练、推理数据和评测构造中，关键区别在于目标、格式和验证方式。</p>
+</blockquote>
+<h3 id="长上下文数据：不是拼长，而是保结构"><a href="#长上下文数据：不是拼长，而是保结构" class="headerlink" title="长上下文数据：不是拼长，而是保结构"></a>长上下文数据：不是拼长，而是保结构</h3><p>上一篇文章已经讨论过长上下文了：模型如何读懂更长的信息。这里从数据工程的角度再看下这个问题：</p>
+<ol>
+<li>长上下文能力不只是位置编码、Attention 优化和推理缓存问题；</li>
+<li>也取决于模型训练时有没有见过足够多高质量长序列。</li>
+</ol>
+<p>长上下文数据不等于把短文本简单拼长。最简单的做法是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">短文 A + 短文 B + 短文 C + 短文 D</span><br></pre></td></tr></table></figure>
+<p>这种 packing 可以提高训练效率，但不一定训练真正的长文理解。因为这些短文之间可能没有任何关系，模型学到的更多是“如何在长窗口里忽略无关内容”，而不是“如何理解一个长结构”。真正有价值的长上下文数据，应该包含<strong>长距离依赖</strong>：</p>
+<ul>
+<li>前文定义的概念，后文继续使用。</li>
+<li>开头提出的问题，结尾给出答案。</li>
+<li>多章节之间有递进关系。</li>
+<li>代码仓库里多个文件互相引用。</li>
+<li>长合同前后条款互相约束。</li>
+<li>论文中的方法、实验和结论相互对应。</li>
+</ul>
+<p>长文档训练还要特别重视结构保留：</p>
+<table>
+<thead>
+<tr>
+<th><strong>结构</strong></th>
+<th><strong>价值</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>标题层级</td>
+<td>帮助模型理解章节关系</td>
+</tr>
+<tr>
+<td>段落</td>
+<td>保留语义单元</td>
+</tr>
+<tr>
+<td>列表</td>
+<td>保留并列和步骤</td>
+</tr>
+<tr>
+<td>表格</td>
+<td>保留属性对比</td>
+</tr>
+<tr>
+<td>代码文件路径</td>
+<td>帮助理解仓库结构</td>
+</tr>
+<tr>
+<td>引用和脚注</td>
+<td>帮助追踪来源</td>
+</tr>
+<tr>
+<td>文档边界</td>
+<td>避免不同文档无意义混合</td>
+</tr>
+</tbody>
+</table>
+<p>这也是为什么粗暴清洗会伤害长上下文能力。把标题、段落、表格、代码路径和文档边界全部抹掉，模型看到的就只是一长串 token，而不是一篇有组织的文档。</p>
+<p>长上下文评测也要去污染。比如某些长文问答题，如果原文、问题和答案在公开仓库里出现过，模型可能不是现场阅读，而是凭记忆回答。更可靠的长上下文评测往往需要使用新构造的文档、动态生成问题、要求答案引用原文位置，并加入干扰信息，测试模型能否真正定位关键段落。</p>
+<p>从数据工程角度看，长上下文能力的核心不是“窗口变大了”，而是：<strong>模型能否在更长的信息结构里稳定定位、保持约束、整合证据并输出答案。</strong></p>
+<h3 id="小结：可信与扩展"><a href="#小结：可信与扩展" class="headerlink" title="小结：可信与扩展"></a>小结：可信与扩展</h3><p>评测污染、合成数据和长上下文，看起来是三个不同问题，其实都指向同一件事：数据工程不能只负责“把数据送进训练”，还要负责模型能力的可信度、增长方式和复杂信息处理能力：</p>
+<ol>
+<li>评测污染：确认模型是真的会了，而不是提前看过答案；</li>
+<li>合成数据： 在自然数据不足时，制造可验证、可控的高价值数据；</li>
+<li>长上下文： 让模型学习真实长结构，而不是只处理更长 token 串。</li>
+</ol>
+<p>如果说前面的清洗、去重、过滤和配比，是在决定模型“学什么”，那么这三个问题就是在进一步追问：</p>
+<ol>
+<li>学到的能力可信吗？</li>
+<li>能力还能继续增长吗？</li>
+<li>模型能处理更复杂的信息结构吗？</li>
+</ol>
+<p>这也是预训练数据工程从基础处理走向高级能力设计的关键一步。</p>
+<h2 id="数据治理：让数据工程可复现"><a href="#数据治理：让数据工程可复现" class="headerlink" title="数据治理：让数据工程可复现"></a>数据治理：让数据工程可复现</h2><p>前面讲的是数据工程的关键环节：数据来源、清洗、去重、过滤、配比、评测污染、合成数据和长上下文。真正落到工程里，这些能力不能只靠几个脚本临时拼起来，而要变成一套可复现、可追踪、可评估的数据治理系统。一个简化的数据平台可以长这样：</p>
+<p><img src="/images/llm/llm-pretraining-data-10.png" alt="数据治理系统"></p>
+<p>这套系统最核心的目标，是让团队能回答几个问题：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>为什么重要</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>这次训练用了哪些数据源</td>
+<td>解释模型能力来源</td>
+</tr>
+<tr>
+<td>每个数据源是什么版本</td>
+<td>保证实验可复现</td>
+</tr>
+<tr>
+<td>清洗、去重、过滤规则是什么</td>
+<td>判断数据处理是否影响能力</td>
+</tr>
+<tr>
+<td>各类数据配比是多少</td>
+<td>分析模型为什么偏科</td>
+</tr>
+<tr>
+<td>tokenizer 是哪个版本</td>
+<td>避免训练样本不可复现</td>
+</tr>
+<tr>
+<td>是否排除了 benchmark</td>
+<td>控制评测污染</td>
+</tr>
+<tr>
+<td>哪些数据被上采样或下采样</td>
+<td>理解能力增强或退化的原因</td>
+</tr>
+</tbody>
+</table>
+<p>所以，数据版本管理不是形式主义，而是模型迭代的记忆系统。没有版本、元数据和质量报告，训练一次模型之后，团队很难说清楚“模型为什么变好了”，也很难说清楚“模型为什么变差了”。</p>
+<p>一个训练样本最好不只是文本，还要有身份信息：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;source&quot;: &quot;web&quot;,</span><br><span class="line">  &quot;language&quot;: &quot;zh&quot;,</span><br><span class="line">  &quot;domain&quot;: &quot;technical_blog&quot;,</span><br><span class="line">  &quot;quality_score&quot;: 0.87,</span><br><span class="line">  &quot;dedup_cluster&quot;: &quot;cluster_123&quot;,</span><br><span class="line">  &quot;license&quot;: &quot;unknown&quot;,</span><br><span class="line">  &quot;created_at&quot;: &quot;2026-06-01&quot;,</span><br><span class="line">  &quot;token_count&quot;: 2048</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>有了元数据，团队才能按语言统计、按领域采样、排除风险来源、对高质量数据上采样、做数据消融，也能在模型出问题时追踪问题可能来自哪类数据。没有元数据，数据湖就只是一个巨大的文本堆。</p>
+<p>这套思路不只适用于训练基座模型。普通团队做领域继续预训练、指令微调、RAG 知识库、企业知识问答、代码助手私有化和评测集构建时，同样绕不开数据治理。</p>
+<p>比如做企业知识问答，最容易犯的错误是：把所有文档直接丢进去。更合理的流程应该是：</p>
+<p><img src="/images/llm/llm-pretraining-data-11.png" alt="企业数据流程"></p>
+<p>可以这样理解：预训练数据工程，是在训练前整理模型的长期记忆；RAG 数据工程，是在推理时整理模型的临时参考资料。两者规模不同，但底层逻辑很像：都要解析、清洗、去重、加元数据、控权限、做质量评估，并通过评测和日志持续回流。</p>
+<p>最后，再整理几个常见误区：</p>
+<ul>
+<li>只追求 token 数量：更重要的是有效 token，高质量、多样、低重复、低污染；</li>
+<li>清洗越狠越好：过度清洗会损失标题、列表、表格、代码缩进等结构信号；</li>
+<li>评测分提升就等于模型变强：可能是数据污染、记忆提升或格式适配；</li>
+<li>合成数据越多越好：合成数据必须可验证、有筛选、有多样性；</li>
+<li>不做数据版本管理：无法解释模型变化，也无法复现实验；</li>
+<li>忽略合规和隐私：训练数据里的 PII、密钥、版权内容必须前置处理。</li>
+</ul>
+<p>数据治理的价值，就是把数据工程从“临时清洗脚本”变成“可持续迭代的能力系统”。</p>
+<h2 id="总结：大模型的燃料工程"><a href="#总结：大模型的燃料工程" class="headerlink" title="总结：大模型的燃料工程"></a>总结：大模型的燃料工程</h2><p>回到开头的问题：大模型到底吃了什么？</p>
+<p>更准确的答案不是“互联网文本”，而是经过数据工程加工后的训练数据分布。这个分布里包含网页、书籍、代码、论文、问答、长文档、领域数据和合成样本；也可能混入噪声、重复、过时信息、隐私风险和评测污染。</p>
+<p>所以，预训练数据工程要解决的核心问题不是“数据够不够多”，而是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">数据是否干净？</span><br><span class="line">是否多样？</span><br><span class="line">是否低重复？</span><br><span class="line">是否低污染？</span><br><span class="line">是否配比合理？</span><br><span class="line">是否可追踪、可复现、可评估？</span><br></pre></td></tr></table></figure>
+<p>如果把整个 LLM 系列连起来，可以看到一条完整链路：</p>
+<p><img src="/images/llm/llm-pretraining-data-12.png" alt="LLM 整体链路"></p>
+<p>理解了这条链路，再看大模型能力差异，就不会只问“参数有多大”，而会继续追问：它看过什么数据？这些数据怎么清洗、去重、配比、去污染、验证和回流？</p>
+<p>最后，总结一下：数据工程不是大模型训练前的脏活，而是大模型能力的燃料工程。模型最终能学到什么，从数据进入训练系统的那一刻，就已经开始被决定了。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;前面几篇我们已经把 LLM 的几条主线串起来了：从 AI 到 LLM，理解大模型为什么会出现；从数学、算法、Transformer 到 Dense/MoE，理解模型结构和学习机制；再到预训练、后训练、分布式训练、推理服务和长上下文，理解一套大模型系统如何被训练出来、部署出去。到了这里，还有一个更底层的问题需要单独展开：模型训练时，究竟吃了什么？&lt;/p&gt;
+&lt;p&gt;很多人讨论大模型时，容易把注意力放在参数量、GPU 数量、训练框架、Attention 结构、MoE 路由和推理加速上。但如果把大模型训练看成一条生产线，数据才是最早进入系统的原材料。没有好的数据，再大的模型也只是在更大规模地学习噪声；没有合理的数据配比，模型就会偏科；没有去重和去污染，模型可能只是记住了训练集和评测答案；没有隐私、安全、版权和版本治理，模型能力越强，风险也越难控制。&lt;/p&gt;
+&lt;p&gt;所以这篇文章想讲的，不是“怎么多收集一些文本”，而是预训练数据工程如何把互联网、书籍、代码、论文、百科、问答和合成样本，炼成一个可学习、可控制、可评估的数据分布。它贯穿数据来源、解析抽取、清洗规范化、去重、质量过滤、安全过滤、数据配比、采样、tokenization、packing、评测去污染、合成数据和版本治理，最终决定模型会学到什么、偏向什么、遗漏什么。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (十一)：长上下文：大模型如何读懂更长的信息</title>
@@ -27,7 +1082,7 @@
 <p>但长上下文并不只是“把窗口调大”。上下文越长，Attention 计算越重，KV Cache 越占显存，模型也越容易忽略中间信息，或者被大量无关内容干扰。真正的长上下文能力，不只是能放下更多 token，而是能在更长、更复杂的信息中找到关键内容，建立远距离关系，并以可承受的成本完成推理。</p>
 <a id="more"></a>
 <h2 id="长上下文为什么重要"><a href="#长上下文为什么重要" class="headerlink" title="长上下文为什么重要"></a>长上下文为什么重要</h2><p>长上下文的重要性，不只是“能输入更多内容”，而是它改变了 LLM 能处理的问题类型。在短上下文阶段，模型更像一个问答工具：用户提出一个问题，模型基于当前 prompt 给出回答。它适合解释概念、生成短文本、写一段代码，但很难真正处理完整资料、长期对话和复杂任务过程。当上下文窗口变长后，模型可以看到更完整的信息，应用形态也随之变化：从“基于一句话回答问题”，走向“基于一组资料完成任务”。</p>
-<p><img src="/images/llm/llm-long-context-01.png" alt="图 1：长上下文让模型从短问答走向复杂任务处理。"></p>
+<p><img src="/images/llm/llm-long-context-01.png" alt="长上下文让模型从短问答走向复杂任务处理"></p>
 <p>典型变化包括：</p>
 <ol>
 <li><strong>长文档问答：</strong>短上下文通常只能放摘要或片段，而长上下文可以让模型阅读完整论文、合同、报告，再基于完整材料回答问题。</li>
@@ -43,7 +1098,7 @@
 <p>但这也带来一个新的要求：模型不仅要“看见”更多 token，还要知道哪些 token 重要，哪些可以忽略，哪些信息需要跨很远的位置建立关系。</p>
 <p>所以，长上下文不是一个单独功能，而是模型结构、训练数据、推理系统和评估方式共同升级后的结果。它让 LLM 从“会回答问题”，进一步走向“能处理复杂信息任务”。</p>
 <h2 id="长上下文难在哪里"><a href="#长上下文难在哪里" class="headerlink" title="长上下文难在哪里"></a>长上下文难在哪里</h2><p>长上下文真正困难的地方，不是把 <code>max context length</code> 这个参数调大，而是当序列变长后，模型和系统都会同时承受更大的压力。可以把它拆成四类问题，如下图所示：</p>
-<p><img src="/images/llm/llm-long-context-02.png" alt="图 2：长上下文的核心挑战不是单点瓶颈，而是计算、显存、位置和信息利用共同叠加。"></p>
+<p><img src="/images/llm/llm-long-context-02.png" alt="长上下文的核心挑战"></p>
 <h3 id="Attention-计算成本会快速上升"><a href="#Attention-计算成本会快速上升" class="headerlink" title="Attention 计算成本会快速上升"></a>Attention 计算成本会快速上升</h3><p>Transformer 的 Self-Attention 会让序列中的 token 彼此建立关系。对于长度为 <code>n</code> 的序列，标准 Attention 需要计算一个近似 <code>n × n</code> 的注意力矩阵，所以复杂度大致是：<strong><code>Attention 复杂度 ≈ O(n²)</code>。</strong>这意味着上下文长度不是线性变贵，而是会快速放大计算压力。举个直观例子（这里是举例说明，实际模型可能通过稀疏注意力、分块、滑动窗口等方式避免完整计算所有关系）：</p>
 <ol>
 <li><strong>4K 上下文：</strong>Attention 关系数量大约是 <code>4K × 4K</code>，约 1.6 千万。</li>
@@ -53,7 +1108,7 @@
 </ol>
 <p>所以，当上下文长度扩大 10 倍时，Attention 计算可能接近扩大 100 倍。FlashAttention 可以显著减少 IO 开销和显存访问成本，让 Attention 算得更快、更省，但它并不会从理论上消除标准全量 Attention 的二次复杂度。</p>
 <h3 id="KV-Cache-会成为显存瓶颈"><a href="#KV-Cache-会成为显存瓶颈" class="headerlink" title="KV Cache 会成为显存瓶颈"></a>KV Cache 会成为显存瓶颈</h3><p>推理阶段还有一个很关键的成本：<strong>KV Cache</strong>。模型在生成新 token 时，需要参考历史上下文。为了避免每一步都重新计算历史 token 的 Key 和 Value，推理系统会把它们缓存起来，后续 decode 时直接复用。</p>
-<p><img src="/images/llm/llm-long-context-03.png" alt="图 3：KV Cache 用显存换计算，避免重复计算历史上下文，但会随着上下文长度持续增长。"></p>
+<p><img src="/images/llm/llm-long-context-03.png" alt="KV Cache"></p>
 <p>KV Cache 可以粗略估算为：<strong><code>KV Cache ≈ 2 × layers × tokens × kv_heads × head_dim × bytes × batch_size</code></strong>。其中：</p>
 <ol>
 <li><code>2</code> 表示 Key 和 Value；</li>
@@ -92,7 +1147,7 @@
 </ol>
 <p>因此，长上下文能力真正要解决的是一条完整链路：<strong><code>放得下 -&gt; 找得到 -&gt; 看得全 -&gt; 推得对 -&gt; 答得稳</code>。</strong>其中“放得下”只是第一步。真正困难的是在长序列里保持稳定的信息检索、关系建模和推理能力。</p>
 <h2 id="长上下文的核心技术方案"><a href="#长上下文的核心技术方案" class="headerlink" title="长上下文的核心技术方案"></a>长上下文的核心技术方案</h2><p>长上下文不是一个单点优化，而是一组技术组合。它既涉及模型结构，也涉及训练数据、推理系统和应用架构。如果简单拆开看，长上下文主要依赖五类能力：</p>
-<p><img src="/images/llm/llm-long-context-04.png" alt="图 4：长上下文能力依赖模型结构、训练方法和推理系统共同协作。"></p>
+<p><img src="/images/llm/llm-long-context-04.png" alt="长上下文"></p>
 <h3 id="位置编码扩展：让模型理解更远的位置"><a href="#位置编码扩展：让模型理解更远的位置" class="headerlink" title="位置编码扩展：让模型理解更远的位置"></a>位置编码扩展：让模型理解更远的位置</h3><p>模型不仅要看到 token，还要知道 token 在哪里。位置编码解决的就是顺序和距离问题。很多现代 LLM 使用 <strong>RoPE</strong>，也就是 Rotary Position Embedding。RoPE 能把位置信息融入 Attention 的 Query 和 Key 中，让模型更好地理解相对位置关系。</p>
 <p>但问题在于：模型训练时见过的上下文长度通常是有限的。如果模型主要在 4K、8K 或 32K 长度上训练，推理时直接拉到 128K、1M，模型不一定能自然适应。所以，长上下文首先需要解决位置外推问题：</p>
 <ol>
@@ -154,7 +1209,7 @@
 </ol>
 <p>这样模型才会从“能放下长文本”，走向“能读懂长文本”。</p>
 <h3 id="长上下文与-RAG：不是替代，而是组合"><a href="#长上下文与-RAG：不是替代，而是组合" class="headerlink" title="长上下文与 RAG：不是替代，而是组合"></a>长上下文与 RAG：不是替代，而是组合</h3><p>长上下文出现后，一个常见误解是：既然模型能放下更多内容，是不是就不需要 RAG 了？答案是否定的。长上下文和 RAG 不是替代关系，而是互补关系。</p>
-<p><img src="/images/llm/llm-long-context-05.png" alt="图 5：更常见的方案不是把所有信息都塞进去，而是先检索，再让模型读更相关的长上下文。"></p>
+<p><img src="/images/llm/llm-long-context-05.png" alt="长上下文流程与 RAG 的结合"></p>
 <p>长上下文的优势是信息更完整，模型可以在更大范围内综合理解。但它也有代价：成本高、噪声多、推理慢。RAG 的优势是<strong>可以先筛选信息，把最相关的资料交给模型</strong>。它能降低成本，也能让知识更新更灵活。但它依赖检索质量，如果召回不到关键材料，模型后面也很难答对。</p>
 <p>所以更合理的架构是：</p>
 <ol>
@@ -163,7 +1218,7 @@
 </ol>
 <p>未来更常见的形态可能是：<strong><code>短期上下文 + 长上下文 + 外部记忆 + RAG + 工具调用</code></strong>。简单来说：长上下文解决“模型一次能读多少”，RAG 解决“应该让模型读什么”，外部记忆和工具调用解决“信息如何长期保存和动态获取”。</p>
 <h2 id="如何评估长上下文能力"><a href="#如何评估长上下文能力" class="headerlink" title="如何评估长上下文能力"></a>如何评估长上下文能力</h2><p>长上下文不能只看“最大支持多少 token”。真正重要的是：模型能否在长输入里稳定找到信息、理解关系，并给出可靠答案。</p>
-<p><img src="/images/llm/llm-long-context-06.png" alt="图 6：长上下文评估要看有效利用率，而不只是窗口长度。"></p>
+<p><img src="/images/llm/llm-long-context-06.png" alt="长上下文评估"></p>
 <p>常见评估方向可以分成五类：</p>
 <ol>
 <li><strong>信息检索能力</strong>：典型方法是 Needle in a Haystack：在大量文本中插入一条关键信息，再观察模型能否准确找出来。但真实任务往往更复杂，需要支持多条关键信息、多位置分布和相似内容干扰。</li>
@@ -175,7 +1230,7 @@
 <p>生产环境里尤其要警惕一种情况：模型看起来<strong>读懂了大部分内容，但漏掉关键细节</strong>。比如合同问答中漏掉免责条款，代码分析中漏掉异常分支，这类错误比直接失败更危险。</p>
 <p>所以，长上下文评估最好和引用、证据链、可追溯性结合起来。模型不仅要给答案，还要尽量说明：答案依据来自哪里，引用了哪些段落，哪些信息存在不确定性。</p>
 <h2 id="未来演进：从更长窗口到记忆系统"><a href="#未来演进：从更长窗口到记忆系统" class="headerlink" title="未来演进：从更长窗口到记忆系统"></a>未来演进：从更长窗口到记忆系统</h2><p>未来长上下文不会只是比拼 128K、1M、10M 这类数字。更重要的方向，是提高有效利用率、降低推理成本，并把上下文能力融入更完整的记忆系统。</p>
-<p><img src="/images/llm/llm-long-context-07.png" alt="图 7：未来长上下文会成为 Agent 记忆系统的一部分。"></p>
+<p><img src="/images/llm/llm-long-context-07.png" alt="未来长上下文会成为 Agent 记忆系统的一部分"></p>
 <p>未来演进大致有五个方向：</p>
 <ol>
 <li><strong>更高效的 Attention</strong>：通过稀疏注意力、滑动窗口、块级注意力、上下文并行等方法，降低超长序列的计算压力。</li>
@@ -6429,97 +7484,6 @@
     <summary type="html">
     
       &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第五篇，从这篇开始会向大家介绍一下 Flink Runtime 中涉及到的分布式调度相关的内容。Flink 本身也是 Master/Slave 架构（当前的架构是在 &lt;a href=&quot;https://cwik
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="flink" scheme="http://matt33.com/tags/flink/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Flink 如何生成 ExecutionGraph</title>
-    <link href="http://matt33.com/2019/12/20/flink-execution-graph-4/"/>
-    <id>http://matt33.com/2019/12/20/flink-execution-graph-4/</id>
-    <published>2019-12-20T03:06:33.000Z</published>
-    <updated>2026-06-19T02:19:10.484Z</updated>
-    
-    <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第四篇，紧接着前面两篇文章，在前两篇文章中介绍的 StreamGraph 和 JobGraph 都是在 client 端生成的，本文将会讲述 JobGraph 是如何转换成 ExecutionGraph 的。当 JobGraph 从 client 端提交到 JobManager 端后，JobManager 会根据 JobGraph 生成对应的 ExecutionGraph，ExecutionGraph 是 Flink 作业调度时使用到的核心数据结构，它包含每一个并行的 task、每一个 intermediate stream 以及它们之间的关系，本篇将会详细分析一下 JobGraph 转换为 ExecutionGraph 的流程。</p>
-<h2 id="Create-ExecutionGraph-的整体流程"><a href="#Create-ExecutionGraph-的整体流程" class="headerlink" title="Create ExecutionGraph 的整体流程"></a>Create ExecutionGraph 的整体流程</h2><p>当用户向一个 Flink 集群提交一个作业后，JobManager 会接收到 Client 相应的请求，JobManager 会先做一些初始化相关的操作（也就是 JobGraph 到 ExecutionGraph 的转化），当这个转换完成后，才会根据 ExecutionGraph 真正在分布式环境中调度当前这个作业，而 JobManager 端处理的整体流程如下：</p>
-<p><img src="/images/flink/4-job-start.png" alt="一个新作业提交后的处理流程"></p>
-<p>上图是一个作业提交后，在 JobManager 端的处理流程，本篇文章主要聚焦于 ExecutionGraph 的生成过程，也就是图中的红色节点，即 ExecutionGraphBuilder 的 <code>buildGraph()</code> 方法，这个方法就是根据 JobGraph 及相关的配置来创建 ExecutionGraph 对象的核心方法。</p>
-<h2 id="具体实现逻辑"><a href="#具体实现逻辑" class="headerlink" title="具体实现逻辑"></a>具体实现逻辑</h2><p>这里将会详细来讲述 ExecutionGraphBuilder <code>buildGraph()</code> 方法的详细实现。</p>
-<h3 id="基本概念"><a href="#基本概念" class="headerlink" title="基本概念"></a>基本概念</h3><p>ExecutionGraph 引入了几个基本概念，先简单介绍一下这些概念，对于理解 ExecutionGraph 有较大帮助：</p>
-<ul>
-<li><strong>ExecutionJobVertex</strong>: 在 ExecutionGraph 中，节点对应的是 ExecutionJobVertex，它是与 JobGraph 中的 JobVertex 一一对应，实际上每个 ExexutionJobVertex 也都是由一个 JobVertex 生成；</li>
-<li><strong>ExecutionVertex</strong>: 在 ExecutionJobVertex 中有一个 <code>taskVertices</code> 变量，它是 ExecutionVertex 类型的数组，数组的大小就是这个 JobVertex 的并发度，在创建 ExecutionJobVertex 对象时，会创建相同并发度梳理的 ExecutionVertex 对象，在真正调度时，一个 ExecutionVertex 实际就是一个 task，它是 ExecutionJobVertex 并行执行的一个子任务；</li>
-<li><strong>Execution</strong>: Execution 是对 ExecutionVertex 的一次执行，通过 ExecutionAttemptId 来唯一标识，一个 ExecutionVertex 在某些情况下可能会执行多次，比如遇到失败的情况或者该 task 的数据需要重新计算时；</li>
-<li><strong>IntermediateResult</strong>: 在 JobGraph 中用 IntermediateDataSet 表示 JobVertex 的输出 stream，一个 JobGraph 可能会有多个输出 stream，在 ExecutionGraph 中，与之对应的就是 IntermediateResult 对象；</li>
-<li><strong>IntermediateResultPartition</strong>: 由于 ExecutionJobVertex 可能有多个并行的子任务，所以每个 IntermediateResult 可能就有多个生产者，每个生产者的在相应的 IntermediateResult 上的输出对应一个 IntermediateResultPartition 对象，IntermediateResultPartition 表示的是 ExecutionVertex 的一个输出分区；</li>
-<li><strong>ExecutionEdge</strong>: ExecutionEdge 表示 ExecutionVertex 的输入，通过 ExecutionEdge 将 ExecutionVertex 和 IntermediateResultPartition 连接起来，进而在 ExecutionVertex 和 IntermediateResultPartition 之间建立联系。</li>
-</ul>
-<p>从这些基本概念中，也可以看出以下几点：</p>
-<ol>
-<li>由于每个 JobVertex 可能有多个 IntermediateDataSet，所以每个 ExecutionJobVertex 可能有多个 IntermediateResult，因此，每个 ExecutionVertex 也可能会包含多个 IntermediateResultPartition；</li>
-<li>ExecutionEdge 这里主要的作用是把 <code>ExecutionVertex</code> 和 <code>IntermediateResultPartition</code> 连接起来，表示它们之间的连接关系。</li>
-</ol>
-<p>这里先放一张 ExecutionGraph 粗略图，它展示上面这些类之间的关系：</p>
-<p><img src="/images/flink/4-excution-graph.png" alt="ExecutionGraph"></p>
-<h3 id="实现细节"><a href="#实现细节" class="headerlink" title="实现细节"></a>实现细节</h3><p>ExecutionGraph 的生成是在 ExecutionGraphBuilder 的 <code>buildGraph()</code> 方法中实现的：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br><span class="line">248</span><br><span class="line">249</span><br><span class="line">250</span><br><span class="line">251</span><br><span class="line">252</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ExecutionGraphBuilder.java</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ExecutionGraph <span class="title">buildGraph</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    @Nullable ExecutionGraph prior,</span></span></span><br><span class="line"><span class="function"><span class="params">    JobGraph jobGraph,</span></span></span><br><span class="line"><span class="function"><span class="params">    Configuration jobManagerConfig,</span></span></span><br><span class="line"><span class="function"><span class="params">    ScheduledExecutorService futureExecutor,</span></span></span><br><span class="line"><span class="function"><span class="params">    Executor ioExecutor,</span></span></span><br><span class="line"><span class="function"><span class="params">    SlotProvider slotProvider,</span></span></span><br><span class="line"><span class="function"><span class="params">    ClassLoader classLoader,</span></span></span><br><span class="line"><span class="function"><span class="params">    CheckpointRecoveryFactory recoveryFactory,</span></span></span><br><span class="line"><span class="function"><span class="params">    Time rpcTimeout,</span></span></span><br><span class="line"><span class="function"><span class="params">    RestartStrategy restartStrategy,</span></span></span><br><span class="line"><span class="function"><span class="params">    MetricGroup metrics,</span></span></span><br><span class="line"><span class="function"><span class="params">    BlobWriter blobWriter,</span></span></span><br><span class="line"><span class="function"><span class="params">    Time allocationTimeout,</span></span></span><br><span class="line"><span class="function"><span class="params">    Logger log,</span></span></span><br><span class="line"><span class="function"><span class="params">    ShuffleMaster&lt;?&gt; shuffleMaster,</span></span></span><br><span class="line"><span class="function"><span class="params">    PartitionTracker partitionTracker,</span></span></span><br><span class="line"><span class="function"><span class="params">    FailoverStrategy.Factory failoverStrategyFactory)</span> <span class="keyword">throws</span> JobExecutionException, JobException </span>&#123;</span><br><span class="line"></span><br><span class="line">    checkNotNull(jobGraph, <span class="string">"job graph cannot be null"</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> String jobName = jobGraph.getName();</span><br><span class="line">    <span class="keyword">final</span> JobID jobId = jobGraph.getJobID();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: build jobInformation</span></span><br><span class="line">    <span class="keyword">final</span> JobInformation jobInformation = <span class="keyword">new</span> JobInformation(</span><br><span class="line">        jobId,</span><br><span class="line">        jobName,</span><br><span class="line">        jobGraph.getSerializedExecutionConfig(),</span><br><span class="line">        jobGraph.getJobConfiguration(),</span><br><span class="line">        jobGraph.getUserJarBlobKeys(),</span><br><span class="line">        jobGraph.getClasspaths());</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: Execution 保留的最大历史数</span></span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">int</span> maxPriorAttemptsHistoryLength =</span><br><span class="line">            jobManagerConfig.getInteger(JobManagerOptions.MAX_ATTEMPTS_HISTORY_SIZE);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 决定什么时候释放 IntermediateResultPartitions 的策略</span></span><br><span class="line">    <span class="keyword">final</span> PartitionReleaseStrategy.Factory partitionReleaseStrategyFactory =</span><br><span class="line">        PartitionReleaseStrategyFactoryLoader.loadPartitionReleaseStrategyFactory(jobManagerConfig);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// create a new execution graph, if none exists so far</span></span><br><span class="line">    <span class="comment">//note: 如果 executionGraph 还不存在，就创建一个新的对象</span></span><br><span class="line">    <span class="keyword">final</span> ExecutionGraph executionGraph;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        executionGraph = (prior != <span class="keyword">null</span>) ? prior :</span><br><span class="line">            <span class="keyword">new</span> ExecutionGraph(</span><br><span class="line">                jobInformation,</span><br><span class="line">                futureExecutor,</span><br><span class="line">                ioExecutor,</span><br><span class="line">                rpcTimeout,</span><br><span class="line">                restartStrategy,</span><br><span class="line">                maxPriorAttemptsHistoryLength,</span><br><span class="line">                failoverStrategyFactory,</span><br><span class="line">                slotProvider,</span><br><span class="line">                classLoader,</span><br><span class="line">                blobWriter,</span><br><span class="line">                allocationTimeout,</span><br><span class="line">                partitionReleaseStrategyFactory,</span><br><span class="line">                shuffleMaster,</span><br><span class="line">                partitionTracker,</span><br><span class="line">                jobGraph.getScheduleMode(),</span><br><span class="line">                jobGraph.getAllowQueuedScheduling());</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> JobException(<span class="string">"Could not create the ExecutionGraph."</span>, e);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// set the basic properties</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">//note: 以 json 的形式记录 JobGraph</span></span><br><span class="line">        executionGraph.setJsonPlan(JsonPlanGenerator.generatePlan(jobGraph));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">        log.warn(<span class="string">"Cannot create JSON plan for job"</span>, t);</span><br><span class="line">        <span class="comment">// give the graph an empty plan</span></span><br><span class="line">        executionGraph.setJsonPlan(<span class="string">"&#123;&#125;"</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// initialize the vertices that have a master initialization hook</span></span><br><span class="line">    <span class="comment">// file output formats create directories here, input formats create splits</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">long</span> initMasterStart = System.nanoTime();</span><br><span class="line">    log.info(<span class="string">"Running initialization on master for job &#123;&#125; (&#123;&#125;)."</span>, jobName, jobId);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (JobVertex vertex : jobGraph.getVertices()) &#123;</span><br><span class="line">        String executableClass = vertex.getInvokableClassName();</span><br><span class="line">        <span class="keyword">if</span> (executableClass == <span class="keyword">null</span> || executableClass.isEmpty()) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> JobSubmissionException(jobId,</span><br><span class="line">                    <span class="string">"The vertex "</span> + vertex.getID() + <span class="string">" ("</span> + vertex.getName() + <span class="string">") has no invokable class."</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">//note: 对于 InputOutputFormatVertex 类型的对象，会在 master 节点做一些额外的初始化操作</span></span><br><span class="line">            vertex.initializeOnMaster(classLoader);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> JobExecutionException(jobId,</span><br><span class="line">                        <span class="string">"Cannot initialize task '"</span> + vertex.getName() + <span class="string">"': "</span> + t.getMessage(), t);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    log.info(<span class="string">"Successfully ran initialization on master in &#123;&#125; ms."</span>,</span><br><span class="line">            (System.nanoTime() - initMasterStart) / <span class="number">1_000_000</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// topologically sort the job vertices and attach the graph to the existing one</span></span><br><span class="line">    <span class="comment">//note: 这里会先做一个排序，source 会放在最前面，接着开始遍历，必须保证当前添加到集合的节点的前置节点都已经添加进去了</span></span><br><span class="line">    List&lt;JobVertex&gt; sortedTopology = jobGraph.getVerticesSortedTopologicallyFromSources();</span><br><span class="line">    <span class="keyword">if</span> (log.isDebugEnabled()) &#123;</span><br><span class="line">        log.debug(<span class="string">"Adding &#123;&#125; vertices from job graph &#123;&#125; (&#123;&#125;)."</span>, sortedTopology.size(), jobName, jobId);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//note: 处理的重点：生成具体的 Execution Plan</span></span><br><span class="line">    executionGraph.attachJobGraph(sortedTopology);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (log.isDebugEnabled()) &#123;</span><br><span class="line">        log.debug(<span class="string">"Successfully created execution graph from job graph &#123;&#125; (&#123;&#125;)."</span>, jobName, jobId);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: cp 相关的配置</span></span><br><span class="line">    <span class="comment">// configure the state CheckPointing</span></span><br><span class="line">    JobCheckpointingSettings snapshotSettings = jobGraph.getCheckpointingSettings();</span><br><span class="line">    <span class="keyword">if</span> (snapshotSettings != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="comment">//note: cp 时，需要 trigger（插入 barrier）的 JobVertex，这里指的是 source 节点</span></span><br><span class="line">        List&lt;ExecutionJobVertex&gt; triggerVertices =</span><br><span class="line">                idToVertex(snapshotSettings.getVerticesToTrigger(), executionGraph);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: cp 时，需要向 master 返回 ack 信息的 JobVertex 节点的集合</span></span><br><span class="line">        List&lt;ExecutionJobVertex&gt; ackVertices =</span><br><span class="line">                idToVertex(snapshotSettings.getVerticesToAcknowledge(), executionGraph);</span><br><span class="line"></span><br><span class="line">        List&lt;ExecutionJobVertex&gt; confirmVertices =</span><br><span class="line">                idToVertex(snapshotSettings.getVerticesToConfirm(), executionGraph);</span><br><span class="line"></span><br><span class="line">        CompletedCheckpointStore completedCheckpoints;</span><br><span class="line">        CheckpointIDCounter checkpointIdCounter;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">int</span> maxNumberOfCheckpointsToRetain = jobManagerConfig.getInteger(</span><br><span class="line">                    CheckpointingOptions.MAX_RETAINED_CHECKPOINTS);</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (maxNumberOfCheckpointsToRetain &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">                <span class="comment">// warning and use 1 as the default value if the setting in</span></span><br><span class="line">                <span class="comment">// state.checkpoints.max-retained-checkpoints is not greater than 0.</span></span><br><span class="line">                log.warn(<span class="string">"The setting for '&#123;&#125; : &#123;&#125;' is invalid. Using default value of &#123;&#125;"</span>,</span><br><span class="line">                        CheckpointingOptions.MAX_RETAINED_CHECKPOINTS.key(),</span><br><span class="line">                        maxNumberOfCheckpointsToRetain,</span><br><span class="line">                        CheckpointingOptions.MAX_RETAINED_CHECKPOINTS.defaultValue());</span><br><span class="line"></span><br><span class="line">                maxNumberOfCheckpointsToRetain = CheckpointingOptions.MAX_RETAINED_CHECKPOINTS.defaultValue();</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            completedCheckpoints = recoveryFactory.createCheckpointStore(jobId, maxNumberOfCheckpointsToRetain, classLoader);</span><br><span class="line">            checkpointIdCounter = recoveryFactory.createCheckpointIDCounter(jobId);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> JobExecutionException(jobId, <span class="string">"Failed to initialize high-availability checkpoint handler"</span>, e);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Maximum number of remembered checkpoints</span></span><br><span class="line">        <span class="comment">//note: cp 保存的最多数量</span></span><br><span class="line">        <span class="keyword">int</span> historySize = jobManagerConfig.getInteger(WebOptions.CHECKPOINTS_HISTORY_SIZE);</span><br><span class="line"></span><br><span class="line">        CheckpointStatsTracker checkpointStatsTracker = <span class="keyword">new</span> CheckpointStatsTracker(</span><br><span class="line">                historySize,</span><br><span class="line">                ackVertices,</span><br><span class="line">                snapshotSettings.getCheckpointCoordinatorConfiguration(),</span><br><span class="line">                metrics);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// load the state backend from the application settings</span></span><br><span class="line">        <span class="keyword">final</span> StateBackend applicationConfiguredBackend;</span><br><span class="line">        <span class="keyword">final</span> SerializedValue&lt;StateBackend&gt; serializedAppConfigured = snapshotSettings.getDefaultStateBackend();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (serializedAppConfigured == <span class="keyword">null</span>) &#123;</span><br><span class="line">            applicationConfiguredBackend = <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                applicationConfiguredBackend = serializedAppConfigured.deserializeValue(classLoader);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (IOException | ClassNotFoundException e) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> JobExecutionException(jobId,</span><br><span class="line">                        <span class="string">"Could not deserialize application-defined state backend."</span>, e);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: state backend</span></span><br><span class="line">        <span class="keyword">final</span> StateBackend rootBackend;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            rootBackend = StateBackendLoader.fromApplicationOrConfigOrDefault(</span><br><span class="line">                    applicationConfiguredBackend, jobManagerConfig, classLoader, log);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">catch</span> (IllegalConfigurationException | IOException | DynamicCodeLoadingException e) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> JobExecutionException(jobId, <span class="string">"Could not instantiate configured state backend"</span>, e);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// instantiate the user-defined checkpoint hooks</span></span><br><span class="line">        <span class="comment">//note: 实例话用户自定义的 cp hook</span></span><br><span class="line">        <span class="keyword">final</span> SerializedValue&lt;MasterTriggerRestoreHook.Factory[]&gt; serializedHooks = snapshotSettings.getMasterHooks();</span><br><span class="line">        <span class="keyword">final</span> List&lt;MasterTriggerRestoreHook&lt;?&gt;&gt; hooks;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (serializedHooks == <span class="keyword">null</span>) &#123;</span><br><span class="line">            hooks = Collections.emptyList();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">final</span> MasterTriggerRestoreHook.Factory[] hookFactories;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                hookFactories = serializedHooks.deserializeValue(classLoader);</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">catch</span> (IOException | ClassNotFoundException e) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> JobExecutionException(jobId, <span class="string">"Could not instantiate user-defined checkpoint hooks"</span>, e);</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">final</span> Thread thread = Thread.currentThread();</span><br><span class="line">            <span class="keyword">final</span> ClassLoader originalClassLoader = thread.getContextClassLoader();</span><br><span class="line">            thread.setContextClassLoader(classLoader);</span><br><span class="line"></span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                hooks = <span class="keyword">new</span> ArrayList&lt;&gt;(hookFactories.length);</span><br><span class="line">                <span class="keyword">for</span> (MasterTriggerRestoreHook.Factory factory : hookFactories) &#123;</span><br><span class="line">                    hooks.add(MasterHooks.wrapHook(factory.create(), classLoader));</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">finally</span> &#123;</span><br><span class="line">                thread.setContextClassLoader(originalClassLoader);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">final</span> CheckpointCoordinatorConfiguration chkConfig = snapshotSettings.getCheckpointCoordinatorConfiguration();</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 创建 CheckpointCoordinator 对象</span></span><br><span class="line">        executionGraph.enableCheckpointing(</span><br><span class="line">            chkConfig,</span><br><span class="line">            triggerVertices,</span><br><span class="line">            ackVertices,</span><br><span class="line">            confirmVertices,</span><br><span class="line">            hooks,</span><br><span class="line">            checkpointIdCounter,</span><br><span class="line">            completedCheckpoints,</span><br><span class="line">            rootBackend,</span><br><span class="line">            checkpointStatsTracker);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// create all the metrics for the Execution Graph</span></span><br><span class="line"></span><br><span class="line">    metrics.gauge(RestartTimeGauge.METRIC_NAME, <span class="keyword">new</span> RestartTimeGauge(executionGraph));</span><br><span class="line">    metrics.gauge(DownTimeGauge.METRIC_NAME, <span class="keyword">new</span> DownTimeGauge(executionGraph));</span><br><span class="line">    metrics.gauge(UpTimeGauge.METRIC_NAME, <span class="keyword">new</span> UpTimeGauge(executionGraph));</span><br><span class="line">    metrics.gauge(NumberOfFullRestartsGauge.METRIC_NAME, <span class="keyword">new</span> NumberOfFullRestartsGauge(executionGraph));</span><br><span class="line"></span><br><span class="line">    executionGraph.getFailoverStrategy().registerMetrics(metrics);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> executionGraph;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在这个方法里，会先创建一个 ExecutionGraph 对象，然后对 JobGraph 中的 JobVertex 列表做一下排序（先把有 source 节点的 JobVertex 放在最前面，然后开始遍历，只有当前 JobVertex 的前置节点都已经添加到集合后才能把当前 JobVertex 节点添加到集合中），最后通过 <code>attachJobGraph()</code> 方法生成具体的 Execution Plan。</p>
-<p>ExecutionGraph 的 <code>attachJobGraph()</code> 方法会将这个作业的 ExecutionGraph 构建出来，它会根据 JobGraph 创建相应的 ExecutionJobVertex、IntermediateResult、ExecutionVertex、ExecutionEdge、IntermediateResultPartition，其详细的执行逻辑如下图所示：</p>
-<p><img src="/images/flink/4-execution-job-vertex.png" alt="ExecutionGraph"></p>
-<p>上面的图还是有些凌乱，要配合本文的第二张图来看，接下来看下具体的方法实现。</p>
-<h4 id="创建-ExecutionJobVertex-对象"><a href="#创建-ExecutionJobVertex-对象" class="headerlink" title="创建 ExecutionJobVertex 对象"></a>创建 ExecutionJobVertex 对象</h4><p>先来看下创建 ExecutionJobVertex 对象的实现：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">ExecutionJobVertex</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        ExecutionGraph graph,</span></span></span><br><span class="line"><span class="function"><span class="params">        JobVertex jobVertex,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">int</span> defaultParallelism,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">int</span> maxPriorAttemptsHistoryLength,</span></span></span><br><span class="line"><span class="function"><span class="params">        Time timeout,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">long</span> initialGlobalModVersion,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">long</span> createTimestamp)</span> <span class="keyword">throws</span> JobException </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (graph == <span class="keyword">null</span> || jobVertex == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.graph = graph;</span><br><span class="line">    <span class="keyword">this</span>.jobVertex = jobVertex;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 并发度</span></span><br><span class="line">    <span class="keyword">int</span> vertexParallelism = jobVertex.getParallelism();</span><br><span class="line">    <span class="keyword">int</span> numTaskVertices = vertexParallelism &gt; <span class="number">0</span> ? vertexParallelism : defaultParallelism;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">int</span> configuredMaxParallelism = jobVertex.getMaxParallelism();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.maxParallelismConfigured = (VALUE_NOT_SET != configuredMaxParallelism);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// if no max parallelism was configured by the user, we calculate and set a default</span></span><br><span class="line">    setMaxParallelismInternal(maxParallelismConfigured ?</span><br><span class="line">            configuredMaxParallelism : KeyGroupRangeAssignment.computeDefaultMaxParallelism(numTaskVertices));</span><br><span class="line"></span><br><span class="line">    <span class="comment">// verify that our parallelism is not higher than the maximum parallelism</span></span><br><span class="line">    <span class="keyword">if</span> (numTaskVertices &gt; maxParallelism) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> JobException(</span><br><span class="line">            String.format(<span class="string">"Vertex %s's parallelism (%s) is higher than the max parallelism (%s). Please lower the parallelism or increase the max parallelism."</span>,</span><br><span class="line">                jobVertex.getName(),</span><br><span class="line">                numTaskVertices,</span><br><span class="line">                maxParallelism));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.parallelism = numTaskVertices;</span><br><span class="line">    <span class="keyword">this</span>.resourceProfile = ResourceProfile.fromResourceSpec(jobVertex.getMinResources(), <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: taskVertices 记录这个 task 每个并发</span></span><br><span class="line">    <span class="keyword">this</span>.taskVertices = <span class="keyword">new</span> ExecutionVertex[numTaskVertices];</span><br><span class="line">    <span class="keyword">this</span>.operatorIDs = Collections.unmodifiableList(jobVertex.getOperatorIDs());</span><br><span class="line">    <span class="keyword">this</span>.userDefinedOperatorIds = Collections.unmodifiableList(jobVertex.getUserDefinedOperatorIDs());</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 记录输入的 IntermediateResult 列表</span></span><br><span class="line">    <span class="keyword">this</span>.inputs = <span class="keyword">new</span> ArrayList&lt;&gt;(jobVertex.getInputs().size());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// take the sharing group</span></span><br><span class="line">    <span class="keyword">this</span>.slotSharingGroup = jobVertex.getSlotSharingGroup();</span><br><span class="line">    <span class="keyword">this</span>.coLocationGroup = jobVertex.getCoLocationGroup();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// setup the coLocation group</span></span><br><span class="line">    <span class="keyword">if</span> (coLocationGroup != <span class="keyword">null</span> &amp;&amp; slotSharingGroup == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> JobException(<span class="string">"Vertex uses a co-location constraint without using slot sharing"</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// create the intermediate results</span></span><br><span class="line">    <span class="comment">//note: 创建 IntermediateResult 对象数组（根据 JobVertex 的 targets 来确定）</span></span><br><span class="line">    <span class="keyword">this</span>.producedDataSets = <span class="keyword">new</span> IntermediateResult[jobVertex.getNumberOfProducedIntermediateDataSets()];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; jobVertex.getProducedDataSets().size(); i++) &#123;</span><br><span class="line">        <span class="comment">//note: JobGraph 中 IntermediateDataSet 这里会转换为 IntermediateResult 对象</span></span><br><span class="line">        <span class="keyword">final</span> IntermediateDataSet result = jobVertex.getProducedDataSets().get(i);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 这里一个 IntermediateDataSet 会对应一个 IntermediateResult</span></span><br><span class="line">        <span class="keyword">this</span>.producedDataSets[i] = <span class="keyword">new</span> IntermediateResult(</span><br><span class="line">                result.getId(),</span><br><span class="line">                <span class="keyword">this</span>,</span><br><span class="line">                numTaskVertices,</span><br><span class="line">                result.getResultType());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// create all task vertices</span></span><br><span class="line">    <span class="comment">//note: task vertices 创建</span></span><br><span class="line">    <span class="comment">//note: 一个 JobVertex/ExecutionJobVertex 代表的是一个operator chain，而具体的 ExecutionVertex 则代表了每一个 Task</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; numTaskVertices; i++) &#123;</span><br><span class="line">        ExecutionVertex vertex = <span class="keyword">new</span> ExecutionVertex(</span><br><span class="line">                <span class="keyword">this</span>,</span><br><span class="line">                i,</span><br><span class="line">                producedDataSets,</span><br><span class="line">                timeout,</span><br><span class="line">                initialGlobalModVersion,</span><br><span class="line">                createTimestamp,</span><br><span class="line">                maxPriorAttemptsHistoryLength);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">this</span>.taskVertices[i] = vertex;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// sanity check for the double referencing between intermediate result partitions and execution vertices</span></span><br><span class="line">    <span class="keyword">for</span> (IntermediateResult ir : <span class="keyword">this</span>.producedDataSets) &#123;</span><br><span class="line">        <span class="keyword">if</span> (ir.getNumberOfAssignedPartitions() != parallelism) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"The intermediate result's partitions were not correctly assigned."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>它主要做了一下工作：</p>
-<ol>
-<li>根据这个 JobVertex 的 <code>results</code>（<code>IntermediateDataSet</code> 列表）来创建相应的 <code>IntermediateResult</code> 对象，每个 <code>IntermediateDataSet</code> 都会对应的一个 <code>IntermediateResult</code>；</li>
-<li>再根据这个 JobVertex 的并发度，来创建相同数量的 <code>ExecutionVertex</code> 对象，每个 <code>ExecutionVertex</code> 对象在调度时实际上就是一个 task 任务；</li>
-<li>在创建 <code>IntermediateResult</code> 和 <code>ExecutionVertex</code> 对象时都会记录它们之间的关系，它们之间的关系可以参考本文的图二。</li>
-</ol>
-<h4 id="创建-ExecutionVertex-对象"><a href="#创建-ExecutionVertex-对象" class="headerlink" title="创建 ExecutionVertex 对象"></a>创建 ExecutionVertex 对象</h4><p>创建 ExecutionVertex 对象的实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">ExecutionVertex</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        ExecutionJobVertex jobVertex,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">int</span> subTaskIndex,</span></span></span><br><span class="line"><span class="function"><span class="params">        IntermediateResult[] producedDataSets,</span></span></span><br><span class="line"><span class="function"><span class="params">        Time timeout,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">long</span> initialGlobalModVersion,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">long</span> createTimestamp,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">int</span> maxPriorExecutionHistoryLength)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.jobVertex = jobVertex;</span><br><span class="line">    <span class="keyword">this</span>.subTaskIndex = subTaskIndex;</span><br><span class="line">    <span class="keyword">this</span>.executionVertexId = <span class="keyword">new</span> ExecutionVertexID(jobVertex.getJobVertexId(), subTaskIndex);</span><br><span class="line">    <span class="keyword">this</span>.taskNameWithSubtask = String.format(<span class="string">"%s (%d/%d)"</span>,</span><br><span class="line">            jobVertex.getJobVertex().getName(), subTaskIndex + <span class="number">1</span>, jobVertex.getParallelism());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.resultPartitions = <span class="keyword">new</span> LinkedHashMap&lt;&gt;(producedDataSets.length, <span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 新建 IntermediateResultPartition 对象，并更新到缓存中</span></span><br><span class="line">    <span class="keyword">for</span> (IntermediateResult result : producedDataSets) &#123;</span><br><span class="line">        IntermediateResultPartition irp = <span class="keyword">new</span> IntermediateResultPartition(result, <span class="keyword">this</span>, subTaskIndex);</span><br><span class="line">        <span class="comment">//note: 记录 IntermediateResult 与 IntermediateResultPartition 之间的关系</span></span><br><span class="line">        result.setPartition(subTaskIndex, irp);</span><br><span class="line"></span><br><span class="line">        resultPartitions.put(irp.getPartitionId(), irp);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建 input ExecutionEdge 列表，记录输入的 ExecutionEdge 列表</span></span><br><span class="line">    <span class="keyword">this</span>.inputEdges = <span class="keyword">new</span> ExecutionEdge[jobVertex.getJobVertex().getInputs().size()][];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.priorExecutions = <span class="keyword">new</span> EvictingBoundedList&lt;&gt;(maxPriorExecutionHistoryLength);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建对应的 Execution 对象，初始化时 attemptNumber 为 0，如果后面重新调度这个 task，它会自增加 1</span></span><br><span class="line">    <span class="keyword">this</span>.currentExecution = <span class="keyword">new</span> Execution(</span><br><span class="line">        getExecutionGraph().getFutureExecutor(),</span><br><span class="line">        <span class="keyword">this</span>,</span><br><span class="line">        <span class="number">0</span>,</span><br><span class="line">        initialGlobalModVersion,</span><br><span class="line">        createTimestamp,</span><br><span class="line">        timeout);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// create a co-location scheduling hint, if necessary</span></span><br><span class="line">    CoLocationGroup clg = jobVertex.getCoLocationGroup();</span><br><span class="line">    <span class="keyword">if</span> (clg != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">this</span>.locationConstraint = clg.getLocationConstraint(subTaskIndex);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">this</span>.locationConstraint = <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    getExecutionGraph().registerExecution(currentExecution);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.timeout = timeout;</span><br><span class="line">    <span class="keyword">this</span>.inputSplits = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>ExecutionVertex 创建时，主要做了下面这三件事：</p>
-<ol>
-<li>根据这个 ExecutionJobVertex 的 <code>producedDataSets</code>（IntermediateResult 类型的数组），给每个 ExecutionVertex 创建相应的 IntermediateResultPartition 对象，它代表了一个 IntermediateResult 分区；</li>
-<li>调用 IntermediateResult 的 <code>setPartition()</code> 方法，记录 IntermediateResult 与 IntermediateResultPartition 之间的关系；</li>
-<li>给这个 ExecutionVertex 创建一个 Execution 对象，如果这个 ExecutionVertex 重新调度（失败重新恢复等情况），那么 Execution 对应的 <code>attemptNumber</code> 将会自增加 1，这里初始化的时候其值为 0。</li>
-</ol>
-<h4 id="创建-ExecutionEdge"><a href="#创建-ExecutionEdge" class="headerlink" title="创建 ExecutionEdge"></a>创建 ExecutionEdge</h4><p>根据前面的流程图，接下来，看下 ExecutionJobVertex 的 <code>connectToPredecessors()</code> 方法。在这个方法中，主要做的工作是创建对应的 ExecutionEdge 对象，并使用这个对象将 ExecutionVertex 与 IntermediateResultPartition 连接起来，ExecutionEdge 的成员变量比较简单，如下所示：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ExecutionEdge.java</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ExecutionEdge</span> </span>&#123;</span><br><span class="line">    <span class="comment">// source 节点</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> IntermediateResultPartition source;</span><br><span class="line">    <span class="comment">// target 节点</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ExecutionVertex target;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> inputNum;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>ExecutionEdge 的创建是在 ExecutionVertex 中 <code>connectSource()</code> 方法中实现的，代码实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ExecutionVertex.java</span></span><br><span class="line"><span class="comment">//note: 与上游节点连在一起</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">connectSource</span><span class="params">(<span class="keyword">int</span> inputNumber, IntermediateResult source, JobEdge edge, <span class="keyword">int</span> consumerNumber)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> DistributionPattern pattern = edge.getDistributionPattern();</span><br><span class="line">    <span class="keyword">final</span> IntermediateResultPartition[] sourcePartitions = source.getPartitions();</span><br><span class="line"></span><br><span class="line">    ExecutionEdge[] edges;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 只有 forward/RESCALE 的方式的情况下，pattern 才是 POINTWISE 的，否则均为 ALL_TO_ALL</span></span><br><span class="line">    <span class="keyword">switch</span> (pattern) &#123;</span><br><span class="line">        <span class="keyword">case</span> POINTWISE:</span><br><span class="line">            edges = connectPointwise(sourcePartitions, inputNumber);</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">case</span> ALL_TO_ALL:</span><br><span class="line">            <span class="comment">//note: 它会连接上游所有的 IntermediateResultPartition</span></span><br><span class="line">            edges = connectAllToAll(sourcePartitions, inputNumber);</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Unrecognized distribution pattern."</span>);</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    inputEdges[inputNumber] = edges;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// add the consumers to the source</span></span><br><span class="line">    <span class="comment">// for now (until the receiver initiated handshake is in place), we need to register the</span></span><br><span class="line">    <span class="comment">// edges as the execution graph</span></span><br><span class="line">    <span class="comment">//note: 之前已经为 IntermediateResult 添加了 consumer，这里为 IntermediateResultPartition 添加 consumer，即关联到 ExecutionEdge 上</span></span><br><span class="line">    <span class="keyword">for</span> (ExecutionEdge ee : edges) &#123;</span><br><span class="line">        ee.getSource().addConsumer(ee, consumerNumber);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在创建 ExecutionEdge 时，会根据这个 JobEdge 的 <code>DistributionPattern</code> 选择不同的实现，这里主要分两种情况，<code>DistributionPattern</code> 是跟 Partitioner 的配置有关（<a href="http://matt33.com/2019/12/09/flink-job-graph-3/#Partitioner">Partitioner 详解</a>）：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// StreamingJobGraphGenerator.java</span></span><br><span class="line"><span class="comment">//note: 创建 JobEdge（它会连接上下游的 node）</span></span><br><span class="line">JobEdge jobEdge;</span><br><span class="line"><span class="keyword">if</span> (partitioner <span class="keyword">instanceof</span> ForwardPartitioner || partitioner <span class="keyword">instanceof</span> RescalePartitioner) &#123;</span><br><span class="line">    jobEdge = downStreamVertex.connectNewDataSetAsInput( <span class="comment">//note: 这个方法会创建 IntermediateDataSet 对象</span></span><br><span class="line">        headVertex,</span><br><span class="line">        DistributionPattern.POINTWISE, <span class="comment">//note: 上游与下游的消费模式，（每个生产任务的 sub-task 会连接到消费任务的一个或多个 sub-task）</span></span><br><span class="line">        resultPartitionType);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    jobEdge = downStreamVertex.connectNewDataSetAsInput(</span><br><span class="line">            headVertex,</span><br><span class="line">            DistributionPattern.ALL_TO_ALL, <span class="comment">//note: 每个生产任务的 sub-task 都会连接到每个消费任务的 sub-task</span></span><br><span class="line">            resultPartitionType);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>如果 DistributionPattern 是 <code>ALL_TO_ALL</code> 模式，这个 ExecutionVertex 会与 IntermediateResult 对应的所有 IntermediateResultPartition 连接起来，而如果是 <code>POINTWISE</code> 模式，ExecutionVertex 只会与部分的 IntermediateResultPartition 连接起来。<code>POINTWISE</code> 模式下 IntermediateResultPartition 与 ExecutionVertex 之间的分配关系如下图所示，具体的分配机制是跟 IntermediateResultPartition 数与 ExecutionVertex 数有很大关系的，具体细节实现可以看下相应代码，这里只是举了几个示例。</p>
-<p><img src="/images/flink/4-partitioner.png" alt="POINTWISE 模式下的分配机制"></p>
-<p>到这里，这个作业的 ExecutionGraph 就创建完成了，有了 ExecutionGraph，JobManager 才能对这个作业做相应的调度。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文详细介绍了 JobGraph 如何转换为 ExecutionGraph 的过程。到这里，StreamGraph、 JobGraph 和 ExecutionGraph 的生成过程，在最近的三篇文章中已经详细讲述完了，后面将会给大家逐步介绍 runtime 的其他内容。</p>
-<p>简单总结一下：</p>
-<ol>
-<li>streamGraph 是最原始的用户逻辑，是一个没有做任何优化的 DataFlow；</li>
-<li>JobGraph 对 StreamGraph 做了一些优化，主要是将能够 Chain 在一起的算子 Chain 在一起，这一样可以减少网络 shuffle 的开销；</li>
-<li>ExecutionGraph 则是作业运行是用来调度的执行图，可以看作是并行化版本的 JobGraph，将 DAG 拆分到基本的调度单元。</li>
-</ol>
-<hr>
-<p>参考</p>
-<ul>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.9/concepts/glossary.html#physical-graph" target="_blank" rel="external">Glossary</a>；</li>
-<li><a href="http://chenyuzhao.me/2016/12/03/Flink%E5%9F%BA%E6%9C%AC%E7%BB%84%E4%BB%B6%E5%92%8C%E9%80%BB%E8%BE%91%E8%AE%A1%E5%88%92/" target="_blank" rel="external">Flink 集群构建 &amp; 逻辑计划生成</a>；</li>
-<li><a href="http://chenyuzhao.me/2017/02/06/flink%E7%89%A9%E7%90%86%E8%AE%A1%E5%88%92%E7%94%9F%E6%88%90/" target="_blank" rel="external">Flink 物理计划生成</a>；</li>
-<li><a href="https://yq.aliyun.com/articles/225618" target="_blank" rel="external">Flink原理与实现：如何生成ExecutionGraph及物理执行图</a>；</li>
-<li><a href="https://blog.jrwang.me/2019/flink-source-code-executiongraph/" target="_blank" rel="external">Flink 源码阅读笔记（3）- ExecutionGraph 的生成</a>；</li>
-<li><a href="https://zhuanlan.zhihu.com/p/22736103" target="_blank" rel="external">Flink源码解析-从API到JobGraph</a>；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第四篇，紧接着前面两篇文章，在前两篇文章中介绍的 StreamGraph 和 JobGraph 都是在 client 端生成的，本文将会讲述 JobGraph 是如何转换成 ExecutionGraph 的。
     
     </summary>
     
