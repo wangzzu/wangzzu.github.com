@@ -1,0 +1,469 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (十三)：RAG，大模型如何连接外部知识 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (十三)：RAG，大模型如何连接外部知识</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (十三)：RAG，大模型如何连接外部知识</h1><div class="post-meta">Jul 3, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">5,529</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/03/llm-rag/" href="/2026/07/03/llm-rag/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么需要-RAG"><span class="toc-number">1.</span> <span class="toc-text">为什么需要 RAG</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RAG-工程链路"><span class="toc-number">2.</span> <span class="toc-text">RAG 工程链路</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#离线入库：先把资料变成可检索知识"><span class="toc-number">2.1.</span> <span class="toc-text">离线入库：先把资料变成可检索知识</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Chunk-切分：决定检索粒度"><span class="toc-number">2.2.</span> <span class="toc-text">Chunk 切分：决定检索粒度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#索引构建：不只有向量索引"><span class="toc-number">2.3.</span> <span class="toc-text">索引构建：不只有向量索引</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#在线召回：从-Query-改写到-Hybrid-Search"><span class="toc-number">2.4.</span> <span class="toc-text">在线召回：从 Query 改写到 Hybrid Search</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Rerank-与上下文组装：把候选证据整理给模型"><span class="toc-number">2.5.</span> <span class="toc-text">Rerank 与上下文组装：把候选证据整理给模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#小结"><span class="toc-number">2.6.</span> <span class="toc-text">小结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#工程实践：从能用到可靠"><span class="toc-number">3.</span> <span class="toc-text">工程实践：从能用到可靠</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#证据治理：引用、冲突与可追溯"><span class="toc-number">3.1.</span> <span class="toc-text">证据治理：引用、冲突与可追溯</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#权限与版本：企业-RAG-的底线"><span class="toc-number">3.2.</span> <span class="toc-text">权限与版本：企业 RAG 的底线</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#评估体系：不要只看最终答案"><span class="toc-number">3.3.</span> <span class="toc-text">评估体系：不要只看最终答案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#幻觉治理：RAG-只能降低幻觉，不能消灭幻觉"><span class="toc-number">3.4.</span> <span class="toc-text">幻觉治理：RAG 只能降低幻觉，不能消灭幻觉</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#常见问题与治理方式"><span class="toc-number">3.5.</span> <span class="toc-text">常见问题与治理方式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#未来演进：从检索插件到知识系统"><span class="toc-number">4.</span> <span class="toc-text">未来演进：从检索插件到知识系统</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><p>大模型在预训练阶段已经学到了大量通用知识，但这些知识本质上是“写进参数里的静态记忆”。模型训练完成后，参数不会自动更新；而真实世界中的知识却在不断变化：产品文档会迭代，业务规则会调整，代码仓库会更新，企业内部知识也往往是私有的、动态的、需要权限控制的。</p>
+<p>对于企业知识问答、客服助手、代码助手、法律合规、金融研报分析这类场景来说，答案不能只是“看起来合理”，还必须能够基于明确证据，说明来自哪份文档、哪个版本、哪个段落。换句话说，大模型不仅要会回答，还要会查资料、用资料、引用资料。</p>
+<p>这就是 RAG 诞生的背景。RAG，全称 <strong>Retrieval-Augmented Generation</strong>，即“检索增强生成”。它的核心思想很直接：不要让模型只依赖参数中的静态知识，而是在回答问题之前，先从外部知识库中检索相关资料，再把这些资料放入上下文，让模型基于证据生成答案。</p>
+<a id="more"></a>
+<h2 id="为什么需要-RAG"><a href="#为什么需要-RAG" class="headerlink" title="为什么需要 RAG"></a>为什么需要 RAG</h2><p>RAG 要解决的核心问题，不是让模型“变得更聪明”，而是让模型能够连接外部知识，并基于可追溯的证据回答问题。可以从四个角度理解它的价值：</p>
+<ol>
+<li><strong>补充最新知识</strong>：模型参数有时间边界，而外部知识库可以持续更新。</li>
+<li><strong>连接私有知识</strong>：企业文档、内部代码、工单记录、数据库说明等信息，通常不在公开预训练语料中。</li>
+<li><strong>降低更新成本</strong>：相比重新训练模型，更新知识库、重建索引和增量同步要现实得多。</li>
+<li><strong>提供证据来源</strong>：业务场景往往要求答案可解释、可引用、可审计，而不是只给出一个看似合理的结论。</li>
+</ol>
+<p>所以，RAG 可以理解成大模型系统里的“外部知识访问层”：</p>
+<ol>
+<li><strong>模型参数</strong>：提供通用语言能力、推理能力和任务理解能力；</li>
+<li><strong>外部知识库</strong>：保存可更新、可治理、可权限控制的业务知识；</li>
+<li><strong>RAG 系统</strong>：负责在两者之间完成检索、排序、上下文组装和基于证据的生成。</li>
+</ol>
+<p><img src="/images/llm/llm-rag-01.png" alt="RAG 检索生成增强生成流程"></p>
+<p>简单说，RAG 不是让模型记住一切，而是让模型在需要时能够找到正确资料，并基于资料回答问题。</p>
+<h2 id="RAG-工程链路"><a href="#RAG-工程链路" class="headerlink" title="RAG 工程链路"></a>RAG 工程链路</h2><p>一个完整的 RAG 系统，不能简单理解成“把文档丢进向量库，然后让模型查询”。真正可用的 RAG，通常是一条从<strong>离线知识入库</strong>到<strong>在线检索生成</strong>的工程链路。</p>
+<p>离线链路负责把原始资料加工成可检索、可过滤、可追踪的知识库；在线链路负责理解用户问题，通过多路召回和重排找到可靠证据，再把证据组织成模型可以理解的上下文。</p>
+<p><img src="/images/llm/llm-rag-02.png" alt="RAG 工程链路"></p>
+<h3 id="离线入库：先把资料变成可检索知识"><a href="#离线入库：先把资料变成可检索知识" class="headerlink" title="离线入库：先把资料变成可检索知识"></a>离线入库：先把资料变成可检索知识</h3><p>RAG 的第一步不是 Embedding，而是<strong>文档解析</strong>。真实业务里的知识通常不是干净的纯文本，而是 PDF、Word、Markdown、HTML、飞书文档、代码仓库、数据库表结构、日志、工单、PPT、图片和扫描件。</p>
+<p>解析阶段的目标不是“提取文字”这么简单，而是尽量保留结构信息：</p>
+<ul>
+<li>标题 / 章节层级 / 段落 / 列表 / 表格</li>
+<li>代码块 / 文件路径 / 图片说明 / 文档来源</li>
+<li>更新时间 / 版本号 / 作者 / 权限信息</li>
+</ul>
+<p>如果这一层把表格打散、标题丢掉、代码缩进破坏，后面的检索和生成都会变差。很多 RAG 效果不好，并不是模型不行，而是知识在入库前就已经被处理坏了。</p>
+<h3 id="Chunk-切分：决定检索粒度"><a href="#Chunk-切分：决定检索粒度" class="headerlink" title="Chunk 切分：决定检索粒度"></a>Chunk 切分：决定检索粒度</h3><p>文档解析后，系统通常不会直接把整篇文档作为检索单元，而是切成多个 Chunk。Chunk 是 RAG 的基础检索单元，它决定系统召回的是“一句话”“一段内容”“一个章节”，还是“一块结构化信息”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>切分方式</strong></th>
+<th><strong>适合场景</strong></th>
+<th><strong>关键问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>固定长度切分</td>
+<td>大规模通用文档</td>
+<td>简单但容易切断语义</td>
+</tr>
+<tr>
+<td>滑动窗口切分</td>
+<td>连续文本</td>
+<td>通过 overlap 缓解边界丢失</td>
+</tr>
+<tr>
+<td>按标题切分</td>
+<td>技术文档、产品手册</td>
+<td>保留章节结构</td>
+</tr>
+<tr>
+<td>语义切分</td>
+<td>长文章、知识库</td>
+<td>按主题边界切分</td>
+</tr>
+<tr>
+<td>结构化切分</td>
+<td>表格、代码、FAQ、API 文档</td>
+<td>保留原始结构</td>
+</tr>
+<tr>
+<td>Parent-Child Chunk</td>
+<td>企业知识问答</td>
+<td>小 chunk 检索，父章节返回</td>
+</tr>
+</tbody>
+</table>
+<p>Chunk 太小，模型缺少上下文；Chunk 太大，召回不精确，还会浪费上下文窗口。所以生产系统常用一个原则：</p>
+<ol>
+<li>检索粒度要足够小，便于命中关键内容；</li>
+<li>返回上下文要足够完整，便于模型理解语义。</li>
+</ol>
+<p>这也是 <strong>小 chunk 召回 + 父文档扩展</strong> 常见的原因：先用小 chunk 精确命中，再把相邻段落、标题层级或父章节一起带回。</p>
+<h3 id="索引构建：不只有向量索引"><a href="#索引构建：不只有向量索引" class="headerlink" title="索引构建：不只有向量索引"></a>索引构建：不只有向量索引</h3><p>Embedding 的作用，是把文本转换成向量：</p>
+<ul>
+<li>chunk text -&gt; embedding vector</li>
+<li>query text -&gt; embedding vector</li>
+<li>similarity(query_embedding, chunk_embedding)</li>
+</ul>
+<p>常见相似度包括 Cosine Similarity、Inner Product 和 L2 Distance。大规模检索不会暴力扫描所有向量，而是使用 ANN 近似最近邻索引，例如 HNSW、IVF、PQ / SQ 量化、DiskANN，工程上可以落到 FAISS、Milvus、Elasticsearch、OpenSearch、pgvector 等系统。</p>
+<p>但生产级 RAG 通常不会只有向量索引，还会同时维护三类索引：</p>
+<ol>
+<li>向量索引：解决语义召回；</li>
+<li>倒排索引：解决关键词、错误码、接口名、专有名词；</li>
+<li>元数据索引：解决权限、时间、版本、业务线过滤。</li>
+</ol>
+<p>元数据非常关键。一个 chunk 不应该只有文本，还应该有：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;doc_id&quot;: &quot;payment_refund_guide&quot;,</span><br><span class="line">  &quot;chunk_id&quot;: &quot;payment_refund_guide_003&quot;,</span><br><span class="line">  &quot;title&quot;: &quot;退款失败原因说明&quot;,</span><br><span class="line">  &quot;source&quot;: &quot;internal_wiki&quot;,</span><br><span class="line">  &quot;section&quot;: &quot;错误码说明&quot;,</span><br><span class="line">  &quot;updated_at&quot;: &quot;2026-06-20&quot;,</span><br><span class="line">  &quot;version&quot;: &quot;v3&quot;,</span><br><span class="line">  &quot;permission&quot;: [&quot;payment_team&quot;, &quot;cs_team&quot;],</span><br><span class="line">  &quot;tags&quot;: [&quot;payment&quot;, &quot;refund&quot;, &quot;error_code&quot;]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>没有元数据，RAG 很快会变成一个“能搜但不可控”的向量仓库。</p>
+<h3 id="在线召回：从-Query-改写到-Hybrid-Search"><a href="#在线召回：从-Query-改写到-Hybrid-Search" class="headerlink" title="在线召回：从 Query 改写到 Hybrid Search"></a>在线召回：从 Query 改写到 Hybrid Search</h3><p>在线链路的第一步，是把用户问题转换成更适合检索系统理解的 Query。</p>
+<p>真实用户的问题往往很短、很口语，甚至缺少上下文。如果直接拿原问题去检索，很容易召回不到关键资料。例如：</p>
+<ul>
+<li>用户问题：为什么支付失败？</li>
+<li>改写后：支付失败可能涉及哪些错误码、风控拒绝、账户余额不足、渠道超时、回调异常或订单状态异常？</li>
+</ul>
+<p>这一步通常会用到几类 Query 处理方法：</p>
+<ol>
+<li><strong>Query Rewrite</strong>：把口语化问题改写成更适合检索的表达。</li>
+<li><strong>Query Expansion</strong>：扩展同义词、缩写、产品名、错误码别名。</li>
+<li><strong>Multi-Query Retrieval</strong>：从多个角度生成查询，并行召回候选结果。</li>
+<li><strong>HyDE</strong>：先生成一个假设性答案或文档，再用它做语义检索。</li>
+<li><strong>Query Decomposition</strong>：把复杂问题拆成多个子问题分别检索。</li>
+</ol>
+<p>Query 处理之后，召回阶段通常不会只依赖一种检索方式。生产系统里更常见的是 <strong>Hybrid Search</strong>：</p>
+<ol>
+<li><strong>Sparse Search</strong>：基于 BM25 / 倒排索引，擅长精确匹配关键词、错误码、接口名、专有名词。</li>
+<li><strong>Dense Search</strong>：基于 Embedding / 向量检索，擅长语义匹配，能找到表达不同但含义接近的内容。</li>
+<li><strong>Metadata Filter</strong>：基于权限、时间、版本、业务线、文档类型等元数据过滤候选范围。</li>
+<li><strong>Structured Search</strong>：针对数据库、表格、代码符号、API schema 等结构化信息做精确查询。</li>
+</ol>
+<p>比如用户问：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ERR-7782 是什么原因？</span><br></pre></td></tr></table></figure>
+<p>这里最关键的是 <code>ERR-7782</code> 这个精确错误码，BM25 或倒排索引往往比向量检索更稳。但如果用户问：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">为什么服务启动后马上退出？</span><br></pre></td></tr></table></figure>
+<p>这类问题不一定和文档里的原始表述完全一致，Dense Search 更容易找到“进程 crash”“健康检查失败”“启动异常退出”等语义相关内容。所以，更合理的召回方式通常是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">关键词召回 + 向量召回 + 元数据过滤 + 结构化检索</span><br></pre></td></tr></table></figure>
+<p>不过，多路召回之后还不能直接进入生成。因为 BM25、向量检索和结构化检索来自不同系统，分数体系并不一致，不能简单把原始分数直接相加。工程上通常还需要做一次<strong>候选融合</strong>：</p>
+<ol>
+<li><strong>RRF</strong>：根据结果在不同召回通道中的排名进行融合，不直接依赖原始分数，简单且稳定。</li>
+<li><strong>分数归一化</strong>：把 BM25 分、向量相似度、时间权重等拉到同一尺度，再进行加权。</li>
+<li><strong>规则加权</strong>：根据来源权威性、更新时间、业务线匹配、关键词精确命中等因素调整排序。</li>
+</ol>
+<p>候选融合的目标不是完成最终排序，而是先得到一个覆盖较全、质量较高的候选池。随后，再交给 Rerank 模型做更精细的相关性判断。</p>
+<h3 id="Rerank-与上下文组装：把候选证据整理给模型"><a href="#Rerank-与上下文组装：把候选证据整理给模型" class="headerlink" title="Rerank 与上下文组装：把候选证据整理给模型"></a>Rerank 与上下文组装：把候选证据整理给模型</h3><p>第一阶段召回通常追求“别漏”，可能会返回 top 50 或 top 100 个候选片段。接下来需要通过 Rerank，把真正相关的内容排到前面。常见 Rerank 方案包括：</p>
+<ol>
+<li>Cross-Encoder Reranker：把 query 和 document pair 一起输入模型，相关性判断更准，但成本较高。</li>
+<li>Late Interaction Reranker：代表思路是 ColBERT，query 和文档分别编码，再做 token 级交互。</li>
+<li>LLM Reranker：让大模型判断哪些片段最相关，适合复杂问题，但延迟和成本更高。</li>
+<li>规则融合排序：结合 BM25 分、向量分、时间、文档质量、来源权威性等信号。</li>
+</ol>
+<p>Rerank 之后，系统还需要做一次上下文组装。这里的目标不是治理证据，而是把最相关的候选内容整理成模型能够读取的输入：</p>
+<ol>
+<li>去掉重复 chunk；</li>
+<li>合并相邻片段；</li>
+<li>补充标题、章节、来源和更新时间；</li>
+<li>按相关性和文档结构重新排序；</li>
+<li>控制 token 长度，避免上下文过长；</li>
+<li>给片段添加编号，方便后续引用。</li>
+</ol>
+<p>可以简单理解为：</p>
+<ul>
+<li>召回结果 -&gt; 候选融合 -&gt; Rerank -&gt; 去重 -&gt; 结构补全 -&gt; 上下文组装 -&gt; LLM 生成</li>
+</ul>
+<p>这一层解决的是“如何把检索结果送到模型面前”。至于这些证据是否可信、是否冲突、能否被追溯，则属于后面的生产治理问题。</p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>这一章可以总结为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">离线链路：</span><br><span class="line">文档 -&gt; 解析 -&gt; 清洗 -&gt; Chunk -&gt; 元数据 -&gt; Embedding -&gt; 多索引</span><br><span class="line"></span><br><span class="line">在线链路：</span><br><span class="line">问题 -&gt; 改写 -&gt; 多路召回 -&gt; 融合排序 -&gt; Rerank -&gt; 上下文组装 -&gt; 生成</span><br></pre></td></tr></table></figure>
+<p>真正决定 RAG 效果的，不只是 embedding 模型好不好，而是整条链路是否能做到：</p>
+<ol>
+<li>文档解析保留结构；</li>
+<li>Chunk 粒度合理；</li>
+<li>元数据足够完整；</li>
+<li>Sparse、Dense、Metadata 多路召回互补；</li>
+<li>Rerank 能把关键证据排前面；</li>
+<li>上下文组织清晰、可引用、可追溯；</li>
+<li>模型最终基于证据回答，而不是凭空补全。</li>
+</ol>
+<h2 id="工程实践：从能用到可靠"><a href="#工程实践：从能用到可靠" class="headerlink" title="工程实践：从能用到可靠"></a>工程实践：从能用到可靠</h2><p>一个 RAG demo 很容易做：文档切块、向量化、检索、拼 prompt、生成答案。但企业级 RAG 要解决的问题远不止这些。真正上线后，系统要面对权限、版本、引用、评估、延迟、成本和幻觉治理。</p>
+<h3 id="证据治理：引用、冲突与可追溯"><a href="#证据治理：引用、冲突与可追溯" class="headerlink" title="证据治理：引用、冲突与可追溯"></a>证据治理：引用、冲突与可追溯</h3><p>企业级 RAG 不能只追求“答出来”，还要追求“答得有依据”。模型最终输出的答案，最好能回答三个问题：</p>
+<ol>
+<li>这个结论来自哪里？</li>
+<li>引用的资料是否足够支持答案？</li>
+<li>如果资料之间冲突，系统有没有说明？</li>
+</ol>
+<p>所以生产级 RAG 通常会把证据治理作为独立能力来做。首先，每个进入上下文的片段都应该带上稳定的证据标识，例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[证据 1]</span><br><span class="line">标题：退款失败错误码说明</span><br><span class="line">来源：payment/refund_error.md</span><br><span class="line">版本：v3</span><br><span class="line">更新时间：2026-06-20</span><br><span class="line">段落：ERR-7782</span><br><span class="line">内容：...</span><br></pre></td></tr></table></figure>
+<p>这样模型生成答案时，才能明确引用来源，而不是泛泛地说“根据文档”。更进一步，系统还可以要求答案按 claim 级别引用证据：</p>
+<ul>
+<li>结论 A -&gt; 来自证据 1</li>
+<li>结论 B -&gt; 来自证据 2、证据 3</li>
+<li>结论 C -&gt; 当前资料不足，无法确认</li>
+</ul>
+<p>其次，RAG 系统要处理资料冲突。真实业务里，不同文档可能版本不一致，旧文档和新文档可能说法不同，FAQ、代码注释、接口文档之间也可能互相矛盾。这时模型不应该强行选择一个答案，而应该说明：</p>
+<ol>
+<li>哪些资料存在冲突；</li>
+<li>哪份资料更新时间更晚；</li>
+<li>哪个来源更权威；</li>
+<li>当前结论是否需要人工确认。</li>
+</ol>
+<p>最后，证据需要可追溯。一个成熟的 RAG 系统通常会记录：</p>
+<ol>
+<li>用户问题；</li>
+<li>Query 改写结果；</li>
+<li>召回了哪些 chunk；</li>
+<li>Rerank 后的排序；</li>
+<li>最终进入上下文的证据；</li>
+<li>模型答案引用了哪些证据；</li>
+<li>哪些证据没有被使用。</li>
+</ol>
+<p>这些信息对调试、审计和持续优化都很重要。否则当用户发现答案错误时，系统很难判断问题出在解析、切分、召回、排序、上下文组装，还是模型生成阶段。</p>
+<p>简单说，证据治理解决的是：</p>
+<ul>
+<li>不仅要回答，还要知道为什么这样回答；</li>
+<li>不仅要引用，还要引用得准确；</li>
+<li>不仅要检索，还要能追溯整个证据链。</li>
+</ul>
+<h3 id="权限与版本：企业-RAG-的底线"><a href="#权限与版本：企业-RAG-的底线" class="headerlink" title="权限与版本：企业 RAG 的底线"></a>权限与版本：企业 RAG 的底线</h3><p>企业 RAG 最重要的问题之一是：<strong>相关不代表可见</strong>。检索系统不能只判断“哪些内容和问题相关”，还必须判断：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个用户有没有权限看这些内容？</span><br></pre></td></tr></table></figure>
+<p>否则，RAG 可能把无权限文档召回给模型，造成信息泄露。工程上通常需要：</p>
+<ol>
+<li><strong>文档级 ACL</strong>：文档本身有访问控制；</li>
+<li><strong>Chunk 权限继承</strong>：切块后不能丢失原文档权限；</li>
+<li><strong>用户身份过滤</strong>：根据用户、部门、项目、租户过滤；</li>
+<li><strong>检索前过滤</strong>：先限制候选范围，再召回；</li>
+<li><strong>检索后校验</strong>：召回后再次检查权限；</li>
+<li><strong>权限变更同步</strong>：文档权限变化后，索引权限也要更新。</li>
+</ol>
+<p>除了权限，版本也很关键。知识库不是静态的，文档会更新、删除、迁移，规则会过期，embedding 模型也会升级。一个成熟 RAG 系统通常要支持：</p>
+<ol>
+<li>增量文档更新；</li>
+<li>文档删除后的索引清理；</li>
+<li>embedding 版本升级；</li>
+<li>chunk 策略变更后的重建；</li>
+<li>文档版本追踪；</li>
+<li>旧文档降权；</li>
+<li>引用来源可回溯。</li>
+</ol>
+<p>这也是为什么元数据不是可选项，而是 RAG 的治理基础。一个 chunk 至少应该有这些信息：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">doc_id</span><br><span class="line">chunk_id</span><br><span class="line">source</span><br><span class="line">url</span><br><span class="line">title</span><br><span class="line">section</span><br><span class="line">created_at</span><br><span class="line">updated_at</span><br><span class="line">author</span><br><span class="line">permission</span><br><span class="line">embedding_model_version</span><br><span class="line">chunk_strategy_version</span><br><span class="line">quality_score</span><br></pre></td></tr></table></figure>
+<p>没有元数据，RAG 很快会变成一个无法治理的向量仓库。</p>
+<h3 id="评估体系：不要只看最终答案"><a href="#评估体系：不要只看最终答案" class="headerlink" title="评估体系：不要只看最终答案"></a>评估体系：不要只看最终答案</h3><p>RAG 的评估不能只问“答案看起来对不对”。因为一个答案可能看起来很流畅，但底层检索是错的；也可能检索到了正确资料，但模型生成时没有用上。更合理的做法，是把 RAG 拆成四层评估：</p>
+<p><img src="/images/llm/llm-rag-03.png" alt="RAG 评估"></p>
+<p>常见指标包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>指标</strong></th>
+<th><strong>说明</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>检索</td>
+<td>Recall@K</td>
+<td>正确证据是否被召回</td>
+</tr>
+<tr>
+<td>检索</td>
+<td>MRR</td>
+<td>正确证据是否排在前面</td>
+</tr>
+<tr>
+<td>检索</td>
+<td>nDCG</td>
+<td>排序整体质量</td>
+</tr>
+<tr>
+<td>上下文</td>
+<td>Context Precision</td>
+<td>放进上下文的内容是否相关</td>
+</tr>
+<tr>
+<td>上下文</td>
+<td>Context Recall</td>
+<td>必要证据是否都在上下文里</td>
+</tr>
+<tr>
+<td>生成</td>
+<td>Faithfulness</td>
+<td>答案是否忠于证据</td>
+</tr>
+<tr>
+<td>生成</td>
+<td>Answer Correctness</td>
+<td>答案是否正确回答问题</td>
+</tr>
+<tr>
+<td>生成</td>
+<td>Citation Accuracy</td>
+<td>引用是否准确</td>
+</tr>
+<tr>
+<td>系统</td>
+<td>Latency</td>
+<td>端到端响应时间</td>
+</tr>
+<tr>
+<td>系统</td>
+<td>Cost</td>
+<td>检索、rerank、生成整体成本</td>
+</tr>
+<tr>
+<td>安全</td>
+<td>Permission Accuracy</td>
+<td>是否发生越权召回</td>
+</tr>
+</tbody>
+</table>
+<p>可以看到，RAG 的评估不是一个分数，而是一组指标。不同问题要定位到不同层：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">没召回到证据 -&gt; 检索问题</span><br><span class="line">证据排得太靠后 -&gt; 排序问题</span><br><span class="line">上下文里噪声太多 -&gt; 组装问题</span><br><span class="line">答案编造事实 -&gt; 生成或约束问题</span><br><span class="line">引用对不上 -&gt; 证据对齐问题</span><br><span class="line">用户看到无权限内容 -&gt; 权限治理问题</span><br></pre></td></tr></table></figure>
+<h3 id="幻觉治理：RAG-只能降低幻觉，不能消灭幻觉"><a href="#幻觉治理：RAG-只能降低幻觉，不能消灭幻觉" class="headerlink" title="幻觉治理：RAG 只能降低幻觉，不能消灭幻觉"></a>幻觉治理：RAG 只能降低幻觉，不能消灭幻觉</h3><p>RAG 能降低幻觉，但不能保证没有幻觉。原因很简单：</p>
+<ol>
+<li>检索可能错；</li>
+<li>检索可能漏；</li>
+<li>文档本身可能过期；</li>
+<li>多个文档可能冲突；</li>
+<li>模型可能误读材料；</li>
+<li>模型可能在证据不足时强行回答。</li>
+</ol>
+<p>所以生产级 RAG 通常要加入回答约束：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">如果资料不足，必须回答“不确定”</span><br><span class="line">答案必须引用来源</span><br><span class="line">不得使用资料外的信息补充关键事实</span><br><span class="line">遇到冲突资料，要说明冲突</span><br><span class="line">过期资料不能作为最终依据</span><br></pre></td></tr></table></figure>
+<p>更强的系统还会加入 <strong>Answer Verification</strong>，也就是答案验证：</p>
+<p><img src="/images/llm/llm-rag-04.png" alt="Answer Verification"></p>
+<p>答案验证可以做得很轻，也可以做得很重：</p>
+<ol>
+<li><strong>轻量方式</strong>：检查答案是否包含引用，引用文档是否在上下文里；</li>
+<li><strong>中等方式</strong>：把答案拆成多个 claim，逐条检查是否有证据支持；</li>
+<li><strong>重型方式</strong>：使用另一个 verifier 模型或规则系统，对答案做事实一致性校验。</li>
+</ol>
+<p>这一步的目标不是让系统永远不犯错，而是让错误更容易被发现、被解释、被拦截。</p>
+<h3 id="常见问题与治理方式"><a href="#常见问题与治理方式" class="headerlink" title="常见问题与治理方式"></a>常见问题与治理方式</h3><p>RAG 系统常见问题可以按链路拆开看：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>表现</strong></th>
+<th><strong>治理方向</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文档解析差</td>
+<td>表格、代码、标题丢失</td>
+<td>优化解析器，保留结构</td>
+</tr>
+<tr>
+<td>Chunk 不合理</td>
+<td>检索太碎或太粗</td>
+<td>调整 chunk size、overlap、语义切分</td>
+</tr>
+<tr>
+<td>召回失败</td>
+<td>答案依据不存在</td>
+<td>Hybrid Search、Query Rewrite、多路召回</td>
+</tr>
+<tr>
+<td>排序错误</td>
+<td>正确证据排在后面</td>
+<td>Rerank、RRF、规则加权</td>
+</tr>
+<tr>
+<td>上下文噪声多</td>
+<td>模型忽略关键内容</td>
+<td>去重、压缩、父章节扩展</td>
+</tr>
+<tr>
+<td>引用不准确</td>
+<td>答案和来源对不上</td>
+<td>证据编号、claim-level citation</td>
+</tr>
+<tr>
+<td>知识过期</td>
+<td>回答旧规则</td>
+<td>版本管理、更新时间降权</td>
+</tr>
+<tr>
+<td>权限泄露</td>
+<td>召回无权限文档</td>
+<td>ACL filter、租户隔离、权限同步</td>
+</tr>
+<tr>
+<td>成本过高</td>
+<td>延迟高、token 多</td>
+<td>缓存、压缩、分层检索、轻量 rerank</td>
+</tr>
+<tr>
+<td>幻觉</td>
+<td>证据不足仍强答</td>
+<td>拒答策略、答案验证、引用约束</td>
+</tr>
+</tbody>
+</table>
+<h2 id="未来演进：从检索插件到知识系统"><a href="#未来演进：从检索插件到知识系统" class="headerlink" title="未来演进：从检索插件到知识系统"></a>未来演进：从检索插件到知识系统</h2><p>早期 RAG 的形态很简单：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">向量库检索 -&gt; 拼接上下文 -&gt; LLM 回答</span><br></pre></td></tr></table></figure>
+<p>但随着应用场景变复杂，RAG 正在从一个“检索插件”，演进成大模型系统中的<strong>知识访问层</strong>。它不再只是负责找几段文本，而是要连接文档、数据库、图谱、多模态资料、工具系统和长期记忆。</p>
+<p><img src="/images/llm/llm-rag-05.png" alt="RAG 未来会演进为 Agent 的知识访问层"></p>
+<p>未来 RAG 主要会沿着四个方向演进，如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th><strong>演进方向</strong></th>
+<th><strong>核心变化</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>典型场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GraphRAG</strong></td>
+<td>从“检索文本片段”走向“检索实体关系”</td>
+<td>普通 RAG 不擅长全局结构、多跳关系和复杂关联推理</td>
+<td>组织架构、企业知识网络、法律条款关系、论文引用网络、代码模块依赖、金融实体关系</td>
+</tr>
+<tr>
+<td><strong>Agentic RAG</strong></td>
+<td>从“单次检索”走向“模型主动规划多步检索”</td>
+<td>复杂问题一次检索不够，需要拆解问题、选择数据源、多次查找和验证证据</td>
+<td>多文档调研、代码仓库分析、故障排查、法律/财务审阅、数据库问答、企业知识助手</td>
+</tr>
+<tr>
+<td><strong>多模态 RAG</strong></td>
+<td>从“文本检索”走向“图片、表格、视频、代码等多模态信息检索”</td>
+<td>企业知识不只存在于文本中，还分布在 PPT、截图、设计稿、视频、日志和监控图表里</td>
+<td>图片问答、表格分析、会议内容检索、设计稿理解、日志分析、代码知识库</td>
+</tr>
+<tr>
+<td><strong>RAG + 长上下文</strong></td>
+<td>从“找少量片段”走向“检索后阅读更多资料”</td>
+<td>RAG 负责找资料，长上下文负责读资料，两者结合提升复杂资料理解能力</td>
+<td>长文档问答、合同审阅、代码仓库分析、研究报告分析、Agent 长程任务</td>
+</tr>
+</tbody>
+</table>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>RAG 的本质，不是给大模型接一个向量数据库，而是构建一套外部知识访问系统。它要解决的问题包括：</p>
+<ol>
+<li>如何把文档解析成高质量知识单元；</li>
+<li>如何切分、标注、embedding 和索引；</li>
+<li>如何通过 sparse、dense、hybrid search 找到证据；</li>
+<li>如何通过 query rewrite、rerank、多路召回提升检索质量；</li>
+<li>如何组装上下文，让模型基于证据回答；</li>
+<li>如何处理权限、版本、更新、引用和评估；</li>
+<li>如何在复杂任务中走向 GraphRAG、Agentic RAG 和多模态 RAG。</li>
+</ol>
+<p>一句话概括：<strong>RAG 让大模型不再只依赖参数里的静态知识，而是能够在回答问题时连接外部知识、引用真实证据，并把企业知识、实时信息和复杂资料纳入推理过程。</strong></p>
+<p>这也是大模型从“通用聊天模型”走向“企业知识系统”和“智能工作流”的关键一步。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/03/llm-rag/" data-id="cmr3prhg90000yqlwcj44oavp" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/07/02/llm-pretraining-data-engineering/" class="next">LLM 系列 (十二)：预训练数据工程：大模型的燃料是如何炼成的</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/03/llm-rag/';
+var disqus_title = 'LLM 系列 (十三)：RAG，大模型如何连接外部知识';
+var disqus_url = 'http://matt33.com/2026/07/03/llm-rag/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/07/03/llm-rag/">LLM 系列 (十三)：RAG，大模型如何连接外部知识</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/02/llm-pretraining-data-engineering/">LLM 系列 (十二)：预训练数据工程：大模型的燃料是如何炼成的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/01/llm-long-context/">LLM 系列 (十一)：长上下文：大模型如何读懂更长的信息</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/30/llm-reasoning-model/">LLM 系列 (十)：推理模型：大模型如何从回答走向思考</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/29/llm-inference-serving/">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/28/llm-distributed-training/">LLM 系列 (八)：分布式训练：千卡集群如何训大模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/27/llm-post-training-alignment/">LLM 系列 (七)：后训练与对齐：从续写器到协作者</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/26/llm-pretraining/">LLM 系列 (六)：预训练的本质：从预测下一个 Token 到通用能力</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/24/llm-dense-moe/">LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/23/llm-transformer-architecture/">LLM 系列 (四)：Transformer 架构篇：大模型为什么选择了 Transformer</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
