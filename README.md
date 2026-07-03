@@ -1,7 +1,7 @@
 Matt's Blog
 ======
 
-该博客使用 Hexo 搭建。
+本博客使用 Hexo 搭建。
 
 Hexo 的主题请参考：[ Hexo Themes](https://hexo.io/themes/)，fork 本仓库并不能直接使用这个主题，需要按照 Hexo 的规则去搭建
 
