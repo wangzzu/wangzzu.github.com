@@ -4,12 +4,407 @@
   
     
     <entry>
+      <title><![CDATA[LLM 系列 (十四)：Agent，大模型如何从对话走向行动]]></title>
+      <url>http://matt33.com/2026/07/04/llm-agent/</url>
+      <content type="html"><![CDATA[<p>大语言模型最初主要以对话式交互的形态被广泛使用：用户输入问题，模型基于上下文生成回答。在这一模式下，模型擅长完成信息解释、文本总结、代码生成、问题分析等任务，本质上仍然是一个以“生成答案”为核心的系统。</p>
+<p>但在真实业务场景中，很多任务并不止于生成一段文本。它们往往需要模型围绕一个目标，连续完成资料检索、文档阅读、接口调用、代码修改、测试执行、结果分析和错误修正等多个步骤。也就是说，系统需要的不只是语言生成能力，还需要任务分解、外部工具使用、状态维护和基于反馈持续调整的能力。这就是 Agent 要解决的问题。</p>
+<a id="more"></a>
+<p>Agent 不是一个单独的模型，也不是某个固定 Prompt，而是一类以大语言模型为核心的任务执行系统。它通过任务规划、工具调用、记忆机制、状态管理和反馈循环，让模型能够围绕目标持续推进任务。</p>
+<p>换句话说，Agent 的意义在于：将 LLM 从“对话生成系统”扩展为“任务执行系统”。</p>
+<h2 id="Agent-是什么"><a href="#Agent-是什么" class="headerlink" title="Agent 是什么"></a>Agent 是什么</h2><p>从系统形态看，Agent 不是一次性问答，而是围绕目标持续执行的闭环系统。它接收的不只是一个问题，而是一个任务目标；输出的也不只是一次回答，而是执行一组动作后的结果。</p>
+<ul>
+<li>普通 LLM 应用更接近“问答模式”：用户问题 -&gt; 模型回答；</li>
+<li>而 Agent 更接近“执行模式”：用户目标 -&gt; 理解任务 -&gt; 制定计划 -&gt; 调用工具 -&gt; 观察结果 -&gt; 更新状态 -&gt; 继续执行 -&gt; 交付结果。</li>
+</ul>
+<p>两者的关键区别在于：普通 LLM 主要生成答案，Agent 则允许模型在系统约束下连接外部环境，并根据反馈持续推进任务。</p>
+<p><img src="/images/llm/llm-agent-01.png" alt="普通 LLM 应用于 Agent 应用对比"></p>
+<p>从系统视角看，Agent 通常由几类能力组成：</p>
+<ol>
+<li><strong>LLM</strong>：理解任务、生成计划、选择动作、总结结果；</li>
+<li><strong>Tools</strong>：连接外部系统，例如搜索、数据库、浏览器、代码执行器、业务 API；</li>
+<li><strong>Memory / State</strong>：保存上下文、任务进展、中间结果和历史信息；</li>
+<li><strong>Controller</strong>：管理执行流程，决定下一步、重试或终止；</li>
+<li><strong>Guardrails</strong>：控制权限、安全、成本和风险。</li>
+</ol>
+<p>所以，Agent 不是“一个会自动做事的模型”，而是一套系统组合：LLM + 工具 + 记忆 / 状态 + 控制循环 + 安全边界。判断一个系统是否具备 Agent 形态，可以看三点：</p>
+<ol>
+<li>是否围绕目标持续执行，而不是只回答一次；</li>
+<li>是否能够调用外部工具，并接收环境反馈；</li>
+<li>是否维护任务状态，并根据结果调整下一步。</li>
+</ol>
+<p>因此，Agent 的核心不是让模型完全自主，而是让模型在可控系统中，把语言理解能力转化为任务执行能力。</p>
+<h2 id="Agent-如何工作"><a href="#Agent-如何工作" class="headerlink" title="Agent 如何工作"></a>Agent 如何工作</h2><p>Agent 的工作方式可以抽象成一个闭环：<strong>Plan -&gt; Act -&gt; Observe -&gt; Reflect。</strong>这个闭环的含义是：模型先根据目标形成计划，然后选择动作并调用工具；工具执行后返回结果，模型再根据结果判断任务是否推进、是否需要修正，或者是否应该结束。可以拆成四个阶段：</p>
+<ol>
+<li><strong>Plan</strong>：理解用户目标，拆解任务，决定下一步要做什么；</li>
+<li><strong>Act</strong>：选择合适的工具，并生成工具调用参数；</li>
+<li><strong>Observe</strong>：接收工具执行结果，例如搜索结果、日志、代码运行结果、接口返回值；</li>
+<li><strong>Reflect</strong>：基于结果判断是否成功，是否需要重试、调整计划或进入下一步。</li>
+</ol>
+<p><img src="/images/llm/llm-agent-02.png" alt="Agent 执行流程"></p>
+<p>这个循环是 Agent 和普通 LLM 应用的关键区别。普通 LLM 往往是在已有上下文里生成一次回答；Agent 则会在执行过程中不断获得新信息，并把这些信息作为下一步决策的依据。</p>
+<ul>
+<li>例如用户给出一个目标：帮我分析这个项目最近一次构建失败的原因，并给出修复建议。</li>
+</ul>
+<p>一个 Agent 可能会按下面的方式执行：</p>
+<ol>
+<li>读取最近一次构建日志；</li>
+<li>定位失败阶段和错误信息；</li>
+<li>搜索相关代码和配置；</li>
+<li>分析错误堆栈与最近改动；</li>
+<li>必要时运行局部测试；</li>
+<li>根据结果修正判断；</li>
+<li>汇总失败原因和修复建议。</li>
+</ol>
+<p>这背后不是一次生成，而是多轮“推理 + 工具调用 + 结果反馈”的过程。</p>
+<p><img src="/images/llm/llm-agent-03.png" alt="Agent 执行流程"></p>
+<p>在实际系统中，Agent 的工作方式通常有几种常见模式：</p>
+<table>
+<thead>
+<tr>
+<th><strong>模式</strong></th>
+<th><strong>核心思路</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ReAct</td>
+<td>推理和行动交替进行，边想边做</td>
+<td>搜索、排障、探索型任务</td>
+</tr>
+<tr>
+<td>Plan-and-Execute</td>
+<td>先生成整体计划，再逐步执行</td>
+<td>流程较清晰的长任务</td>
+</tr>
+<tr>
+<td>Reflection</td>
+<td>执行后检查结果，再决定是否修正</td>
+<td>代码修改、报告生成、结果校验</td>
+</tr>
+<tr>
+<td>Workflow Agent</td>
+<td>流程相对固定，模型只负责关键判断</td>
+<td>企业生产系统、低风险自动化</td>
+</tr>
+</tbody>
+</table>
+<p>需要注意的是，生产环境里很少会让 Agent 完全自由行动。更常见的方式是：流程有边界，工具有权限，执行有终止条件，关键动作需要校验或人工确认。所以，Agent 的工作流程可以总结为：</p>
+<ul>
+<li>目标不是一次性回答，而是持续推进任务；</li>
+<li>动作不是凭空生成，而是通过工具连接外部环境；</li>
+<li>结果不是直接相信，而是根据反馈不断修正。</li>
+</ul>
+<h2 id="Agent-的核心能力：从模型调用到可控执行"><a href="#Agent-的核心能力：从模型调用到可控执行" class="headerlink" title="Agent 的核心能力：从模型调用到可控执行"></a>Agent 的核心能力：从模型调用到可控执行</h2><p>Agent 能不能真正可用，不只取决于模型本身的能力，更取决于系统是否把“规划、执行、记忆、校验、控制”这些能力组织好。可以把 Agent 看成一个围绕 LLM 构建的任务执行系统，如下图所示：</p>
+<p><img src="/images/llm/llm-agent-04.png" alt="Agent 执行闭环"></p>
+<p>Agent 通过规划、执行、反馈和校验形成闭环，当任务完成则交付结果，遇到高风险场景则转人工确认或终止。</p>
+<h3 id="工具调用：连接外部世界"><a href="#工具调用：连接外部世界" class="headerlink" title="工具调用：连接外部世界"></a>工具调用：连接外部世界</h3><p>工具调用是 Agent 从“生成文本”走向“执行任务”的关键。模型本身不能直接访问数据库、浏览器、代码仓库或业务系统，它需要通过工具接口间接连接外部环境。一个工具通常需要明确描述：</p>
+<table>
+<thead>
+<tr>
+<th><strong>配置项</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工具名称</td>
+<td>告诉模型这个工具能做什么</td>
+</tr>
+<tr>
+<td>工具描述</td>
+<td>说明适用场景，帮助模型选择工具</td>
+</tr>
+<tr>
+<td>输入参数 schema</td>
+<td>约束参数类型、字段和必填项</td>
+</tr>
+<tr>
+<td>输出格式</td>
+<td>让模型理解工具返回结果</td>
+</tr>
+<tr>
+<td>权限范围</td>
+<td>限制工具能访问哪些资源</td>
+</tr>
+<tr>
+<td>失败处理</td>
+<td>定义超时、错误、空结果如何返回</td>
+</tr>
+<tr>
+<td>确认机制</td>
+<td>高风险操作是否需要用户确认</td>
+</tr>
+</tbody>
+</table>
+<p>例如一个文档检索工具可以定义成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;name&quot;: &quot;search_docs&quot;,</span><br><span class="line">  &quot;description&quot;: &quot;在企业知识库中检索相关文档&quot;,</span><br><span class="line">  &quot;parameters&quot;: &#123;</span><br><span class="line">    &quot;query&quot;: &quot;string&quot;,</span><br><span class="line">    &quot;top_k&quot;: &quot;number&quot;,</span><br><span class="line">    &quot;source&quot;: &quot;wiki | code | ticket&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>模型生成的不是最终动作，而是一个工具调用请求：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;tool&quot;: &quot;search_docs&quot;,</span><br><span class="line">  &quot;input&quot;: &#123;</span><br><span class="line">    &quot;query&quot;: &quot;退款失败 ERR-7782 原因&quot;,</span><br><span class="line">    &quot;top_k&quot;: 5,</span><br><span class="line">    &quot;source&quot;: &quot;wiki&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>真正的执行由系统完成。这样做的好处是：模型负责判断“该调用什么”，系统负责保证“能不能调用、怎么调用、是否安全”。工具调用的技术重点包括：</p>
+<ol>
+<li><strong>参数校验</strong>：防止模型生成非法字段或错误类型；</li>
+<li><strong>权限控制</strong>：不同用户只能调用自己有权限的工具和数据；</li>
+<li><strong>错误返回</strong>：工具失败时返回结构化错误，而不是只抛异常；</li>
+<li><strong>幂等设计</strong>：重复调用不会造成不可控副作用；</li>
+<li><strong>审计日志</strong>：记录谁在什么任务里调用了什么工具。</li>
+</ol>
+<h3 id="记忆与状态：让任务连续推进"><a href="#记忆与状态：让任务连续推进" class="headerlink" title="记忆与状态：让任务连续推进"></a>记忆与状态：让任务连续推进</h3><p>Agent 需要知道自己正在做什么、已经做了什么、下一步还要做什么。这里的“记忆”不只是聊天历史，而是任务执行过程中的状态管理。可以拆成几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>类型</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>短期上下文</td>
+<td>当前对话、最近工具结果、当前任务约束</td>
+</tr>
+<tr>
+<td>工作记忆</td>
+<td>当前计划、已完成步骤、待执行步骤、中间结论</td>
+</tr>
+<tr>
+<td>长期记忆</td>
+<td>用户偏好、历史任务结果、项目背景</td>
+</tr>
+<tr>
+<td>外部记忆</td>
+<td>RAG、数据库、文件系统、知识库</td>
+</tr>
+<tr>
+<td>执行轨迹</td>
+<td>每一步工具调用、输入输出、错误和重试记录</td>
+</tr>
+</tbody>
+</table>
+<p>如果没有状态管理，Agent 很容易出现问题：重复执行同一步、忘记原始目标、忽略工具结果、前后结论不一致，或者长任务中断后无法恢复。因此，生产级 Agent 往往会维护一个显式的任务状态对象，例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;goal&quot;: &quot;分析构建失败原因&quot;,</span><br><span class="line">  &quot;plan&quot;: [&quot;读取日志&quot;, &quot;定位错误&quot;, &quot;检查代码&quot;, &quot;给出修复建议&quot;],</span><br><span class="line">  &quot;completed_steps&quot;: [&quot;读取日志&quot;, &quot;定位错误&quot;],</span><br><span class="line">  &quot;current_step&quot;: &quot;检查代码&quot;,</span><br><span class="line">  &quot;observations&quot;: [</span><br><span class="line">    &quot;构建失败发生在 test 阶段&quot;,</span><br><span class="line">    &quot;错误来自 payment 模块的空指针异常&quot;</span><br><span class="line">  ],</span><br><span class="line">  &quot;next_action&quot;: &quot;搜索最近 payment 模块变更&quot;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这类状态对象可以让 Agent 不完全依赖上下文窗口，而是用结构化方式保存任务进展。</p>
+<h3 id="规划与控制：让模型会拆任务，但不失控"><a href="#规划与控制：让模型会拆任务，但不失控" class="headerlink" title="规划与控制：让模型会拆任务，但不失控"></a>规划与控制：让模型会拆任务，但不失控</h3><p>Agent 需要具备任务规划能力。面对复杂目标时，模型不能只生成一个最终答案，而要把目标拆成多个可执行步骤。常见规划方式有两类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方式</strong></th>
+<th><strong>特点</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>显式规划</td>
+<td>先生成完整计划，再逐步执行</td>
+<td>报告生成、数据分析、代码迁移</td>
+</tr>
+<tr>
+<td>动态规划</td>
+<td>每一步根据观察结果决定下一步</td>
+<td>故障排查、网页操作、资料调研</td>
+</tr>
+</tbody>
+</table>
+<p>但规划能力必须和控制机制配合使用。否则 Agent 很容易无限搜索、重复尝试，或者把一个简单任务拆得过于复杂。常见控制参数包括：</p>
+<ol>
+<li>最大执行轮数；</li>
+<li>最大工具调用次数；</li>
+<li>最大 token 成本；</li>
+<li>是否允许写操作；</li>
+<li>是否允许访问外部网络；</li>
+<li>是否需要人工确认；</li>
+<li>失败后是否重试；</li>
+<li>什么条件下终止任务。</li>
+</ol>
+<p>所以，Agent 的规划不是“让模型自由发挥”，而是让模型在明确边界内做决策。</p>
+<h3 id="反馈与校验：让结果可以被验证"><a href="#反馈与校验：让结果可以被验证" class="headerlink" title="反馈与校验：让结果可以被验证"></a>反馈与校验：让结果可以被验证</h3><p>Agent 每执行一步，都会得到一个观察结果。但工具返回结果不一定代表任务成功，模型生成的结论也不一定可靠。因此 Agent 需要校验机制。校验可以分为几层：</p>
+<table>
+<thead>
+<tr>
+<th><strong>校验层次</strong></th>
+<th><strong>例子</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工具结果校验</td>
+<td>API 是否返回成功，字段是否完整</td>
+</tr>
+<tr>
+<td>任务结果校验</td>
+<td>测试是否通过，文件是否生成，数据是否匹配</td>
+</tr>
+<tr>
+<td>事实一致性校验</td>
+<td>回答是否有证据支持，引用是否准确</td>
+</tr>
+<tr>
+<td>规则校验</td>
+<td>是否违反权限、格式、安全策略</td>
+</tr>
+<tr>
+<td>人工确认</td>
+<td>高风险动作前让用户确认</td>
+</tr>
+</tbody>
+</table>
+<p>例如代码修复类 Agent，不应该在修改代码后直接输出“已修复”，而应该继续运行测试：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">修改代码 -&gt; 运行测试 -&gt; 测试通过 -&gt; 输出修复说明</span><br><span class="line">修改代码 -&gt; 运行测试 -&gt; 测试失败 -&gt; 重新分析错误</span><br></pre></td></tr></table></figure>
+<p>这也是 Agent 和普通生成式应用的重要区别：Agent 的结果最好能被环境反馈验证，而不是只依赖模型自我判断。</p>
+<h3 id="安全边界：让-Agent-可控"><a href="#安全边界：让-Agent-可控" class="headerlink" title="安全边界：让 Agent 可控"></a>安全边界：让 Agent 可控</h3><p>Agent 越能行动，风险也越高。一个能调用工具的模型，如果没有边界，可能会访问不该访问的数据，执行不该执行的操作，或者在错误判断下持续重试。因此，Agent 系统必须有安全边界：</p>
+<ol>
+<li>读操作和写操作分离；</li>
+<li>高风险操作需要人工确认；</li>
+<li>工具按用户权限动态开放；</li>
+<li>敏感数据进入模型前脱敏；</li>
+<li>所有工具调用都记录日志；</li>
+<li>失败和异常要能回滚或终止；</li>
+<li>不允许模型绕过系统直接执行危险动作。</li>
+</ol>
+<p>简单说，Agent 的核心能力可以总结为：</p>
+<table>
+<thead>
+<tr>
+<th><strong>能力</strong></th>
+<th><strong>解决的问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工具调用</td>
+<td>让模型连接外部系统</td>
+</tr>
+<tr>
+<td>记忆与状态</td>
+<td>让任务可以连续推进</td>
+</tr>
+<tr>
+<td>规划与控制</td>
+<td>让复杂任务可以拆解执行</td>
+</tr>
+<tr>
+<td>反馈与校验</td>
+<td>让结果可以被验证</td>
+</tr>
+<tr>
+<td>安全边界</td>
+<td>让 Agent 在可控范围内行动</td>
+</tr>
+</tbody>
+</table>
+<p>Agent 真正的难点，不是让模型“想到下一步”，而是让每一步都能被执行、被记录、被验证、被约束。只有这些能力组合起来，Agent 才能从一个演示系统走向真实业务系统。</p>
+<h2 id="Agent-落地难在哪里"><a href="#Agent-落地难在哪里" class="headerlink" title="Agent 落地难在哪里"></a>Agent 落地难在哪里</h2><p>上一节讲的是 Agent 需要具备哪些核心能力：工具调用、状态管理、规划控制、结果校验和安全边界。这些能力从架构上看并不复杂，但在真实生产环境里，它们很容易失效。</p>
+<p>原因在于，Agent 面对的不是一次静态输入，而是一条动态执行链路。每一步都可能引入新的不确定性：模型可能理解错目标，工具可能返回异常，状态可能没有正确更新，前一步错误可能影响后续判断，高风险操作还可能对真实系统造成影响。所以，Agent 落地的难点，不是“有没有这些模块”，而是这些模块能否在真实任务中稳定协同。</p>
+<p>普通 LLM 应用的失败，通常只是“回答错了”；Agent 的失败可能会变成“执行错了”。一旦 Agent 连接了数据库、代码仓库、浏览器、业务 API 或自动化工具，错误就不再停留在文本层面，而可能影响真实系统。所以 Agent 落地的核心挑战，可以概括为三句话：</p>
+<ol>
+<li>模型输出具有不确定性，但任务执行需要<strong>稳定性</strong>；</li>
+<li>工具调用可能带来副作用，但业务系统需要<strong>可控性</strong>；</li>
+<li>多步骤链路会累积错误，但最终结果需要<strong>可验证性</strong>。</li>
+</ol>
+<p><img src="/images/llm/llm-agent-05.png" alt="Agent 落地挑战"></p>
+<p>Agent 落地不是单点模型问题，而是模型、工具、状态、安全和评估共同构成的系统问题。可以从几个典型问题来总结下：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>本质</strong></th>
+<th><strong>典型表现</strong></th>
+<th><strong>解决方向</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>目标不清晰</td>
+<td>输入缺少任务边界</td>
+<td>Agent 自行猜测目标，执行方向偏离</td>
+<td>任务澄清、结构化任务描述、验收标准</td>
+</tr>
+<tr>
+<td>规划不稳定</td>
+<td>LLM 输出具有不确定性</td>
+<td>同一任务多次执行路径不同，步骤遗漏</td>
+<td>模板化 Workflow、阶段性计划、关键步骤确认</td>
+</tr>
+<tr>
+<td>工具调用错误</td>
+<td>模型可能选错工具或填错参数</td>
+<td>参数格式错误、重复调用、忽略工具失败</td>
+<td>Tool schema、参数校验、错误码、重试策略</td>
+</tr>
+<tr>
+<td>长链路错误累积</td>
+<td>多步任务中错误会传播</td>
+<td>前一步判断错，后续全部基于错误结果执行</td>
+<td>分阶段校验、checkpoint、Verifier</td>
+</tr>
+<tr>
+<td>状态丢失</td>
+<td>任务进展没有结构化记录</td>
+<td>重复执行、忘记约束、无法恢复</td>
+<td>状态机、任务日志、事件流、工作记忆</td>
+</tr>
+<tr>
+<td>结果不可验证</td>
+<td>模型输出缺少外部证据</td>
+<td>看似完成，实际没有依据或测试失败</td>
+<td>测试、引用、规则校验、人工审核</td>
+</tr>
+<tr>
+<td>安全风险</td>
+<td>工具连接真实系统</td>
+<td>删除数据、越权访问、误发消息</td>
+<td>权限隔离、沙箱、人工确认、审计日志</td>
+</tr>
+<tr>
+<td>成本不可控</td>
+<td>多轮调用放大 token 和工具成本</td>
+<td>执行慢、费用高、循环调用</td>
+<td>最大轮数、预算控制、缓存、模型路由</td>
+</tr>
+</tbody>
+</table>
+<p>这里最关键的是：<strong>Agent 系统不能只依赖模型自觉正确</strong>。生产系统必须把任务执行过程拆开，在关键节点加入约束和校验。一个更可靠的 Agent 架构，通常会采用“受控执行”的方式：</p>
+<p><img src="/images/llm/llm-agent-06.png" alt="Agent 分阶段落地"></p>
+<p>因此，Agent 落地时更推荐从低风险场景开始，而不是一上来就做完全自主系统：</p>
+<ol>
+<li><strong>先做只读型 Agent</strong>：例如文档检索、日志分析、代码阅读、数据分析建议；</li>
+<li><strong>再做建议型 Agent</strong>：模型给出操作建议，但由人确认后执行；</li>
+<li><strong>然后做半自动 Workflow</strong>：固定流程由系统控制，模型只负责局部判断；</li>
+<li><strong>最后再做可控自主执行</strong>：在明确权限、预算、终止条件和回滚机制下，让 Agent 执行多步任务。</li>
+</ol>
+<p>可以把自主程度分成几个阶段：</p>
+<p><img src="/images/llm/llm-agent-07.png" alt="图 7：Agent 落地通常从只读问答逐步走向可控自主执行。"></p>
+<p><em>图 7：Agent 落地通常从只读问答逐步走向可控自主执行。</em></p>
+<p>所以，生产级 Agent 的重点不是“让模型尽可能自由”，而是建立一套可控机制：</p>
+<ol>
+<li>目标要明确；</li>
+<li>工具要有边界；</li>
+<li>状态要可追踪；</li>
+<li>关键步骤要可验证；</li>
+<li>高风险动作要可确认；</li>
+<li>失败过程要可恢复；</li>
+<li>整个执行链路要可观测。</li>
+</ol>
+<p>一句话总结：Agent 落地的难点，不是让模型多走几步，而是让每一步都能被约束、被记录、被验证，并在出错时能够停止、回退或交给人处理。</p>
+<h2 id="未来演进与总结"><a href="#未来演进与总结" class="headerlink" title="未来演进与总结"></a>未来演进与总结</h2><p>Agent 是 LLM 从“生成内容”走向“完成任务”的关键形态。未来 Agent 大概率会沿着几个方向继续演进：</p>
+<ol>
+<li><strong>工具调用更标准化</strong>：模型能更稳定地理解工具 schema、生成参数、处理错误。</li>
+<li><strong>Computer Use 更成熟</strong>：模型不仅调用 API，还能操作浏览器、桌面软件和复杂界面。</li>
+<li><strong>记忆系统更完善</strong>：短期上下文、长期记忆、RAG、任务轨迹会逐渐融合。</li>
+<li><strong>多 Agent 协作</strong>：不同 Agent 分工处理规划、检索、代码、审查和执行。</li>
+<li><strong>安全与评估更重要</strong>：Agent 越能行动，越需要权限、审计、回滚和人工确认。</li>
+</ol>
+<p>简单总结：<strong>Agent 不是让大模型变成一个“完全自主的人”，而是把 LLM 放进一个有工具、有记忆、有状态、有反馈、有边界的系统里，让它能够围绕目标持续完成任务。</strong>如果说 RAG 解决的是“大模型如何连接外部知识”，那么 Agent 解决的就是：<strong>大模型如何连接外部世界，并把知识转化为行动。</strong></p>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[LLM 系列 (十三)：RAG，大模型如何连接外部知识]]></title>
       <url>http://matt33.com/2026/07/03/llm-rag/</url>
       <content type="html"><![CDATA[<p>大模型在预训练阶段已经学到了大量通用知识，但这些知识本质上是“写进参数里的静态记忆”。模型训练完成后，参数不会自动更新；而真实世界中的知识却在不断变化：产品文档会迭代，业务规则会调整，代码仓库会更新，企业内部知识也往往是私有的、动态的、需要权限控制的。</p>
 <p>对于企业知识问答、客服助手、代码助手、法律合规、金融研报分析这类场景来说，答案不能只是“看起来合理”，还必须能够基于明确证据，说明来自哪份文档、哪个版本、哪个段落。换句话说，大模型不仅要会回答，还要会查资料、用资料、引用资料。</p>
-<p>这就是 RAG 诞生的背景。RAG，全称 <strong>Retrieval-Augmented Generation</strong>，即“检索增强生成”。它的核心思想很直接：不要让模型只依赖参数中的静态知识，而是在回答问题之前，先从外部知识库中检索相关资料，再把这些资料放入上下文，让模型基于证据生成答案。</p>
 <a id="more"></a>
+<p>这就是 RAG 诞生的背景。RAG，全称 <strong>Retrieval-Augmented Generation</strong>，即“检索增强生成”。它的核心思想很直接：不要让模型只依赖参数中的静态知识，而是在回答问题之前，先从外部知识库中检索相关资料，再把这些资料放入上下文，让模型基于证据生成答案。</p>
 <h2 id="为什么需要-RAG"><a href="#为什么需要-RAG" class="headerlink" title="为什么需要 RAG"></a>为什么需要 RAG</h2><p>RAG 要解决的核心问题，不是让模型“变得更聪明”，而是让模型能够连接外部知识，并基于可追溯的证据回答问题。可以从四个角度理解它的价值：</p>
 <ol>
 <li><strong>补充最新知识</strong>：模型参数有时间边界，而外部知识库可以持续更新。</li>
@@ -444,8 +839,8 @@
       <url>http://matt33.com/2026/07/02/llm-pretraining-data-engineering/</url>
       <content type="html"><![CDATA[<p>前面几篇我们已经把 LLM 的几条主线串起来了：从 AI 到 LLM，理解大模型为什么会出现；从数学、算法、Transformer 到 Dense/MoE，理解模型结构和学习机制；再到预训练、后训练、分布式训练、推理服务和长上下文，理解一套大模型系统如何被训练出来、部署出去。到了这里，还有一个更底层的问题需要单独展开：模型训练时，究竟吃了什么？</p>
 <p>很多人讨论大模型时，容易把注意力放在参数量、GPU 数量、训练框架、Attention 结构、MoE 路由和推理加速上。但如果把大模型训练看成一条生产线，数据才是最早进入系统的原材料。没有好的数据，再大的模型也只是在更大规模地学习噪声；没有合理的数据配比，模型就会偏科；没有去重和去污染，模型可能只是记住了训练集和评测答案；没有隐私、安全、版权和版本治理，模型能力越强，风险也越难控制。</p>
-<p>所以这篇文章想讲的，不是“怎么多收集一些文本”，而是预训练数据工程如何把互联网、书籍、代码、论文、百科、问答和合成样本，炼成一个可学习、可控制、可评估的数据分布。它贯穿数据来源、解析抽取、清洗规范化、去重、质量过滤、安全过滤、数据配比、采样、tokenization、packing、评测去污染、合成数据和版本治理，最终决定模型会学到什么、偏向什么、遗漏什么。</p>
 <a id="more"></a>
+<p>所以这篇文章想讲的，不是“怎么多收集一些文本”，而是预训练数据工程如何把互联网、书籍、代码、论文、百科、问答和合成样本，炼成一个可学习、可控制、可评估的数据分布。它贯穿数据来源、解析抽取、清洗规范化、去重、质量过滤、安全过滤、数据配比、采样、tokenization、packing、评测去污染、合成数据和版本治理，最终决定模型会学到什么、偏向什么、遗漏什么。</p>
 <h2 id="数据决定能力"><a href="#数据决定能力" class="headerlink" title="数据决定能力"></a>数据决定能力</h2><p>讨论预训练时，我们经常会听到三个词：<strong><code>模型、算力、数据</code></strong>。模型决定表达能力，算力决定训练规模，数据决定模型学习的对象。可以把这三者想象成做饭：</p>
 <table>
 <thead>
@@ -1481,8 +1876,8 @@
       <url>http://matt33.com/2026/07/01/llm-long-context/</url>
       <content type="html"><![CDATA[<p>过去我们使用大模型时，常常会遇到一个很直观的限制：输入太长，模型放不下。一篇几十页的论文、一份完整的技术文档、一个代码仓库、一次持续很久的多轮对话，都可能超过模型能够处理的上下文窗口。</p>
 <p>随着模型上下文长度从早期常见的 4K token，扩展到今天的 1M token 级别（例如 Gemini 1.5 Pro，以及后续部分 Claude / GPT / Gemini 系列模型），LLM 的使用方式也开始发生变化。它不再只是回答一个短问题，而是可以阅读完整资料、分析复杂代码、理解长期对话，甚至支撑 Agent 执行长程任务。</p>
-<p>但长上下文并不只是“把窗口调大”。上下文越长，Attention 计算越重，KV Cache 越占显存，模型也越容易忽略中间信息，或者被大量无关内容干扰。真正的长上下文能力，不只是能放下更多 token，而是能在更长、更复杂的信息中找到关键内容，建立远距离关系，并以可承受的成本完成推理。</p>
 <a id="more"></a>
+<p>但长上下文并不只是“把窗口调大”。上下文越长，Attention 计算越重，KV Cache 越占显存，模型也越容易忽略中间信息，或者被大量无关内容干扰。真正的长上下文能力，不只是能放下更多 token，而是能在更长、更复杂的信息中找到关键内容，建立远距离关系，并以可承受的成本完成推理。</p>
 <h2 id="长上下文为什么重要"><a href="#长上下文为什么重要" class="headerlink" title="长上下文为什么重要"></a>长上下文为什么重要</h2><p>长上下文的重要性，不只是“能输入更多内容”，而是它改变了 LLM 能处理的问题类型。在短上下文阶段，模型更像一个问答工具：用户提出一个问题，模型基于当前 prompt 给出回答。它适合解释概念、生成短文本、写一段代码，但很难真正处理完整资料、长期对话和复杂任务过程。当上下文窗口变长后，模型可以看到更完整的信息，应用形态也随之变化：从“基于一句话回答问题”，走向“基于一组资料完成任务”。</p>
 <p><img src="/images/llm/llm-long-context-01.png" alt="长上下文让模型从短问答走向复杂任务处理"></p>
 <p>典型变化包括：</p>
@@ -1864,8 +2259,8 @@
       <url>http://matt33.com/2026/06/29/llm-inference-serving/</url>
       <content type="html"><![CDATA[<p>如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。</p>
 <p>这里的“推理”需要先做一个区分。它既可以指 <strong>Inference Serving</strong>，也可以指 <strong>Reasoning Model</strong>。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。</p>
-<p>本文讨论的是第一种：<strong>推理服务</strong>。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。</p>
 <a id="more"></a>
+<p>本文讨论的是第一种：<strong>推理服务</strong>。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。</p>
 <p>简单来说，推理服务的本质，<strong>是在模型参数固定的情况下，把自回归 token 生成过程组织成高吞吐、低延迟、低成本、可扩展的在线系统</strong>。</p>
 <h2 id="从训练到推理"><a href="#从训练到推理" class="headerlink" title="从训练到推理"></a>从训练到推理</h2><p>训练和推理最大的区别是：<strong>训练会更新参数，推理不会更新参数</strong>。训练阶段，模型通过前向传播计算 loss，再通过反向传播更新参数；推理阶段，模型参数已经固定，系统只是在给定 prompt 的情况下调用模型，让它生成下一个 token。如下图所示：</p>
 <p><img src="/images/llm/llm-inference-serving-01.png" alt="训练 vs 推理"></p>

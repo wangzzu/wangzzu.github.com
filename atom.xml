@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-03T12:10:00.000Z</updated>
+  <updated>2026-07-04T12:10:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -16,6 +16,418 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
+    <title>LLM 系列 (十四)：Agent，大模型如何从对话走向行动</title>
+    <link href="http://matt33.com/2026/07/04/llm-agent/"/>
+    <id>http://matt33.com/2026/07/04/llm-agent/</id>
+    <published>2026-07-04T12:10:00.000Z</published>
+    <updated>2026-07-04T12:10:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>大语言模型最初主要以对话式交互的形态被广泛使用：用户输入问题，模型基于上下文生成回答。在这一模式下，模型擅长完成信息解释、文本总结、代码生成、问题分析等任务，本质上仍然是一个以“生成答案”为核心的系统。</p>
+<p>但在真实业务场景中，很多任务并不止于生成一段文本。它们往往需要模型围绕一个目标，连续完成资料检索、文档阅读、接口调用、代码修改、测试执行、结果分析和错误修正等多个步骤。也就是说，系统需要的不只是语言生成能力，还需要任务分解、外部工具使用、状态维护和基于反馈持续调整的能力。这就是 Agent 要解决的问题。</p>
+<a id="more"></a>
+<p>Agent 不是一个单独的模型，也不是某个固定 Prompt，而是一类以大语言模型为核心的任务执行系统。它通过任务规划、工具调用、记忆机制、状态管理和反馈循环，让模型能够围绕目标持续推进任务。</p>
+<p>换句话说，Agent 的意义在于：将 LLM 从“对话生成系统”扩展为“任务执行系统”。</p>
+<h2 id="Agent-是什么"><a href="#Agent-是什么" class="headerlink" title="Agent 是什么"></a>Agent 是什么</h2><p>从系统形态看，Agent 不是一次性问答，而是围绕目标持续执行的闭环系统。它接收的不只是一个问题，而是一个任务目标；输出的也不只是一次回答，而是执行一组动作后的结果。</p>
+<ul>
+<li>普通 LLM 应用更接近“问答模式”：用户问题 -&gt; 模型回答；</li>
+<li>而 Agent 更接近“执行模式”：用户目标 -&gt; 理解任务 -&gt; 制定计划 -&gt; 调用工具 -&gt; 观察结果 -&gt; 更新状态 -&gt; 继续执行 -&gt; 交付结果。</li>
+</ul>
+<p>两者的关键区别在于：普通 LLM 主要生成答案，Agent 则允许模型在系统约束下连接外部环境，并根据反馈持续推进任务。</p>
+<p><img src="/images/llm/llm-agent-01.png" alt="普通 LLM 应用于 Agent 应用对比"></p>
+<p>从系统视角看，Agent 通常由几类能力组成：</p>
+<ol>
+<li><strong>LLM</strong>：理解任务、生成计划、选择动作、总结结果；</li>
+<li><strong>Tools</strong>：连接外部系统，例如搜索、数据库、浏览器、代码执行器、业务 API；</li>
+<li><strong>Memory / State</strong>：保存上下文、任务进展、中间结果和历史信息；</li>
+<li><strong>Controller</strong>：管理执行流程，决定下一步、重试或终止；</li>
+<li><strong>Guardrails</strong>：控制权限、安全、成本和风险。</li>
+</ol>
+<p>所以，Agent 不是“一个会自动做事的模型”，而是一套系统组合：LLM + 工具 + 记忆 / 状态 + 控制循环 + 安全边界。判断一个系统是否具备 Agent 形态，可以看三点：</p>
+<ol>
+<li>是否围绕目标持续执行，而不是只回答一次；</li>
+<li>是否能够调用外部工具，并接收环境反馈；</li>
+<li>是否维护任务状态，并根据结果调整下一步。</li>
+</ol>
+<p>因此，Agent 的核心不是让模型完全自主，而是让模型在可控系统中，把语言理解能力转化为任务执行能力。</p>
+<h2 id="Agent-如何工作"><a href="#Agent-如何工作" class="headerlink" title="Agent 如何工作"></a>Agent 如何工作</h2><p>Agent 的工作方式可以抽象成一个闭环：<strong>Plan -&gt; Act -&gt; Observe -&gt; Reflect。</strong>这个闭环的含义是：模型先根据目标形成计划，然后选择动作并调用工具；工具执行后返回结果，模型再根据结果判断任务是否推进、是否需要修正，或者是否应该结束。可以拆成四个阶段：</p>
+<ol>
+<li><strong>Plan</strong>：理解用户目标，拆解任务，决定下一步要做什么；</li>
+<li><strong>Act</strong>：选择合适的工具，并生成工具调用参数；</li>
+<li><strong>Observe</strong>：接收工具执行结果，例如搜索结果、日志、代码运行结果、接口返回值；</li>
+<li><strong>Reflect</strong>：基于结果判断是否成功，是否需要重试、调整计划或进入下一步。</li>
+</ol>
+<p><img src="/images/llm/llm-agent-02.png" alt="Agent 执行流程"></p>
+<p>这个循环是 Agent 和普通 LLM 应用的关键区别。普通 LLM 往往是在已有上下文里生成一次回答；Agent 则会在执行过程中不断获得新信息，并把这些信息作为下一步决策的依据。</p>
+<ul>
+<li>例如用户给出一个目标：帮我分析这个项目最近一次构建失败的原因，并给出修复建议。</li>
+</ul>
+<p>一个 Agent 可能会按下面的方式执行：</p>
+<ol>
+<li>读取最近一次构建日志；</li>
+<li>定位失败阶段和错误信息；</li>
+<li>搜索相关代码和配置；</li>
+<li>分析错误堆栈与最近改动；</li>
+<li>必要时运行局部测试；</li>
+<li>根据结果修正判断；</li>
+<li>汇总失败原因和修复建议。</li>
+</ol>
+<p>这背后不是一次生成，而是多轮“推理 + 工具调用 + 结果反馈”的过程。</p>
+<p><img src="/images/llm/llm-agent-03.png" alt="Agent 执行流程"></p>
+<p>在实际系统中，Agent 的工作方式通常有几种常见模式：</p>
+<table>
+<thead>
+<tr>
+<th><strong>模式</strong></th>
+<th><strong>核心思路</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ReAct</td>
+<td>推理和行动交替进行，边想边做</td>
+<td>搜索、排障、探索型任务</td>
+</tr>
+<tr>
+<td>Plan-and-Execute</td>
+<td>先生成整体计划，再逐步执行</td>
+<td>流程较清晰的长任务</td>
+</tr>
+<tr>
+<td>Reflection</td>
+<td>执行后检查结果，再决定是否修正</td>
+<td>代码修改、报告生成、结果校验</td>
+</tr>
+<tr>
+<td>Workflow Agent</td>
+<td>流程相对固定，模型只负责关键判断</td>
+<td>企业生产系统、低风险自动化</td>
+</tr>
+</tbody>
+</table>
+<p>需要注意的是，生产环境里很少会让 Agent 完全自由行动。更常见的方式是：流程有边界，工具有权限，执行有终止条件，关键动作需要校验或人工确认。所以，Agent 的工作流程可以总结为：</p>
+<ul>
+<li>目标不是一次性回答，而是持续推进任务；</li>
+<li>动作不是凭空生成，而是通过工具连接外部环境；</li>
+<li>结果不是直接相信，而是根据反馈不断修正。</li>
+</ul>
+<h2 id="Agent-的核心能力：从模型调用到可控执行"><a href="#Agent-的核心能力：从模型调用到可控执行" class="headerlink" title="Agent 的核心能力：从模型调用到可控执行"></a>Agent 的核心能力：从模型调用到可控执行</h2><p>Agent 能不能真正可用，不只取决于模型本身的能力，更取决于系统是否把“规划、执行、记忆、校验、控制”这些能力组织好。可以把 Agent 看成一个围绕 LLM 构建的任务执行系统，如下图所示：</p>
+<p><img src="/images/llm/llm-agent-04.png" alt="Agent 执行闭环"></p>
+<p>Agent 通过规划、执行、反馈和校验形成闭环，当任务完成则交付结果，遇到高风险场景则转人工确认或终止。</p>
+<h3 id="工具调用：连接外部世界"><a href="#工具调用：连接外部世界" class="headerlink" title="工具调用：连接外部世界"></a>工具调用：连接外部世界</h3><p>工具调用是 Agent 从“生成文本”走向“执行任务”的关键。模型本身不能直接访问数据库、浏览器、代码仓库或业务系统，它需要通过工具接口间接连接外部环境。一个工具通常需要明确描述：</p>
+<table>
+<thead>
+<tr>
+<th><strong>配置项</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工具名称</td>
+<td>告诉模型这个工具能做什么</td>
+</tr>
+<tr>
+<td>工具描述</td>
+<td>说明适用场景，帮助模型选择工具</td>
+</tr>
+<tr>
+<td>输入参数 schema</td>
+<td>约束参数类型、字段和必填项</td>
+</tr>
+<tr>
+<td>输出格式</td>
+<td>让模型理解工具返回结果</td>
+</tr>
+<tr>
+<td>权限范围</td>
+<td>限制工具能访问哪些资源</td>
+</tr>
+<tr>
+<td>失败处理</td>
+<td>定义超时、错误、空结果如何返回</td>
+</tr>
+<tr>
+<td>确认机制</td>
+<td>高风险操作是否需要用户确认</td>
+</tr>
+</tbody>
+</table>
+<p>例如一个文档检索工具可以定义成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;name&quot;: &quot;search_docs&quot;,</span><br><span class="line">  &quot;description&quot;: &quot;在企业知识库中检索相关文档&quot;,</span><br><span class="line">  &quot;parameters&quot;: &#123;</span><br><span class="line">    &quot;query&quot;: &quot;string&quot;,</span><br><span class="line">    &quot;top_k&quot;: &quot;number&quot;,</span><br><span class="line">    &quot;source&quot;: &quot;wiki | code | ticket&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>模型生成的不是最终动作，而是一个工具调用请求：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;tool&quot;: &quot;search_docs&quot;,</span><br><span class="line">  &quot;input&quot;: &#123;</span><br><span class="line">    &quot;query&quot;: &quot;退款失败 ERR-7782 原因&quot;,</span><br><span class="line">    &quot;top_k&quot;: 5,</span><br><span class="line">    &quot;source&quot;: &quot;wiki&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>真正的执行由系统完成。这样做的好处是：模型负责判断“该调用什么”，系统负责保证“能不能调用、怎么调用、是否安全”。工具调用的技术重点包括：</p>
+<ol>
+<li><strong>参数校验</strong>：防止模型生成非法字段或错误类型；</li>
+<li><strong>权限控制</strong>：不同用户只能调用自己有权限的工具和数据；</li>
+<li><strong>错误返回</strong>：工具失败时返回结构化错误，而不是只抛异常；</li>
+<li><strong>幂等设计</strong>：重复调用不会造成不可控副作用；</li>
+<li><strong>审计日志</strong>：记录谁在什么任务里调用了什么工具。</li>
+</ol>
+<h3 id="记忆与状态：让任务连续推进"><a href="#记忆与状态：让任务连续推进" class="headerlink" title="记忆与状态：让任务连续推进"></a>记忆与状态：让任务连续推进</h3><p>Agent 需要知道自己正在做什么、已经做了什么、下一步还要做什么。这里的“记忆”不只是聊天历史，而是任务执行过程中的状态管理。可以拆成几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>类型</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>短期上下文</td>
+<td>当前对话、最近工具结果、当前任务约束</td>
+</tr>
+<tr>
+<td>工作记忆</td>
+<td>当前计划、已完成步骤、待执行步骤、中间结论</td>
+</tr>
+<tr>
+<td>长期记忆</td>
+<td>用户偏好、历史任务结果、项目背景</td>
+</tr>
+<tr>
+<td>外部记忆</td>
+<td>RAG、数据库、文件系统、知识库</td>
+</tr>
+<tr>
+<td>执行轨迹</td>
+<td>每一步工具调用、输入输出、错误和重试记录</td>
+</tr>
+</tbody>
+</table>
+<p>如果没有状态管理，Agent 很容易出现问题：重复执行同一步、忘记原始目标、忽略工具结果、前后结论不一致，或者长任务中断后无法恢复。因此，生产级 Agent 往往会维护一个显式的任务状态对象，例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;goal&quot;: &quot;分析构建失败原因&quot;,</span><br><span class="line">  &quot;plan&quot;: [&quot;读取日志&quot;, &quot;定位错误&quot;, &quot;检查代码&quot;, &quot;给出修复建议&quot;],</span><br><span class="line">  &quot;completed_steps&quot;: [&quot;读取日志&quot;, &quot;定位错误&quot;],</span><br><span class="line">  &quot;current_step&quot;: &quot;检查代码&quot;,</span><br><span class="line">  &quot;observations&quot;: [</span><br><span class="line">    &quot;构建失败发生在 test 阶段&quot;,</span><br><span class="line">    &quot;错误来自 payment 模块的空指针异常&quot;</span><br><span class="line">  ],</span><br><span class="line">  &quot;next_action&quot;: &quot;搜索最近 payment 模块变更&quot;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这类状态对象可以让 Agent 不完全依赖上下文窗口，而是用结构化方式保存任务进展。</p>
+<h3 id="规划与控制：让模型会拆任务，但不失控"><a href="#规划与控制：让模型会拆任务，但不失控" class="headerlink" title="规划与控制：让模型会拆任务，但不失控"></a>规划与控制：让模型会拆任务，但不失控</h3><p>Agent 需要具备任务规划能力。面对复杂目标时，模型不能只生成一个最终答案，而要把目标拆成多个可执行步骤。常见规划方式有两类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方式</strong></th>
+<th><strong>特点</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>显式规划</td>
+<td>先生成完整计划，再逐步执行</td>
+<td>报告生成、数据分析、代码迁移</td>
+</tr>
+<tr>
+<td>动态规划</td>
+<td>每一步根据观察结果决定下一步</td>
+<td>故障排查、网页操作、资料调研</td>
+</tr>
+</tbody>
+</table>
+<p>但规划能力必须和控制机制配合使用。否则 Agent 很容易无限搜索、重复尝试，或者把一个简单任务拆得过于复杂。常见控制参数包括：</p>
+<ol>
+<li>最大执行轮数；</li>
+<li>最大工具调用次数；</li>
+<li>最大 token 成本；</li>
+<li>是否允许写操作；</li>
+<li>是否允许访问外部网络；</li>
+<li>是否需要人工确认；</li>
+<li>失败后是否重试；</li>
+<li>什么条件下终止任务。</li>
+</ol>
+<p>所以，Agent 的规划不是“让模型自由发挥”，而是让模型在明确边界内做决策。</p>
+<h3 id="反馈与校验：让结果可以被验证"><a href="#反馈与校验：让结果可以被验证" class="headerlink" title="反馈与校验：让结果可以被验证"></a>反馈与校验：让结果可以被验证</h3><p>Agent 每执行一步，都会得到一个观察结果。但工具返回结果不一定代表任务成功，模型生成的结论也不一定可靠。因此 Agent 需要校验机制。校验可以分为几层：</p>
+<table>
+<thead>
+<tr>
+<th><strong>校验层次</strong></th>
+<th><strong>例子</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工具结果校验</td>
+<td>API 是否返回成功，字段是否完整</td>
+</tr>
+<tr>
+<td>任务结果校验</td>
+<td>测试是否通过，文件是否生成，数据是否匹配</td>
+</tr>
+<tr>
+<td>事实一致性校验</td>
+<td>回答是否有证据支持，引用是否准确</td>
+</tr>
+<tr>
+<td>规则校验</td>
+<td>是否违反权限、格式、安全策略</td>
+</tr>
+<tr>
+<td>人工确认</td>
+<td>高风险动作前让用户确认</td>
+</tr>
+</tbody>
+</table>
+<p>例如代码修复类 Agent，不应该在修改代码后直接输出“已修复”，而应该继续运行测试：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">修改代码 -&gt; 运行测试 -&gt; 测试通过 -&gt; 输出修复说明</span><br><span class="line">修改代码 -&gt; 运行测试 -&gt; 测试失败 -&gt; 重新分析错误</span><br></pre></td></tr></table></figure>
+<p>这也是 Agent 和普通生成式应用的重要区别：Agent 的结果最好能被环境反馈验证，而不是只依赖模型自我判断。</p>
+<h3 id="安全边界：让-Agent-可控"><a href="#安全边界：让-Agent-可控" class="headerlink" title="安全边界：让 Agent 可控"></a>安全边界：让 Agent 可控</h3><p>Agent 越能行动，风险也越高。一个能调用工具的模型，如果没有边界，可能会访问不该访问的数据，执行不该执行的操作，或者在错误判断下持续重试。因此，Agent 系统必须有安全边界：</p>
+<ol>
+<li>读操作和写操作分离；</li>
+<li>高风险操作需要人工确认；</li>
+<li>工具按用户权限动态开放；</li>
+<li>敏感数据进入模型前脱敏；</li>
+<li>所有工具调用都记录日志；</li>
+<li>失败和异常要能回滚或终止；</li>
+<li>不允许模型绕过系统直接执行危险动作。</li>
+</ol>
+<p>简单说，Agent 的核心能力可以总结为：</p>
+<table>
+<thead>
+<tr>
+<th><strong>能力</strong></th>
+<th><strong>解决的问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工具调用</td>
+<td>让模型连接外部系统</td>
+</tr>
+<tr>
+<td>记忆与状态</td>
+<td>让任务可以连续推进</td>
+</tr>
+<tr>
+<td>规划与控制</td>
+<td>让复杂任务可以拆解执行</td>
+</tr>
+<tr>
+<td>反馈与校验</td>
+<td>让结果可以被验证</td>
+</tr>
+<tr>
+<td>安全边界</td>
+<td>让 Agent 在可控范围内行动</td>
+</tr>
+</tbody>
+</table>
+<p>Agent 真正的难点，不是让模型“想到下一步”，而是让每一步都能被执行、被记录、被验证、被约束。只有这些能力组合起来，Agent 才能从一个演示系统走向真实业务系统。</p>
+<h2 id="Agent-落地难在哪里"><a href="#Agent-落地难在哪里" class="headerlink" title="Agent 落地难在哪里"></a>Agent 落地难在哪里</h2><p>上一节讲的是 Agent 需要具备哪些核心能力：工具调用、状态管理、规划控制、结果校验和安全边界。这些能力从架构上看并不复杂，但在真实生产环境里，它们很容易失效。</p>
+<p>原因在于，Agent 面对的不是一次静态输入，而是一条动态执行链路。每一步都可能引入新的不确定性：模型可能理解错目标，工具可能返回异常，状态可能没有正确更新，前一步错误可能影响后续判断，高风险操作还可能对真实系统造成影响。所以，Agent 落地的难点，不是“有没有这些模块”，而是这些模块能否在真实任务中稳定协同。</p>
+<p>普通 LLM 应用的失败，通常只是“回答错了”；Agent 的失败可能会变成“执行错了”。一旦 Agent 连接了数据库、代码仓库、浏览器、业务 API 或自动化工具，错误就不再停留在文本层面，而可能影响真实系统。所以 Agent 落地的核心挑战，可以概括为三句话：</p>
+<ol>
+<li>模型输出具有不确定性，但任务执行需要<strong>稳定性</strong>；</li>
+<li>工具调用可能带来副作用，但业务系统需要<strong>可控性</strong>；</li>
+<li>多步骤链路会累积错误，但最终结果需要<strong>可验证性</strong>。</li>
+</ol>
+<p><img src="/images/llm/llm-agent-05.png" alt="Agent 落地挑战"></p>
+<p>Agent 落地不是单点模型问题，而是模型、工具、状态、安全和评估共同构成的系统问题。可以从几个典型问题来总结下：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>本质</strong></th>
+<th><strong>典型表现</strong></th>
+<th><strong>解决方向</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>目标不清晰</td>
+<td>输入缺少任务边界</td>
+<td>Agent 自行猜测目标，执行方向偏离</td>
+<td>任务澄清、结构化任务描述、验收标准</td>
+</tr>
+<tr>
+<td>规划不稳定</td>
+<td>LLM 输出具有不确定性</td>
+<td>同一任务多次执行路径不同，步骤遗漏</td>
+<td>模板化 Workflow、阶段性计划、关键步骤确认</td>
+</tr>
+<tr>
+<td>工具调用错误</td>
+<td>模型可能选错工具或填错参数</td>
+<td>参数格式错误、重复调用、忽略工具失败</td>
+<td>Tool schema、参数校验、错误码、重试策略</td>
+</tr>
+<tr>
+<td>长链路错误累积</td>
+<td>多步任务中错误会传播</td>
+<td>前一步判断错，后续全部基于错误结果执行</td>
+<td>分阶段校验、checkpoint、Verifier</td>
+</tr>
+<tr>
+<td>状态丢失</td>
+<td>任务进展没有结构化记录</td>
+<td>重复执行、忘记约束、无法恢复</td>
+<td>状态机、任务日志、事件流、工作记忆</td>
+</tr>
+<tr>
+<td>结果不可验证</td>
+<td>模型输出缺少外部证据</td>
+<td>看似完成，实际没有依据或测试失败</td>
+<td>测试、引用、规则校验、人工审核</td>
+</tr>
+<tr>
+<td>安全风险</td>
+<td>工具连接真实系统</td>
+<td>删除数据、越权访问、误发消息</td>
+<td>权限隔离、沙箱、人工确认、审计日志</td>
+</tr>
+<tr>
+<td>成本不可控</td>
+<td>多轮调用放大 token 和工具成本</td>
+<td>执行慢、费用高、循环调用</td>
+<td>最大轮数、预算控制、缓存、模型路由</td>
+</tr>
+</tbody>
+</table>
+<p>这里最关键的是：<strong>Agent 系统不能只依赖模型自觉正确</strong>。生产系统必须把任务执行过程拆开，在关键节点加入约束和校验。一个更可靠的 Agent 架构，通常会采用“受控执行”的方式：</p>
+<p><img src="/images/llm/llm-agent-06.png" alt="Agent 分阶段落地"></p>
+<p>因此，Agent 落地时更推荐从低风险场景开始，而不是一上来就做完全自主系统：</p>
+<ol>
+<li><strong>先做只读型 Agent</strong>：例如文档检索、日志分析、代码阅读、数据分析建议；</li>
+<li><strong>再做建议型 Agent</strong>：模型给出操作建议，但由人确认后执行；</li>
+<li><strong>然后做半自动 Workflow</strong>：固定流程由系统控制，模型只负责局部判断；</li>
+<li><strong>最后再做可控自主执行</strong>：在明确权限、预算、终止条件和回滚机制下，让 Agent 执行多步任务。</li>
+</ol>
+<p>可以把自主程度分成几个阶段：</p>
+<p><img src="/images/llm/llm-agent-07.png" alt="图 7：Agent 落地通常从只读问答逐步走向可控自主执行。"></p>
+<p><em>图 7：Agent 落地通常从只读问答逐步走向可控自主执行。</em></p>
+<p>所以，生产级 Agent 的重点不是“让模型尽可能自由”，而是建立一套可控机制：</p>
+<ol>
+<li>目标要明确；</li>
+<li>工具要有边界；</li>
+<li>状态要可追踪；</li>
+<li>关键步骤要可验证；</li>
+<li>高风险动作要可确认；</li>
+<li>失败过程要可恢复；</li>
+<li>整个执行链路要可观测。</li>
+</ol>
+<p>一句话总结：Agent 落地的难点，不是让模型多走几步，而是让每一步都能被约束、被记录、被验证，并在出错时能够停止、回退或交给人处理。</p>
+<h2 id="未来演进与总结"><a href="#未来演进与总结" class="headerlink" title="未来演进与总结"></a>未来演进与总结</h2><p>Agent 是 LLM 从“生成内容”走向“完成任务”的关键形态。未来 Agent 大概率会沿着几个方向继续演进：</p>
+<ol>
+<li><strong>工具调用更标准化</strong>：模型能更稳定地理解工具 schema、生成参数、处理错误。</li>
+<li><strong>Computer Use 更成熟</strong>：模型不仅调用 API，还能操作浏览器、桌面软件和复杂界面。</li>
+<li><strong>记忆系统更完善</strong>：短期上下文、长期记忆、RAG、任务轨迹会逐渐融合。</li>
+<li><strong>多 Agent 协作</strong>：不同 Agent 分工处理规划、检索、代码、审查和执行。</li>
+<li><strong>安全与评估更重要</strong>：Agent 越能行动，越需要权限、审计、回滚和人工确认。</li>
+</ol>
+<p>简单总结：<strong>Agent 不是让大模型变成一个“完全自主的人”，而是把 LLM 放进一个有工具、有记忆、有状态、有反馈、有边界的系统里，让它能够围绕目标持续完成任务。</strong>如果说 RAG 解决的是“大模型如何连接外部知识”，那么 Agent 解决的就是：<strong>大模型如何连接外部世界，并把知识转化为行动。</strong></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;大语言模型最初主要以对话式交互的形态被广泛使用：用户输入问题，模型基于上下文生成回答。在这一模式下，模型擅长完成信息解释、文本总结、代码生成、问题分析等任务，本质上仍然是一个以“生成答案”为核心的系统。&lt;/p&gt;
+&lt;p&gt;但在真实业务场景中，很多任务并不止于生成一段文本。它们往往需要模型围绕一个目标，连续完成资料检索、文档阅读、接口调用、代码修改、测试执行、结果分析和错误修正等多个步骤。也就是说，系统需要的不只是语言生成能力，还需要任务分解、外部工具使用、状态维护和基于反馈持续调整的能力。这就是 Agent 要解决的问题。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
+  
+  <entry>
     <title>LLM 系列 (十三)：RAG，大模型如何连接外部知识</title>
     <link href="http://matt33.com/2026/07/03/llm-rag/"/>
     <id>http://matt33.com/2026/07/03/llm-rag/</id>
@@ -24,8 +436,8 @@
     
     <content type="html"><![CDATA[<p>大模型在预训练阶段已经学到了大量通用知识，但这些知识本质上是“写进参数里的静态记忆”。模型训练完成后，参数不会自动更新；而真实世界中的知识却在不断变化：产品文档会迭代，业务规则会调整，代码仓库会更新，企业内部知识也往往是私有的、动态的、需要权限控制的。</p>
 <p>对于企业知识问答、客服助手、代码助手、法律合规、金融研报分析这类场景来说，答案不能只是“看起来合理”，还必须能够基于明确证据，说明来自哪份文档、哪个版本、哪个段落。换句话说，大模型不仅要会回答，还要会查资料、用资料、引用资料。</p>
-<p>这就是 RAG 诞生的背景。RAG，全称 <strong>Retrieval-Augmented Generation</strong>，即“检索增强生成”。它的核心思想很直接：不要让模型只依赖参数中的静态知识，而是在回答问题之前，先从外部知识库中检索相关资料，再把这些资料放入上下文，让模型基于证据生成答案。</p>
 <a id="more"></a>
+<p>这就是 RAG 诞生的背景。RAG，全称 <strong>Retrieval-Augmented Generation</strong>，即“检索增强生成”。它的核心思想很直接：不要让模型只依赖参数中的静态知识，而是在回答问题之前，先从外部知识库中检索相关资料，再把这些资料放入上下文，让模型基于证据生成答案。</p>
 <h2 id="为什么需要-RAG"><a href="#为什么需要-RAG" class="headerlink" title="为什么需要 RAG"></a>为什么需要 RAG</h2><p>RAG 要解决的核心问题，不是让模型“变得更聪明”，而是让模型能够连接外部知识，并基于可追溯的证据回答问题。可以从四个角度理解它的价值：</p>
 <ol>
 <li><strong>补充最新知识</strong>：模型参数有时间边界，而外部知识库可以持续更新。</li>
@@ -458,7 +870,6 @@
     
       &lt;p&gt;大模型在预训练阶段已经学到了大量通用知识，但这些知识本质上是“写进参数里的静态记忆”。模型训练完成后，参数不会自动更新；而真实世界中的知识却在不断变化：产品文档会迭代，业务规则会调整，代码仓库会更新，企业内部知识也往往是私有的、动态的、需要权限控制的。&lt;/p&gt;
 &lt;p&gt;对于企业知识问答、客服助手、代码助手、法律合规、金融研报分析这类场景来说，答案不能只是“看起来合理”，还必须能够基于明确证据，说明来自哪份文档、哪个版本、哪个段落。换句话说，大模型不仅要会回答，还要会查资料、用资料、引用资料。&lt;/p&gt;
-&lt;p&gt;这就是 RAG 诞生的背景。RAG，全称 &lt;strong&gt;Retrieval-Augmented Generation&lt;/strong&gt;，即“检索增强生成”。它的核心思想很直接：不要让模型只依赖参数中的静态知识，而是在回答问题之前，先从外部知识库中检索相关资料，再把这些资料放入上下文，让模型基于证据生成答案。&lt;/p&gt;
     
     </summary>
     
@@ -478,8 +889,8 @@
     
     <content type="html"><![CDATA[<p>前面几篇我们已经把 LLM 的几条主线串起来了：从 AI 到 LLM，理解大模型为什么会出现；从数学、算法、Transformer 到 Dense/MoE，理解模型结构和学习机制；再到预训练、后训练、分布式训练、推理服务和长上下文，理解一套大模型系统如何被训练出来、部署出去。到了这里，还有一个更底层的问题需要单独展开：模型训练时，究竟吃了什么？</p>
 <p>很多人讨论大模型时，容易把注意力放在参数量、GPU 数量、训练框架、Attention 结构、MoE 路由和推理加速上。但如果把大模型训练看成一条生产线，数据才是最早进入系统的原材料。没有好的数据，再大的模型也只是在更大规模地学习噪声；没有合理的数据配比，模型就会偏科；没有去重和去污染，模型可能只是记住了训练集和评测答案；没有隐私、安全、版权和版本治理，模型能力越强，风险也越难控制。</p>
-<p>所以这篇文章想讲的，不是“怎么多收集一些文本”，而是预训练数据工程如何把互联网、书籍、代码、论文、百科、问答和合成样本，炼成一个可学习、可控制、可评估的数据分布。它贯穿数据来源、解析抽取、清洗规范化、去重、质量过滤、安全过滤、数据配比、采样、tokenization、packing、评测去污染、合成数据和版本治理，最终决定模型会学到什么、偏向什么、遗漏什么。</p>
 <a id="more"></a>
+<p>所以这篇文章想讲的，不是“怎么多收集一些文本”，而是预训练数据工程如何把互联网、书籍、代码、论文、百科、问答和合成样本，炼成一个可学习、可控制、可评估的数据分布。它贯穿数据来源、解析抽取、清洗规范化、去重、质量过滤、安全过滤、数据配比、采样、tokenization、packing、评测去污染、合成数据和版本治理，最终决定模型会学到什么、偏向什么、遗漏什么。</p>
 <h2 id="数据决定能力"><a href="#数据决定能力" class="headerlink" title="数据决定能力"></a>数据决定能力</h2><p>讨论预训练时，我们经常会听到三个词：<strong><code>模型、算力、数据</code></strong>。模型决定表达能力，算力决定训练规模，数据决定模型学习的对象。可以把这三者想象成做饭：</p>
 <table>
 <thead>
@@ -1513,7 +1924,6 @@
     
       &lt;p&gt;前面几篇我们已经把 LLM 的几条主线串起来了：从 AI 到 LLM，理解大模型为什么会出现；从数学、算法、Transformer 到 Dense/MoE，理解模型结构和学习机制；再到预训练、后训练、分布式训练、推理服务和长上下文，理解一套大模型系统如何被训练出来、部署出去。到了这里，还有一个更底层的问题需要单独展开：模型训练时，究竟吃了什么？&lt;/p&gt;
 &lt;p&gt;很多人讨论大模型时，容易把注意力放在参数量、GPU 数量、训练框架、Attention 结构、MoE 路由和推理加速上。但如果把大模型训练看成一条生产线，数据才是最早进入系统的原材料。没有好的数据，再大的模型也只是在更大规模地学习噪声；没有合理的数据配比，模型就会偏科；没有去重和去污染，模型可能只是记住了训练集和评测答案；没有隐私、安全、版权和版本治理，模型能力越强，风险也越难控制。&lt;/p&gt;
-&lt;p&gt;所以这篇文章想讲的，不是“怎么多收集一些文本”，而是预训练数据工程如何把互联网、书籍、代码、论文、百科、问答和合成样本，炼成一个可学习、可控制、可评估的数据分布。它贯穿数据来源、解析抽取、清洗规范化、去重、质量过滤、安全过滤、数据配比、采样、tokenization、packing、评测去污染、合成数据和版本治理，最终决定模型会学到什么、偏向什么、遗漏什么。&lt;/p&gt;
     
     </summary>
     
@@ -1533,8 +1943,8 @@
     
     <content type="html"><![CDATA[<p>过去我们使用大模型时，常常会遇到一个很直观的限制：输入太长，模型放不下。一篇几十页的论文、一份完整的技术文档、一个代码仓库、一次持续很久的多轮对话，都可能超过模型能够处理的上下文窗口。</p>
 <p>随着模型上下文长度从早期常见的 4K token，扩展到今天的 1M token 级别（例如 Gemini 1.5 Pro，以及后续部分 Claude / GPT / Gemini 系列模型），LLM 的使用方式也开始发生变化。它不再只是回答一个短问题，而是可以阅读完整资料、分析复杂代码、理解长期对话，甚至支撑 Agent 执行长程任务。</p>
-<p>但长上下文并不只是“把窗口调大”。上下文越长，Attention 计算越重，KV Cache 越占显存，模型也越容易忽略中间信息，或者被大量无关内容干扰。真正的长上下文能力，不只是能放下更多 token，而是能在更长、更复杂的信息中找到关键内容，建立远距离关系，并以可承受的成本完成推理。</p>
 <a id="more"></a>
+<p>但长上下文并不只是“把窗口调大”。上下文越长，Attention 计算越重，KV Cache 越占显存，模型也越容易忽略中间信息，或者被大量无关内容干扰。真正的长上下文能力，不只是能放下更多 token，而是能在更长、更复杂的信息中找到关键内容，建立远距离关系，并以可承受的成本完成推理。</p>
 <h2 id="长上下文为什么重要"><a href="#长上下文为什么重要" class="headerlink" title="长上下文为什么重要"></a>长上下文为什么重要</h2><p>长上下文的重要性，不只是“能输入更多内容”，而是它改变了 LLM 能处理的问题类型。在短上下文阶段，模型更像一个问答工具：用户提出一个问题，模型基于当前 prompt 给出回答。它适合解释概念、生成短文本、写一段代码，但很难真正处理完整资料、长期对话和复杂任务过程。当上下文窗口变长后，模型可以看到更完整的信息，应用形态也随之变化：从“基于一句话回答问题”，走向“基于一组资料完成任务”。</p>
 <p><img src="/images/llm/llm-long-context-01.png" alt="长上下文让模型从短问答走向复杂任务处理"></p>
 <p>典型变化包括：</p>
@@ -1709,7 +2119,6 @@
     
       &lt;p&gt;过去我们使用大模型时，常常会遇到一个很直观的限制：输入太长，模型放不下。一篇几十页的论文、一份完整的技术文档、一个代码仓库、一次持续很久的多轮对话，都可能超过模型能够处理的上下文窗口。&lt;/p&gt;
 &lt;p&gt;随着模型上下文长度从早期常见的 4K token，扩展到今天的 1M token 级别（例如 Gemini 1.5 Pro，以及后续部分 Claude / GPT / Gemini 系列模型），LLM 的使用方式也开始发生变化。它不再只是回答一个短问题，而是可以阅读完整资料、分析复杂代码、理解长期对话，甚至支撑 Agent 执行长程任务。&lt;/p&gt;
-&lt;p&gt;但长上下文并不只是“把窗口调大”。上下文越长，Attention 计算越重，KV Cache 越占显存，模型也越容易忽略中间信息，或者被大量无关内容干扰。真正的长上下文能力，不只是能放下更多 token，而是能在更长、更复杂的信息中找到关键内容，建立远距离关系，并以可承受的成本完成推理。&lt;/p&gt;
     
     </summary>
     
@@ -1951,8 +2360,8 @@
     
     <content type="html"><![CDATA[<p>如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。</p>
 <p>这里的“推理”需要先做一个区分。它既可以指 <strong>Inference Serving</strong>，也可以指 <strong>Reasoning Model</strong>。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。</p>
-<p>本文讨论的是第一种：<strong>推理服务</strong>。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。</p>
 <a id="more"></a>
+<p>本文讨论的是第一种：<strong>推理服务</strong>。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。</p>
 <p>简单来说，推理服务的本质，<strong>是在模型参数固定的情况下，把自回归 token 生成过程组织成高吞吐、低延迟、低成本、可扩展的在线系统</strong>。</p>
 <h2 id="从训练到推理"><a href="#从训练到推理" class="headerlink" title="从训练到推理"></a>从训练到推理</h2><p>训练和推理最大的区别是：<strong>训练会更新参数，推理不会更新参数</strong>。训练阶段，模型通过前向传播计算 loss，再通过反向传播更新参数；推理阶段，模型参数已经固定，系统只是在给定 prompt 的情况下调用模型，让它生成下一个 token。如下图所示：</p>
 <p><img src="/images/llm/llm-inference-serving-01.png" alt="训练 vs 推理"></p>
@@ -2307,7 +2716,6 @@
     
       &lt;p&gt;如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。&lt;/p&gt;
 &lt;p&gt;这里的“推理”需要先做一个区分。它既可以指 &lt;strong&gt;Inference Serving&lt;/strong&gt;，也可以指 &lt;strong&gt;Reasoning Model&lt;/strong&gt;。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。&lt;/p&gt;
-&lt;p&gt;本文讨论的是第一种：&lt;strong&gt;推理服务&lt;/strong&gt;。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。&lt;/p&gt;
     
     </summary>
     
@@ -7609,160 +8017,6 @@
     <summary type="html">
     
       &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第七篇，这篇文章主要会讲述 Flink 中的 TaskManager 的一些内容，TaskManager 是 Flink 的 worker 节点，它负责 Flink 中本机 slot 资源的管理以及具体 ta
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="flink" scheme="http://matt33.com/tags/flink/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Flink JobManager 详解</title>
-    <link href="http://matt33.com/2019/12/27/flink-jobmanager-6/"/>
-    <id>http://matt33.com/2019/12/27/flink-jobmanager-6/</id>
-    <published>2019-12-27T02:16:26.000Z</published>
-    <updated>2026-06-19T02:19:10.484Z</updated>
-    
-    <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第六篇，紧接着上篇文章，本篇主要讲述 Flink Master 中另一个组件 —— JobManager（在源码中对应的实现类是 <code>JobMaster</code>）。每个作业在启动后，Dispatcher 都会为这个作业创建一个 JobManager 对象，用来做这个作业相关的协调工作，比如：调度这个作业的 task、触发 Checkpoint 以及作业的容错恢复等。另外，本篇文章也将会看下一个作业在生成 ExecutionGraph 之后是如何在集群中调度起来的。</p>
-<p>从之前文章的介绍中，我们已经知道 JobManager 其实就是一个作业的 master 服务，主要负责自己作业相关的协调工作，包括：向 ResourceManager 申请 Slot 资源来调度相应的 task 任务、定时触发作业的 checkpoint 和手动 savepoint 的触发、以及作业的容错恢复，这些流程将会在后面的系列文章中介绍（这些流程涉及到的组件比较多，需要等待后面把 TaskManager 及 Flink 的调度模型讲述完再回头来看），本文会从 JobManager 是如何初始化的、JobManager 有哪些组件以及分别提供了哪些功能这两块来讲述。</p>
-<h2 id="JobManager-简介"><a href="#JobManager-简介" class="headerlink" title="JobManager 简介"></a>JobManager 简介</h2><p>当用户向 Flink 集群提交一个作业后，Dispatcher 在收到 Client 端提交的 JobGraph 后，会为这个作业创建一个 JobManager 对象（对应的是 JobMaster 类），如下图所示：</p>
-<p><img src="/images/flink/4-job-start.png" alt="一个新作业提交后的处理流程"></p>
-<p>JobManager 在初始化时，会创建 <code>LegacyScheduler</code> 对象，而 <code>LegacyScheduler</code> 在初始化时会将这个作业的 JobGraph 转化为 ExecutionGraph。在JobManager 启动后，就会开始给这个作业的 task 申请相应的资源、开始调度执行这个作业。</p>
-<h2 id="JobManager-详解"><a href="#JobManager-详解" class="headerlink" title="JobManager 详解"></a>JobManager 详解</h2><p>JobMaster 在实现中，也依赖了很多的服务，其中最重要的是 <code>SchedulerNG</code> 和 <code>SlotPool</code>，JobMaster 对外提供的接口实现中大都是使用前面这两个服务的方法。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// JobMaster.java</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JobMaster</span> <span class="keyword">extends</span> <span class="title">FencedRpcEndpoint</span>&lt;<span class="title">JobMasterId</span>&gt; <span class="keyword">implements</span> <span class="title">JobMasterGateway</span>, <span class="title">JobMasterService</span> </span>&#123;</span><br><span class="line">    <span class="comment">// LegacyScheduler: 用于调度作业的 ExecutionGraph</span></span><br><span class="line">    <span class="keyword">private</span> SchedulerNG schedulerNG;</span><br><span class="line">    <span class="comment">// SlotPoolImpl: 从名字也能看出它主要处理 slot 相关的内容，在 JM 这边的一个抽象</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> SlotPool slotPool;</span><br><span class="line">    <span class="comment">// HA 服务，这里主要用于监控 RM leader，如果 RM Leader 有变化，这里会与新的 leader 建立连接</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> HighAvailabilityServices highAvailabilityServices;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">    * 下面这些都是创建上面 SchedulerNG（即 LegacyScheduler）需要使用到的服务</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">    <span class="comment">// 用于将数据上传到 BlobServer，这里上传的主要是 JobInformation 和 TaskInformation</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> BlobWriter blobWriter;</span><br><span class="line">    <span class="comment">// 作业的 JobGraph 信息</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> JobGraph jobGraph;</span><br><span class="line">    <span class="comment">// SchedulerImpl: 它也是一个调度器，将 slot 分配给对应的 task，它会调用 SlotPool 的相关接口（它里面有一个 slotSelectionStrategy 对象，用来决定一个 slot 分配的最佳算法）</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Scheduler scheduler;</span><br><span class="line">    <span class="comment">// 用于注册 Intermediate result partition，在作业调度的时候会用到</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ShuffleMaster&lt;?&gt; shuffleMaster;</span><br><span class="line">    <span class="comment">// 用于追踪 Intermediate result partition 的服务</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> PartitionTracker partitionTracker;</span><br><span class="line">    <span class="comment">// --------- BackPressure --------</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> BackPressureStatsTracker backPressureStatsTracker;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>JobMaster 中涉及到重要组件如下图所示：</p>
-<p><img src="/images/flink/6-job-manager.png" alt="JobMaster 中的组件组成"></p>
-<p>JobMaster 主要有两个服务:</p>
-<ol>
-<li><code>LegacyScheduler</code>: ExecutionGraph 相关的调度都是在这里实现的，它类似更深层的抽象，封装了 ExecutionGraph 和 BackPressureStatsTracker，JobMaster 不直接去调用 ExecutionGraph 和 BackPressureStatsTracker 的相关方法，都是通过 <code>LegacyScheduler</code> 间接去调用；</li>
-<li><code>SlotPool</code>: 它是 JobMaster 管理其 slot 的服务，它负责向 RM 申请/释放 slot 资源，并维护其相应的 slot 信息。</li>
-</ol>
-<p>从前面的图中可以看出，如果 <code>LegacyScheduler</code> 想调用 <code>CheckpointCoordinator</code> 的方法，比如 <code>LegacyScheduler</code> 的 <code>triggerSavepoint()</code> 方法，它是需要先通过 <code>executionGraph</code> 的 <code>getCheckpointCoordinator()</code> 方法拿到 <code>CheckpointCoordinator</code>，然后再调用 <code>CheckpointCoordinator</code> 的 <code>triggerSavepoint()</code> 方法来触发这个作业的 savepoint。</p>
-<h3 id="JobMaster-的-API-概述"><a href="#JobMaster-的-API-概述" class="headerlink" title="JobMaster 的 API 概述"></a>JobMaster 的 API 概述</h3><p>目前 JobMaster 对外提供的 API 列表如下（主要还是 <code>JobMasterGateway</code> 接口对应的实现）：</p>
-<ol>
-<li><code>cancel()</code>: 取消当前正在执行的作业，如果作业还在调度，会执行停止，如果作业正在运行的话，它会向对应的 TM 发送取消 task 的请求（<code>cancelTask()</code> 请求）；</li>
-<li><code>updateTaskExecutionState()</code>: 更新某个 task 的状态信息，这个是 TM 主动向 JM 发送的更新请求；</li>
-<li><code>requestNextInputSplit()</code>: Source ExecutionJobVertex 请求 next InputSlipt，这个一般是针对批处理读取而言，有兴趣的可以看下 <a href="https://cwiki.apache.org/confluence/display/FLINK/FLIP-27%3A+Refactor+Source+Interface" target="_blank" rel="external">FLIP-27: Refactor Source Interface</a>，这里是社区计划对 Source 做的改进，未来会将批和流统一到一起；</li>
-<li><code>requestPartitionState()</code>: 获取指定 Result Partition 对应生产者 JobVertex 的执行状态；</li>
-<li><code>scheduleOrUpdateConsumers()</code>: TM 通知 JM 对应的 Result Partition 的数据已经可用，每个 ExecutionVertex 的每个 ResultPartition 都会调用一次这个方法（可能是在第一次生产数据时调用或者所有数据已经就绪时调用）；</li>
-<li><code>disconnectTaskManager()</code>: TM 心跳超时或者作业取消时，会调用这个方法，JM 会释放这个 TM 上的所有 slot 资源；</li>
-<li><code>acknowledgeCheckpoint()</code>: 当一个 Task 做完 snapshot 后，通过这个接口通知 JM，JM 再做相应的处理，如果这个 checkpoint 所有的 task 都已经 ack 了，那就意味着这个 checkpoint 完成了；</li>
-<li><code>declineCheckpoint()</code>: TM 向 JM 发送这个消息，告诉 JM 的 Checkpoint Coordinator 这个 checkpoint request 没有响应，比如：TM 触发 checkpoint 失败，然后 Checkpoint Coordinator 就会知道这个 checkpoint 处理失败了，再做相应的处理；</li>
-<li><code>requestKvStateLocation()</code>: 请求某个注册过 registrationName 对应的 KvState 的位置信息；</li>
-<li><code>notifyKvStateRegistered()</code>: 当注册一个 KvState 的时候，会调用这个方法，一些 operator 在初始化的时候会调用这个方法注册一个 KvState；</li>
-<li><code>notifyKvStateUnregistered()</code>: 取消一个 KVState 的注册，这里是在 operator 关闭 state backend 时调用的（比如：operator 的生命周期结束了，就会调用这个方法）；</li>
-<li><code>offerSlots()</code>: TM 通知 JM 其上分配到的 slot 列表；</li>
-<li><code>failSlot()</code>: 如果 TM 分配 slot 失败（情况可能很多，比如：slot 分配时状态转移失败等），将会通过这个接口告知 JM；</li>
-<li><code>registerTaskManager()</code>: 向这个 JM 注册 TM，JM 会将 TM 注册到 SlotPool 中（只有注册过的 TM 的 Slot 才被认为是有效的，才可以做相应的分配），并且会通过心跳监控对应的 TM；</li>
-<li><code>disconnectResourceManager()</code>: 与 ResourceManager 断开连接，这个是有三种情况会触发，JM 与 ResourceManager 心跳超时、作业取消、重连 RM 时会断开连接（比如：RM leader 切换、RM 的心跳超时）；</li>
-<li><code>heartbeatFromTaskManager()</code>: TM 向 JM 发送心跳信息；</li>
-<li><code>heartbeatFromResourceManager()</code>: JM 向 ResourceManager 发送一个心跳信息，ResourceManager 只会监听 JM 是否超时；</li>
-<li><code>requestJobDetails()</code>: 请求这个作业的 <code>JobDetails</code>（作业的概况信息，比如：作业执行了多长时间、作业状态等）；</li>
-<li><code>requestJobStatus()</code>: 请求这个作业的执行状态 <code>JobStatus</code>；</li>
-<li><code>requestJob()</code>: 请求这个作业的 <code>ArchivedExecutionGraph</code>（它是 <code>ExecutionGraph</code> 序列化之后的结果）；</li>
-<li><code>triggerSavepoint()</code>: 对这个作业触发一次 savepoint；</li>
-<li><code>stopWithSavepoint()</code>: 停止作业前触发一次 savepoint（触发情况是：用户手动停止作业时指定一个 savepoint 路径，这样的话，会在停止前做一次 savepoint）；</li>
-<li><code>requestOperatorBackPressureStats()</code>: 汇报某个 operator 反压的情况；</li>
-<li><code>notifyAllocationFailure()</code>: 如果 RM 分配 slot 失败的话，将会通过这个接口通知 JM；</li>
-</ol>
-<p>这里可以看到有部分接口的方法是在跟 RM 通信使用的，所以在 RM 的接口中也可以看到对应的方法。另外，JobMaster 上面这些方法在实现时基本都是在调用 <code>LegacyScheduler</code> 或 <code>SlotPool</code> 的具体实现方法来实现的。</p>
-<h3 id="SlotPool"><a href="#SlotPool" class="headerlink" title="SlotPool"></a>SlotPool</h3><p>SlotPool 是为当前作业的 slot 请求而服务的，它会向 ResourceManager 请求 slot 资源；SlotPool 会维护请求到的 slot 列表信息（即使 ResourceManager 挂掉了，SlotPool 也可以使用当前作业空闲的 slot 资源进行分配），而如果一个 slot 不再使用的话，即使作业在运行，也是可以释放掉的（所有的 slot 都是通过 <code>AllocationID</code> 来区分的）。</p>
-<p>目前 SlotPool 提供的 API 列表如下：</p>
-<ol>
-<li><code>connectToResourceManager()</code>: SlotPool 与 ResourceManager 建立连接，之后 SlotPool 就可以向 ResourceManager 请求 slot 资源了；</li>
-<li><code>disconnectResourceManage()</code>: SlotPool 与 ResourceManager 断开连接，这个方法被调用后，SlotPool 就不能从 ResourceManager 请求 slot 资源了，并且所有正在排队等待的 Slot Request 都被取消；</li>
-<li><code>allocateAvailableSlot()</code>: 将指定的 Slot Request 分配到指定的 slot 上，这里只是记录其对应关系（哪个 slot 对应哪个 slot 请求）；</li>
-<li><code>releaseSlot()</code>: 释放一个 slot； </li>
-<li><code>requestNewAllocatedSlot()</code>: 从 RM 请求一个新的 slot 资源分配，申请到的 slot 之后也会添加到 SlotPool 中；</li>
-<li><code>requestNewAllocatedBatchSlot()</code>: 上面的方法是 Stream 类型，这里是 batch 类型，但向 RM 申请的时候，这里并没有区别，只是为了做相应的标识；</li>
-<li><code>getAvailableSlotsInformation()</code>: 获取当前可用的 slot 列表；</li>
-<li><code>failAllocation()</code>: 分配失败，并释放相应的 slot，可能是因为请求超时由 JM 触发或者 TM 分配失败；</li>
-<li><code>registerTaskManager()</code>: 注册 TM，这里会记录一下注册过来的 TM，只能向注册过来的 TM 分配 slot；</li>
-<li><code>releaseTaskManager()</code>: 注销 TM，这个 TM 相关的 slot 都会被释放，task 将会被取消，SlotPool 会通知相应的 TM 释放其 slot；</li>
-<li><code>createAllocatedSlotReport()</code>: 汇报指定 TM 上的 slot 分配情况；</li>
-</ol>
-<p>通过上面 SlotPool 对外提供的 API 列表，可以看到其相关方法都是跟 Slot 相关的，整体可以分为下面几部分：</p>
-<ol>
-<li>与 ResourceManager 建立/取消 连接；</li>
-<li>注册/注销 TM，这里只是记录注册过 TM 列表，只有是注册过的 TM 才允许使用其上面的 slot 资源；</li>
-<li>向 ResourceManager 请求 slot 资源；</li>
-<li>分配/释放 slot，这里只是更新其状态信息，并不做实质的操作。</li>
-</ol>
-<p>SlotPool 这里，更多只是维护一个状态信息，以及与 ResourceManager（请求 slot 资源）和 TM（释放对应的 slot）做一些交互工作，它对这些功能做了相应的封装，方便 JobMaster 来调用。</p>
-<h3 id="LegacyScheduler"><a href="#LegacyScheduler" class="headerlink" title="LegacyScheduler"></a>LegacyScheduler</h3><p>如前面所述，LegacyScheduler 其实是对 <code>ExecutionGraph</code> 和 <code>BackPressureStatsTracker</code> 方法的一个抽象，它还负责为作业创建对应的 ExecutionGraph 以及对这个作业进行调度。关于 LegacyScheduler 提供的 API 这里就不再展开，有兴趣的可以直接看下源码，它提供的大部分 API 都是在 JobMaster 的 API 列表中，因为 JobMaster 的很多方法实现本身就是调用 LegacyScheduler 对应的方法。</p>
-<h2 id="作业调度的详细流程"><a href="#作业调度的详细流程" class="headerlink" title="作业调度的详细流程"></a>作业调度的详细流程</h2><p>有了前面的讲述，这里看下一个新提交的作业，JobMaster 是如何调度起来的。当 JobMaster 调用 LegacyScheduler 的 <code>startScheduling()</code> 方法后，就会开始对这个作业进行相应的调度，申请对应的 slot，并部署 task，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// LegacyScheduler.java</span></span><br><span class="line"><span class="comment">//note: ExecutionGraph 开始调度</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">startScheduling</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">//note: 启动这个线程</span></span><br><span class="line">    mainThreadExecutor.assertRunningInMainThread();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">//note: 调度这个 graph</span></span><br><span class="line">        executionGraph.scheduleForExecution();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">        executionGraph.failGlobal(t);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>一个作业开始调度后详细流程如下图所示（其中比较核心方法已经标成黄颜色）：</p>
-<p><img src="/images/flink/6-job-schedule.png" alt="一个作业调度的详细流程"></p>
-<p>ExecutionGraph 通过 <code>scheduleForExecution()</code> 方法对这个作业调度执行，其方法实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line">/note: 把 CREATED 状态转换为 RUNNING 状态，并做相应的调度，如果有异常这里会抛出</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">scheduleForExecution</span><span class="params">()</span> <span class="keyword">throws</span> JobException </span>&#123;</span><br><span class="line"></span><br><span class="line">    assertRunningInJobMasterMainThread();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">long</span> currentGlobalModVersion = globalModVersion;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 先将作业状态转移为 RUNNING</span></span><br><span class="line">    <span class="keyword">if</span> (transitionState(JobStatus.CREATED, JobStatus.RUNNING)) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 这里会真正调度相应的 Execution Graph</span></span><br><span class="line">        <span class="keyword">final</span> CompletableFuture&lt;Void&gt; newSchedulingFuture = SchedulingUtils.schedule(</span><br><span class="line">            scheduleMode,</span><br><span class="line">            getAllExecutionVertices(),</span><br><span class="line">            <span class="keyword">this</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (state == JobStatus.RUNNING &amp;&amp; currentGlobalModVersion == globalModVersion) &#123;</span><br><span class="line">            schedulingFuture = newSchedulingFuture;</span><br><span class="line">            <span class="comment">//note: 前面调度完成后，如果最后的结果有异常，这里会做相应的处理</span></span><br><span class="line">            newSchedulingFuture.whenComplete(</span><br><span class="line">                (Void ignored, Throwable throwable) -&gt; &#123;</span><br><span class="line">                    <span class="keyword">if</span> (throwable != <span class="keyword">null</span>) &#123;</span><br><span class="line">                        <span class="keyword">final</span> Throwable strippedThrowable = ExceptionUtils.stripCompletionException(throwable);</span><br><span class="line"></span><br><span class="line">                        <span class="keyword">if</span> (!(strippedThrowable <span class="keyword">instanceof</span> CancellationException)) &#123;</span><br><span class="line">                            <span class="comment">// only fail if the scheduling future was not canceled</span></span><br><span class="line">                            failGlobal(strippedThrowable);</span><br><span class="line">                        &#125;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            newSchedulingFuture.cancel(<span class="keyword">false</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Job may only be scheduled from state "</span> + JobStatus.CREATED);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>配合前面图中的流程，接下来，看下这个作业在 SchedulingUtils 中是如何调度的：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// SchedulingUtils.java</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> CompletableFuture&lt;Void&gt; <span class="title">schedule</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        ScheduleMode scheduleMode,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">final</span> Iterable&lt;ExecutionVertex&gt; vertices,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">final</span> ExecutionGraph executionGraph)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span> (scheduleMode) &#123;</span><br><span class="line">        <span class="comment">// LAZY 的意思是：是有上游数据就绪后，下游的 task 才能调度，这个主要是批场景会用到，流不能走这个模式</span></span><br><span class="line">        <span class="keyword">case</span> LAZY_FROM_SOURCES:</span><br><span class="line">        <span class="keyword">case</span> LAZY_FROM_SOURCES_WITH_BATCH_SLOT_REQUEST:</span><br><span class="line">            <span class="keyword">return</span> scheduleLazy(vertices, executionGraph);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 流默认的是这个调度模式</span></span><br><span class="line">        <span class="keyword">case</span> EAGER:</span><br><span class="line">            <span class="keyword">return</span> scheduleEager(vertices, executionGraph);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(String.format(<span class="string">"Schedule mode %s is invalid."</span>, scheduleMode));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Schedule vertices eagerly. That means all vertices will be scheduled at once.</span></span><br><span class="line"><span class="comment"> * note: 所有的节点会被同时调度</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> vertices Topologically sorted vertices to schedule.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> executionGraph The graph the given vertices belong to.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> CompletableFuture&lt;Void&gt; <span class="title">scheduleEager</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">final</span> Iterable&lt;ExecutionVertex&gt; vertices,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">final</span> ExecutionGraph executionGraph)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    executionGraph.assertRunningInJobMasterMainThread();</span><br><span class="line"></span><br><span class="line">    checkState(executionGraph.getState() == JobStatus.RUNNING, <span class="string">"job is not running currently"</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Important: reserve all the space we need up front.</span></span><br><span class="line">    <span class="comment">// that way we do not have any operation that can fail between allocating the slots</span></span><br><span class="line">    <span class="comment">// and adding them to the list. If we had a failure in between there, that would</span></span><br><span class="line">    <span class="comment">// cause the slots to get lost</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// collecting all the slots may resize and fail in that operation without slots getting lost</span></span><br><span class="line">    <span class="keyword">final</span> ArrayList&lt;CompletableFuture&lt;Execution&gt;&gt; allAllocationFutures = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> SlotProviderStrategy slotProviderStrategy = executionGraph.getSlotProviderStrategy();</span><br><span class="line">    <span class="keyword">final</span> Set&lt;AllocationID&gt; allPreviousAllocationIds = Collections.unmodifiableSet(</span><br><span class="line">        computePriorAllocationIdsIfRequiredByScheduling(vertices, slotProviderStrategy.asSlotProvider()));</span><br><span class="line"></span><br><span class="line">    <span class="comment">// allocate the slots (obtain all their futures)</span></span><br><span class="line">    <span class="keyword">for</span> (ExecutionVertex ev : vertices) &#123;</span><br><span class="line">        <span class="comment">// these calls are not blocking, they only return futures</span></span><br><span class="line">        <span class="comment">//note: 给每个 Execution 分配相应的资源</span></span><br><span class="line">        CompletableFuture&lt;Execution&gt; allocationFuture = ev.getCurrentExecutionAttempt().allocateResourcesForExecution(</span><br><span class="line">            slotProviderStrategy,</span><br><span class="line">            LocationPreferenceConstraint.ALL,</span><br><span class="line">            allPreviousAllocationIds);</span><br><span class="line"></span><br><span class="line">        allAllocationFutures.add(allocationFuture);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// this future is complete once all slot futures are complete.</span></span><br><span class="line">    <span class="comment">// the future fails once one slot future fails.</span></span><br><span class="line">    <span class="keyword">final</span> ConjunctFuture&lt;Collection&lt;Execution&gt;&gt; allAllocationsFuture = FutureUtils.combineAll(allAllocationFutures);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> allAllocationsFuture.thenAccept(</span><br><span class="line">        (Collection&lt;Execution&gt; executionsToDeploy) -&gt; &#123;</span><br><span class="line">            <span class="keyword">for</span> (Execution execution : executionsToDeploy) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    <span class="comment">//note: 部署每个 Execution</span></span><br><span class="line">                    execution.deploy();</span><br><span class="line">                &#125; <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">                    <span class="keyword">throw</span> <span class="keyword">new</span> CompletionException(</span><br><span class="line">                        <span class="keyword">new</span> FlinkException(</span><br><span class="line">                            String.format(<span class="string">"Could not deploy execution %s."</span>, execution),</span><br><span class="line">                            t));</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;)</span><br><span class="line">        <span class="comment">// Generate a more specific failure message for the eager scheduling</span></span><br><span class="line">        .exceptionally(</span><br><span class="line">            <span class="comment">//...</span></span><br><span class="line">        );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>由于对于流作业来说，它默认的调度模式（<code>ScheduleMode</code>）是 <code>ScheduleMode.EAGER</code>，也就是说，所有 task 会同时调度起来，上面的代码里也可以看到调度的时候有两个主要方法：</p>
-<ol>
-<li><code>allocateResourcesForExecution()</code>: 它的作用是给这个 Execution 分配资源，获取要分配的 slot（它还会向 ShuffleMaster 注册 produced partition，这个 shuffle 部分内容后面文章再讲述，这里就不展开了）；</li>
-<li><code>deploy()</code>: 这个方法会直接向 TM 提交这个 task 任务；</li>
-</ol>
-<p>这里，主要展开一下 <code>allocateResourcesForExecution()</code> 方法的实现，<code>deploy()</code> 的实现将会在后面 TaskManager 这篇文章中讲述。</p>
-<h3 id="如何给-ExecutionVertex-分配-slot"><a href="#如何给-ExecutionVertex-分配-slot" class="headerlink" title="如何给 ExecutionVertex 分配 slot"></a>如何给 ExecutionVertex 分配 slot</h3><p>通过前面的代码，我们知道，<code>allocateResourcesForExecution()</code> 方法会给每一个 ExecutionVertex 分配一个 slot，而它具体是如何分配的，这个流程是在 Execution 的 <code>allocateAndAssignSlotForExecution()</code> 方法中实现的，代码如下如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Allocates and assigns a slot obtained from the slot provider to the execution.</span></span><br><span class="line"><span class="comment"> * note: 从 slot provider 获取一个 slot，将任务分配到这个 slot 上</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> slotProviderStrategy to obtain a new slot from</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> locationPreferenceConstraint constraint for the location preferences</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> allPreviousExecutionGraphAllocationIds set with all previous allocation ids in the job graph.</span></span><br><span class="line"><span class="comment"> *                                                 Can be empty if the allocation ids are not required for scheduling.</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> Future which is completed with the allocated slot once it has been assigned</span></span><br><span class="line"><span class="comment"> *          or with an exception if an error occurred.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> CompletableFuture&lt;LogicalSlot&gt; <span class="title">allocateAndAssignSlotForExecution</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        SlotProviderStrategy slotProviderStrategy,</span></span></span><br><span class="line"><span class="function"><span class="params">        LocationPreferenceConstraint locationPreferenceConstraint,</span></span></span><br><span class="line"><span class="function"><span class="params">        @Nonnull Set&lt;AllocationID&gt; allPreviousExecutionGraphAllocationIds)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    checkNotNull(slotProviderStrategy);</span><br><span class="line"></span><br><span class="line">    assertRunningInJobMasterMainThread();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 获取这个 vertex 的相关信息</span></span><br><span class="line">    <span class="keyword">final</span> SlotSharingGroup sharingGroup = vertex.getJobVertex().getSlotSharingGroup();</span><br><span class="line">    <span class="keyword">final</span> CoLocationConstraint locationConstraint = vertex.getLocationConstraint();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// sanity check</span></span><br><span class="line">    <span class="comment">//note: 做相应的检查</span></span><br><span class="line">    <span class="keyword">if</span> (locationConstraint != <span class="keyword">null</span> &amp;&amp; sharingGroup == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(</span><br><span class="line">                <span class="string">"Trying to schedule with co-location constraint but without slot sharing allowed."</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// this method only works if the execution is in the state 'CREATED'</span></span><br><span class="line">    <span class="comment">//note: 这个只会在 CREATED 下工作</span></span><br><span class="line">    <span class="keyword">if</span> (transitionState(CREATED, SCHEDULED)) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">final</span> SlotSharingGroupId slotSharingGroupId = sharingGroup != <span class="keyword">null</span> ? sharingGroup.getSlotSharingGroupId() : <span class="keyword">null</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 创建一个 ScheduledUnit 对象（跟 sharingGroup/locationConstraint 都有关系）</span></span><br><span class="line">        ScheduledUnit toSchedule = locationConstraint == <span class="keyword">null</span> ?</span><br><span class="line">                <span class="keyword">new</span> ScheduledUnit(<span class="keyword">this</span>, slotSharingGroupId) :</span><br><span class="line">                <span class="keyword">new</span> ScheduledUnit(<span class="keyword">this</span>, slotSharingGroupId, locationConstraint);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// try to extract previous allocation ids, if applicable, so that we can reschedule to the same slot</span></span><br><span class="line">        <span class="comment">//note: 如果能找到之前调度的 AllocationID，会尽量先重新调度在同一个 slot 上</span></span><br><span class="line">        ExecutionVertex executionVertex = getVertex();</span><br><span class="line">        AllocationID lastAllocation = executionVertex.getLatestPriorAllocation();</span><br><span class="line"></span><br><span class="line">        Collection&lt;AllocationID&gt; previousAllocationIDs =</span><br><span class="line">            lastAllocation != <span class="keyword">null</span> ? Collections.singletonList(lastAllocation) : Collections.emptyList();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// calculate the preferred locations</span></span><br><span class="line">        <span class="comment">//note: 这里先根据 state 和上游数据的输入节点获取这个 Task Execution 的最佳 TM location</span></span><br><span class="line">        <span class="keyword">final</span> CompletableFuture&lt;Collection&lt;TaskManagerLocation&gt;&gt; preferredLocationsFuture =</span><br><span class="line">            calculatePreferredLocations(locationPreferenceConstraint);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">final</span> SlotRequestId slotRequestId = <span class="keyword">new</span> SlotRequestId();</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 根据指定的需求分配这个 slot</span></span><br><span class="line">        <span class="keyword">final</span> CompletableFuture&lt;LogicalSlot&gt; logicalSlotFuture =</span><br><span class="line">            preferredLocationsFuture.thenCompose(</span><br><span class="line">                (Collection&lt;TaskManagerLocation&gt; preferredLocations) -&gt;</span><br><span class="line">                    slotProviderStrategy.allocateSlot(</span><br><span class="line">                        slotRequestId,</span><br><span class="line">                        toSchedule,</span><br><span class="line">                        <span class="keyword">new</span> SlotProfile(</span><br><span class="line">                            vertex.getResourceProfile(),</span><br><span class="line">                            preferredLocations,</span><br><span class="line">                            previousAllocationIDs,</span><br><span class="line">                            allPreviousExecutionGraphAllocationIds)));</span><br><span class="line"></span><br><span class="line">        <span class="comment">// register call back to cancel slot request in case that the execution gets canceled</span></span><br><span class="line">        releaseFuture.whenComplete(</span><br><span class="line">            (Object ignored, Throwable throwable) -&gt; &#123;</span><br><span class="line">                <span class="keyword">if</span> (logicalSlotFuture.cancel(<span class="keyword">false</span>)) &#123;</span><br><span class="line">                    slotProviderStrategy.cancelSlotRequest(</span><br><span class="line">                        slotRequestId,</span><br><span class="line">                        slotSharingGroupId,</span><br><span class="line">                        <span class="keyword">new</span> FlinkException(<span class="string">"Execution "</span> + <span class="keyword">this</span> + <span class="string">" was released."</span>));</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// This forces calls to the slot pool back into the main thread, for normal and exceptional completion</span></span><br><span class="line">        <span class="comment">//note: 返回 LogicalSlot</span></span><br><span class="line">        <span class="keyword">return</span> logicalSlotFuture.handle(</span><br><span class="line">            (LogicalSlot logicalSlot, Throwable failure) -&gt; &#123;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (failure != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">throw</span> <span class="keyword">new</span> CompletionException(failure);</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (tryAssignResource(logicalSlot)) &#123;</span><br><span class="line">                    <span class="keyword">return</span> logicalSlot;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">// release the slot</span></span><br><span class="line">                    logicalSlot.releaseSlot(<span class="keyword">new</span> FlinkException(<span class="string">"Could not assign logical slot to execution "</span> + <span class="keyword">this</span> + <span class="string">'.'</span>));</span><br><span class="line">                    <span class="keyword">throw</span> <span class="keyword">new</span> CompletionException(</span><br><span class="line">                        <span class="keyword">new</span> FlinkException(</span><br><span class="line">                            <span class="string">"Could not assign slot "</span> + logicalSlot + <span class="string">" to execution "</span> + <span class="keyword">this</span> + <span class="string">" because it has already been assigned "</span>));</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// call race, already deployed, or already done</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalExecutionStateException(<span class="keyword">this</span>, CREATED, state);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里，简单总结一下上面这个方法的流程：</p>
-<ol>
-<li>状态转换，将这个 Execution 的状态（<code>ExecutionState</code>）从 <code>CREATED</code> 转为 <code>SCHEDULED</code> 状态；</li>
-<li>根据是否是一个有状态的 operator 以及它上游输入节点位置，来计算一个最佳的 TM 位置列表（<code>TaskManagerLocation</code>）列表；</li>
-<li>如果这个 Execution 之前有调度记录，也就是说，这次由 failover 导致的重启，这里会拿到上次调度的 TM 位置信息；</li>
-<li>根据 2、3 拿到 TM 位置信息，去调用 SlotProviderStrategy 的 <code>allocateSlot()</code> 获取要分配的 slot。</li>
-</ol>
-<p>在 SchedulerImpl 去分配 slot 的时候，其实是会分两种情况的：</p>
-<ol>
-<li><code>allocateSingleSlot()</code>: 如果对应的 task 节点没有设置 SlotSharingGroup，会直接走这个方法，就不会考虑 share group 的情况，直接给这个 task 分配对应的 slot；</li>
-<li><code>allocateSharedSlot()</code>: 如果对应的 task 节点有设置 SlotSharingGroup，就会走到这个方法，在分配 slot 的时候，考虑的因素就会多一些。</li>
-</ol>
-<h3 id="分配时如何选择最优的-TM-列表"><a href="#分配时如何选择最优的-TM-列表" class="headerlink" title="分配时如何选择最优的 TM 列表"></a>分配时如何选择最优的 TM 列表</h3><p>这里，我们先来看下如何给这个 slot 选择一个最佳的 TM 列表，具体的方法实现是在 <code>Execution</code> 中的 <code>calculatePreferredLocations()</code> 方法中实现的，其具体的实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Execution.java</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Calculates the preferred locations based on the location preference constraint.</span></span><br><span class="line"><span class="comment"> * note: 根据 LocationPreferenceConstraint 策略计算前置输入节点的 TaskManagerLocation</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> locationPreferenceConstraint constraint for the location preference</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> Future containing the collection of preferred locations. This might not be completed if not all inputs</span></span><br><span class="line"><span class="comment"> *      have been a resource assigned.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">@VisibleForTesting</span></span><br><span class="line"><span class="keyword">public</span> CompletableFuture&lt;Collection&lt;TaskManagerLocation&gt;&gt; calculatePreferredLocations(LocationPreferenceConstraint locationPreferenceConstraint) &#123;</span><br><span class="line">    <span class="comment">//note: 获取一个最佳分配的 TM location 集合</span></span><br><span class="line">    <span class="keyword">final</span> Collection&lt;CompletableFuture&lt;TaskManagerLocation&gt;&gt; preferredLocationFutures = getVertex().getPreferredLocations();</span><br><span class="line">    <span class="keyword">final</span> CompletableFuture&lt;Collection&lt;TaskManagerLocation&gt;&gt; preferredLocationsFuture;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span>(locationPreferenceConstraint) &#123;</span><br><span class="line">        <span class="keyword">case</span> ALL:</span><br><span class="line">            <span class="comment">//note: 默认是 ALL，就是前面拿到的列表，这里都可以使用</span></span><br><span class="line">            preferredLocationsFuture = FutureUtils.combineAll(preferredLocationFutures);</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        <span class="keyword">case</span> ANY:</span><br><span class="line">            <span class="comment">//note: 遍历所有 input，先获取已经完成 assign 的 input 列表</span></span><br><span class="line">            <span class="keyword">final</span> ArrayList&lt;TaskManagerLocation&gt; completedTaskManagerLocations = <span class="keyword">new</span> ArrayList&lt;&gt;(preferredLocationFutures.size());</span><br><span class="line"></span><br><span class="line">            <span class="keyword">for</span> (CompletableFuture&lt;TaskManagerLocation&gt; preferredLocationFuture : preferredLocationFutures) &#123;</span><br><span class="line">                <span class="keyword">if</span> (preferredLocationFuture.isDone() &amp;&amp; !preferredLocationFuture.isCompletedExceptionally()) &#123;</span><br><span class="line">                    <span class="comment">//note: 在这个 future 完成（没有异常的情况下），这里会使用这个 taskManagerLocation 对象</span></span><br><span class="line">                    <span class="keyword">final</span> TaskManagerLocation taskManagerLocation = preferredLocationFuture.getNow(<span class="keyword">null</span>);</span><br><span class="line"></span><br><span class="line">                    <span class="keyword">if</span> (taskManagerLocation == <span class="keyword">null</span>) &#123;</span><br><span class="line">                        <span class="keyword">throw</span> <span class="keyword">new</span> FlinkRuntimeException(<span class="string">"TaskManagerLocationFuture was completed with null. This indicates a programming bug."</span>);</span><br><span class="line">                    &#125;</span><br><span class="line"></span><br><span class="line">                    completedTaskManagerLocations.add(taskManagerLocation);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            preferredLocationsFuture = CompletableFuture.completedFuture(completedTaskManagerLocations);</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Unknown LocationPreferenceConstraint "</span> + locationPreferenceConstraint + <span class="string">'.'</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> preferredLocationsFuture;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>从上面的实现可以看出，这里是先通过 <code>ExecutionVertex</code> 的 <code>getPreferredLocations()</code> 方法获取一个 TaskManagerLocation 列表，然后再根据 <code>LocationPreferenceConstraint</code> 的模式做过滤，如果是 <code>ALL</code>，那么前面拿到的所有列表都会直接返回，而如果是 <code>ANY</code>，只会把那些已经分配好的 input 节点的 <code>TaskManagerLocation</code> 返回。</p>
-<p>这里，看下 <code>ExecutionVertex</code> 的 <code>getPreferredLocations()</code> 方法的实现逻辑：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ExecutionVertex.java</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Gets the overall preferred execution location for this vertex's current execution.</span></span><br><span class="line"><span class="comment"> * The preference is determined as follows:</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;ol&gt;</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;If the task execution has state to load (from a checkpoint), then the location preference</span></span><br><span class="line"><span class="comment"> *         is the location of the previous execution (if there is a previous execution attempt).</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;If the task execution has no state or no previous location, then the location preference</span></span><br><span class="line"><span class="comment"> *         is based on the task's inputs.</span></span><br><span class="line"><span class="comment"> * &lt;/ol&gt;</span></span><br><span class="line"><span class="comment"> * note: 如果这个 task Execution 是从 checkpoint 加载的状态，那么这个 location preference 就是之前执行的状态；</span></span><br><span class="line"><span class="comment"> * note: 如果这个 task Execution 没有状态信息或之前的 location 记录，这个 location preference 依赖于 task 的输入；</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;These rules should result in the following behavior:</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * note: 1. 无状态 task 总是基于与输入共享的方式调度；</span></span><br><span class="line"><span class="comment"> * note: 2. 有状态 task 基于与输入共享的方式来初始化他们最开始的调度；</span></span><br><span class="line"><span class="comment"> * note: 3. 有状态 task 的重复执行会尽量与他们的 state 共享执行；</span></span><br><span class="line"><span class="comment"> * &lt;ul&gt;</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;Stateless tasks are always scheduled based on co-location with inputs.</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;Stateful tasks are on their initial attempt executed based on co-location with inputs.</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;Repeated executions of stateful tasks try to co-locate the execution with its state.</span></span><br><span class="line"><span class="comment"> * &lt;/ul&gt;</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> Collection&lt;CompletableFuture&lt;TaskManagerLocation&gt;&gt; getPreferredLocations() &#123;</span><br><span class="line">    Collection&lt;CompletableFuture&lt;TaskManagerLocation&gt;&gt; basedOnState = getPreferredLocationsBasedOnState();</span><br><span class="line">    <span class="keyword">return</span> basedOnState != <span class="keyword">null</span> ? basedOnState : getPreferredLocationsBasedOnInputs();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Gets the preferred location to execute the current task execution attempt, based on the state that the execution attempt will resume.</span></span><br><span class="line"><span class="comment"> * note: 根据这个 Execution 试图恢复的状态来获取当前 task execution 的首选位置</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> Collection&lt;CompletableFuture&lt;TaskManagerLocation&gt;&gt; getPreferredLocationsBasedOnState() &#123;</span><br><span class="line">    TaskManagerLocation priorLocation;</span><br><span class="line">    <span class="keyword">if</span> (currentExecution.getTaskRestore() != <span class="keyword">null</span> &amp;&amp; (priorLocation = getLatestPriorLocation()) != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> Collections.singleton(CompletableFuture.completedFuture(priorLocation));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里简单介绍一下其处理逻辑：</p>
-<ol>
-<li>如果这个作业是从 Checkpoint 恢复的话，这里会根据它之前的状态信息获取上次的位置信息，直接返回这个位置信息；</li>
-<li>另一种情况是，根据这个 ExecutionVertex 的 <code>inputEdges</code>，获取其上游 ExecutionVertex 的位置信息列表，但是如果这个列表的数目超过阈值（默认是 8），就会直接返回 null（上游过于分散，再根据 input 位置信息去分配就没有太大意义了）。</li>
-</ol>
-<p>可以看出，在选取最优的 TaskManagerLocation 列表时，主要是根据 state 和 input 的位置信息来判断，会优先选择 state，也就是上次 checkpoint 中记录的位置。</p>
-<h3 id="最优的-slot-分配算法"><a href="#最优的-slot-分配算法" class="headerlink" title="最优的 slot 分配算法"></a>最优的 slot 分配算法</h3><p>在上面选择了最优的 TaskManagerLocation 列表后，这里来看下如何给 task 选择具体的 slot，这个是在 <code>SlotSelectionStrategy</code> 中的 <code>selectBestSlotForProfile()</code> 方法中做的，目前 <code>SlotSelectionStrategy</code> 有两个实现类：<code>PreviousAllocationSlotSelectionStrategy</code> 和 <code>LocationPreferenceSlotSelectionStrategy</code>，这个是在 <code>state.backend.local-recovery</code> 参数中配置的，默认是 false，选择的是 <code>PreviousAllocationSlotSelectionStrategy</code>，如果配置为 true，那么就会选择 <code>PreviousAllocationSlotSelectionStrategy</code>，这部分的逻辑如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// DefaultSchedulerFactory.java</span></span><br><span class="line"><span class="meta">@Nonnull</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> SlotSelectionStrategy <span class="title">selectSlotSelectionStrategy</span><span class="params">(@Nonnull Configuration configuration)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 根据 state.backend.local-recover 配置选择</span></span><br><span class="line">    <span class="keyword">if</span> (configuration.getBoolean(CheckpointingOptions.LOCAL_RECOVERY)) &#123;</span><br><span class="line">        <span class="keyword">return</span> PreviousAllocationSlotSelectionStrategy.INSTANCE;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> LocationPreferenceSlotSelectionStrategy.INSTANCE;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里分别看下这两个实现类的 <code>selectBestSlotForProfile()</code> 的实现逻辑：</p>
-<ol>
-<li><code>PreviousAllocationSlotSelectionStrategy</code>: 它会根据上次的分配记录，如果这个位置刚好在 SlotPool 的可用列表里，这里就会直接选这个 slot，否则会走到 <code>LocationPreferenceSlotSelectionStrategy</code> 的处理逻辑；</li>
-<li><code>LocationPreferenceSlotSelectionStrategy</code>: 这个是对可用的 slot 列表做打分，选择分数最高的（分数相同的话，会选择第一个），如果 slot 在前面得到的最优 <code>TaskManagerLocation</code> 列表中，分数就会比较高。</li>
-</ol>
-<h3 id="allocateSharedSlot-VS-allocateSingleSlot"><a href="#allocateSharedSlot-VS-allocateSingleSlot" class="headerlink" title="allocateSharedSlot VS allocateSingleSlot"></a>allocateSharedSlot VS allocateSingleSlot</h3><p>在分配 slot 时，这里分为两种情况：</p>
-<ol>
-<li><code>allocateSingleSlot()</code>: 如果没有设置 SlotSharingGroup 将会走到这个方法，直接给这个 SlotRequestId 分配一个 slot，具体选择哪个 slot 就是上面的逻辑；</li>
-<li><code>allocateSharedSlot()</code>: 而如果设置了 SlotSharingGroup 就会走到这里，先根据 <code>SlotSharingGroupId</code> 获取或创建对应的 <code>SlotSharingManager</code>，然后创建（或者根据 <code>SlotSharingGroup</code> 获取）一个的 <code>MultiTaskSlot</code>（每个 <code>SlotSharingGroup</code> 会对应一个 <code>MultiTaskSlot</code> 对象），这里再将这个 task 分配到这个 <code>MultiTaskSlot</code> 上（这个只是简单介绍，后面在调度模型文章中，将会详细讲述）。</li>
-</ol>
-<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>到这里，Flink JobManager 的大部分内容已经讲述完了，还有一些小点会在后面的系列文章中再给大家讲述。这里总结一下，JobManager 主要是为一个具体的作业而服务的，它负责这个作业每个 task 的调度、checkpoint/savepoint（后面 checkpoint 的文章中会详述其流程）的触发以及容错恢复，它有两个非常重点的服务组件 —— <code>LegacyScheduler</code> 和 <code>SlotPool</code>，其中：</p>
-<ol>
-<li><code>LegacyScheduler</code>: 它封装了作业的 <code>ExecutionGraph</code> 以及 <code>BackPressureStatsTracker</code> 中的接口，它会负责这个作业具体调度、savepoint 触发等工作；</li>
-<li><code>SlotPool</code>: 它主要负责这个作业 slot 相关的内容，像与 ResourceManager 通信、分配或释放 slot 资源等工作。</li>
-</ol>
-<p>文章的后半部分，又总结了一个作业是如何调度起来的，首先是分配 slot，最后是通过 <code>deploy()</code> 接口向 TM 提交这个 task，本文着重关注了 slot 的分配，task 的部署将会在下节的 TaskManager 详解中给大家介绍。</p>
-<hr>
-<p>参考</p>
-<ul>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.9/internals/job_scheduling.html" target="_blank" rel="external">Jobs and Scheduling</a>；</li>
-<li><a href="https://www.cnblogs.com/andyhe/p/10633692.html" target="_blank" rel="external">Flink架构分析之资源分配</a>；</li>
-<li><a href="http://chenyuzhao.me/2017/02/08/jobmanager%E5%9F%BA%E6%9C%AC%E7%BB%84%E4%BB%B6/" target="_blank" rel="external">Flink JobManager 基本组件</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/TBzzGTNFTzVLjFQdzz-LuQ" target="_blank" rel="external">Apache Flink 进阶（一）：Runtime 核心机制剖析</a>；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第六篇，紧接着上篇文章，本篇主要讲述 Flink Master 中另一个组件 —— JobManager（在源码中对应的实现类是 &lt;code&gt;JobMaster&lt;/code&gt;）。每个作业在启动后，Dispat
     
     </summary>
     
