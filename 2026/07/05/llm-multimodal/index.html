@@ -1,0 +1,409 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界</h1><div class="post-meta">Jul 5, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">5,522</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/05/llm-multimodal/" href="/2026/07/05/llm-multimodal/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么需要多模态"><span class="toc-number">1.</span> <span class="toc-text">为什么需要多模态</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#多模态信息如何进入-LLM"><span class="toc-number">2.</span> <span class="toc-text">多模态信息如何进入 LLM</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#主流架构路线"><span class="toc-number">3.</span> <span class="toc-text">主流架构路线</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#视觉编码器-Projector-LLM"><span class="toc-number">3.1.</span> <span class="toc-text">视觉编码器 + Projector + LLM</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cross-Attention-融合"><span class="toc-number">3.2.</span> <span class="toc-text">Cross-Attention 融合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#原生多模态-Transformer"><span class="toc-number">3.3.</span> <span class="toc-text">原生多模态 Transformer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#多模态-MoE"><span class="toc-number">3.4.</span> <span class="toc-text">多模态 MoE</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#小结"><span class="toc-number">3.5.</span> <span class="toc-text">小结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#训练流程与数据工程"><span class="toc-number">4.</span> <span class="toc-text">训练流程与数据工程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#数据工程：样本治理"><span class="toc-number">4.1.</span> <span class="toc-text">数据工程：样本治理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#模态对齐：统一语义空间"><span class="toc-number">4.2.</span> <span class="toc-text">模态对齐：统一语义空间</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#指令微调：从描述到任务"><span class="toc-number">4.3.</span> <span class="toc-text">指令微调：从描述到任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Grounding：定位与映射"><span class="toc-number">4.4.</span> <span class="toc-text">Grounding：定位与映射</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#安全对齐：减少幻觉与风险"><span class="toc-number">4.5.</span> <span class="toc-text">安全对齐：减少幻觉与风险</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#应用、挑战与未来演进"><span class="toc-number">5.</span> <span class="toc-text">应用、挑战与未来演进</span></a></li></ol></div></div><div class="post-content"><p>过去的 LLM 主要围绕文本展开：用户输入一段文字，模型基于上下文生成回答。这个范式已经足够强大，可以支持问答、总结、写作、代码生成和复杂推理。</p>
+<p>但真实世界的信息并不只以文本存在。技术文档里有表格、架构图和流程图；代码排障经常伴随截图、日志和监控曲线；会议内容包含语音、视频和演示材料；移动端 Agent 还需要理解界面布局、按钮位置和操作反馈。</p>
+<p>如果模型只能处理文本，它看到的世界是不完整的。很多重要信息会在“转成文字”的过程中丢失，比如图像中的空间关系、图表中的趋势变化、视频中的动作过程，以及界面中的布局结构。这就是多模态要解决的问题。</p>
+<a id="more"></a>
+<p>多模态的目标，不是简单给 LLM 增加一个图片输入框，而是让模型能够统一理解文字、图像、语音、视频、表格、界面等不同形态的信息，并在这些信息之间建立关系。从技术上看，多模态至少要解决三个核心问题：</p>
+<ol>
+<li>不同模态如何表示成模型可以处理的 token；</li>
+<li>图像、语音、视频如何与语言表示空间对齐；</li>
+<li>模型如何基于多模态信息进行推理、生成和行动。</li>
+</ol>
+<h2 id="为什么需要多模态"><a href="#为什么需要多模态" class="headerlink" title="为什么需要多模态"></a>为什么需要多模态</h2><p>多模态的重要性，不只是“让模型能看图”，而是让 <strong>LLM 能处理更接近真实任务的信息输入</strong>。</p>
+<p>在纯文本阶段，很多系统会先把非文本信息转换成文字，再交给模型处理。例如，把图片做 OCR，把语音转成 ASR 文本，把视频抽帧后生成描述，把表格转成 Markdown。这种方式可以工作，但会损失大量原始信息。典型损失包括：</p>
+<ol>
+<li><strong>空间关系丢失</strong>：图片和界面里的位置、布局、相对关系很难完整转成文字；</li>
+<li><strong>视觉细节丢失</strong>：小字、颜色、图标、局部区域、图表趋势可能被忽略；</li>
+<li><strong>时间过程丢失</strong>：视频中的动作变化、事件顺序和因果关系难以只靠摘要表达；</li>
+<li><strong>结构信息丢失</strong>：表格、流程图、架构图、页面层级在纯文本中容易被打散；</li>
+<li><strong>操作反馈丢失</strong>：Agent 执行任务时，界面状态变化和错误提示往往来自截图或视觉反馈。</li>
+</ol>
+<p><img src="/images/llm/llm-multimodal-01.png" alt="LLM 的多模态"></p>
+<p>因此，多模态的价值不是多支持一种输入格式，而是让模型从“处理语言”扩展到“处理信息”。它让 LLM 可以阅读文档截图、理解图表趋势、分析视频片段、参与语音交互，也能支撑 Agent 在真实界面中观察环境、判断状态并执行下一步动作。</p>
+<h2 id="多模态信息如何进入-LLM"><a href="#多模态信息如何进入-LLM" class="headerlink" title="多模态信息如何进入 LLM"></a>多模态信息如何进入 LLM</h2><p>LLM 本质上处理的是一串 token。文本可以通过 tokenizer 切分成 token，再映射成 embedding；但图像、音频、视频这类信号不能直接输入 LLM，需要先经过编码和映射，变成模型可以处理的表示。可以把这个过程理解成两步：</p>
+<ol>
+<li><strong>模态编码</strong>：把图像、音频、视频等原始信号转换成一组向量；</li>
+<li><strong>空间对齐</strong>：把这些向量映射到 LLM 能理解的 embedding 空间。</li>
+</ol>
+<blockquote>
+<p>这里的 token 是广义上的 token / embedding 表示。视觉 token、音频 token 并不是 tokenizer 切出来的文字 token，而是 encoder 生成的向量表示。</p>
+</blockquote>
+<p>简化来看：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">文本 -&gt; tokenizer -&gt; text tokens -&gt; text embeddings</span><br><span class="line">图像 -&gt; vision encoder -&gt; visual tokens -&gt; projector -&gt; LLM space</span><br><span class="line">语音 -&gt; audio encoder -&gt; audio tokens -&gt; projector -&gt; LLM space</span><br><span class="line">视频 -&gt; frame / clip encoder -&gt; video tokens -&gt; projector -&gt; LLM space</span><br></pre></td></tr></table></figure>
+<p>核心问题是：不同模态的原始信号差异很大，但最终都要进入同一个上下文，由 Transformer 统一处理。</p>
+<p><img src="/images/llm/llm-multimodal-02.png" alt="多模态模型通常先把不同模态编码成 token"></p>
+<p>这里有几个关键模块：</p>
+<table>
+<thead>
+<tr>
+<th><strong>模块</strong></th>
+<th><strong>作用</strong></th>
+<th><strong>典型方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tokenizer</td>
+<td>把文本切成 token</td>
+<td>BPE、SentencePiece</td>
+</tr>
+<tr>
+<td>Modality Encoder</td>
+<td>把非文本信号编码成向量</td>
+<td>ViT、CNN、Audio Encoder、Video Encoder</td>
+</tr>
+<tr>
+<td>Projector / Adapter</td>
+<td>把模态向量映射到 LLM embedding 空间</td>
+<td>MLP、Linear Projection、Q-Former、Adapter</td>
+</tr>
+<tr>
+<td>Token Fusion</td>
+<td>融合文本 token 和多模态 token</td>
+<td>拼接、Cross-Attention、统一 Transformer</td>
+</tr>
+<tr>
+<td>Position / Layout Encoding</td>
+<td>保留空间位置、时间顺序和文档结构</td>
+<td>2D position、temporal position、layout embedding</td>
+</tr>
+<tr>
+<td>LLM Backbone</td>
+<td>对统一 token 序列进行推理和生成</td>
+<td>Decoder-only Transformer、MoE Transformer</td>
+</tr>
+</tbody>
+</table>
+<p>以图像为例，常见流程是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">image -&gt; patches -&gt; vision encoder -&gt; visual embeddings -&gt; projector -&gt; visual tokens</span><br></pre></td></tr></table></figure>
+<p>图像会先被切成多个 patch，每个 patch 类似视觉里的“token”。Vision Encoder 会把这些 patch 编码成视觉向量；Projector 再把这些视觉向量映射到 LLM 的表示空间，让它们可以和文本 token 一起输入模型。</p>
+<p>最终输入可能类似：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[visual tokens] + [text tokens] -&gt; LLM -&gt; answer</span><br></pre></td></tr></table></figure>
+<ul>
+<li>例如用户输入：请解释这张架构图的核心流程。</li>
+<li>模型看到的不是原始图片，而是一组已经编码后的 visual tokens，再结合文本问题进行推理。</li>
+</ul>
+<p>这里的难点在于：视觉 token、音频 token、视频 token 本身并不是自然语言。模型必须通过训练学会：</p>
+<ol>
+<li>哪些视觉区域对应哪些文字含义；</li>
+<li>图像中的空间关系如何影响回答；</li>
+<li>语音中的时间片段如何对应文本语义；</li>
+<li>视频中的动作过程如何转化成事件理解；</li>
+<li>多个模态之间出现冲突时应该如何处理。</li>
+</ol>
+<p>所以，多模态输入不是简单“把图片塞进模型”，而是把不同信号编码、压缩、对齐，并组织成 LLM 可以推理的 token 序列。</p>
+<h2 id="主流架构路线"><a href="#主流架构路线" class="headerlink" title="主流架构路线"></a>主流架构路线</h2><p>多模态架构的核心目标，是把不同模态的信息接入 LLM，并让模型能够在统一上下文中进行推理。这里真正要解决的不是“图片怎么输入”，而是三个问题：</p>
+<ol>
+<li><strong>表示问题</strong>：图像、语音、视频如何变成 token；</li>
+<li><strong>对齐问题</strong>：非文本 token 如何进入语言模型的语义空间；</li>
+<li><strong>融合问题</strong>：不同模态之间如何充分交互，而不是简单拼接。</li>
+</ol>
+<p>围绕这三个问题，业内形成了几类主流架构路线。</p>
+<h3 id="视觉编码器-Projector-LLM"><a href="#视觉编码器-Projector-LLM" class="headerlink" title="视觉编码器 + Projector + LLM"></a>视觉编码器 + Projector + LLM</h3><p>这是目前最常见、工程上最容易落地的路线。它的思路是：不直接改造 LLM，而是在 LLM 前面加一个视觉模块。流程可以简化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">image -&gt; vision encoder -&gt; visual features -&gt; projector -&gt; visual tokens -&gt; LLM</span><br></pre></td></tr></table></figure>
+<p><img src="/images/llm/llm-multimodal-03.png" alt="视觉编码器 + Projector + LLM 是很多多模态模型的基础路线"></p>
+<p>这里通常有三个关键模块：</p>
+<ol>
+<li>Vision Encoder：把图像切成 patch，并编码成视觉特征；</li>
+<li>Projector：把视觉特征映射到 LLM 的 embedding 空间；</li>
+<li>LLM：基于视觉 token 和文本 token 进行推理生成。</li>
+</ol>
+<p>这种路线的优点是成本低、改造小、可以复用成熟 LLM。很多模型会冻结一部分 LLM 或视觉编码器，只训练 projector 和少量适配层，从而降低训练成本。</p>
+<p>但它也有明显限制：视觉信息进入 LLM 前已经被压缩，模型对细粒度区域、空间关系、图表结构和复杂视觉推理的理解会受到 encoder 与 projector 的限制。</p>
+<p>简单说，这条路线解决的是：<strong>如何用最小架构改造，把图像接入已有 LLM。</strong></p>
+<h3 id="Cross-Attention-融合"><a href="#Cross-Attention-融合" class="headerlink" title="Cross-Attention 融合"></a>Cross-Attention 融合</h3><p>第一种路线通常是把视觉 token 和文本 token 拼接后交给 LLM。这样实现简单，但模态交互不一定充分。为了解决这个问题，另一类方案会引入 Cross-Attention，让文本表示可以主动关注视觉特征。可以理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">text hidden states &lt;-&gt; visual features</span><br></pre></td></tr></table></figure>
+<p>在这种结构里，文本 token 不只是“看到”一串视觉 token，而是可以通过注意力机制在生成过程中动态查询视觉信息。</p>
+<p><img src="/images/llm/llm-multimodal-04.png" alt="Cross-Attention 让语言表示在生成过程中动态关注视觉特征"></p>
+<p>Cross-Attention 的价值在于，它增强了文本与视觉之间的交互能力，尤其适合视觉问答、图文推理、图表理解、复杂文档理解这类任务。但代价也很明显：</p>
+<ol>
+<li>架构改动更大；</li>
+<li>训练成本更高；</li>
+<li>推理时需要维护额外的跨模态注意力计算；</li>
+<li>不容易直接复用纯文本 LLM 的标准推理优化。</li>
+</ol>
+<p>这条路线解决的是：<strong>如何让语言 token 和视觉特征发生更充分的交互，而不是浅层拼接。</strong></p>
+<h3 id="原生多模态-Transformer"><a href="#原生多模态-Transformer" class="headerlink" title="原生多模态 Transformer"></a>原生多模态 Transformer</h3><p>前面两类方案，本质上还是以语言模型为中心，再通过视觉编码器、Projector 或 Cross-Attention 把其他模态接入进来。它们更像是“在 LLM 外围增强多模态能力”。</p>
+<p>原生多模态 Transformer 则代表另一种<strong>更长期的演进方向</strong>：不再把图像、语音、视频看作外挂输入，而是尽量把不同模态都表示成统一 token，由同一个模型结构进行建模。</p>
+<blockquote>
+<p>需要注意的是，目前很多多模态模型仍然是混合架构，并不是所有模态都已经完全由一个统一 Transformer 原生处理。所谓“原生多模态”，更多代表一种架构演进趋势：让模型从设计上具备统一处理文本、图像、语音、视频等信息流的能力。</p>
+</blockquote>
+<p>更进一步看，它会把文本、图像、语音、视频都统一表示成 token，并由同一个 Transformer 处理。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[text tokens, image tokens, audio tokens, video tokens] -&gt; unified Transformer</span><br></pre></td></tr></table></figure>
+<p>它的目标不是“给 LLM 外挂一个视觉模块”，而是让模型从结构上就具备处理多种模态的能力。</p>
+<p><img src="/images/llm/llm-multimodal-05.png" alt="原生多模态 Transformer 代表统一建模多种模态的信息流方向"></p>
+<p>这种路线的优势是能力上限更高，模态之间可以在更深层发生交互，也更适合未来的 any-to-any 模型：文本输入生成语音，图像输入生成文本，语音输入驱动操作，视频输入生成结构化结论。但它的训练难度也更高：</p>
+<ol>
+<li>不同模态 token 数量差异巨大；</li>
+<li>图像和视频会显著增加上下文长度；</li>
+<li>多模态数据配比很难控制；</li>
+<li>模态之间容易不平衡，模型可能偏向文本；</li>
+<li>推理成本和 KV Cache 压力更大。</li>
+</ol>
+<p>这条路线解决的是：<strong>如何从架构层面统一建模多种模态，而不是把多模态能力作为外挂能力。</strong></p>
+<h3 id="多模态-MoE"><a href="#多模态-MoE" class="headerlink" title="多模态 MoE"></a>多模态 MoE</h3><p>多模态任务之间差异非常大。OCR、图表理解、视觉问答、视频摘要、语音对话、UI 操作所需要的能力并不相同。如果所有 token 都经过同一组参数，模型容量和计算成本都会快速上升。</p>
+<ul>
+<li>MoE 的思路是：让不同 expert 学习不同模态或任务分布，每个 token 只激活部分 expert。</li>
+</ul>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">multimodal tokens -&gt; router -&gt; selected experts -&gt; fused representation</span><br></pre></td></tr></table></figure>
+<p>在多模态场景里，expert 可以按照不同方式分工：</p>
+<ol>
+<li>按模态分工：文本 expert、视觉 expert、语音 expert、视频 expert；</li>
+<li>按任务分工：OCR expert、图表 expert、推理 expert、UI expert；</li>
+<li>按层级分工：底层处理感知特征，高层处理语义推理；</li>
+<li>按动态路由分工：router 根据 token 内容选择 expert。</li>
+</ol>
+<p>多模态 MoE 的价值在于：在模型总容量变大的同时，控制每次推理的激活计算量。它适合处理多任务、多模态、高容量需求的基座模型。但挑战也更复杂：</p>
+<ol>
+<li>router 是否能学会合理分配不同模态 token；</li>
+<li>expert 是否会出现负载不均衡；</li>
+<li>不同模态 expert 是否会割裂，导致融合不足；</li>
+<li>训练稳定性和通信成本更高；</li>
+<li>推理部署比 Dense 多模态模型更复杂。</li>
+</ol>
+<p>这条路线解决的是：<strong>如何在多模态任务越来越复杂时，用稀疏激活扩展模型容量。</strong></p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>几类架构可以这样对比：</p>
+<table>
+<thead>
+<tr>
+<th><strong>架构路线</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>优点</strong></th>
+<th><strong>挑战</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vision Encoder + Projector + LLM</td>
+<td>低成本接入图像能力</td>
+<td>改造小、复用 LLM、训练成本低</td>
+<td>融合较浅，视觉能力受 encoder 限制</td>
+</tr>
+<tr>
+<td>Cross-Attention 融合</td>
+<td>增强图文交互</td>
+<td>模态交互更充分</td>
+<td>架构复杂，推理成本更高</td>
+</tr>
+<tr>
+<td>原生多模态 Transformer</td>
+<td>统一建模多种模态</td>
+<td>能力上限高，适合 any-to-any</td>
+<td>数据、训练、推理成本都更高</td>
+</tr>
+<tr>
+<td>多模态 MoE</td>
+<td>扩展多模态容量</td>
+<td>多任务分工，性能/成本比更好</td>
+<td>路由、训练稳定性、部署复杂</td>
+</tr>
+</tbody>
+</table>
+<p>可以看到，多模态架构的演进方向，是从“把视觉接到 LLM 上”，逐步走向“用统一模型处理多种信息流”。</p>
+<p>一句话概括：<strong>早期多模态更像是 LLM 的外接感知模块，而未来多模态会越来越像一个统一的信息建模系统。</strong></p>
+<h2 id="训练流程与数据工程"><a href="#训练流程与数据工程" class="headerlink" title="训练流程与数据工程"></a>训练流程与数据工程</h2><p>多模态模型不是只靠架构就能获得能力。架构解决的是“不同模态如何进入模型”，训练解决的是“模型如何真正理解这些模态之间的关系”。一个典型多模态训练流程，可以分成几层：</p>
+<p><img src="/images/llm/llm-multimodal-06.png" alt="多模态能力如何训练出来"></p>
+<h3 id="数据工程：样本治理"><a href="#数据工程：样本治理" class="headerlink" title="数据工程：样本治理"></a>数据工程：样本治理</h3><p>多模态数据比纯文本数据更复杂，因为它不只包含内容，还包含空间、时间、布局和跨模态关系。常见数据类型包括：</p>
+<ul>
+<li>图像 - Caption：建立图像内容与语言描述的对应关系；</li>
+<li>图像 - 问答：训练视觉问答和图文推理能力；</li>
+<li>OCR 文档 - 文本：训练截图、扫描件、PDF、表格理解；</li>
+<li>图表 - 解释：训练趋势分析、指标理解和结构化推理；</li>
+<li>视频 - 字幕 / 描述：建立视频片段与事件描述的关系；</li>
+<li>语音 - 转写文本：建立音频信号与语言文本的关系；</li>
+<li>UI 截图 - 操作轨迹：训练界面理解和 Agent 操作能力。</li>
+</ul>
+<p>这一阶段的难点不只是“数据越多越好”，而是要保证数据质量：</p>
+<ol>
+<li>图文是否匹配；</li>
+<li>OCR 文本是否准确；</li>
+<li>图表解释是否忠实；</li>
+<li>视频描述是否覆盖关键事件；</li>
+<li>UI 操作轨迹是否和截图状态一致；</li>
+<li>是否包含隐私、人脸、敏感信息或版权风险。</li>
+</ol>
+<p>如果数据本身错位，例如图片和 caption 不匹配，模型会学到错误的跨模态关系。</p>
+<h3 id="模态对齐：统一语义空间"><a href="#模态对齐：统一语义空间" class="headerlink" title="模态对齐：统一语义空间"></a>模态对齐：统一语义空间</h3><p>模态对齐的目标，是让模型理解“这个视觉区域、这段语音、这个视频片段”对应什么语言含义。常见训练目标包括：</p>
+<ol>
+<li><strong>图文对比学习</strong>：让匹配的图像和文本距离更近，不匹配的距离更远；</li>
+<li><strong>Caption 生成</strong>：输入图像，让模型生成对应描述；</li>
+<li><strong>图文问答</strong>：输入图像和问题，让模型生成答案；</li>
+<li><strong>图像 - 文本匹配</strong>：判断一段文本是否描述了当前图像；</li>
+<li><strong>语音 - 文本对齐</strong>：让音频片段和转写文本建立对应关系；</li>
+<li><strong>视频 - 事件对齐</strong>：让视频片段和事件描述建立时间关系。</li>
+</ol>
+<p>这一阶段解决的是“看见”和“说出来”之间的对齐问题。模型需要学会：视觉 token、音频 token、视频 token 不是孤立向量，而是可以和语言概念发生对应。</p>
+<h3 id="指令微调：从描述到任务"><a href="#指令微调：从描述到任务" class="headerlink" title="指令微调：从描述到任务"></a>指令微调：从描述到任务</h3><p>模态对齐之后，模型可能已经能描述图片，但这还不等于能完成真实任务。真实用户给出的不是“描述这张图”，而是更复杂的指令：</p>
+<ol>
+<li>请解释这张架构图的核心流程；</li>
+<li>请提取截图中的错误信息；</li>
+<li>请根据这张表总结趋势；</li>
+<li>请判断这个 UI 页面下一步应该点击哪里；</li>
+<li>请比较这两张图的差异；</li>
+<li>请根据视频内容总结关键事件。</li>
+</ol>
+<p>多模态指令微调的目标，是让模型学会根据用户意图使用多模态信息，而不是只做表面描述。</p>
+<ul>
+<li>这一步会让模型从：<strong>看见图像 -&gt; 描述图像</strong>。</li>
+<li>进一步变成：<strong>理解图像 / 文档 / 视频 -&gt; 按任务要求推理和回答</strong>。</li>
+</ul>
+<h3 id="Grounding：定位与映射"><a href="#Grounding：定位与映射" class="headerlink" title="Grounding：定位与映射"></a>Grounding：定位与映射</h3><p>多模态模型不能只回答“图里有一个按钮”，还要知道按钮在哪里、哪个区域对应哪个对象、哪段视频对应哪个事件。Grounding 训练要建立文本和空间 / 时间位置之间的关系：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">对象 -&gt; 边界框</span><br><span class="line">文字描述 -&gt; 图像区域</span><br><span class="line">表格问题 -&gt; 单元格 / 行列</span><br><span class="line">视频事件 -&gt; 时间片段</span><br><span class="line">操作指令 -&gt; UI 坐标</span><br></pre></td></tr></table></figure>
+<p>这对 UI Agent、机器人、文档定位、图表问答非常关键。例如 UI Agent 需要的不只是回答“点击提交按钮”，还要知道：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">提交按钮在哪个区域？</span><br><span class="line">当前页面状态是否允许点击？</span><br><span class="line">点击之后页面是否发生了预期变化？</span><br></pre></td></tr></table></figure>
+<p>没有 Grounding，多模态模型容易停留在“看起来理解了”，但无法把理解落实到具体区域、时间点或动作上。</p>
+<h3 id="安全对齐：减少幻觉与风险"><a href="#安全对齐：减少幻觉与风险" class="headerlink" title="安全对齐：减少幻觉与风险"></a>安全对齐：减少幻觉与风险</h3><p>多模态模型也会幻觉，而且有时更隐蔽。它可能看错图片、误读图表、编造 OCR 内容，或者在证据不足时给出确定答案。因此，多模态也需要偏好对齐和安全训练：</p>
+<ol>
+<li>不确定时说明无法判断；</li>
+<li>对 OCR、图表、医学、法律等场景保持谨慎；</li>
+<li>对人脸、身份、隐私、地理位置等敏感信息做限制；</li>
+<li>对工具操作类任务加入确认机制；</li>
+<li>对图像、视频中的不充分证据避免过度推断；</li>
+<li>回答最好能引用图像区域、文档段落或视频时间点。</li>
+</ol>
+<p>简单说，多模态训练要解决的不只是“看懂”，还包括：<strong>看得准 -&gt; 对得上 -&gt; 会执行 -&gt; 可验证 -&gt; 不乱说</strong>。</p>
+<h2 id="应用、挑战与未来演进"><a href="#应用、挑战与未来演进" class="headerlink" title="应用、挑战与未来演进"></a>应用、挑战与未来演进</h2><p>多模态让 LLM 的应用边界明显扩大。它让模型从处理文字，扩展到处理文档、图像、语音、视频和界面环境，也让很多原本需要人工观察和判断的任务，开始具备自动化可能。典型应用可以概括为几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>场景</strong></th>
+<th><strong>多模态能力</strong></th>
+<th><strong>典型任务</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文档理解</td>
+<td>OCR、版面结构、表格、图表理解</td>
+<td>PDF 问答、合同审阅、财报分析</td>
+</tr>
+<tr>
+<td>图表分析</td>
+<td>趋势识别、异常点分析、指标关联</td>
+<td>监控图分析、业务报表解读</td>
+</tr>
+<tr>
+<td>截图问答</td>
+<td>页面元素识别、错误提示理解</td>
+<td>排障、客服、产品支持</td>
+</tr>
+<tr>
+<td>UI Agent</td>
+<td>界面理解、坐标定位、操作反馈</td>
+<td>自动填表、网页操作、移动端任务</td>
+</tr>
+<tr>
+<td>视频理解</td>
+<td>帧理解、时间建模、事件抽取</td>
+<td>会议总结、教学视频分析、监控片段理解</td>
+</tr>
+<tr>
+<td>语音助手</td>
+<td>ASR、语音理解、实时交互</td>
+<td>会议纪要、客服录音、实时对话</td>
+</tr>
+<tr>
+<td>多模态 RAG</td>
+<td>从图文表视频中检索证据</td>
+<td>企业知识问答、研究报告分析</td>
+</tr>
+</tbody>
+</table>
+<p>但多模态能力越强，系统复杂度也越高。它带来的挑战不只是“模型能不能看懂”，还包括成本、评估、安全和工程稳定性。</p>
+<table>
+<thead>
+<tr>
+<th><strong>挑战</strong></th>
+<th><strong>表现</strong></th>
+<th><strong>解决方向</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token 成本高</td>
+<td>图片、视频会产生大量视觉 token</td>
+<td>token 压缩、分辨率自适应、关键帧抽取</td>
+</tr>
+<tr>
+<td>细粒度识别难</td>
+<td>小字、密集对象、复杂表格容易出错</td>
+<td>OCR 增强、区域裁剪、高分辨率编码</td>
+</tr>
+<tr>
+<td>空间推理不稳定</td>
+<td>能识别对象，但位置关系判断不准</td>
+<td>Grounding、2D position、区域级监督</td>
+</tr>
+<tr>
+<td>视频时间建模难</td>
+<td>动作变化、事件顺序和因果关系复杂</td>
+<td>temporal encoding、clip-level 建模、事件标注</td>
+</tr>
+<tr>
+<td>图像幻觉隐蔽</td>
+<td>回答自然但没有真实依据</td>
+<td>证据引用、区域定位、回答校验</td>
+</tr>
+<tr>
+<td>评估复杂</td>
+<td>不能只看文本答案是否像</td>
+<td>区域、坐标、时间片段、操作结果评估</td>
+</tr>
+<tr>
+<td>隐私与安全风险高</td>
+<td>图片、语音、视频包含敏感信息</td>
+<td>脱敏、权限控制、敏感内容识别</td>
+</tr>
+</tbody>
+</table>
+<p>这里最值得注意的是：多模态错误往往不像文本错误那么容易被发现。模型可能把一张图解释得很流畅，但实际上看错了关键区域；也可能在视频总结中遗漏关键事件，或者误读 UI 页面状态。</p>
+<p>因此，生产级多模态系统不能只依赖模型回答，还需要让关键结论可追溯到图像区域、文档段落或视频时间点；在高风险场景加入人工确认；对 OCR、图表、坐标、时间片段进行专项评估；并对图片、语音、视频中的隐私信息做权限控制和脱敏处理。</p>
+<p>未来多模态大模型会沿着几个方向继续演进：</p>
+<ol>
+<li><strong>原生多模态架构</strong>：文本、视觉、语音、视频统一建模，而不是外挂模块；</li>
+<li><strong>实时多模态交互</strong>：模型可以处理连续语音、视频流和界面状态变化；</li>
+<li><strong>多模态 Agent</strong>：模型不仅看懂界面，还能根据视觉反馈执行下一步动作；</li>
+<li><strong>多模态 RAG</strong>：从文字、图片、表格、视频中共同检索证据；</li>
+<li><strong>更强 Grounding</strong>：答案能对应到图像区域、文档段落或视频时间点；</li>
+<li><strong>多模态 MoE</strong>：不同 expert 处理不同模态和任务，提高容量与效率；</li>
+<li><strong>更严格评估与安全机制</strong>：减少看图幻觉、误识别和高风险操作。</li>
+</ol>
+<p>简单来说，多模态的目标，不是让 LLM 多支持几种输入格式，而是让模型把文字、图像、语音、视频和外部环境统一到可推理、可生成、可行动的表示空间中。它让大模型从“读懂文字”，进一步走向“理解世界”。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/05/llm-multimodal/" data-id="cmr7s0p640000dxlwznqo4ql3" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/07/04/llm-agent/" class="next">LLM 系列 (十四)：Agent，大模型如何从对话走向行动</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/05/llm-multimodal/';
+var disqus_title = 'LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界';
+var disqus_url = 'http://matt33.com/2026/07/05/llm-multimodal/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/07/05/llm-multimodal/">LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/04/llm-agent/">LLM 系列 (十四)：Agent，大模型如何从对话走向行动</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/03/llm-rag/">LLM 系列 (十三)：RAG，大模型如何连接外部知识</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/02/llm-pretraining-data-engineering/">LLM 系列 (十二)：预训练数据工程：大模型的燃料是如何炼成的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/01/llm-long-context/">LLM 系列 (十一)：长上下文：大模型如何读懂更长的信息</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/30/llm-reasoning-model/">LLM 系列 (十)：推理模型：大模型如何从回答走向思考</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/29/llm-inference-serving/">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/28/llm-distributed-training/">LLM 系列 (八)：分布式训练：千卡集群如何训大模型</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/27/llm-post-training-alignment/">LLM 系列 (七)：后训练与对齐：从续写器到协作者</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/26/llm-pretraining/">LLM 系列 (六)：预训练的本质：从预测下一个 Token 到通用能力</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

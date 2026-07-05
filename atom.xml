@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-04T12:10:00.000Z</updated>
+  <updated>2026-07-05T12:10:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,400 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界</title>
+    <link href="http://matt33.com/2026/07/05/llm-multimodal/"/>
+    <id>http://matt33.com/2026/07/05/llm-multimodal/</id>
+    <published>2026-07-05T12:10:00.000Z</published>
+    <updated>2026-07-05T12:10:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>过去的 LLM 主要围绕文本展开：用户输入一段文字，模型基于上下文生成回答。这个范式已经足够强大，可以支持问答、总结、写作、代码生成和复杂推理。</p>
+<p>但真实世界的信息并不只以文本存在。技术文档里有表格、架构图和流程图；代码排障经常伴随截图、日志和监控曲线；会议内容包含语音、视频和演示材料；移动端 Agent 还需要理解界面布局、按钮位置和操作反馈。</p>
+<p>如果模型只能处理文本，它看到的世界是不完整的。很多重要信息会在“转成文字”的过程中丢失，比如图像中的空间关系、图表中的趋势变化、视频中的动作过程，以及界面中的布局结构。这就是多模态要解决的问题。</p>
+<a id="more"></a>
+<p>多模态的目标，不是简单给 LLM 增加一个图片输入框，而是让模型能够统一理解文字、图像、语音、视频、表格、界面等不同形态的信息，并在这些信息之间建立关系。从技术上看，多模态至少要解决三个核心问题：</p>
+<ol>
+<li>不同模态如何表示成模型可以处理的 token；</li>
+<li>图像、语音、视频如何与语言表示空间对齐；</li>
+<li>模型如何基于多模态信息进行推理、生成和行动。</li>
+</ol>
+<h2 id="为什么需要多模态"><a href="#为什么需要多模态" class="headerlink" title="为什么需要多模态"></a>为什么需要多模态</h2><p>多模态的重要性，不只是“让模型能看图”，而是让 <strong>LLM 能处理更接近真实任务的信息输入</strong>。</p>
+<p>在纯文本阶段，很多系统会先把非文本信息转换成文字，再交给模型处理。例如，把图片做 OCR，把语音转成 ASR 文本，把视频抽帧后生成描述，把表格转成 Markdown。这种方式可以工作，但会损失大量原始信息。典型损失包括：</p>
+<ol>
+<li><strong>空间关系丢失</strong>：图片和界面里的位置、布局、相对关系很难完整转成文字；</li>
+<li><strong>视觉细节丢失</strong>：小字、颜色、图标、局部区域、图表趋势可能被忽略；</li>
+<li><strong>时间过程丢失</strong>：视频中的动作变化、事件顺序和因果关系难以只靠摘要表达；</li>
+<li><strong>结构信息丢失</strong>：表格、流程图、架构图、页面层级在纯文本中容易被打散；</li>
+<li><strong>操作反馈丢失</strong>：Agent 执行任务时，界面状态变化和错误提示往往来自截图或视觉反馈。</li>
+</ol>
+<p><img src="/images/llm/llm-multimodal-01.png" alt="LLM 的多模态"></p>
+<p>因此，多模态的价值不是多支持一种输入格式，而是让模型从“处理语言”扩展到“处理信息”。它让 LLM 可以阅读文档截图、理解图表趋势、分析视频片段、参与语音交互，也能支撑 Agent 在真实界面中观察环境、判断状态并执行下一步动作。</p>
+<h2 id="多模态信息如何进入-LLM"><a href="#多模态信息如何进入-LLM" class="headerlink" title="多模态信息如何进入 LLM"></a>多模态信息如何进入 LLM</h2><p>LLM 本质上处理的是一串 token。文本可以通过 tokenizer 切分成 token，再映射成 embedding；但图像、音频、视频这类信号不能直接输入 LLM，需要先经过编码和映射，变成模型可以处理的表示。可以把这个过程理解成两步：</p>
+<ol>
+<li><strong>模态编码</strong>：把图像、音频、视频等原始信号转换成一组向量；</li>
+<li><strong>空间对齐</strong>：把这些向量映射到 LLM 能理解的 embedding 空间。</li>
+</ol>
+<blockquote>
+<p>这里的 token 是广义上的 token / embedding 表示。视觉 token、音频 token 并不是 tokenizer 切出来的文字 token，而是 encoder 生成的向量表示。</p>
+</blockquote>
+<p>简化来看：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">文本 -&gt; tokenizer -&gt; text tokens -&gt; text embeddings</span><br><span class="line">图像 -&gt; vision encoder -&gt; visual tokens -&gt; projector -&gt; LLM space</span><br><span class="line">语音 -&gt; audio encoder -&gt; audio tokens -&gt; projector -&gt; LLM space</span><br><span class="line">视频 -&gt; frame / clip encoder -&gt; video tokens -&gt; projector -&gt; LLM space</span><br></pre></td></tr></table></figure>
+<p>核心问题是：不同模态的原始信号差异很大，但最终都要进入同一个上下文，由 Transformer 统一处理。</p>
+<p><img src="/images/llm/llm-multimodal-02.png" alt="多模态模型通常先把不同模态编码成 token"></p>
+<p>这里有几个关键模块：</p>
+<table>
+<thead>
+<tr>
+<th><strong>模块</strong></th>
+<th><strong>作用</strong></th>
+<th><strong>典型方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tokenizer</td>
+<td>把文本切成 token</td>
+<td>BPE、SentencePiece</td>
+</tr>
+<tr>
+<td>Modality Encoder</td>
+<td>把非文本信号编码成向量</td>
+<td>ViT、CNN、Audio Encoder、Video Encoder</td>
+</tr>
+<tr>
+<td>Projector / Adapter</td>
+<td>把模态向量映射到 LLM embedding 空间</td>
+<td>MLP、Linear Projection、Q-Former、Adapter</td>
+</tr>
+<tr>
+<td>Token Fusion</td>
+<td>融合文本 token 和多模态 token</td>
+<td>拼接、Cross-Attention、统一 Transformer</td>
+</tr>
+<tr>
+<td>Position / Layout Encoding</td>
+<td>保留空间位置、时间顺序和文档结构</td>
+<td>2D position、temporal position、layout embedding</td>
+</tr>
+<tr>
+<td>LLM Backbone</td>
+<td>对统一 token 序列进行推理和生成</td>
+<td>Decoder-only Transformer、MoE Transformer</td>
+</tr>
+</tbody>
+</table>
+<p>以图像为例，常见流程是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">image -&gt; patches -&gt; vision encoder -&gt; visual embeddings -&gt; projector -&gt; visual tokens</span><br></pre></td></tr></table></figure>
+<p>图像会先被切成多个 patch，每个 patch 类似视觉里的“token”。Vision Encoder 会把这些 patch 编码成视觉向量；Projector 再把这些视觉向量映射到 LLM 的表示空间，让它们可以和文本 token 一起输入模型。</p>
+<p>最终输入可能类似：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[visual tokens] + [text tokens] -&gt; LLM -&gt; answer</span><br></pre></td></tr></table></figure>
+<ul>
+<li>例如用户输入：请解释这张架构图的核心流程。</li>
+<li>模型看到的不是原始图片，而是一组已经编码后的 visual tokens，再结合文本问题进行推理。</li>
+</ul>
+<p>这里的难点在于：视觉 token、音频 token、视频 token 本身并不是自然语言。模型必须通过训练学会：</p>
+<ol>
+<li>哪些视觉区域对应哪些文字含义；</li>
+<li>图像中的空间关系如何影响回答；</li>
+<li>语音中的时间片段如何对应文本语义；</li>
+<li>视频中的动作过程如何转化成事件理解；</li>
+<li>多个模态之间出现冲突时应该如何处理。</li>
+</ol>
+<p>所以，多模态输入不是简单“把图片塞进模型”，而是把不同信号编码、压缩、对齐，并组织成 LLM 可以推理的 token 序列。</p>
+<h2 id="主流架构路线"><a href="#主流架构路线" class="headerlink" title="主流架构路线"></a>主流架构路线</h2><p>多模态架构的核心目标，是把不同模态的信息接入 LLM，并让模型能够在统一上下文中进行推理。这里真正要解决的不是“图片怎么输入”，而是三个问题：</p>
+<ol>
+<li><strong>表示问题</strong>：图像、语音、视频如何变成 token；</li>
+<li><strong>对齐问题</strong>：非文本 token 如何进入语言模型的语义空间；</li>
+<li><strong>融合问题</strong>：不同模态之间如何充分交互，而不是简单拼接。</li>
+</ol>
+<p>围绕这三个问题，业内形成了几类主流架构路线。</p>
+<h3 id="视觉编码器-Projector-LLM"><a href="#视觉编码器-Projector-LLM" class="headerlink" title="视觉编码器 + Projector + LLM"></a>视觉编码器 + Projector + LLM</h3><p>这是目前最常见、工程上最容易落地的路线。它的思路是：不直接改造 LLM，而是在 LLM 前面加一个视觉模块。流程可以简化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">image -&gt; vision encoder -&gt; visual features -&gt; projector -&gt; visual tokens -&gt; LLM</span><br></pre></td></tr></table></figure>
+<p><img src="/images/llm/llm-multimodal-03.png" alt="视觉编码器 + Projector + LLM 是很多多模态模型的基础路线"></p>
+<p>这里通常有三个关键模块：</p>
+<ol>
+<li>Vision Encoder：把图像切成 patch，并编码成视觉特征；</li>
+<li>Projector：把视觉特征映射到 LLM 的 embedding 空间；</li>
+<li>LLM：基于视觉 token 和文本 token 进行推理生成。</li>
+</ol>
+<p>这种路线的优点是成本低、改造小、可以复用成熟 LLM。很多模型会冻结一部分 LLM 或视觉编码器，只训练 projector 和少量适配层，从而降低训练成本。</p>
+<p>但它也有明显限制：视觉信息进入 LLM 前已经被压缩，模型对细粒度区域、空间关系、图表结构和复杂视觉推理的理解会受到 encoder 与 projector 的限制。</p>
+<p>简单说，这条路线解决的是：<strong>如何用最小架构改造，把图像接入已有 LLM。</strong></p>
+<h3 id="Cross-Attention-融合"><a href="#Cross-Attention-融合" class="headerlink" title="Cross-Attention 融合"></a>Cross-Attention 融合</h3><p>第一种路线通常是把视觉 token 和文本 token 拼接后交给 LLM。这样实现简单，但模态交互不一定充分。为了解决这个问题，另一类方案会引入 Cross-Attention，让文本表示可以主动关注视觉特征。可以理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">text hidden states &lt;-&gt; visual features</span><br></pre></td></tr></table></figure>
+<p>在这种结构里，文本 token 不只是“看到”一串视觉 token，而是可以通过注意力机制在生成过程中动态查询视觉信息。</p>
+<p><img src="/images/llm/llm-multimodal-04.png" alt="Cross-Attention 让语言表示在生成过程中动态关注视觉特征"></p>
+<p>Cross-Attention 的价值在于，它增强了文本与视觉之间的交互能力，尤其适合视觉问答、图文推理、图表理解、复杂文档理解这类任务。但代价也很明显：</p>
+<ol>
+<li>架构改动更大；</li>
+<li>训练成本更高；</li>
+<li>推理时需要维护额外的跨模态注意力计算；</li>
+<li>不容易直接复用纯文本 LLM 的标准推理优化。</li>
+</ol>
+<p>这条路线解决的是：<strong>如何让语言 token 和视觉特征发生更充分的交互，而不是浅层拼接。</strong></p>
+<h3 id="原生多模态-Transformer"><a href="#原生多模态-Transformer" class="headerlink" title="原生多模态 Transformer"></a>原生多模态 Transformer</h3><p>前面两类方案，本质上还是以语言模型为中心，再通过视觉编码器、Projector 或 Cross-Attention 把其他模态接入进来。它们更像是“在 LLM 外围增强多模态能力”。</p>
+<p>原生多模态 Transformer 则代表另一种<strong>更长期的演进方向</strong>：不再把图像、语音、视频看作外挂输入，而是尽量把不同模态都表示成统一 token，由同一个模型结构进行建模。</p>
+<blockquote>
+<p>需要注意的是，目前很多多模态模型仍然是混合架构，并不是所有模态都已经完全由一个统一 Transformer 原生处理。所谓“原生多模态”，更多代表一种架构演进趋势：让模型从设计上具备统一处理文本、图像、语音、视频等信息流的能力。</p>
+</blockquote>
+<p>更进一步看，它会把文本、图像、语音、视频都统一表示成 token，并由同一个 Transformer 处理。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[text tokens, image tokens, audio tokens, video tokens] -&gt; unified Transformer</span><br></pre></td></tr></table></figure>
+<p>它的目标不是“给 LLM 外挂一个视觉模块”，而是让模型从结构上就具备处理多种模态的能力。</p>
+<p><img src="/images/llm/llm-multimodal-05.png" alt="原生多模态 Transformer 代表统一建模多种模态的信息流方向"></p>
+<p>这种路线的优势是能力上限更高，模态之间可以在更深层发生交互，也更适合未来的 any-to-any 模型：文本输入生成语音，图像输入生成文本，语音输入驱动操作，视频输入生成结构化结论。但它的训练难度也更高：</p>
+<ol>
+<li>不同模态 token 数量差异巨大；</li>
+<li>图像和视频会显著增加上下文长度；</li>
+<li>多模态数据配比很难控制；</li>
+<li>模态之间容易不平衡，模型可能偏向文本；</li>
+<li>推理成本和 KV Cache 压力更大。</li>
+</ol>
+<p>这条路线解决的是：<strong>如何从架构层面统一建模多种模态，而不是把多模态能力作为外挂能力。</strong></p>
+<h3 id="多模态-MoE"><a href="#多模态-MoE" class="headerlink" title="多模态 MoE"></a>多模态 MoE</h3><p>多模态任务之间差异非常大。OCR、图表理解、视觉问答、视频摘要、语音对话、UI 操作所需要的能力并不相同。如果所有 token 都经过同一组参数，模型容量和计算成本都会快速上升。</p>
+<ul>
+<li>MoE 的思路是：让不同 expert 学习不同模态或任务分布，每个 token 只激活部分 expert。</li>
+</ul>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">multimodal tokens -&gt; router -&gt; selected experts -&gt; fused representation</span><br></pre></td></tr></table></figure>
+<p>在多模态场景里，expert 可以按照不同方式分工：</p>
+<ol>
+<li>按模态分工：文本 expert、视觉 expert、语音 expert、视频 expert；</li>
+<li>按任务分工：OCR expert、图表 expert、推理 expert、UI expert；</li>
+<li>按层级分工：底层处理感知特征，高层处理语义推理；</li>
+<li>按动态路由分工：router 根据 token 内容选择 expert。</li>
+</ol>
+<p>多模态 MoE 的价值在于：在模型总容量变大的同时，控制每次推理的激活计算量。它适合处理多任务、多模态、高容量需求的基座模型。但挑战也更复杂：</p>
+<ol>
+<li>router 是否能学会合理分配不同模态 token；</li>
+<li>expert 是否会出现负载不均衡；</li>
+<li>不同模态 expert 是否会割裂，导致融合不足；</li>
+<li>训练稳定性和通信成本更高；</li>
+<li>推理部署比 Dense 多模态模型更复杂。</li>
+</ol>
+<p>这条路线解决的是：<strong>如何在多模态任务越来越复杂时，用稀疏激活扩展模型容量。</strong></p>
+<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>几类架构可以这样对比：</p>
+<table>
+<thead>
+<tr>
+<th><strong>架构路线</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>优点</strong></th>
+<th><strong>挑战</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vision Encoder + Projector + LLM</td>
+<td>低成本接入图像能力</td>
+<td>改造小、复用 LLM、训练成本低</td>
+<td>融合较浅，视觉能力受 encoder 限制</td>
+</tr>
+<tr>
+<td>Cross-Attention 融合</td>
+<td>增强图文交互</td>
+<td>模态交互更充分</td>
+<td>架构复杂，推理成本更高</td>
+</tr>
+<tr>
+<td>原生多模态 Transformer</td>
+<td>统一建模多种模态</td>
+<td>能力上限高，适合 any-to-any</td>
+<td>数据、训练、推理成本都更高</td>
+</tr>
+<tr>
+<td>多模态 MoE</td>
+<td>扩展多模态容量</td>
+<td>多任务分工，性能/成本比更好</td>
+<td>路由、训练稳定性、部署复杂</td>
+</tr>
+</tbody>
+</table>
+<p>可以看到，多模态架构的演进方向，是从“把视觉接到 LLM 上”，逐步走向“用统一模型处理多种信息流”。</p>
+<p>一句话概括：<strong>早期多模态更像是 LLM 的外接感知模块，而未来多模态会越来越像一个统一的信息建模系统。</strong></p>
+<h2 id="训练流程与数据工程"><a href="#训练流程与数据工程" class="headerlink" title="训练流程与数据工程"></a>训练流程与数据工程</h2><p>多模态模型不是只靠架构就能获得能力。架构解决的是“不同模态如何进入模型”，训练解决的是“模型如何真正理解这些模态之间的关系”。一个典型多模态训练流程，可以分成几层：</p>
+<p><img src="/images/llm/llm-multimodal-06.png" alt="多模态能力如何训练出来"></p>
+<h3 id="数据工程：样本治理"><a href="#数据工程：样本治理" class="headerlink" title="数据工程：样本治理"></a>数据工程：样本治理</h3><p>多模态数据比纯文本数据更复杂，因为它不只包含内容，还包含空间、时间、布局和跨模态关系。常见数据类型包括：</p>
+<ul>
+<li>图像 - Caption：建立图像内容与语言描述的对应关系；</li>
+<li>图像 - 问答：训练视觉问答和图文推理能力；</li>
+<li>OCR 文档 - 文本：训练截图、扫描件、PDF、表格理解；</li>
+<li>图表 - 解释：训练趋势分析、指标理解和结构化推理；</li>
+<li>视频 - 字幕 / 描述：建立视频片段与事件描述的关系；</li>
+<li>语音 - 转写文本：建立音频信号与语言文本的关系；</li>
+<li>UI 截图 - 操作轨迹：训练界面理解和 Agent 操作能力。</li>
+</ul>
+<p>这一阶段的难点不只是“数据越多越好”，而是要保证数据质量：</p>
+<ol>
+<li>图文是否匹配；</li>
+<li>OCR 文本是否准确；</li>
+<li>图表解释是否忠实；</li>
+<li>视频描述是否覆盖关键事件；</li>
+<li>UI 操作轨迹是否和截图状态一致；</li>
+<li>是否包含隐私、人脸、敏感信息或版权风险。</li>
+</ol>
+<p>如果数据本身错位，例如图片和 caption 不匹配，模型会学到错误的跨模态关系。</p>
+<h3 id="模态对齐：统一语义空间"><a href="#模态对齐：统一语义空间" class="headerlink" title="模态对齐：统一语义空间"></a>模态对齐：统一语义空间</h3><p>模态对齐的目标，是让模型理解“这个视觉区域、这段语音、这个视频片段”对应什么语言含义。常见训练目标包括：</p>
+<ol>
+<li><strong>图文对比学习</strong>：让匹配的图像和文本距离更近，不匹配的距离更远；</li>
+<li><strong>Caption 生成</strong>：输入图像，让模型生成对应描述；</li>
+<li><strong>图文问答</strong>：输入图像和问题，让模型生成答案；</li>
+<li><strong>图像 - 文本匹配</strong>：判断一段文本是否描述了当前图像；</li>
+<li><strong>语音 - 文本对齐</strong>：让音频片段和转写文本建立对应关系；</li>
+<li><strong>视频 - 事件对齐</strong>：让视频片段和事件描述建立时间关系。</li>
+</ol>
+<p>这一阶段解决的是“看见”和“说出来”之间的对齐问题。模型需要学会：视觉 token、音频 token、视频 token 不是孤立向量，而是可以和语言概念发生对应。</p>
+<h3 id="指令微调：从描述到任务"><a href="#指令微调：从描述到任务" class="headerlink" title="指令微调：从描述到任务"></a>指令微调：从描述到任务</h3><p>模态对齐之后，模型可能已经能描述图片，但这还不等于能完成真实任务。真实用户给出的不是“描述这张图”，而是更复杂的指令：</p>
+<ol>
+<li>请解释这张架构图的核心流程；</li>
+<li>请提取截图中的错误信息；</li>
+<li>请根据这张表总结趋势；</li>
+<li>请判断这个 UI 页面下一步应该点击哪里；</li>
+<li>请比较这两张图的差异；</li>
+<li>请根据视频内容总结关键事件。</li>
+</ol>
+<p>多模态指令微调的目标，是让模型学会根据用户意图使用多模态信息，而不是只做表面描述。</p>
+<ul>
+<li>这一步会让模型从：<strong>看见图像 -&gt; 描述图像</strong>。</li>
+<li>进一步变成：<strong>理解图像 / 文档 / 视频 -&gt; 按任务要求推理和回答</strong>。</li>
+</ul>
+<h3 id="Grounding：定位与映射"><a href="#Grounding：定位与映射" class="headerlink" title="Grounding：定位与映射"></a>Grounding：定位与映射</h3><p>多模态模型不能只回答“图里有一个按钮”，还要知道按钮在哪里、哪个区域对应哪个对象、哪段视频对应哪个事件。Grounding 训练要建立文本和空间 / 时间位置之间的关系：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">对象 -&gt; 边界框</span><br><span class="line">文字描述 -&gt; 图像区域</span><br><span class="line">表格问题 -&gt; 单元格 / 行列</span><br><span class="line">视频事件 -&gt; 时间片段</span><br><span class="line">操作指令 -&gt; UI 坐标</span><br></pre></td></tr></table></figure>
+<p>这对 UI Agent、机器人、文档定位、图表问答非常关键。例如 UI Agent 需要的不只是回答“点击提交按钮”，还要知道：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">提交按钮在哪个区域？</span><br><span class="line">当前页面状态是否允许点击？</span><br><span class="line">点击之后页面是否发生了预期变化？</span><br></pre></td></tr></table></figure>
+<p>没有 Grounding，多模态模型容易停留在“看起来理解了”，但无法把理解落实到具体区域、时间点或动作上。</p>
+<h3 id="安全对齐：减少幻觉与风险"><a href="#安全对齐：减少幻觉与风险" class="headerlink" title="安全对齐：减少幻觉与风险"></a>安全对齐：减少幻觉与风险</h3><p>多模态模型也会幻觉，而且有时更隐蔽。它可能看错图片、误读图表、编造 OCR 内容，或者在证据不足时给出确定答案。因此，多模态也需要偏好对齐和安全训练：</p>
+<ol>
+<li>不确定时说明无法判断；</li>
+<li>对 OCR、图表、医学、法律等场景保持谨慎；</li>
+<li>对人脸、身份、隐私、地理位置等敏感信息做限制；</li>
+<li>对工具操作类任务加入确认机制；</li>
+<li>对图像、视频中的不充分证据避免过度推断；</li>
+<li>回答最好能引用图像区域、文档段落或视频时间点。</li>
+</ol>
+<p>简单说，多模态训练要解决的不只是“看懂”，还包括：<strong>看得准 -&gt; 对得上 -&gt; 会执行 -&gt; 可验证 -&gt; 不乱说</strong>。</p>
+<h2 id="应用、挑战与未来演进"><a href="#应用、挑战与未来演进" class="headerlink" title="应用、挑战与未来演进"></a>应用、挑战与未来演进</h2><p>多模态让 LLM 的应用边界明显扩大。它让模型从处理文字，扩展到处理文档、图像、语音、视频和界面环境，也让很多原本需要人工观察和判断的任务，开始具备自动化可能。典型应用可以概括为几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>场景</strong></th>
+<th><strong>多模态能力</strong></th>
+<th><strong>典型任务</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文档理解</td>
+<td>OCR、版面结构、表格、图表理解</td>
+<td>PDF 问答、合同审阅、财报分析</td>
+</tr>
+<tr>
+<td>图表分析</td>
+<td>趋势识别、异常点分析、指标关联</td>
+<td>监控图分析、业务报表解读</td>
+</tr>
+<tr>
+<td>截图问答</td>
+<td>页面元素识别、错误提示理解</td>
+<td>排障、客服、产品支持</td>
+</tr>
+<tr>
+<td>UI Agent</td>
+<td>界面理解、坐标定位、操作反馈</td>
+<td>自动填表、网页操作、移动端任务</td>
+</tr>
+<tr>
+<td>视频理解</td>
+<td>帧理解、时间建模、事件抽取</td>
+<td>会议总结、教学视频分析、监控片段理解</td>
+</tr>
+<tr>
+<td>语音助手</td>
+<td>ASR、语音理解、实时交互</td>
+<td>会议纪要、客服录音、实时对话</td>
+</tr>
+<tr>
+<td>多模态 RAG</td>
+<td>从图文表视频中检索证据</td>
+<td>企业知识问答、研究报告分析</td>
+</tr>
+</tbody>
+</table>
+<p>但多模态能力越强，系统复杂度也越高。它带来的挑战不只是“模型能不能看懂”，还包括成本、评估、安全和工程稳定性。</p>
+<table>
+<thead>
+<tr>
+<th><strong>挑战</strong></th>
+<th><strong>表现</strong></th>
+<th><strong>解决方向</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token 成本高</td>
+<td>图片、视频会产生大量视觉 token</td>
+<td>token 压缩、分辨率自适应、关键帧抽取</td>
+</tr>
+<tr>
+<td>细粒度识别难</td>
+<td>小字、密集对象、复杂表格容易出错</td>
+<td>OCR 增强、区域裁剪、高分辨率编码</td>
+</tr>
+<tr>
+<td>空间推理不稳定</td>
+<td>能识别对象，但位置关系判断不准</td>
+<td>Grounding、2D position、区域级监督</td>
+</tr>
+<tr>
+<td>视频时间建模难</td>
+<td>动作变化、事件顺序和因果关系复杂</td>
+<td>temporal encoding、clip-level 建模、事件标注</td>
+</tr>
+<tr>
+<td>图像幻觉隐蔽</td>
+<td>回答自然但没有真实依据</td>
+<td>证据引用、区域定位、回答校验</td>
+</tr>
+<tr>
+<td>评估复杂</td>
+<td>不能只看文本答案是否像</td>
+<td>区域、坐标、时间片段、操作结果评估</td>
+</tr>
+<tr>
+<td>隐私与安全风险高</td>
+<td>图片、语音、视频包含敏感信息</td>
+<td>脱敏、权限控制、敏感内容识别</td>
+</tr>
+</tbody>
+</table>
+<p>这里最值得注意的是：多模态错误往往不像文本错误那么容易被发现。模型可能把一张图解释得很流畅，但实际上看错了关键区域；也可能在视频总结中遗漏关键事件，或者误读 UI 页面状态。</p>
+<p>因此，生产级多模态系统不能只依赖模型回答，还需要让关键结论可追溯到图像区域、文档段落或视频时间点；在高风险场景加入人工确认；对 OCR、图表、坐标、时间片段进行专项评估；并对图片、语音、视频中的隐私信息做权限控制和脱敏处理。</p>
+<p>未来多模态大模型会沿着几个方向继续演进：</p>
+<ol>
+<li><strong>原生多模态架构</strong>：文本、视觉、语音、视频统一建模，而不是外挂模块；</li>
+<li><strong>实时多模态交互</strong>：模型可以处理连续语音、视频流和界面状态变化；</li>
+<li><strong>多模态 Agent</strong>：模型不仅看懂界面，还能根据视觉反馈执行下一步动作；</li>
+<li><strong>多模态 RAG</strong>：从文字、图片、表格、视频中共同检索证据；</li>
+<li><strong>更强 Grounding</strong>：答案能对应到图像区域、文档段落或视频时间点；</li>
+<li><strong>多模态 MoE</strong>：不同 expert 处理不同模态和任务，提高容量与效率；</li>
+<li><strong>更严格评估与安全机制</strong>：减少看图幻觉、误识别和高风险操作。</li>
+</ol>
+<p>简单来说，多模态的目标，不是让 LLM 多支持几种输入格式，而是让模型把文字、图像、语音、视频和外部环境统一到可推理、可生成、可行动的表示空间中。它让大模型从“读懂文字”，进一步走向“理解世界”。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;过去的 LLM 主要围绕文本展开：用户输入一段文字，模型基于上下文生成回答。这个范式已经足够强大，可以支持问答、总结、写作、代码生成和复杂推理。&lt;/p&gt;
+&lt;p&gt;但真实世界的信息并不只以文本存在。技术文档里有表格、架构图和流程图；代码排障经常伴随截图、日志和监控曲线；会议内容包含语音、视频和演示材料；移动端 Agent 还需要理解界面布局、按钮位置和操作反馈。&lt;/p&gt;
+&lt;p&gt;如果模型只能处理文本，它看到的世界是不完整的。很多重要信息会在“转成文字”的过程中丢失，比如图像中的空间关系、图表中的趋势变化、视频中的动作过程，以及界面中的布局结构。这就是多模态要解决的问题。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (十四)：Agent，大模型如何从对话走向行动</title>
@@ -7855,168 +8249,6 @@
     <summary type="html">
     
       &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第八篇，在介绍 TaskManager 第二部分之前，先来给介绍一下目前 StreamTask 中基于 MailBox 实现的线程模型，这个模型从 1.9 开始实现，在目前发布的 1.10 版本中，基本上已经
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="flink" scheme="http://matt33.com/tags/flink/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Flink TaskManager 详解（一）</title>
-    <link href="http://matt33.com/2020/03/15/flink-taskmanager-7/"/>
-    <id>http://matt33.com/2020/03/15/flink-taskmanager-7/</id>
-    <published>2020-03-15T03:46:37.000Z</published>
-    <updated>2026-06-19T02:19:10.484Z</updated>
-    
-    <content type="html"><![CDATA[<p>本篇文章是 <strong>Flink 系列</strong> 的第七篇，这篇文章主要会讲述 Flink 中的 TaskManager 的一些内容，TaskManager 是 Flink 的 worker 节点，它负责 Flink 中本机 slot 资源的管理以及具体 task 的执行。TaskManager 上的基本资源单位是 slot，一个作业的 task 最终会部署在一个 TM 的 slot 上运行，TM 会负责维护本地的 slot 资源列表，并来与 Flink Master 和 JobManager 通信，预计将会通过两篇左右的文章来向大家揭秘 TaskManager 内部的实现原理。另外，本篇将采用先提出问题，然后再根据源码实现去解答这些问题的形式叙述，如果大家有其他建议，欢迎（博客/公众号）留言反馈。</p>
-<p>对于 TaskManager 的内容，这里将会聚焦下面几个问题上，下面的文章将会逐个去分析这些问题（因为内容较多，会分为两篇文章讲述，本篇注重聚焦在前五个问题上）：</p>
-<ol>
-<li>TaskManager 启动流程？</li>
-<li>TaskManager 提供了哪些能力/功能？</li>
-<li>TaskManager 怎么发现 RM leader（在使用 ZK 做 HA 的情况下）？</li>
-<li>TM 如何维护 JobManager 的关系，如果 JobManager 挂掉，TM 会如何处理？</li>
-<li>TM Slot 资源是如何管理的？</li>
-<li>TM 如何处理提交过来的 Task；</li>
-<li>TM 如何处理 Task 之间 Shuffle 的需求？</li>
-</ol>
-<h2 id="TaskManager-启动流程"><a href="#TaskManager-启动流程" class="headerlink" title="TaskManager 启动流程"></a>TaskManager 启动流程</h2><p>与 JobManager 类似，TaskManager 的启动类是 <code>TaskManagerRunner</code>，大概的流程如下图所示：</p>
-<p><img src="/images/flink/TaskManager-1.png" alt="TaskManager 启动流程"></p>
-<p>TaskManager 启动的入口方法是 <code>runTaskManager()</code>，它会首先初始化 TaskManager 一些相关的服务，比如：初始化 RpcService、初始化 HighAvailabilityServices 等等，这些都是为 TaskManager 服务的启动做相应的准备工作。其实 TaskManager 初始化主要分为下面两大块：</p>
-<ol>
-<li>TaskManager 相关 service 的初始化：比如：内存管理器、IO 管理器、TaskSlotTable（TaskSlot 的管理是在这里进行的）等，这里也包括 TaskExecutor 的初始化，注意这里对于一些需要启动的服务在这一步并没有启动；</li>
-<li>TaskExecutor 的启动：它会启动 TM 上相关的服务，Task 的提交和运行也是在 TaskExecutor 中处理的，上一步 TM 初始化的那些服务也是在 TaskExecutor 中使用的。</li>
-</ol>
-<p>TM 的服务真正 Run 起来之后，核心流程还是在 <code>TaskExecutor</code> 中。</p>
-<h3 id="TaskManager-相关服务的初始化"><a href="#TaskManager-相关服务的初始化" class="headerlink" title="TaskManager 相关服务的初始化"></a>TaskManager 相关服务的初始化</h3><p>这里，先从 TaskManager 的入口 <code>runTaskManager()</code> 来看 TaskManager 相关服务的初始化流程，总结来看流程如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//  1. 入口方法</span></span><br><span class="line">runTaskManager()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 创建 TaskManagerRunner 对象</span></span><br><span class="line">TaskManagerRunner taskManagerRunner = <span class="keyword">new</span> TaskManagerRunner(configuration, resourceId);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 启动 TaskManager 服务</span></span><br><span class="line">startTaskManager()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 初始化相关的服务</span></span><br><span class="line">TaskManagerServices.fromConfiguration()</span><br></pre></td></tr></table></figure>
-<p>首先看下具体的代码实现：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskManagerRunner.java</span></span><br><span class="line"><span class="comment">//note: 启动 TaskManagerRunner</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">runTaskManager</span><span class="params">(Configuration configuration, ResourceID resourceId)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    <span class="keyword">final</span> TaskManagerRunner taskManagerRunner = <span class="keyword">new</span> TaskManagerRunner(configuration, resourceId);</span><br><span class="line"></span><br><span class="line">    taskManagerRunner.start();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 初始化 TaskManagerRunner</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">TaskManagerRunner</span><span class="params">(Configuration configuration, ResourceID resourceId)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    <span class="keyword">this</span>.configuration = checkNotNull(configuration);</span><br><span class="line">    <span class="keyword">this</span>.resourceId = checkNotNull(resourceId);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: akka 超时设置</span></span><br><span class="line">    timeout = AkkaUtils.getTimeoutAsTime(configuration);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.executor = java.util.concurrent.Executors.newScheduledThreadPool(</span><br><span class="line">        Hardware.getNumberCPUCores(),</span><br><span class="line">        <span class="keyword">new</span> ExecutorThreadFactory(<span class="string">"taskmanager-future"</span>));</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: HA 的配置及服务初始化</span></span><br><span class="line">    highAvailabilityServices = HighAvailabilityServicesUtils.createHighAvailabilityServices(</span><br><span class="line">        configuration,</span><br><span class="line">        executor,</span><br><span class="line">        HighAvailabilityServicesUtils.AddressResolution.TRY_ADDRESS_RESOLUTION);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: create rpc service</span></span><br><span class="line">    rpcService = createRpcService(configuration, highAvailabilityServices);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 初始化心跳服务</span></span><br><span class="line">    HeartbeatServices heartbeatServices = HeartbeatServices.fromConfiguration(configuration);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: metrics 服务</span></span><br><span class="line">    metricRegistry = <span class="keyword">new</span> MetricRegistryImpl(</span><br><span class="line">        MetricRegistryConfiguration.fromConfiguration(configuration),</span><br><span class="line">        ReporterSetup.fromConfiguration(configuration));</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 启动相应的 metrics 服务</span></span><br><span class="line">    <span class="keyword">final</span> RpcService metricQueryServiceRpcService = MetricUtils.startMetricsRpcService(configuration, rpcService.getAddress());</span><br><span class="line">    metricRegistry.startQueryService(metricQueryServiceRpcService, resourceId);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 初始化 blob 服务</span></span><br><span class="line">    blobCacheService = <span class="keyword">new</span> BlobCacheService(</span><br><span class="line">        configuration, highAvailabilityServices.createBlobStore(), <span class="keyword">null</span></span><br><span class="line">    );</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 启动 TaskManager 服务及创建 TaskExecutor 对象</span></span><br><span class="line">    taskManager = startTaskManager(</span><br><span class="line">        <span class="keyword">this</span>.configuration,</span><br><span class="line">        <span class="keyword">this</span>.resourceId,</span><br><span class="line">        rpcService,</span><br><span class="line">        highAvailabilityServices,</span><br><span class="line">        heartbeatServices,</span><br><span class="line">        metricRegistry,</span><br><span class="line">        blobCacheService,</span><br><span class="line">        <span class="keyword">false</span>,</span><br><span class="line">        <span class="keyword">this</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">this</span>.terminationFuture = <span class="keyword">new</span> CompletableFuture&lt;&gt;();</span><br><span class="line">    <span class="keyword">this</span>.shutdown = <span class="keyword">false</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 周期性地输出内存相关的日志信息，直到 terminationFuture complete</span></span><br><span class="line">    MemoryLogger.startIfConfigured(LOG, configuration, terminationFuture);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在上面的流程中，初始化了一些最基本的服务，比如：rpc 服务，在方法的最后调用了 <code>startTaskManager()</code> 启动 TaskManager，其代码实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskManagerRunner.java</span></span><br><span class="line"><span class="comment">//note: 创建并初始化 TaskExecutor 对象</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> TaskExecutor <span class="title">startTaskManager</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        Configuration configuration,</span></span></span><br><span class="line"><span class="function"><span class="params">        ResourceID resourceID,</span></span></span><br><span class="line"><span class="function"><span class="params">        RpcService rpcService,</span></span></span><br><span class="line"><span class="function"><span class="params">        HighAvailabilityServices highAvailabilityServices,</span></span></span><br><span class="line"><span class="function"><span class="params">        HeartbeatServices heartbeatServices,</span></span></span><br><span class="line"><span class="function"><span class="params">        MetricRegistry metricRegistry,</span></span></span><br><span class="line"><span class="function"><span class="params">        BlobCacheService blobCacheService,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">boolean</span> localCommunicationOnly,</span></span></span><br><span class="line"><span class="function"><span class="params">        FatalErrorHandler fatalErrorHandler)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line"></span><br><span class="line">    checkNotNull(configuration);</span><br><span class="line">    checkNotNull(resourceID);</span><br><span class="line">    checkNotNull(rpcService);</span><br><span class="line">    checkNotNull(highAvailabilityServices);</span><br><span class="line"></span><br><span class="line">    LOG.info(<span class="string">"Starting TaskManager with ResourceID: &#123;&#125;"</span>, resourceID);</span><br><span class="line"></span><br><span class="line">    InetAddress remoteAddress = InetAddress.getByName(rpcService.getAddress());</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: TM 服务相关的配置都维护在这个对象中，这里会把使用的相关参数解析并维护起来</span></span><br><span class="line">    TaskManagerServicesConfiguration taskManagerServicesConfiguration =</span><br><span class="line">        TaskManagerServicesConfiguration.fromConfiguration(</span><br><span class="line">            configuration,</span><br><span class="line">            resourceID,</span><br><span class="line">            remoteAddress,</span><br><span class="line">            EnvironmentInformation.getSizeOfFreeHeapMemoryWithDefrag(),</span><br><span class="line">            EnvironmentInformation.getMaxJvmHeapMemory(),</span><br><span class="line">            localCommunicationOnly);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 初始化 TM 的 TaskManagerMetricGroup，并相应地初始化 TM 的基本状态（内存、CPU 等）监控</span></span><br><span class="line">    Tuple2&lt;TaskManagerMetricGroup, MetricGroup&gt; taskManagerMetricGroup = MetricUtils.instantiateTaskManagerMetricGroup(</span><br><span class="line">        metricRegistry,</span><br><span class="line">        TaskManagerLocation.getHostName(remoteAddress),</span><br><span class="line">        resourceID,</span><br><span class="line">        taskManagerServicesConfiguration.getSystemResourceMetricsProbingInterval());</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 初始化 TaskManagerServices（TM 相关服务的初始化都在这里）</span></span><br><span class="line">    TaskManagerServices taskManagerServices = TaskManagerServices.fromConfiguration(</span><br><span class="line">        taskManagerServicesConfiguration,</span><br><span class="line">        taskManagerMetricGroup.f1,</span><br><span class="line">        rpcService.getExecutor()); <span class="comment">// TODO replace this later with some dedicated executor for io.</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: TaskManager 相关的配置，主要用于 TaskExecutor 的初始化</span></span><br><span class="line">    TaskManagerConfiguration taskManagerConfiguration = TaskManagerConfiguration.fromConfiguration(configuration);</span><br><span class="line"></span><br><span class="line">    String metricQueryServiceAddress = metricRegistry.getMetricQueryServiceGatewayRpcAddress();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 最后创建 TaskExecutor 对象</span></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> TaskExecutor(</span><br><span class="line">        rpcService,</span><br><span class="line">        taskManagerConfiguration,</span><br><span class="line">        highAvailabilityServices,</span><br><span class="line">        taskManagerServices,</span><br><span class="line">        heartbeatServices,</span><br><span class="line">        taskManagerMetricGroup.f0,</span><br><span class="line">        metricQueryServiceAddress,</span><br><span class="line">        blobCacheService,</span><br><span class="line">        fatalErrorHandler,</span><br><span class="line">        <span class="keyword">new</span> PartitionTable&lt;&gt;());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里，来着重看一下 <code>TaskManagerServices.fromConfiguration()</code> 这个方法，在这个方法初始了很多 TM 的服务，从下面的具体实现中也可以看出：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskManagerServices.java</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Creates and returns the task manager services.</span></span><br><span class="line"><span class="comment"> * note：根据创建 TM 服务</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> taskManagerServicesConfiguration task manager configuration</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> taskManagerMetricGroup metric group of the task manager</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> taskIOExecutor executor for async IO operations</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> task manager components</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@throws</span> Exception</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> TaskManagerServices <span class="title">fromConfiguration</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        TaskManagerServicesConfiguration taskManagerServicesConfiguration,</span></span></span><br><span class="line"><span class="function"><span class="params">        MetricGroup taskManagerMetricGroup,</span></span></span><br><span class="line"><span class="function"><span class="params">        Executor taskIOExecutor)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// pre-start checks</span></span><br><span class="line">    checkTempDirs(taskManagerServicesConfiguration.getTmpDirPaths());</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建 taskEventDispatcher</span></span><br><span class="line">    <span class="keyword">final</span> TaskEventDispatcher taskEventDispatcher = <span class="keyword">new</span> TaskEventDispatcher();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// start the I/O manager, it will create some temp directories.</span></span><br><span class="line">    <span class="comment">//note: 创建 IO 管理器</span></span><br><span class="line">    <span class="keyword">final</span> IOManager ioManager = <span class="keyword">new</span> IOManagerAsync(taskManagerServicesConfiguration.getTmpDirPaths());</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建 ShuffleEnvironment 对象(默认是 NettyShuffleEnvironment)</span></span><br><span class="line">    <span class="keyword">final</span> ShuffleEnvironment&lt;?, ?&gt; shuffleEnvironment = createShuffleEnvironment(</span><br><span class="line">        taskManagerServicesConfiguration,</span><br><span class="line">        taskEventDispatcher,</span><br><span class="line">        taskManagerMetricGroup);</span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">int</span> dataPort = shuffleEnvironment.start();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建 KvStateService 实例并启动</span></span><br><span class="line">    <span class="keyword">final</span> KvStateService kvStateService = KvStateService.fromConfiguration(taskManagerServicesConfiguration);</span><br><span class="line">    kvStateService.start();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 初始化 taskManagerLocation，记录 connection 信息</span></span><br><span class="line">    <span class="keyword">final</span> TaskManagerLocation taskManagerLocation = <span class="keyword">new</span> TaskManagerLocation(</span><br><span class="line">        taskManagerServicesConfiguration.getResourceID(),</span><br><span class="line">        taskManagerServicesConfiguration.getTaskManagerAddress(),</span><br><span class="line">        dataPort);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// this call has to happen strictly after the network stack has been initialized</span></span><br><span class="line">    <span class="comment">//note: 初始化 MemoryManager</span></span><br><span class="line">    <span class="keyword">final</span> MemoryManager memoryManager = createMemoryManager(taskManagerServicesConfiguration);</span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">long</span> managedMemorySize = memoryManager.getMemorySize();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 初始化 BroadcastVariableManager 对象</span></span><br><span class="line">    <span class="keyword">final</span> BroadcastVariableManager broadcastVariableManager = <span class="keyword">new</span> BroadcastVariableManager();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 当前 TM 拥有的 slot 及每个 slot 的资源信息</span></span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">int</span> numOfSlots = taskManagerServicesConfiguration.getNumberOfSlots();</span><br><span class="line">    <span class="keyword">final</span> List&lt;ResourceProfile&gt; resourceProfiles =</span><br><span class="line">        Collections.nCopies(numOfSlots, computeSlotResourceProfile(numOfSlots, managedMemorySize));</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 注册一个超时（AKKA 超时设置）服务（在 TaskSlotTable 用于监控 slot 分配是否超时）</span></span><br><span class="line">    <span class="keyword">final</span> TimerService&lt;AllocationID&gt; timerService = <span class="keyword">new</span> TimerService&lt;&gt;(</span><br><span class="line">        <span class="keyword">new</span> ScheduledThreadPoolExecutor(<span class="number">1</span>),</span><br><span class="line">        taskManagerServicesConfiguration.getTimerServiceShutdownTimeout());</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 这里会维护 slot 相关列表</span></span><br><span class="line">    <span class="keyword">final</span> TaskSlotTable taskSlotTable = <span class="keyword">new</span> TaskSlotTable(resourceProfiles, timerService);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 维护 jobId 与 JobManager connection 之间的关系</span></span><br><span class="line">    <span class="keyword">final</span> JobManagerTable jobManagerTable = <span class="keyword">new</span> JobManagerTable();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 监控注册的 job 的 JobManger leader 信息</span></span><br><span class="line">    <span class="keyword">final</span> JobLeaderService jobLeaderService = <span class="keyword">new</span> JobLeaderService(taskManagerLocation, taskManagerServicesConfiguration.getRetryingRegistrationConfiguration());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> String[] stateRootDirectoryStrings = taskManagerServicesConfiguration.getLocalRecoveryStateRootDirectories();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">final</span> File[] stateRootDirectoryFiles = <span class="keyword">new</span> File[stateRootDirectoryStrings.length];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; stateRootDirectoryStrings.length; ++i) &#123;</span><br><span class="line">        stateRootDirectoryFiles[i] = <span class="keyword">new</span> File(stateRootDirectoryStrings[i], LOCAL_STATE_SUB_DIRECTORY_ROOT);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建 TaskExecutorLocalStateStoresManager 对象：维护状态信息</span></span><br><span class="line">    <span class="keyword">final</span> TaskExecutorLocalStateStoresManager taskStateManager = <span class="keyword">new</span> TaskExecutorLocalStateStoresManager(</span><br><span class="line">        taskManagerServicesConfiguration.isLocalRecoveryEnabled(),</span><br><span class="line">        stateRootDirectoryFiles,</span><br><span class="line">        taskIOExecutor);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 将上面初始化的这些服务，封装到一个 TaskManagerServices 对象中</span></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> TaskManagerServices(</span><br><span class="line">        taskManagerLocation,</span><br><span class="line">        memoryManager,</span><br><span class="line">        ioManager,</span><br><span class="line">        shuffleEnvironment,</span><br><span class="line">        kvStateService,</span><br><span class="line">        broadcastVariableManager,</span><br><span class="line">        taskSlotTable,</span><br><span class="line">        jobManagerTable,</span><br><span class="line">        jobLeaderService,</span><br><span class="line">        taskStateManager,</span><br><span class="line">        taskEventDispatcher);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>看到这里，是否有点懵圈了，是不是感觉 TaskManager 实现还挺复杂的，但与 TaskManager 要做的功能相比，上面的实现还不够，真正在 TaskManager 中处理复杂繁琐工作的组件是 <strong>TaskExecutor</strong>，这个才是 TaskManager 的核心。</p>
-<h3 id="TaskExecutor-的启动"><a href="#TaskExecutor-的启动" class="headerlink" title="TaskExecutor 的启动"></a>TaskExecutor 的启动</h3><p>回顾一下文章最开始的流程图，TaskManagerRunner 调用 <code>run()</code> 方法之后，真正要启动的是 TaskExecutor 服务，其 <code>onStart()</code> 具体实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//note: 启动服务</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onStart</span><span class="params">()</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">//note: 启动 TM 的相关服务</span></span><br><span class="line">        startTaskExecutorServices();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        <span class="keyword">final</span> TaskManagerException exception = <span class="keyword">new</span> TaskManagerException(String.format(<span class="string">"Could not start the TaskExecutor %s"</span>, getAddress()), e);</span><br><span class="line">        onFatalError(exception);</span><br><span class="line">        <span class="keyword">throw</span> exception;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 注册超时检测，如果超时还未注册完成，就抛出错误，启动失败</span></span><br><span class="line">    startRegistrationTimeout();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里，主要分为两个部分：</p>
-<ol>
-<li><code>startTaskExecutorServices()</code>: 启动 TaskManager 相关的服务，结合流程图主要是四大块：<ul>
-<li>启动心跳服务；</li>
-<li>向 Flink Master 的 ResourceManager 注册 TaskManager；</li>
-<li>启动 TaskSlotTable 服务（TaskSlot 的维护主要在这个服务中）；</li>
-<li>启动 JobLeaderService 服务，它主要是监控各个作业 JobManager leader 的变化；</li>
-</ul>
-</li>
-<li><code>startRegistrationTimeout()</code>: 启动注册超时的检测，默认是5 min，如果超过这个时间还没注册完成，就会抛出异常退出进程，启动失败。</li>
-</ol>
-<p>TaskExecutor 启动的核心实现是在 <code>startTaskExecutorServices()</code> 中，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">startTaskExecutorServices</span><span class="params">()</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">//note: 启动心跳服务</span></span><br><span class="line">        startHeartbeatServices();</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 与集群的 ResourceManager 建立连接（并创建一个 listener）</span></span><br><span class="line">        <span class="comment">// start by connecting to the ResourceManager</span></span><br><span class="line">        resourceManagerLeaderRetriever.start(<span class="keyword">new</span> ResourceManagerLeaderListener());</span><br><span class="line"></span><br><span class="line">        <span class="comment">// tell the task slot table who's responsible for the task slot actions</span></span><br><span class="line">        <span class="comment">//note: taskSlotTable 启动</span></span><br><span class="line">        taskSlotTable.start(<span class="keyword">new</span> SlotActionsImpl());</span><br><span class="line"></span><br><span class="line">        <span class="comment">// start the job leader service</span></span><br><span class="line">        <span class="comment">//note: 启动 job leader 服务</span></span><br><span class="line">        jobLeaderService.start(getAddress(), getRpcService(), haServices, <span class="keyword">new</span> JobLeaderListenerImpl());</span><br><span class="line"></span><br><span class="line">        fileCache = <span class="keyword">new</span> FileCache(taskManagerConfiguration.getTmpDirectories(), blobCacheService.getPermanentBlobService());</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">        handleStartTaskExecutorServicesException(e);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>接下来，详细这块的实现。</p>
-<h4 id="1-启动心跳服务"><a href="#1-启动心跳服务" class="headerlink" title="1. 启动心跳服务"></a>1. 启动心跳服务</h4><p>TaskExecutor 启动的第一个服务就是 HeartbeatManager，这里会启动两个：</p>
-<ol>
-<li><code>jobManagerHeartbeatManager</code>: 用于与 JobManager（如果 Job 有 task 在这个 TM 上，这个 Job 的 JobManager 就与 TaskManager 有心跳通信）之间的心跳通信管理，如果 timeout，这里会重连；</li>
-<li><code>resourceManagerHeartbeatManager</code>:用于与 ResourceManager 之间的通信管理，如果 timeout，这里也会重连。</li>
-</ol>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskExecutor.java</span></span><br><span class="line"><span class="comment">//note: 启动心跳服务</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">startHeartbeatServices</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">final</span> ResourceID resourceId = taskExecutorServices.getTaskManagerLocation().getResourceID();</span><br><span class="line">    <span class="comment">//note: 创建一个与 JM 通信的心跳管理器</span></span><br><span class="line">    jobManagerHeartbeatManager = heartbeatServices.createHeartbeatManager(</span><br><span class="line">        resourceId,</span><br><span class="line">        <span class="keyword">new</span> JobManagerHeartbeatListener(),</span><br><span class="line">        getMainThreadExecutor(),</span><br><span class="line">        log);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 创建一个与 RM 通信的心跳管理器</span></span><br><span class="line">    resourceManagerHeartbeatManager = heartbeatServices.createHeartbeatManager(</span><br><span class="line">        resourceId,</span><br><span class="line">        <span class="keyword">new</span> ResourceManagerHeartbeatListener(),</span><br><span class="line">        getMainThreadExecutor(),</span><br><span class="line">        log);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h4 id="2-向-RM-注册-TM"><a href="#2-向-RM-注册-TM" class="headerlink" title="2. 向 RM 注册 TM"></a>2. 向 RM 注册 TM</h4><p>TaskManger 向 ResourceManager 注册是通过 <code>ResourceManagerLeaderListener</code> 来完成的，它会监控 ResourceManager 的 leader 变化，如果有新的 leader 被选举出来，将会调用 <code>notifyLeaderAddress()</code> 方法去触发与 ResourceManager 的重连，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskExecutor.java</span></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The listener for leader changes of the resource manager.</span></span><br><span class="line"><span class="comment"> * note：监控 ResourceManager leader 变化的 listener</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">ResourceManagerLeaderListener</span> <span class="keyword">implements</span> <span class="title">LeaderRetrievalListener</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 如果 leader 被选举处理（包括挂掉之后重新选举），将会调用这个方法通知 TM</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">notifyLeaderAddress</span><span class="params">(<span class="keyword">final</span> String leaderAddress, <span class="keyword">final</span> UUID leaderSessionID)</span> </span>&#123;</span><br><span class="line">        runAsync(</span><br><span class="line">            () -&gt; notifyOfNewResourceManagerLeader(</span><br><span class="line">                leaderAddress,</span><br><span class="line">                ResourceManagerId.fromUuidOrNull(leaderSessionID)));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">handleError</span><span class="params">(Exception exception)</span> </span>&#123;</span><br><span class="line">        onFatalError(exception);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 如果 RM 的 new leader 选举出来了，这里会新创建一个 ResourceManagerAddress 对象，并重新建立连接</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">notifyOfNewResourceManagerLeader</span><span class="params">(String newLeaderAddress, ResourceManagerId newResourceManagerId)</span> </span>&#123;</span><br><span class="line">    resourceManagerAddress = createResourceManagerAddress(newLeaderAddress, newResourceManagerId);</span><br><span class="line">    reconnectToResourceManager(<span class="keyword">new</span> FlinkException(String.format(<span class="string">"ResourceManager leader changed to new address %s"</span>, resourceManagerAddress)));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 重新与 ResourceManager 连接（可能是 RM leader 切换）</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">reconnectToResourceManager</span><span class="params">(Exception cause)</span> </span>&#123;</span><br><span class="line">    closeResourceManagerConnection(cause);</span><br><span class="line">    <span class="comment">//note: 注册超时检测，如果 timeout 还没注册成功，这里就会 failed</span></span><br><span class="line">    startRegistrationTimeout();</span><br><span class="line">    <span class="comment">//note: 与 RM 重新建立连接</span></span><br><span class="line">    tryConnectToResourceManager();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 建立与 ResourceManager 的连接</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">tryConnectToResourceManager</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (resourceManagerAddress != <span class="keyword">null</span>) &#123;</span><br><span class="line">        connectToResourceManager();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 与 ResourceManager 建立连接</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">connectToResourceManager</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">assert</span>(resourceManagerAddress != <span class="keyword">null</span>);</span><br><span class="line">    <span class="keyword">assert</span>(establishedResourceManagerConnection == <span class="keyword">null</span>);</span><br><span class="line">    <span class="keyword">assert</span>(resourceManagerConnection == <span class="keyword">null</span>);</span><br><span class="line"></span><br><span class="line">    log.info(<span class="string">"Connecting to ResourceManager &#123;&#125;."</span>, resourceManagerAddress);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 与 RM 建立连接</span></span><br><span class="line">    resourceManagerConnection =</span><br><span class="line">        <span class="keyword">new</span> TaskExecutorToResourceManagerConnection(</span><br><span class="line">            log,</span><br><span class="line">            getRpcService(),</span><br><span class="line">            getAddress(),</span><br><span class="line">            getResourceID(),</span><br><span class="line">            taskManagerConfiguration.getRetryingRegistrationConfiguration(),</span><br><span class="line">            taskManagerLocation.dataPort(),</span><br><span class="line">            hardwareDescription,</span><br><span class="line">            resourceManagerAddress.getAddress(),</span><br><span class="line">            resourceManagerAddress.getResourceManagerId(),</span><br><span class="line">            getMainThreadExecutor(),</span><br><span class="line">            <span class="keyword">new</span> ResourceManagerRegistrationListener());</span><br><span class="line">    resourceManagerConnection.start();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>在上面的最后一步，创建了 <code>TaskExecutorToResourceManagerConnection</code> 对象，它启动后，会向 ResourceManager 注册 TM，具体的方法实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskExecutorToResourceManagerConnection.java</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> CompletableFuture&lt;RegistrationResponse&gt; <span class="title">invokeRegistration</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        ResourceManagerGateway resourceManager, ResourceManagerId fencingToken, <span class="keyword">long</span> timeoutMillis)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line"></span><br><span class="line">    Time timeout = Time.milliseconds(timeoutMillis);</span><br><span class="line">    <span class="keyword">return</span> resourceManager.registerTaskExecutor(</span><br><span class="line">        taskExecutorAddress,</span><br><span class="line">        resourceID,</span><br><span class="line">        dataPort,</span><br><span class="line">        hardwareDescription,</span><br><span class="line">        timeout);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>ResourceManager 在收到这个请求，会做相应的处理，主要要做的事情就是：先从缓存里移除旧的 TM 注册信息（如果之前存在的话），然后再更新缓存，并增加心跳监控，只有这些工作完成之后，TM 的注册才会被认为是成功的。</p>
-<h4 id="3-启动-TaskSlotTable-服务"><a href="#3-启动-TaskSlotTable-服务" class="headerlink" title="3. 启动 TaskSlotTable 服务"></a>3. 启动 TaskSlotTable 服务</h4><p>TaskSlotTable 从名字也可以看出，它主要是为 TaskSlot 服务的，它主要的功能有以下三点：</p>
-<ol>
-<li>维护这个 TM 上所有 TaskSlot 与 Task、及 Job 的关系；</li>
-<li>维护这个 TM 上所有 TaskSlot 的状态；</li>
-<li>TaskSlot 在进行 allocate/free 操作，通过 <strong>TimeService</strong> 做超时检测。</li>
-</ol>
-<p>先看下 TaskSlotTable 是如何初始化的：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskManagerServices.java</span></span><br><span class="line"><span class="comment">//note: 当前 TM 拥有的 slot 及每个 slot 的资源信息</span></span><br><span class="line"><span class="comment">//note: TM 的 slot 数由 taskmanager.numberOfTaskSlots 决定，默认是 1</span></span><br><span class="line"><span class="keyword">final</span> <span class="keyword">int</span> numOfSlots = taskManagerServicesConfiguration.getNumberOfSlots();</span><br><span class="line"><span class="keyword">final</span> List&lt;ResourceProfile&gt; resourceProfiles =</span><br><span class="line">    Collections.nCopies(numOfSlots, computeSlotResourceProfile(numOfSlots, managedMemorySize));</span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 注册一个超时（AKKA 超时设置）服务（在 TaskSlotTable 用于监控 slot 分配是否超时）</span></span><br><span class="line"><span class="comment">//note: 超时参数由 akka.ask.timeout 控制，默认是 10s</span></span><br><span class="line"><span class="keyword">final</span> TimerService&lt;AllocationID&gt; timerService = <span class="keyword">new</span> TimerService&lt;&gt;(</span><br><span class="line">    <span class="keyword">new</span> ScheduledThreadPoolExecutor(<span class="number">1</span>),</span><br><span class="line">    taskManagerServicesConfiguration.getTimerServiceShutdownTimeout());</span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 这里会维护 slot 相关列表</span></span><br><span class="line"><span class="keyword">final</span> TaskSlotTable taskSlotTable = <span class="keyword">new</span> TaskSlotTable(resourceProfiles, timerService);</span><br></pre></td></tr></table></figure>
-<p>TaskSlotTable 的初始化，只需要两个变量：</p>
-<ol>
-<li><code>resourceProfiles</code>: TM 上每个 Slot 的资源信息；</li>
-<li><code>timerService</code>: 超时检测服务，来保证操作超时时做相应的处理。</li>
-</ol>
-<p>TaskSlotTable 的启动流程如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskExecutor.java</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// tell the task slot table who's responsible for the task slot actions</span></span><br><span class="line"><span class="comment">//note: taskSlotTable 启动</span></span><br><span class="line">taskSlotTable.start(<span class="keyword">new</span> SlotActionsImpl());</span><br><span class="line"></span><br><span class="line"><span class="comment">//note: SlotActions 相关方法的实现</span></span><br><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">SlotActionsImpl</span> <span class="keyword">implements</span> <span class="title">SlotActions</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 释放 slot 资源</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">freeSlot</span><span class="params">(<span class="keyword">final</span> AllocationID allocationId)</span> </span>&#123;</span><br><span class="line">        runAsync(() -&gt;</span><br><span class="line">            freeSlotInternal(</span><br><span class="line">                allocationId,</span><br><span class="line">                <span class="keyword">new</span> FlinkException(<span class="string">"TaskSlotTable requested freeing the TaskSlot "</span> + allocationId + <span class="string">'.'</span>)));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 如果 slot 相关的操作（分配/释放）失败，这里将会调用这个方法</span></span><br><span class="line">    <span class="comment">//note: 监控的手段是：操作前先注册一个 timeout 监控，操作完成后再取消这个监控，如果在这个期间 timeout 了，就会调用这个方法</span></span><br><span class="line">    <span class="comment">//note: TimeService 的 key 是 AllocationID</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">timeoutSlot</span><span class="params">(<span class="keyword">final</span> AllocationID allocationId, <span class="keyword">final</span> UUID ticket)</span> </span>&#123;</span><br><span class="line">        runAsync(() -&gt; TaskExecutor.<span class="keyword">this</span>.timeoutSlot(allocationId, ticket));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h4 id="4-启动-JobLeaderService-服务"><a href="#4-启动-JobLeaderService-服务" class="headerlink" title="4. 启动 JobLeaderService 服务"></a>4. 启动 JobLeaderService 服务</h4><p>TaskExecutor 启动的最后一步是，启动 JobLeader 服务，这个服务通过 <code>JobLeaderListenerImpl</code> 监控 Job 的 JobManager leader 的变化，如果 leader 被选举出来之后，这里将会与新的 JobManager leader 建立通信连接。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskExecutor.java</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// start the job leader service</span></span><br><span class="line"><span class="comment">//note: 启动 job leader 服务</span></span><br><span class="line">jobLeaderService.start(getAddress(), getRpcService(), haServices, <span class="keyword">new</span> JobLeaderListenerImpl());</span><br><span class="line"></span><br><span class="line"><span class="comment">//note: JobLeaderListener 的实现</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">JobLeaderListenerImpl</span> <span class="keyword">implements</span> <span class="title">JobLeaderListener</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">jobManagerGainedLeadership</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">final</span> JobID jobId,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">final</span> JobMasterGateway jobManagerGateway,</span></span></span><br><span class="line"><span class="function"><span class="params">        <span class="keyword">final</span> JMTMRegistrationSuccess registrationMessage)</span> </span>&#123;</span><br><span class="line">        <span class="comment">//note: 建立与 JobManager 的连接</span></span><br><span class="line">        runAsync(</span><br><span class="line">            () -&gt;</span><br><span class="line">                establishJobManagerConnection(</span><br><span class="line">                    jobId,</span><br><span class="line">                    jobManagerGateway,</span><br><span class="line">                    registrationMessage));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">jobManagerLostLeadership</span><span class="params">(<span class="keyword">final</span> JobID jobId, <span class="keyword">final</span> JobMasterId jobMasterId)</span> </span>&#123;</span><br><span class="line">        log.info(<span class="string">"JobManager for job &#123;&#125; with leader id &#123;&#125; lost leadership."</span>, jobId, jobMasterId);</span><br><span class="line"></span><br><span class="line">        runAsync(() -&gt;</span><br><span class="line">            closeJobManagerConnection(</span><br><span class="line">                jobId,</span><br><span class="line">                <span class="keyword">new</span> Exception(<span class="string">"Job leader for job id "</span> + jobId + <span class="string">" lost leadership."</span>)));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">handleError</span><span class="params">(Throwable throwable)</span> </span>&#123;</span><br><span class="line">        onFatalError(throwable);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>到这里，TaskManager 的启动流程就梳理完了，TaskManager 在实现上整体的复杂度还是比较高的，毕竟它要做的事情是非常多的，下面的几个问题，将会进一步分析 TaskManager 内部的实现机制。</p>
-<h2 id="TaskManager-提供了哪些能力-功能？"><a href="#TaskManager-提供了哪些能力-功能？" class="headerlink" title="TaskManager 提供了哪些能力/功能？"></a>TaskManager 提供了哪些能力/功能？</h2><p>要想知道 TaskManager 提供了哪些能力，个人认为有一个最简单有效的方法就是查看其对外提供的 API 接口，它向上层暴露哪些 API，这些 API 背后都是 TaskManager 能力的体现，TaskManager 对外的包括的 API 列表如下：</p>
-<ol>
-<li><code>requestSlot()</code>: RM 向 TM 请求一个 slot 资源；</li>
-<li><code>requestStackTraceSample()</code>: 请求某个 task 在执行过程中的一个 stack trace 抽样；</li>
-<li><code>submitTask()</code>: JobManager 向 TM 提交 task；</li>
-<li><code>updatePartitions()</code>: 更新这个 task 对应的 Partition 信息；</li>
-<li><code>releasePartitions()</code>: 释放这个 job 的所有中间结果，比如 close 的时候触发；</li>
-<li><code>triggerCheckpoint()</code>: Checkpoint Coordinator 触发 task 的 checkpoint；</li>
-<li><code>confirmCheckpoint()</code>: Checkpoint Coordinator 通知 task 这个 checkpoint 完成；</li>
-<li><code>cancelTask()</code>: task 取消；</li>
-<li><code>heartbeatFromJobManager()</code>: 接收来自 JobManager 的心跳请求；</li>
-<li><code>heartbeatFromResourceManager()</code>: 接收来自 ResourceManager 的心跳请求；</li>
-<li><code>disconnectJobManager()</code>；</li>
-<li><code>disconnectResourceManager()</code>；</li>
-<li><code>freeSlot()</code>: JobManager 释放 Slot；</li>
-<li><code>requestFileUpload()</code>: 一些文件（log 等）的上传请求；</li>
-<li><code>requestMetricQueryServiceAddress()</code>: 请求 TM 的 metric query service 地址；</li>
-<li><code>canBeReleased()</code>: 检查 TM 是否可以被 realease；</li>
-</ol>
-<p>把上面的 API 列表分分类，大概有以下几块：</p>
-<ol>
-<li>slot 的资源管理：slot 的分配/释放；</li>
-<li>task 运行：接收来自 JobManager 的 task 提交、也包括该 task 对应的 Partition（中间结果）信息；</li>
-<li>checkpoint 相关的处理；</li>
-<li>心跳监控、连接建立等。</li>
-</ol>
-<p>通常，可以任务 TaskManager 提供的功能主要是前三点，如下图所示：</p>
-<p><img src="/images/flink/task-manager-function.png" alt="TaskManager 提供的功能"></p>
-<h2 id="TaskManager-怎么发现-RM-leader（在使用-ZK-做-HA-的情况下）？"><a href="#TaskManager-怎么发现-RM-leader（在使用-ZK-做-HA-的情况下）？" class="headerlink" title="TaskManager 怎么发现 RM leader（在使用 ZK 做 HA 的情况下）？"></a>TaskManager 怎么发现 RM leader（在使用 ZK 做 HA 的情况下）？</h2><p>这个是 Flink HA 内容，Flink HA 机制是有一套统一的框架，它跟这个问题（<strong>TM 如何维护 JobManager 的关系，如果 JobManager 挂掉，TM 会如何处理？</strong> ）的原理是一样的，这里以 ResourceManager Leader 的发现为例简单介一下。</p>
-<p>这里，我们以使用 Zookeeper 模式的情况来讲述，ZooKeeper 做 HA 是业内最常用的方案，Flink 在实现并没有使用 <code>ZkClient</code> 这个包，而是使用 <code>curator</code> 来做的（有兴趣可以看下这篇文章 <a href="https://colobu.com/2014/12/15/zookeeper-recipes-by-example-5/" target="_blank" rel="external">跟着实例学习ZooKeeper的用法： 缓存</a>）。</p>
-<p>关于 Flink HA 的使用，可以参考官方文档——<a href="https://ci.apache.org/projects/flink/flink-docs-stable/ops/jobmanager_high_availability.html" target="_blank" rel="external">JobManager High Availability (HA)</a>。这里 TaskExecutor 在注册完 <code>ResourceManagerLeaderListener</code> 后，如果 leader 被选举出来或者有节点有变化，就通过它的 <code>notifyLeaderAddress()</code> 方法来通知 TaskExecutor，核心还是利用了 ZK 的 watcher 机制。同理， JobManager leader 的处理也是一样。</p>
-<h2 id="TM-Slot-资源是如何管理的？"><a href="#TM-Slot-资源是如何管理的？" class="headerlink" title="TM Slot 资源是如何管理的？"></a>TM Slot 资源是如何管理的？</h2><p>TaskManager Slot 资源的管理主要是在 TaskSlotTable 中处理的，slot 资源的申请与释放都通过 它处理的，相关的流程如下图所示（图中只描述了主要逻辑，相关的异常处理没有展示在图中）：</p>
-<p><img src="/images/flink/tm-slot-manager.png" alt="TaskManager slot 的分配与释放"></p>
-<h3 id="slot-的申请"><a href="#slot-的申请" class="headerlink" title="slot 的申请"></a>slot 的申请</h3><p>这里先看下 slot 资源请求的处理，其实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskExecutor.java</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: slot 请求</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> CompletableFuture&lt;Acknowledge&gt; <span class="title">requestSlot</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> SlotID slotId,</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> JobID jobId,</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> AllocationID allocationId,</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> String targetAddress,</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> ResourceManagerId resourceManagerId,</span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">final</span> Time timeout)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// <span class="doctag">TODO:</span> Filter invalid requests from the resource manager by using the instance/registration Id</span></span><br><span class="line"></span><br><span class="line">    log.info(<span class="string">"Receive slot request &#123;&#125; for job &#123;&#125; from resource manager with leader id &#123;&#125;."</span>,</span><br><span class="line">        allocationId, jobId, resourceManagerId);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (!isConnectedToResourceManager(resourceManagerId)) &#123;</span><br><span class="line">            <span class="comment">//note: 如果 TM 并没有跟这个 RM 通信，就抛出异常</span></span><br><span class="line">            <span class="keyword">final</span> String message = String.format(<span class="string">"TaskManager is not connected to the resource manager %s."</span>, resourceManagerId);</span><br><span class="line">            log.debug(message);</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> TaskManagerException(message);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (taskSlotTable.isSlotFree(slotId.getSlotNumber())) &#123;</span><br><span class="line">            <span class="comment">//note: Slot 状态是 free，还未分配出去</span></span><br><span class="line">            <span class="keyword">if</span> (taskSlotTable.allocateSlot(slotId.getSlotNumber(), jobId, allocationId, taskManagerConfiguration.getTimeout())) &#123;</span><br><span class="line">                log.info(<span class="string">"Allocated slot for &#123;&#125;."</span>, allocationId);</span><br><span class="line">                <span class="comment">//note: allcate 成功</span></span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                log.info(<span class="string">"Could not allocate slot for &#123;&#125;."</span>, allocationId);</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> SlotAllocationException(<span class="string">"Could not allocate slot."</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!taskSlotTable.isAllocated(slotId.getSlotNumber(), jobId, allocationId)) &#123;</span><br><span class="line">            <span class="comment">//note: slot 已经分配出去，但分配的并不是当前这个作业</span></span><br><span class="line">            <span class="keyword">final</span> String message = <span class="string">"The slot "</span> + slotId + <span class="string">" has already been allocated for a different job."</span>;</span><br><span class="line"></span><br><span class="line">            log.info(message);</span><br><span class="line"></span><br><span class="line">            <span class="keyword">final</span> AllocationID allocationID = taskSlotTable.getCurrentAllocation(slotId.getSlotNumber());</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> SlotOccupiedException(message, allocationID, taskSlotTable.getOwningJob(allocationID));</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (jobManagerTable.contains(jobId)) &#123;</span><br><span class="line">            <span class="comment">//note: 如果 TM 已经有这个 JobManager 的 meta，这里会将这个 job 的 slot 分配再汇报给 JobManager 一次</span></span><br><span class="line">            offerSlotsToJobManager(jobId);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">//note: 监控这个作业 JobManager 的 leader 变化</span></span><br><span class="line">                jobLeaderService.addJob(jobId, targetAddress);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                <span class="comment">// free the allocated slot</span></span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    taskSlotTable.freeSlot(allocationId);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (SlotNotFoundException slotNotFoundException) &#123;</span><br><span class="line">                    <span class="comment">// slot no longer existent, this should actually never happen, because we've</span></span><br><span class="line">                    <span class="comment">// just allocated the slot. So let's fail hard in this case!</span></span><br><span class="line">                    onFatalError(slotNotFoundException);</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="comment">// release local state under the allocation id.</span></span><br><span class="line">                localStateStoresManager.releaseLocalStateForAllocationId(allocationId);</span><br><span class="line"></span><br><span class="line">                <span class="comment">// sanity check</span></span><br><span class="line">                <span class="keyword">if</span> (!taskSlotTable.isSlotFree(slotId.getSlotNumber())) &#123;</span><br><span class="line">                    onFatalError(<span class="keyword">new</span> Exception(<span class="string">"Could not free slot "</span> + slotId));</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> SlotAllocationException(<span class="string">"Could not add job to job leader service."</span>, e);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (TaskManagerException taskManagerException) &#123;</span><br><span class="line">        <span class="keyword">return</span> FutureUtils.completedExceptionally(taskManagerException);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> CompletableFuture.completedFuture(Acknowledge.get());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>相应的处理逻辑如下：</p>
-<ol>
-<li>首先检测这个这个 RM 是否当前建立连接的 RM，如果不是，就抛出相应的异常，需要等到 TM 连接上 RM 之后才能处理 RM 上的 slot 请求；</li>
-<li>判断这个 slot 是否可以分配<ul>
-<li>如果 slot 是 <code>FREE</code> 状态，就进行分配（调用 TaskSlotTable 的 <code>allocateSlot()</code> 方法），如果分配失败，就抛出相应的异常；</li>
-<li>如果 slot 已经分配，检查分配的是不是当前作业的 AllocationId，如果不是，也会抛出相应的异常，告诉 RM 这个 Slot 已经分配出去了；</li>
-</ul>
-</li>
-<li>如果 TM 已经有了这个 JobManager 的 meta，这里会将这个 job 在这个 TM 上的 slot 分配再重新汇报给 JobManager 一次；</li>
-</ol>
-<p>而 TaskSlotTable 在处理 slot 的分配时，主要是根据内部缓存的信息做相应的检查，其 <code>allocateSlot()</code> 的方法的实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskSlotTable.java</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">allocateSlot</span><span class="params">(<span class="keyword">int</span> index, JobID jobId, AllocationID allocationId, Time slotTimeout)</span> </span>&#123;</span><br><span class="line">    checkInit();</span><br><span class="line"></span><br><span class="line">    TaskSlot taskSlot = taskSlots.get(index);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 分配这个 TaskSlot</span></span><br><span class="line">    <span class="keyword">boolean</span> result = taskSlot.allocate(jobId, allocationId);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (result) &#123;</span><br><span class="line">        <span class="comment">//note: 分配成功，记录到缓存中</span></span><br><span class="line">        <span class="comment">// update the allocation id to task slot map</span></span><br><span class="line">        allocationIDTaskSlotMap.put(allocationId, taskSlot);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// register a timeout for this slot since it's in state allocated</span></span><br><span class="line">        timerService.registerTimeout(allocationId, slotTimeout.getSize(), slotTimeout.getUnit());</span><br><span class="line"></span><br><span class="line">        <span class="comment">// add this slot to the set of job slots</span></span><br><span class="line">        Set&lt;AllocationID&gt; slots = slotsPerJob.get(jobId);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (slots == <span class="keyword">null</span>) &#123;</span><br><span class="line">            slots = <span class="keyword">new</span> HashSet&lt;&gt;(<span class="number">4</span>);</span><br><span class="line">            slotsPerJob.put(jobId, slots);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        slots.add(allocationId);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h3 id="slot-的释放"><a href="#slot-的释放" class="headerlink" title="slot 的释放"></a>slot 的释放</h3><p>这里再看下 Slot 的资源是如何释放的，代码实现如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TaskExecutor.java</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 释放这个 slot 资源</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> CompletableFuture&lt;Acknowledge&gt; <span class="title">freeSlot</span><span class="params">(AllocationID allocationId, Throwable cause, Time timeout)</span> </span>&#123;</span><br><span class="line">    freeSlotInternal(allocationId, cause);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> CompletableFuture.completedFuture(Acknowledge.get());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">//note: 将本地分配的 slot 释放掉（free the slot）</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">freeSlotInternal</span><span class="params">(AllocationID allocationId, Throwable cause)</span> </span>&#123;</span><br><span class="line">    checkNotNull(allocationId);</span><br><span class="line"></span><br><span class="line">    log.debug(<span class="string">"Free slot with allocation id &#123;&#125; because: &#123;&#125;"</span>, allocationId, cause.getMessage());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="keyword">final</span> JobID jobId = taskSlotTable.getOwningJob(allocationId);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//note: 释放这个 slot</span></span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> slotIndex = taskSlotTable.freeSlot(allocationId, cause);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (slotIndex != -<span class="number">1</span>) &#123;</span><br><span class="line">            <span class="comment">//note: 成功释放掉的情况下</span></span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (isConnectedToResourceManager()) &#123;</span><br><span class="line">                <span class="comment">//note: 通知 ResourceManager 这个 slot 因为被释放了，所以可以变可用了</span></span><br><span class="line">                <span class="comment">// the slot was freed. Tell the RM about it</span></span><br><span class="line">                ResourceManagerGateway resourceManagerGateway = establishedResourceManagerConnection.getResourceManagerGateway();</span><br><span class="line"></span><br><span class="line">                resourceManagerGateway.notifySlotAvailable(</span><br><span class="line">                    establishedResourceManagerConnection.getTaskExecutorRegistrationId(),</span><br><span class="line">                    <span class="keyword">new</span> SlotID(getResourceID(), slotIndex),</span><br><span class="line">                    allocationId);</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (jobId != <span class="keyword">null</span>) &#123;</span><br><span class="line">                closeJobManagerConnectionIfNoAllocatedResources(jobId);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">catch</span> (SlotNotFoundException e) &#123;</span><br><span class="line">        log.debug(<span class="string">"Could not free slot for allocation id &#123;&#125;."</span>, allocationId, e);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//note: 释放这个 allocationId 的相应状态信息</span></span><br><span class="line">    localStateStoresManager.releaseLocalStateForAllocationId(allocationId);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>总结一下，TaskExecutor 在处理 slot 释放请求的理逻辑如下：</p>
-<ol>
-<li>先调用 TaskSlotTable 的 <code>freeSlot()</code> 方法，尝试释放这个 slot：<ul>
-<li>如果这个 slot 没有 task 在运行，那么 slot 是可以释放的（状态更新为 <code>FREE</code>）;</li>
-<li>先将 slot 状态更新为 <code>RELEASING</code>，然后再遍历这个 slot 上的 task，逐个将其标记为 failed；</li>
-</ul>
-</li>
-<li>如果 slot 被成功释放（状态是 <code>FREE</code>），这里将会通知 RM 这个 slot 现在又可用了；</li>
-<li>更新缓存信息。</li>
-</ol>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本篇文章主要把 TaskManager 的启动流程及资源管理做了相应的讲述，正如文章中所述，TaskManager 主要有三大功能：slot 资源管理、task 的提交与运行以及 checkpoint 处理，在下篇文章中将会着重在 Task 的提交与运行上，checkpoint 处理部分将会 checkpoint 的文章中一起介绍。</p>
-<p>最后，说一些个人的感想吧，我个人在看开源项目的源码时，慢慢开始感受到阅读优秀的开源代码对个人技术能力的提升是非常有帮助的，它不但会增加你对这个项目的熟悉程度，还会让你看到一些设计或方案在代码里是如何落地或实现的，如果换做是你，你会怎么设计或实现，经常看看这些优秀代码，多多思考（如果能把其中的设计或实现应用到自己的工作上那就更好不过了），这对自己工程能力的提升是有帮助的。</p>
-<hr>
-<p>参考：</p>
-<ol>
-<li><a href="https://ci.apache.org/projects/flink/flink-docs-release-1.9/concepts/runtime.html" target="_blank" rel="external">Distributed Runtime Environment</a>；</li>
-<li><a href="https://mp.weixin.qq.com/s/TBzzGTNFTzVLjFQdzz-LuQ" target="_blank" rel="external">Apache Flink 进阶（一）：Runtime 核心机制剖析 ​</a>；</li>
-</ol>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;本篇文章是 &lt;strong&gt;Flink 系列&lt;/strong&gt; 的第七篇，这篇文章主要会讲述 Flink 中的 TaskManager 的一些内容，TaskManager 是 Flink 的 worker 节点，它负责 Flink 中本机 slot 资源的管理以及具体 ta
     
     </summary>
     
