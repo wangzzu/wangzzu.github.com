@@ -1,0 +1,336 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4306182362668251" crossorigin="anonymous"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景</h1><div class="post-meta">Jul 6, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">3,550</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/06/llm-finetune-lora/" href="/2026/07/06/llm-finetune-lora/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么需要微调"><span class="toc-number">1.</span> <span class="toc-text">为什么需要微调</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#微调路线：从全量更新到参数高效"><span class="toc-number">2.</span> <span class="toc-text">微调路线：从全量更新到参数高效</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Full-Fine-tuning：更新全部参数"><span class="toc-number">2.1.</span> <span class="toc-text">Full Fine-tuning：更新全部参数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SFT：让模型学会按指令完成任务"><span class="toc-number">2.2.</span> <span class="toc-text">SFT：让模型学会按指令完成任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PEFT：只训练少量新增参数"><span class="toc-number">2.3.</span> <span class="toc-text">PEFT：只训练少量新增参数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LoRA-与-QLoRA-的核心原理"><span class="toc-number">3.</span> <span class="toc-text">LoRA 与 QLoRA 的核心原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LoRA-原理"><span class="toc-number">3.1.</span> <span class="toc-text">LoRA 原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#QLoRA：进一步降低显存门槛"><span class="toc-number">3.2.</span> <span class="toc-text">QLoRA：进一步降低显存门槛</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#数据与训练流程"><span class="toc-number">4.</span> <span class="toc-text">数据与训练流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#数据怎么构造"><span class="toc-number">4.1.</span> <span class="toc-text">数据怎么构造</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#数据质量比数据数量更重要"><span class="toc-number">4.2.</span> <span class="toc-text">数据质量比数据数量更重要</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#训练参数关注什么"><span class="toc-number">4.3.</span> <span class="toc-text">训练参数关注什么</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#微调的边界与生产落地"><span class="toc-number">5.</span> <span class="toc-text">微调的边界与生产落地</span></a></li></ol></div></div><div class="post-content"><p>在大模型落地到真实业务时，经常会遇到一个问题：基础模型能力很强，但并不一定适合当前场景。它可能不熟悉某个行业的表达习惯，不能稳定遵循业务输出格式，也可能在客服、代码审查、合同分析、工单分类这类垂直任务上表现不够一致。</p>
+<p>要解决这类问题，常见有两条路线：一条是 RAG，把外部知识检索出来放进上下文，让模型基于资料回答；另一条是微调，用特定任务数据继续训练模型，让模型的行为、表达方式和任务能力更贴近目标场景。</p>
+<p>微调本身也有不同层次：从更新全部参数的 Full Fine-tuning，到只训练少量增量参数的 LoRA、QLoRA。前者能力上限更高，但成本更大；后者更轻量、更易落地，也因此成为很多团队适配垂直场景时最常用的方法。这一篇，我们就从全量微调讲到 LoRA，看清楚大模型到底是如何被“定制”的。</p>
+<a id="more"></a>  
+<h2 id="为什么需要微调"><a href="#为什么需要微调" class="headerlink" title="为什么需要微调"></a>为什么需要微调</h2><p>预训练模型已经学到了大量通用知识和语言能力，但通用能力不等于业务可用。真实业务里，模型经常会遇到几类问题：</p>
+<ol>
+<li><strong>领域语言不熟</strong>：金融、法律、医疗、工业、研发体系里有大量专有术语和表达习惯；</li>
+<li><strong>输出格式不稳</strong>：业务系统需要固定 JSON、表格、SQL、配置、工单字段，而模型可能自由发挥；</li>
+<li><strong>任务风格不一致</strong>：客服、投研、代码审查、故障排查，对回答风格和判断标准要求不同；</li>
+<li><strong>小模型能力不足</strong>：为了成本和延迟，业务可能希望用较小模型完成特定任务；</li>
+<li><strong>RAG 不能解决所有问题</strong>：RAG 能提供知识，但不一定改变模型的行为模式。</li>
+</ol>
+<p>可以把大模型适配业务的方式分成几类：</p>
+<p><img src="/images/llm/llm-finetune-lora-01.png" alt="大模型适配"></p>
+<p>从上图可以看出，Prompt、RAG、微调和后训练解决的问题不同，微调更偏向改变模型行为和任务分布。微调适合解决的问题，通常不是“今天文档更新了模型不知道”，而是：</p>
+<ul>
+<li>模型已经大概会做，但做得不稳定、不专业、不符合业务要求。</li>
+</ul>
+<p>例如以下这些场景，微调的主要作业是：</p>
+<ol>
+<li>客服助手：统一回答风格、话术、拒答边界；</li>
+<li>代码模型：适配项目代码风格、框架模式、测试规范；</li>
+<li>金融研报：学会领域表达、结构化摘要和风险提示；</li>
+<li>法律文档：适配条款分析、审查格式和谨慎表达；</li>
+<li>数据分析：稳定生成 SQL、图表解释和结论模板；</li>
+<li>工单系统：输出固定字段、分类、优先级和处理建议。</li>
+</ol>
+<p>一句话概括：<strong>RAG 主要给模型补知识，微调主要改变模型做事的方式。</strong></p>
+<h2 id="微调路线：从全量更新到参数高效"><a href="#微调路线：从全量更新到参数高效" class="headerlink" title="微调路线：从全量更新到参数高效"></a>微调路线：从全量更新到参数高效</h2><p>微调的核心思想很直接：在已有基础模型之上，用特定数据继续训练，让模型更适配目标任务。但从技术上看，微调可以拆成两个维度：</p>
+<ol>
+<li><strong>训练目标</strong>：模型要学什么，比如继续预训练、指令监督微调 SFT、偏好对齐；</li>
+<li><strong>参数更新方式</strong>：训练时更新哪些参数，比如 Full Fine-tuning、LoRA、QLoRA、Adapter。</li>
+</ol>
+<p>这里需要注意的是：SFT 和 LoRA 不是同一层概念。SFT 更关注“用什么数据、学什么行为”，LoRA 更关注“用什么方式更新参数”。一次 SFT 训练，既可以用全量微调实现，也可以用 LoRA 实现。</p>
+<p><img src="/images/llm/llm-finetune-lora-02.png" alt="微调可以从训练目标和参数更新方式两个维度理解"></p>
+<h3 id="Full-Fine-tuning：更新全部参数"><a href="#Full-Fine-tuning：更新全部参数" class="headerlink" title="Full Fine-tuning：更新全部参数"></a>Full Fine-tuning：更新全部参数</h3><p>Full Fine-tuning 是最直接的微调方式：模型中的所有可训练参数都会参与更新。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">θ_new = θ_old - η × ∇L(θ)</span><br></pre></td></tr></table></figure>
+<p>其中 <code>θ</code> 表示模型参数，<code>L</code> 表示训练 loss。对于 Transformer 来说，这意味着 Embedding、Attention 投影矩阵、FFN / MLP 矩阵、LayerNorm、输出层等参数都可能被更新。它的优势是适配能力强，模型可以充分学习新的任务分布。但代价也很明显：</p>
+<ol>
+<li><strong>显存占用高</strong>：不仅要存模型权重，还要存梯度、优化器状态和激活值；</li>
+<li><strong>训练成本高</strong>：所有参数都参与反向传播；</li>
+<li><strong>部署成本高</strong>：每个场景都可能需要保存一份完整模型；</li>
+<li><strong>过拟合风险高</strong>：小数据场景下容易损伤原模型通用能力；</li>
+<li><strong>安全边界可能被破坏</strong>：训练数据不干净时，模型可能学到错误行为。</li>
+</ol>
+<p>所以 Full Fine-tuning 更适合数据量大、任务重要、算力充足、需要深度领域适配的场景。</p>
+<h3 id="SFT：让模型学会按指令完成任务"><a href="#SFT：让模型学会按指令完成任务" class="headerlink" title="SFT：让模型学会按指令完成任务"></a>SFT：让模型学会按指令完成任务</h3><p>SFT，全称 Supervised Fine-Tuning，监督微调。它通常使用“指令 - 输入 - 输出”形式的数据，让模型学习在给定指令下生成期望答案。</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"instruction"</span>: <span class="string">"请总结下面这段故障日志的原因"</span>,</span><br><span class="line">  <span class="attr">"input"</span>: <span class="string">"...日志内容..."</span>,</span><br><span class="line">  <span class="attr">"output"</span>: <span class="string">"故障原因是数据库连接池耗尽，建议检查连接泄露和最大连接数配置。"</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>SFT 的目标不是单纯让模型继续学习领域文本，而是让模型学会：</p>
+<ol>
+<li>理解用户指令；</li>
+<li>按任务要求回答；</li>
+<li>遵循固定格式；</li>
+<li>使用特定领域表达；</li>
+<li>避免不符合业务规则的输出。</li>
+</ol>
+<p>很多垂直模型训练，本质上都是围绕 SFT 展开的：构造高质量指令数据，再选择 Full Fine-tuning 或 LoRA / QLoRA 等方式进行训练。</p>
+<h3 id="PEFT：只训练少量新增参数"><a href="#PEFT：只训练少量新增参数" class="headerlink" title="PEFT：只训练少量新增参数"></a>PEFT：只训练少量新增参数</h3><p>Full Fine-tuning 成本太高，因此业内出现了很多参数高效微调方法，也就是 PEFT，Parameter-Efficient Fine-Tuning。它们的共同思想是：</p>
+<ul>
+<li>冻结大部分原模型参数，只训练少量新增参数或增量参数。</li>
+</ul>
+<p>常见方法包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>核心思想</strong></th>
+<th><strong>特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Adapter</td>
+<td>在 Transformer 层中插入小模块</td>
+<td>只训练 Adapter，便于多任务切换</td>
+</tr>
+<tr>
+<td>Prefix Tuning</td>
+<td>在注意力层前加入可训练 prefix</td>
+<td>参数少，但表达能力受限</td>
+</tr>
+<tr>
+<td>LoRA</td>
+<td>给线性层增加低秩增量矩阵</td>
+<td>当前最常用，成本低，效果稳定</td>
+</tr>
+<tr>
+<td>QLoRA</td>
+<td>量化基础模型，再训练 LoRA</td>
+<td>显存更低，适合资源受限场景</td>
+</tr>
+</tbody>
+</table>
+<p>Adapter 可以理解为在原模型层旁边插入一个小的可训练模块：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">原模型层 -&gt; Adapter 小模块 -&gt; 输出</span><br></pre></td></tr></table></figure>
+<p>它的好处是不同业务场景可以保存不同 Adapter，不需要复制完整模型。但它会改变推理结构，部署上需要额外适配。</p>
+<p>LoRA 则更进一步：不改变主干结构，只给关键线性层增加低秩增量，因此在工程上更轻量，也更容易成为主流方案。</p>
+<h2 id="LoRA-与-QLoRA-的核心原理"><a href="#LoRA-与-QLoRA-的核心原理" class="headerlink" title="LoRA 与 QLoRA 的核心原理"></a>LoRA 与 QLoRA 的核心原理</h2><h3 id="LoRA-原理"><a href="#LoRA-原理" class="headerlink" title="LoRA 原理"></a>LoRA 原理</h3><p>LoRA 是最常见的参数高效微调方法之一。它的核心思想是：<strong>冻结原模型参数，只训练一小组新增的低秩矩阵</strong>。</p>
+<p>在 Transformer 里，很多参数都集中在线性层中，比如 Attention 的 <code>q_proj</code>、<code>v_proj</code>、<code>o_proj</code>，以及 FFN / MLP 的投影矩阵。全量微调会直接更新这些大矩阵，而 LoRA 不直接改原矩阵 <code>W</code>，而是在旁边学习一个增量：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">W&apos; = W + ΔW</span><br></pre></td></tr></table></figure>
+<p>为了让这个增量足够轻量，LoRA 不训练完整的 <code>ΔW</code>，而是把它拆成两个更小的矩阵：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ΔW = B × A</span><br></pre></td></tr></table></figure>
+<p>也就是说，原模型负责保留通用能力，LoRA 只学习当前任务需要补上的那部分变化。</p>
+<p><img src="/images/llm/llm-finetune-lora-03.png" alt="LoRA 不更新原权重，只训练低秩增量矩阵"></p>
+<p>LoRA 能省参数，是因为原矩阵可能是一个很大的 <code>4096 × 4096</code> 矩阵，而 LoRA 只训练两个很窄的小矩阵。比如 rank <code>r = 8</code> 时，新增参数大约只有原矩阵的 0.39%。这也是 LoRA 能显著降低显存和训练成本的核心原因。</p>
+<p>LoRA 的优势是显存低、训练快、易管理、可插拔；同一个基础模型可以挂载不同 LoRA adapter，适配不同业务任务。但它也有代价：rank 太小可能学不动，rank 太大成本会上升，注入层选错会影响效果，数据质量差时 LoRA 也会稳定学到错误模式。</p>
+<h3 id="QLoRA：进一步降低显存门槛"><a href="#QLoRA：进一步降低显存门槛" class="headerlink" title="QLoRA：进一步降低显存门槛"></a>QLoRA：进一步降低显存门槛</h3><p>QLoRA 可以理解为 LoRA 的低显存版本。它的核心思路是：<strong>基础模型权重量化 + LoRA 增量训练</strong>。具体做法是：</p>
+<ol>
+<li>把基础模型权重量化到低比特，比如 4-bit；</li>
+<li>冻结量化后的基础模型；</li>
+<li>只训练 LoRA adapter 参数；</li>
+<li>LoRA 参数通常仍用 FP16 / BF16 训练。</li>
+</ol>
+<p>在实际实现中，QLoRA 还常结合 <strong>NF4 量化、Double Quantization 和 Paged Optimizer</strong> 等技术，进一步降低显存占用和训练峰值。这里可以先简单理解为：QLoRA 用低比特保存基础模型权重，用少量 LoRA 参数完成任务适配。</p>
+<p><img src="/images/llm/llm-finetune-lora-04.png" alt="QLoRA 通过量化基础模型并只训练 LoRA 参数"></p>
+<p>QLoRA 省显存的原因是：基础模型的大部分权重用低比特存储，训练时只需要为 LoRA 参数保存梯度和优化器状态。</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>基础模型权重</strong></th>
+<th><strong>训练参数</strong></th>
+<th><strong>显存压力</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full Fine-tuning</td>
+<td>FP16 / BF16</td>
+<td>全部参数</td>
+<td>最高</td>
+</tr>
+<tr>
+<td>LoRA</td>
+<td>FP16 / BF16</td>
+<td>LoRA 参数</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>QLoRA</td>
+<td>4-bit 量化</td>
+<td>LoRA 参数</td>
+<td>更低</td>
+</tr>
+</tbody>
+</table>
+<p>QLoRA 很适合单机训练、中小团队垂直场景适配、多业务 adapter 管理，以及对训练成本非常敏感的场景。但它也不是免费午餐：量化会带来数值误差，训练对学习率、batch size、rank 更敏感；长上下文训练时，activation 仍然会占用大量显存；基础模型质量也仍然决定最终上限。</p>
+<p>简单总结一下：<strong>LoRA 让微调从“更新整个模型”变成“学习少量增量”，QLoRA 则进一步通过低比特量化降低显存门槛。</strong></p>
+<h2 id="数据与训练流程"><a href="#数据与训练流程" class="headerlink" title="数据与训练流程"></a>数据与训练流程</h2><p>微调最容易被误解的一点是：只要把业务数据丢进去训练，模型就会变好。实际不是这样。微调效果很大程度取决于数据质量，而不是数据数量。一个典型的微调流程如下图所示：</p>
+<p><img src="/images/llm/llm-finetune-lora-05.png" alt="微调的训练流程"></p>
+<p>从图片也可以看出，微调并不是一次训练动作，而是一套围绕数据、训练、评测和迭代的工程流程。</p>
+<h3 id="数据怎么构造"><a href="#数据怎么构造" class="headerlink" title="数据怎么构造"></a>数据怎么构造</h3><p>常见微调数据可以分成几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据类型</strong></th>
+<th><strong>作用</strong></th>
+<th><strong>示例</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>指令数据</td>
+<td>提升任务遵循能力</td>
+<td>问题 -&gt; 标准回答</td>
+</tr>
+<tr>
+<td>领域语料</td>
+<td>适配领域语言和知识分布</td>
+<td>金融研报、法律条款、技术文档</td>
+</tr>
+<tr>
+<td>格式样本</td>
+<td>稳定输出结构</td>
+<td>JSON、SQL、表格、工单字段</td>
+</tr>
+<tr>
+<td>失败样本</td>
+<td>修复模型常见错误</td>
+<td>历史 bad case -&gt; 正确答案</td>
+</tr>
+<tr>
+<td>偏好数据</td>
+<td>学习回答优劣偏好</td>
+<td>answer A 优于 answer B</td>
+</tr>
+<tr>
+<td>安全样本</td>
+<td>强化拒答和边界</td>
+<td>越权问题、敏感内容、注入攻击</td>
+</tr>
+</tbody>
+</table>
+<p>这里要注意：<strong>领域语料和指令数据的训练方式不完全一样</strong>。如果只是金融研报、法律条款、技术文档这类原始文本，更适合做继续预训练或领域自适应预训练，让模型熟悉领域语言和知识分布；如果是“问题 - 答案”“指令 - 输出”形式的数据，则更适合做 SFT，让模型学会在具体任务中如何回答（领域微调更关注“懂不懂这个领域”，指令微调更关注“会不会按要求做事”）。</p>
+<h3 id="数据质量比数据数量更重要"><a href="#数据质量比数据数量更重要" class="headerlink" title="数据质量比数据数量更重要"></a>数据质量比数据数量更重要</h3><p>微调数据常见问题包括：</p>
+<ol>
+<li>答案本身不准确；</li>
+<li>指令和答案不匹配；</li>
+<li>格式混乱；</li>
+<li>同一个问题多种冲突答案；</li>
+<li>混入过期知识；</li>
+<li>包含隐私或敏感信息；</li>
+<li>样本分布和线上真实问题不一致。</li>
+</ol>
+<p>如果用低质量数据微调，模型不会变聪明，只会更稳定地学会错误模式。所以生产级微调通常需要：</p>
+<ol>
+<li>数据去重；</li>
+<li>质量评分；</li>
+<li>隐私脱敏；</li>
+<li>格式统一；</li>
+<li>难例增强；</li>
+<li>训练集、验证集、测试集隔离；</li>
+<li>微调后做回归评测。</li>
+</ol>
+<h3 id="训练参数关注什么"><a href="#训练参数关注什么" class="headerlink" title="训练参数关注什么"></a>训练参数关注什么</h3><p>LoRA / QLoRA 微调时，常见关键参数包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>参数</strong></th>
+<th><strong>含义</strong></th>
+<th><strong>影响</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>rank r</td>
+<td>低秩矩阵维度</td>
+<td>越大表达能力越强，但参数更多</td>
+</tr>
+<tr>
+<td>alpha</td>
+<td>LoRA 缩放系数</td>
+<td>影响 LoRA 增量强度</td>
+</tr>
+<tr>
+<td>target modules</td>
+<td>注入哪些层</td>
+<td>常见为 q_proj、v_proj、o_proj、MLP</td>
+</tr>
+<tr>
+<td>learning rate</td>
+<td>学习率</td>
+<td>过大容易学坏，过小收敛慢</td>
+</tr>
+<tr>
+<td>batch size</td>
+<td>批大小</td>
+<td>影响稳定性和显存</td>
+</tr>
+<tr>
+<td>epochs</td>
+<td>训练轮数</td>
+<td>太多容易过拟合</td>
+</tr>
+<tr>
+<td>max length</td>
+<td>最大序列长度</td>
+<td>影响长样本训练成本</td>
+</tr>
+</tbody>
+</table>
+<p>微调不是参数越大越好，也不是训练越久越好。更重要的是：训练后是否在目标任务上变好，同时不破坏原有能力和安全边界。</p>
+<h2 id="微调的边界与生产落地"><a href="#微调的边界与生产落地" class="headerlink" title="微调的边界与生产落地"></a>微调的边界与生产落地</h2><p>微调适合解决“模型行为”问题，比如输出格式不稳定、领域表达不专业、任务风格不符合业务要求。它不适合承载频繁变化的业务知识，也不适合替代可追溯的文档检索。</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题类型</strong></th>
+<th><strong>更适合的方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>知识频繁更新、需要引用来源</td>
+<td>RAG</td>
+</tr>
+<tr>
+<td>输出格式、回答风格、领域表达不稳定</td>
+<td>微调 / LoRA</td>
+</tr>
+<tr>
+<td>简单格式约束和任务提示</td>
+<td>Prompt / 上下文工程</td>
+</tr>
+<tr>
+<td>多步骤任务执行</td>
+<td>Agent + 工具</td>
+</tr>
+<tr>
+<td>上线质量验证</td>
+<td>Eval + 安全检查</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-finetune-lora-06.png" alt="RAG 解决知识问题，微调解决行为问题"></p>
+<p>微调上线前必须重新评测：目标任务是否提升、通用能力是否退化、输出格式是否稳定、幻觉是否增加、安全边界是否被破坏。即使是 LoRA，也可能改变模型行为。</p>
+<p><img src="/images/llm/llm-finetune-lora-07.png" alt="微调需要和评测、安全、线上反馈形成持续迭代闭环"></p>
+<p>一句话概括：<strong>微调让模型更会做某类任务，LoRA 让这种适配更轻量；但真正落地，还需要评测、安全和数据回流一起配合。</strong></p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/06/llm-finetune-lora/" data-id="cmr9et0gv000057lwv735120w" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/07/05/llm-eval-safety/" class="next">LLM 系列 (十六)：评测与安全，如何判断大模型是否真正可靠</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/06/llm-finetune-lora/';
+var disqus_title = 'LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景';
+var disqus_url = 'http://matt33.com/2026/07/06/llm-finetune-lora/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/07/06/llm-finetune-lora/">LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/05/llm-eval-safety/">LLM 系列 (十六)：评测与安全，如何判断大模型是否真正可靠</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/05/llm-multimodal/">LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/04/llm-agent/">LLM 系列 (十四)：Agent，大模型如何从对话走向行动</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/03/llm-rag/">LLM 系列 (十三)：RAG，大模型如何连接外部知识</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/02/llm-pretraining-data-engineering/">LLM 系列 (十二)：预训练数据工程：大模型的燃料是如何炼成的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/01/llm-long-context/">LLM 系列 (十一)：长上下文：大模型如何读懂更长的信息</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/30/llm-reasoning-model/">LLM 系列 (十)：推理模型：大模型如何从回答走向思考</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/29/llm-inference-serving/">LLM 系列 (九)：推理服务：大模型如何高效生成 Token</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/28/llm-distributed-training/">LLM 系列 (八)：分布式训练：千卡集群如何训大模型</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

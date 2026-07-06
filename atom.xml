@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-05T12:20:00.000Z</updated>
+  <updated>2026-07-06T12:10:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,327 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景</title>
+    <link href="http://matt33.com/2026/07/06/llm-finetune-lora/"/>
+    <id>http://matt33.com/2026/07/06/llm-finetune-lora/</id>
+    <published>2026-07-06T12:10:00.000Z</published>
+    <updated>2026-07-06T12:10:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>在大模型落地到真实业务时，经常会遇到一个问题：基础模型能力很强，但并不一定适合当前场景。它可能不熟悉某个行业的表达习惯，不能稳定遵循业务输出格式，也可能在客服、代码审查、合同分析、工单分类这类垂直任务上表现不够一致。</p>
+<p>要解决这类问题，常见有两条路线：一条是 RAG，把外部知识检索出来放进上下文，让模型基于资料回答；另一条是微调，用特定任务数据继续训练模型，让模型的行为、表达方式和任务能力更贴近目标场景。</p>
+<p>微调本身也有不同层次：从更新全部参数的 Full Fine-tuning，到只训练少量增量参数的 LoRA、QLoRA。前者能力上限更高，但成本更大；后者更轻量、更易落地，也因此成为很多团队适配垂直场景时最常用的方法。这一篇，我们就从全量微调讲到 LoRA，看清楚大模型到底是如何被“定制”的。</p>
+<a id="more"></a>  
+<h2 id="为什么需要微调"><a href="#为什么需要微调" class="headerlink" title="为什么需要微调"></a>为什么需要微调</h2><p>预训练模型已经学到了大量通用知识和语言能力，但通用能力不等于业务可用。真实业务里，模型经常会遇到几类问题：</p>
+<ol>
+<li><strong>领域语言不熟</strong>：金融、法律、医疗、工业、研发体系里有大量专有术语和表达习惯；</li>
+<li><strong>输出格式不稳</strong>：业务系统需要固定 JSON、表格、SQL、配置、工单字段，而模型可能自由发挥；</li>
+<li><strong>任务风格不一致</strong>：客服、投研、代码审查、故障排查，对回答风格和判断标准要求不同；</li>
+<li><strong>小模型能力不足</strong>：为了成本和延迟，业务可能希望用较小模型完成特定任务；</li>
+<li><strong>RAG 不能解决所有问题</strong>：RAG 能提供知识，但不一定改变模型的行为模式。</li>
+</ol>
+<p>可以把大模型适配业务的方式分成几类：</p>
+<p><img src="/images/llm/llm-finetune-lora-01.png" alt="大模型适配"></p>
+<p>从上图可以看出，Prompt、RAG、微调和后训练解决的问题不同，微调更偏向改变模型行为和任务分布。微调适合解决的问题，通常不是“今天文档更新了模型不知道”，而是：</p>
+<ul>
+<li>模型已经大概会做，但做得不稳定、不专业、不符合业务要求。</li>
+</ul>
+<p>例如以下这些场景，微调的主要作业是：</p>
+<ol>
+<li>客服助手：统一回答风格、话术、拒答边界；</li>
+<li>代码模型：适配项目代码风格、框架模式、测试规范；</li>
+<li>金融研报：学会领域表达、结构化摘要和风险提示；</li>
+<li>法律文档：适配条款分析、审查格式和谨慎表达；</li>
+<li>数据分析：稳定生成 SQL、图表解释和结论模板；</li>
+<li>工单系统：输出固定字段、分类、优先级和处理建议。</li>
+</ol>
+<p>一句话概括：<strong>RAG 主要给模型补知识，微调主要改变模型做事的方式。</strong></p>
+<h2 id="微调路线：从全量更新到参数高效"><a href="#微调路线：从全量更新到参数高效" class="headerlink" title="微调路线：从全量更新到参数高效"></a>微调路线：从全量更新到参数高效</h2><p>微调的核心思想很直接：在已有基础模型之上，用特定数据继续训练，让模型更适配目标任务。但从技术上看，微调可以拆成两个维度：</p>
+<ol>
+<li><strong>训练目标</strong>：模型要学什么，比如继续预训练、指令监督微调 SFT、偏好对齐；</li>
+<li><strong>参数更新方式</strong>：训练时更新哪些参数，比如 Full Fine-tuning、LoRA、QLoRA、Adapter。</li>
+</ol>
+<p>这里需要注意的是：SFT 和 LoRA 不是同一层概念。SFT 更关注“用什么数据、学什么行为”，LoRA 更关注“用什么方式更新参数”。一次 SFT 训练，既可以用全量微调实现，也可以用 LoRA 实现。</p>
+<p><img src="/images/llm/llm-finetune-lora-02.png" alt="微调可以从训练目标和参数更新方式两个维度理解"></p>
+<h3 id="Full-Fine-tuning：更新全部参数"><a href="#Full-Fine-tuning：更新全部参数" class="headerlink" title="Full Fine-tuning：更新全部参数"></a>Full Fine-tuning：更新全部参数</h3><p>Full Fine-tuning 是最直接的微调方式：模型中的所有可训练参数都会参与更新。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">θ_new = θ_old - η × ∇L(θ)</span><br></pre></td></tr></table></figure>
+<p>其中 <code>θ</code> 表示模型参数，<code>L</code> 表示训练 loss。对于 Transformer 来说，这意味着 Embedding、Attention 投影矩阵、FFN / MLP 矩阵、LayerNorm、输出层等参数都可能被更新。它的优势是适配能力强，模型可以充分学习新的任务分布。但代价也很明显：</p>
+<ol>
+<li><strong>显存占用高</strong>：不仅要存模型权重，还要存梯度、优化器状态和激活值；</li>
+<li><strong>训练成本高</strong>：所有参数都参与反向传播；</li>
+<li><strong>部署成本高</strong>：每个场景都可能需要保存一份完整模型；</li>
+<li><strong>过拟合风险高</strong>：小数据场景下容易损伤原模型通用能力；</li>
+<li><strong>安全边界可能被破坏</strong>：训练数据不干净时，模型可能学到错误行为。</li>
+</ol>
+<p>所以 Full Fine-tuning 更适合数据量大、任务重要、算力充足、需要深度领域适配的场景。</p>
+<h3 id="SFT：让模型学会按指令完成任务"><a href="#SFT：让模型学会按指令完成任务" class="headerlink" title="SFT：让模型学会按指令完成任务"></a>SFT：让模型学会按指令完成任务</h3><p>SFT，全称 Supervised Fine-Tuning，监督微调。它通常使用“指令 - 输入 - 输出”形式的数据，让模型学习在给定指令下生成期望答案。</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"instruction"</span>: <span class="string">"请总结下面这段故障日志的原因"</span>,</span><br><span class="line">  <span class="attr">"input"</span>: <span class="string">"...日志内容..."</span>,</span><br><span class="line">  <span class="attr">"output"</span>: <span class="string">"故障原因是数据库连接池耗尽，建议检查连接泄露和最大连接数配置。"</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>SFT 的目标不是单纯让模型继续学习领域文本，而是让模型学会：</p>
+<ol>
+<li>理解用户指令；</li>
+<li>按任务要求回答；</li>
+<li>遵循固定格式；</li>
+<li>使用特定领域表达；</li>
+<li>避免不符合业务规则的输出。</li>
+</ol>
+<p>很多垂直模型训练，本质上都是围绕 SFT 展开的：构造高质量指令数据，再选择 Full Fine-tuning 或 LoRA / QLoRA 等方式进行训练。</p>
+<h3 id="PEFT：只训练少量新增参数"><a href="#PEFT：只训练少量新增参数" class="headerlink" title="PEFT：只训练少量新增参数"></a>PEFT：只训练少量新增参数</h3><p>Full Fine-tuning 成本太高，因此业内出现了很多参数高效微调方法，也就是 PEFT，Parameter-Efficient Fine-Tuning。它们的共同思想是：</p>
+<ul>
+<li>冻结大部分原模型参数，只训练少量新增参数或增量参数。</li>
+</ul>
+<p>常见方法包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>核心思想</strong></th>
+<th><strong>特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Adapter</td>
+<td>在 Transformer 层中插入小模块</td>
+<td>只训练 Adapter，便于多任务切换</td>
+</tr>
+<tr>
+<td>Prefix Tuning</td>
+<td>在注意力层前加入可训练 prefix</td>
+<td>参数少，但表达能力受限</td>
+</tr>
+<tr>
+<td>LoRA</td>
+<td>给线性层增加低秩增量矩阵</td>
+<td>当前最常用，成本低，效果稳定</td>
+</tr>
+<tr>
+<td>QLoRA</td>
+<td>量化基础模型，再训练 LoRA</td>
+<td>显存更低，适合资源受限场景</td>
+</tr>
+</tbody>
+</table>
+<p>Adapter 可以理解为在原模型层旁边插入一个小的可训练模块：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">原模型层 -&gt; Adapter 小模块 -&gt; 输出</span><br></pre></td></tr></table></figure>
+<p>它的好处是不同业务场景可以保存不同 Adapter，不需要复制完整模型。但它会改变推理结构，部署上需要额外适配。</p>
+<p>LoRA 则更进一步：不改变主干结构，只给关键线性层增加低秩增量，因此在工程上更轻量，也更容易成为主流方案。</p>
+<h2 id="LoRA-与-QLoRA-的核心原理"><a href="#LoRA-与-QLoRA-的核心原理" class="headerlink" title="LoRA 与 QLoRA 的核心原理"></a>LoRA 与 QLoRA 的核心原理</h2><h3 id="LoRA-原理"><a href="#LoRA-原理" class="headerlink" title="LoRA 原理"></a>LoRA 原理</h3><p>LoRA 是最常见的参数高效微调方法之一。它的核心思想是：<strong>冻结原模型参数，只训练一小组新增的低秩矩阵</strong>。</p>
+<p>在 Transformer 里，很多参数都集中在线性层中，比如 Attention 的 <code>q_proj</code>、<code>v_proj</code>、<code>o_proj</code>，以及 FFN / MLP 的投影矩阵。全量微调会直接更新这些大矩阵，而 LoRA 不直接改原矩阵 <code>W</code>，而是在旁边学习一个增量：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">W&apos; = W + ΔW</span><br></pre></td></tr></table></figure>
+<p>为了让这个增量足够轻量，LoRA 不训练完整的 <code>ΔW</code>，而是把它拆成两个更小的矩阵：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ΔW = B × A</span><br></pre></td></tr></table></figure>
+<p>也就是说，原模型负责保留通用能力，LoRA 只学习当前任务需要补上的那部分变化。</p>
+<p><img src="/images/llm/llm-finetune-lora-03.png" alt="LoRA 不更新原权重，只训练低秩增量矩阵"></p>
+<p>LoRA 能省参数，是因为原矩阵可能是一个很大的 <code>4096 × 4096</code> 矩阵，而 LoRA 只训练两个很窄的小矩阵。比如 rank <code>r = 8</code> 时，新增参数大约只有原矩阵的 0.39%。这也是 LoRA 能显著降低显存和训练成本的核心原因。</p>
+<p>LoRA 的优势是显存低、训练快、易管理、可插拔；同一个基础模型可以挂载不同 LoRA adapter，适配不同业务任务。但它也有代价：rank 太小可能学不动，rank 太大成本会上升，注入层选错会影响效果，数据质量差时 LoRA 也会稳定学到错误模式。</p>
+<h3 id="QLoRA：进一步降低显存门槛"><a href="#QLoRA：进一步降低显存门槛" class="headerlink" title="QLoRA：进一步降低显存门槛"></a>QLoRA：进一步降低显存门槛</h3><p>QLoRA 可以理解为 LoRA 的低显存版本。它的核心思路是：<strong>基础模型权重量化 + LoRA 增量训练</strong>。具体做法是：</p>
+<ol>
+<li>把基础模型权重量化到低比特，比如 4-bit；</li>
+<li>冻结量化后的基础模型；</li>
+<li>只训练 LoRA adapter 参数；</li>
+<li>LoRA 参数通常仍用 FP16 / BF16 训练。</li>
+</ol>
+<p>在实际实现中，QLoRA 还常结合 <strong>NF4 量化、Double Quantization 和 Paged Optimizer</strong> 等技术，进一步降低显存占用和训练峰值。这里可以先简单理解为：QLoRA 用低比特保存基础模型权重，用少量 LoRA 参数完成任务适配。</p>
+<p><img src="/images/llm/llm-finetune-lora-04.png" alt="QLoRA 通过量化基础模型并只训练 LoRA 参数"></p>
+<p>QLoRA 省显存的原因是：基础模型的大部分权重用低比特存储，训练时只需要为 LoRA 参数保存梯度和优化器状态。</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>基础模型权重</strong></th>
+<th><strong>训练参数</strong></th>
+<th><strong>显存压力</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full Fine-tuning</td>
+<td>FP16 / BF16</td>
+<td>全部参数</td>
+<td>最高</td>
+</tr>
+<tr>
+<td>LoRA</td>
+<td>FP16 / BF16</td>
+<td>LoRA 参数</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>QLoRA</td>
+<td>4-bit 量化</td>
+<td>LoRA 参数</td>
+<td>更低</td>
+</tr>
+</tbody>
+</table>
+<p>QLoRA 很适合单机训练、中小团队垂直场景适配、多业务 adapter 管理，以及对训练成本非常敏感的场景。但它也不是免费午餐：量化会带来数值误差，训练对学习率、batch size、rank 更敏感；长上下文训练时，activation 仍然会占用大量显存；基础模型质量也仍然决定最终上限。</p>
+<p>简单总结一下：<strong>LoRA 让微调从“更新整个模型”变成“学习少量增量”，QLoRA 则进一步通过低比特量化降低显存门槛。</strong></p>
+<h2 id="数据与训练流程"><a href="#数据与训练流程" class="headerlink" title="数据与训练流程"></a>数据与训练流程</h2><p>微调最容易被误解的一点是：只要把业务数据丢进去训练，模型就会变好。实际不是这样。微调效果很大程度取决于数据质量，而不是数据数量。一个典型的微调流程如下图所示：</p>
+<p><img src="/images/llm/llm-finetune-lora-05.png" alt="微调的训练流程"></p>
+<p>从图片也可以看出，微调并不是一次训练动作，而是一套围绕数据、训练、评测和迭代的工程流程。</p>
+<h3 id="数据怎么构造"><a href="#数据怎么构造" class="headerlink" title="数据怎么构造"></a>数据怎么构造</h3><p>常见微调数据可以分成几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据类型</strong></th>
+<th><strong>作用</strong></th>
+<th><strong>示例</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>指令数据</td>
+<td>提升任务遵循能力</td>
+<td>问题 -&gt; 标准回答</td>
+</tr>
+<tr>
+<td>领域语料</td>
+<td>适配领域语言和知识分布</td>
+<td>金融研报、法律条款、技术文档</td>
+</tr>
+<tr>
+<td>格式样本</td>
+<td>稳定输出结构</td>
+<td>JSON、SQL、表格、工单字段</td>
+</tr>
+<tr>
+<td>失败样本</td>
+<td>修复模型常见错误</td>
+<td>历史 bad case -&gt; 正确答案</td>
+</tr>
+<tr>
+<td>偏好数据</td>
+<td>学习回答优劣偏好</td>
+<td>answer A 优于 answer B</td>
+</tr>
+<tr>
+<td>安全样本</td>
+<td>强化拒答和边界</td>
+<td>越权问题、敏感内容、注入攻击</td>
+</tr>
+</tbody>
+</table>
+<p>这里要注意：<strong>领域语料和指令数据的训练方式不完全一样</strong>。如果只是金融研报、法律条款、技术文档这类原始文本，更适合做继续预训练或领域自适应预训练，让模型熟悉领域语言和知识分布；如果是“问题 - 答案”“指令 - 输出”形式的数据，则更适合做 SFT，让模型学会在具体任务中如何回答（领域微调更关注“懂不懂这个领域”，指令微调更关注“会不会按要求做事”）。</p>
+<h3 id="数据质量比数据数量更重要"><a href="#数据质量比数据数量更重要" class="headerlink" title="数据质量比数据数量更重要"></a>数据质量比数据数量更重要</h3><p>微调数据常见问题包括：</p>
+<ol>
+<li>答案本身不准确；</li>
+<li>指令和答案不匹配；</li>
+<li>格式混乱；</li>
+<li>同一个问题多种冲突答案；</li>
+<li>混入过期知识；</li>
+<li>包含隐私或敏感信息；</li>
+<li>样本分布和线上真实问题不一致。</li>
+</ol>
+<p>如果用低质量数据微调，模型不会变聪明，只会更稳定地学会错误模式。所以生产级微调通常需要：</p>
+<ol>
+<li>数据去重；</li>
+<li>质量评分；</li>
+<li>隐私脱敏；</li>
+<li>格式统一；</li>
+<li>难例增强；</li>
+<li>训练集、验证集、测试集隔离；</li>
+<li>微调后做回归评测。</li>
+</ol>
+<h3 id="训练参数关注什么"><a href="#训练参数关注什么" class="headerlink" title="训练参数关注什么"></a>训练参数关注什么</h3><p>LoRA / QLoRA 微调时，常见关键参数包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>参数</strong></th>
+<th><strong>含义</strong></th>
+<th><strong>影响</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>rank r</td>
+<td>低秩矩阵维度</td>
+<td>越大表达能力越强，但参数更多</td>
+</tr>
+<tr>
+<td>alpha</td>
+<td>LoRA 缩放系数</td>
+<td>影响 LoRA 增量强度</td>
+</tr>
+<tr>
+<td>target modules</td>
+<td>注入哪些层</td>
+<td>常见为 q_proj、v_proj、o_proj、MLP</td>
+</tr>
+<tr>
+<td>learning rate</td>
+<td>学习率</td>
+<td>过大容易学坏，过小收敛慢</td>
+</tr>
+<tr>
+<td>batch size</td>
+<td>批大小</td>
+<td>影响稳定性和显存</td>
+</tr>
+<tr>
+<td>epochs</td>
+<td>训练轮数</td>
+<td>太多容易过拟合</td>
+</tr>
+<tr>
+<td>max length</td>
+<td>最大序列长度</td>
+<td>影响长样本训练成本</td>
+</tr>
+</tbody>
+</table>
+<p>微调不是参数越大越好，也不是训练越久越好。更重要的是：训练后是否在目标任务上变好，同时不破坏原有能力和安全边界。</p>
+<h2 id="微调的边界与生产落地"><a href="#微调的边界与生产落地" class="headerlink" title="微调的边界与生产落地"></a>微调的边界与生产落地</h2><p>微调适合解决“模型行为”问题，比如输出格式不稳定、领域表达不专业、任务风格不符合业务要求。它不适合承载频繁变化的业务知识，也不适合替代可追溯的文档检索。</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题类型</strong></th>
+<th><strong>更适合的方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>知识频繁更新、需要引用来源</td>
+<td>RAG</td>
+</tr>
+<tr>
+<td>输出格式、回答风格、领域表达不稳定</td>
+<td>微调 / LoRA</td>
+</tr>
+<tr>
+<td>简单格式约束和任务提示</td>
+<td>Prompt / 上下文工程</td>
+</tr>
+<tr>
+<td>多步骤任务执行</td>
+<td>Agent + 工具</td>
+</tr>
+<tr>
+<td>上线质量验证</td>
+<td>Eval + 安全检查</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-finetune-lora-06.png" alt="RAG 解决知识问题，微调解决行为问题"></p>
+<p>微调上线前必须重新评测：目标任务是否提升、通用能力是否退化、输出格式是否稳定、幻觉是否增加、安全边界是否被破坏。即使是 LoRA，也可能改变模型行为。</p>
+<p><img src="/images/llm/llm-finetune-lora-07.png" alt="微调需要和评测、安全、线上反馈形成持续迭代闭环"></p>
+<p>一句话概括：<strong>微调让模型更会做某类任务，LoRA 让这种适配更轻量；但真正落地，还需要评测、安全和数据回流一起配合。</strong></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;在大模型落地到真实业务时，经常会遇到一个问题：基础模型能力很强，但并不一定适合当前场景。它可能不熟悉某个行业的表达习惯，不能稳定遵循业务输出格式，也可能在客服、代码审查、合同分析、工单分类这类垂直任务上表现不够一致。&lt;/p&gt;
+&lt;p&gt;要解决这类问题，常见有两条路线：一条是 RAG，把外部知识检索出来放进上下文，让模型基于资料回答；另一条是微调，用特定任务数据继续训练模型，让模型的行为、表达方式和任务能力更贴近目标场景。&lt;/p&gt;
+&lt;p&gt;微调本身也有不同层次：从更新全部参数的 Full Fine-tuning，到只训练少量增量参数的 LoRA、QLoRA。前者能力上限更高，但成本更大；后者更轻量、更易落地，也因此成为很多团队适配垂直场景时最常用的方法。这一篇，我们就从全量微调讲到 LoRA，看清楚大模型到底是如何被“定制”的。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (十六)：评测与安全，如何判断大模型是否真正可靠</title>
@@ -8653,86 +8974,6 @@
     
     
       <category term="kubernetes" scheme="http://matt33.com/tags/kubernetes/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>浅谈 CPU 分支预测技术</title>
-    <link href="http://matt33.com/2020/04/16/cpu-branch-predictor/"/>
-    <id>http://matt33.com/2020/04/16/cpu-branch-predictor/</id>
-    <published>2020-04-15T16:33:56.000Z</published>
-    <updated>2026-06-19T02:19:10.485Z</updated>
-    
-    <content type="html"><![CDATA[<p>最近在看 SQL 优化之 Code Generation 相关的内容，我们知道 Code Generation 是 SQL 优化的大杀器之一，不管是在 Apache Spark 还是 Apache Flink 中都有比较深入的应用（特别是在 Spark 中），Code Generation 最开始是在数据库中应用的，Spark 将其引入到 Spark SQL 的中优化，后来的 Flink 也借鉴了这一思想。Code Generation 是要解决什么问题呢？相信大部分人应该有所了解，简单来说就是减少虚函数调用、尽可能利用 CPU 分支预测的能力（会在 Code Generation 部分详细介绍，这里只需要了解这一背景即可），那么什么是 CPU 分支预测（<a href="https://en.wikipedia.org/wiki/Branch_predictor" target="_blank" rel="external">Wikipedia: CPU Branch Predictor</a>）呢？为什么虚函数调用会极大消耗 CPU 性能呢？这就是本文将要给大家介绍的内容。</p>
-<h2 id="CPU-Instruction-pipelining"><a href="#CPU-Instruction-pipelining" class="headerlink" title="CPU Instruction pipelining"></a>CPU Instruction pipelining</h2><p>在介绍 CPU 分支预测机制之前，先来看下 CPU 的流水线机制（<a href="https://en.wikipedia.org/wiki/Instruction_pipelining" target="_blank" rel="external">Wikipedia: CPU Instruction pipelining</a>）。</p>
-<p>关于流水线（pipeline），这里举一个生活中的例子，比如在洗车时，当前面一辆车清洗完成进入擦洗阶段后，下一辆车就可以进入喷水阶段了，这就是一个典型的流水线场景（如下如所示），它不是说非要前面一辆车把清洗、擦洗全部完成后，下一辆车才能开始。</p>
-<p><img src="/images/system/cpu-pipeline2.png" alt="洗车中流水线"></p>
-<p>从这里也可以看出，流水线机制一个重要的特性就是 <strong>提高了系统的吞吐量</strong>，也就是单位时间内服务的总数，<strong>不过它会有一个轻微的延迟</strong>，对于上面的例子就是，一辆汽车在洗完之后需要开到擦洗的地方擦洗。在 CPU 的设计中，也有类似流水线化的机制，这个汽车就是指令，每个阶段完成执行执行的一部分。</p>
-<h3 id="CPU-中计算的流水线化"><a href="#CPU-中计算的流水线化" class="headerlink" title="CPU 中计算的流水线化"></a>CPU 中计算的流水线化</h3><p>下面举一个示例，这里将系统执行分为三个阶段（A、B 和 C），如下图所示，每个阶段需要 100ps（picosecond，皮秒，也就是微微秒，即 $10^{-12}$），中间加载寄存器（也可以叫做流水线寄存器，pipeline register）需要 20ps。对于图 b，时间从左往右流动，对于指令 I1，三个方框分别代表三个阶段（图片来自 <a href="https://book.douban.com/subject/26912767/" target="_blank" rel="external">《深入理解计算机系统 第三版》</a> 中插图）。</p>
-<p><img src="/images/system/cpu-pipeline3.png" alt="三阶段流水线化的计算硬件"></p>
-<p>这样，每条指令都会按照三步经过这个系统，从头到尾需要三个完整的时钟周期，如上图所示，只要 <code>I1</code> 从 A 进入 B，就可以让 <code>I2</code> 进入 A 阶段了，以此类推。在稳定状态下，三个阶段都应该是活动的，每个时钟周期，一条指令离开系统，一条新的指令进入。在这个系统中，时钟周期设为 <code>100+20=120ps</code>，得到的吞吐量大约为 <code>8.33GIPS</code>，但是因为处理一条指令需要 3 个时钟周期，所以这条流水线的延迟就是 <code>3*120=360ps</code>，它相当于 一阶段 的系统，吞吐量提高了 2.67 倍，代价是增加了一些硬件以及延迟的增加（寄存器变多带来的延迟）。</p>
-<h3 id="流水线的局限"><a href="#流水线的局限" class="headerlink" title="流水线的局限"></a>流水线的局限</h3><p>在上面的三阶段系统中，它是一个比较理想的情况，在这个系统中，我们可以将计算分成三个独立的阶段，每个阶段需要的时间是原来逻辑需要时间的三分之一，但是在实际生产中，会出现一些其他的因素，降低流水线的效率。</p>
-<h4 id="情况-1：阶段不一致的划分"><a href="#情况-1：阶段不一致的划分" class="headerlink" title="情况 1：阶段不一致的划分"></a>情况 1：阶段不一致的划分</h4><p>在前面的例子划分的阶段中，每个阶段执行都是 100ps，但是实际中并不一定是这样的，假如 A 阶段是 50ps，B 阶段是 150ps，C 阶段是 100ps，在这种情况下，系统必须将时钟周期设置为 170ps（由最慢的来决定），这样的话，其吞吐量就变成了 <code>5.88GIPS</code>，由于时钟减慢，也导致了延迟增加到了 510ps。</p>
-<p>因此，在 CPU 硬件设计时，将系统计算设计分为一组具有相同延迟的阶段将是一个严峻的挑战。</p>
-<h4 id="情况-2：流水线过深，收益反而下降"><a href="#情况-2：流水线过深，收益反而下降" class="headerlink" title="情况 2：流水线过深，收益反而下降"></a>情况 2：流水线过深，收益反而下降</h4><p>如果流水线过深，中间使用到的寄存器将会变多，寄存器使用带来的延迟在指令运行总延迟中的比重将会增大。一方面，在设计时，为了提高时钟频率，现代处理器会采用很深的流水线，另一方面，由于流水线过深，指令运行延迟会变长。所以，在实际设计时，电路设计师如何设计流水线寄存器，使其延迟尽可能减少，是高速微处理器面临重大挑战之一。</p>
-<h2 id="CPU-Branch-Predictor"><a href="#CPU-Branch-Predictor" class="headerlink" title="CPU Branch Predictor"></a>CPU Branch Predictor</h2><p>在开始介绍 CPU 分支预测技术之前，可以先看下 StackOverflow 上一个非常有名的问题（现在有 3w+ 人认同第一个回答） —— <a href="https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array#11227902" target="_blank" rel="external">Why is processing a sorted array faster than processing an unsorted array?</a>，问题的大概是，对一个数组中的每个元素，先做判断，如果大于某个值，就做累加，就是这样一个简单的操作，发现一个有意思的现象，如果用 C++ 写这段代码，对于有序数组和无序数组分别做这个操作，性能大概相差五倍多，在 Java 中，差距小一点，大概是 1 倍。为什么会出现这个问题呢？</p>
-<p>背后的原因就是 <strong>CPU 流水线下，CPU 采用分支预测技术</strong>，对于有序数组可以很好地 CPU 这一特性，而无序数组会使得分支预测手足无措。</p>
-<h3 id="什么是分支预测"><a href="#什么是分支预测" class="headerlink" title="什么是分支预测"></a>什么是分支预测</h3><p>在前面，我们了解到 CPU 为了提高吞吐量采用了流水线机制，比如下图中的 4 级流水线（图片来自 <a href="https://en.wikipedia.org/wiki/Instruction_pipelining" target="_blank" rel="external">Wikipedia: CPU Instruction pipelining</a>）：</p>
-<p><img src="/images/system/cpu-pipeline1.png" alt="CPU 4 级流水线"></p>
-<p>上图中的 CPU pipeline 有四个执行阶段:</p>
-<ol>
-<li>读取指令(Fetch)；</li>
-<li>指令解码(Decode)；</li>
-<li>运行指令(Execute)；</li>
-<li>回写(Write-back)。</li>
-</ol>
-<p>假设有三条指令，在上面这个四级流水线构架下（每个阶段都会花费一个时钟周期），pipeline 执行流程如下图所示：</p>
-<p><img src="/images/system/cpu-pipeline4.png" alt="4 级流水线示例"></p>
-<p>我们知道：如果没有流水线机制，一条指令大概会花费 4 个时钟周期，而如果采用流水线机制，当第一条指令完成<code>Fetch</code>后，第二条指令就可以进行<code>Fetch</code>了，极大提高了指令的执行效率。</p>
-<p>上面是我们的期待的理想情况，而在现实环境中，如果遇到的指令是 <strong>条件跳转指令</strong>，只要当前面的指令运行到执行阶段，才能知道要选择的分支，显然这种 <strong>停顿</strong> 对于 CPU 的 pipeline 机制是非常不友好的。而 <strong>分支预测技术</strong> 正是为了解决上述问题而诞生的，CPU 会根据分支预测的结果，选择下一条指令进入流水线。待跳转指令执行完成，如果预测正确，则流水线继续执行，不会受到跳转指令的影响。如果分支预测失败，那么便需要清空流水线，重新加载正确的分支（实际上目前市面上所有处理器都采用了类似的技术）。</p>
-<h3 id="分支预测技术"><a href="#分支预测技术" class="headerlink" title="分支预测技术"></a>分支预测技术</h3><p>这里看下常见的分支预测技术，主要有：静态分支预测、动态分支预测 和 协同分支预测 三种，有兴趣的可以看下下面的几篇文章：</p>
-<ol>
-<li><a href="https://zhuanlan.zhihu.com/p/22469702" target="_blank" rel="external">深入理解CPU的分支预测(Branch Prediction)模型</a>；</li>
-<li><a href="http://djs66256.github.io/2019/01/29/2019-01-29-CPU%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/" target="_blank" rel="external">CPU分支预测</a>；</li>
-</ol>
-<p>关于这三种技术，这里就不再展开了，简单总结一下。</p>
-<ol>
-<li>静态分支预测：实现起来很简单、成本低，而且在生产中，这种预测正确率的波动范围很大；</li>
-<li>动态分支预测：根据指令的不同及历史信息（存储在一张分支历史表中 —— Branch History Table）作出相应的预测，常见的有 1-bit/n-bit 动态预测；</li>
-<li>协同分支预测：利用代码中分支跳转指令之间的关联关系，提高分支预测的准确率。</li>
-</ol>
-<h2 id="Java-中的虚函数调用"><a href="#Java-中的虚函数调用" class="headerlink" title="Java 中的虚函数调用"></a>Java 中的虚函数调用</h2><p>Java 本身没有虚函数的概念，它在 C++ 中是最常见的。在 C++ 中，虚函数通过 <code>virtual</code> 关键字定义，实现在类的继承当中，编译器通过判断对象的类型，在调用函数时，执行对应的函数。Java 中并没有显式去定义虚函数的概念，Java 中实际上每个函数都默认是一个虚函数（声明 <code>final</code> 关键字的函数除外），比如下面示例中 <code>eat()</code> 方法。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Animal</span> </span>&#123;</span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">eat</span><span class="params">()</span> </span>&#123; System.out.println(<span class="string">"I eat like a generic Animal."</span>); </span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Dog</span> <span class="keyword">extends</span> <span class="title">Animal</span> </span>&#123;</span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">eat</span><span class="params">()</span> </span>&#123; System.out.println(<span class="string">"I eat like a dog!"</span>); &#125;</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Cat</span> <span class="keyword">extends</span> <span class="title">Animal</span> </span>&#123;</span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">eat</span><span class="params">()</span> </span>&#123; System.out.println(<span class="string">"I eat like a cat!"</span>); &#125;</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">      List&lt;Animal&gt; animals = <span class="keyword">new</span> LinkedList&lt;Animal&gt;();</span><br><span class="line"></span><br><span class="line">      animals.add(<span class="keyword">new</span> Animal());</span><br><span class="line">      animals.add(<span class="keyword">new</span> Dog());</span><br><span class="line">      animals.add(<span class="keyword">new</span> Cat());</span><br><span class="line">      <span class="keyword">for</span> (Animal currentAnimal : animals) &#123;</span><br><span class="line">         currentAnimal.eat();</span><br><span class="line">      &#125;</span><br><span class="line">   &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>虚函数存在的意义就是为了实现多态，Java 通过 <strong>动态绑定</strong>，不仅实现了虚函数的功能，也使得代码逻辑更为简洁。</p>
-<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>到这里，相信大家已经对 CPU 的流水线机制及 CPU 的分支预测技术有了一定的了解。回到 code<br>上，如果代码里充满着各种不可预知的条件跳转指令，将会极大影响 CPU 的执行效率，数据库中采用的 Volcano-style execution engine（火山执行引擎）在代码中充满着各种虚函数调用（详细机制在后面内容中再介绍），在编译器中，虚函数需要调用查找虚函数表，并且虚函数调用是一个非直接跳转逻辑，在这个逻辑中，最大的代价是可能导致错误的 CPU 分支预测，一次错误的分支预测会导致需要 10 几个周期的系统开销。</p>
-<hr>
-<p>参考：</p>
-<ul>
-<li><a href="https://en.wikipedia.org/wiki/Branch_predictor" target="_blank" rel="external">Wikipedia: CPU Branch predictor</a>；</li>
-<li><a href="https://en.wikipedia.org/wiki/Instruction_pipelining" target="_blank" rel="external">Wikipedia: CPU Instruction pipelining</a>；</li>
-<li><a href="https://www.computerhope.com/jargon/b/branch-prediction.htm" target="_blank" rel="external">CPU Branch prediction</a>；</li>
-<li><a href="https://danluu.com/branch-prediction/" target="_blank" rel="external">Branch prediction</a>；</li>
-<li><a href="https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array#11227902" target="_blank" rel="external">Why is processing a sorted array faster than processing an unsorted array?</a>；</li>
-<li><a href="https://book.douban.com/subject/26912767/" target="_blank" rel="external">《深入理解计算机系统 第三版》</a>；</li>
-<li><a href="http://hengyunabc.github.io/optimization-tip-if-vs-switch/" target="_blank" rel="external">优化技巧：提前if判断帮助CPU分支预测</a>；</li>
-<li><a href="https://ericfu.me/code-gen-of-expression/" target="_blank" rel="external">JIT 代码生成技术（一）表达式编译</a>；</li>
-<li><a href="https://ericfu.me/code-gen-of-query/" target="_blank" rel="external">JIT 代码生成技术（二）查询编译执行</a>；</li>
-<li><a href="http://irootlee.com/juicer_vtable/" target="_blank" rel="external">C++性能榨汁机之虚函数的开销</a>；</li>
-<li><a href="https://www.techbelife.com/post/Talk-about-Java-virtual-functions.html#toc_2" target="_blank" rel="external">浅谈Java中的”虚函数”</a>；</li>
-<li><a href="https://juejin.im/post/5c983bd46fb9a0710a1bd3e1" target="_blank" rel="external">Java 和操作系统交互细节</a>；</li>
-</ul>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;最近在看 SQL 优化之 Code Generation 相关的内容，我们知道 Code Generation 是 SQL 优化的大杀器之一，不管是在 Apache Spark 还是 Apache Flink 中都有比较深入的应用（特别是在 Spark 中），Code Ge
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="system" scheme="http://matt33.com/tags/system/"/>
     
   </entry>
   
