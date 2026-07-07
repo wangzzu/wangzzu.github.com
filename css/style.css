@@ -243,6 +243,38 @@ div {
   box-shadow: none;
 }
 
+.adsense-unit {
+  clear: both;
+  margin: 28px 0;
+  padding: 18px 0;
+  border-top: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  text-align: center;
+  overflow: hidden;
+}
+
+.adsense-unit .adsbygoogle {
+  display: block;
+}
+
+.adsense-sidebar {
+  margin: 10px 0 0;
+  padding: 12px 0;
+  min-height: 250px;
+  background: transparent;
+}
+
+.adsense-index-bottom {
+  margin-top: 35px;
+  min-height: 90px;
+}
+
+.adsense-post-bottom {
+  margin: 25px 0 20px;
+  min-height: 90px;
+}
+
 /* title for search result or tagged posts*/
 .label-title {
   margin-top: 1.1em;
@@ -548,6 +580,10 @@ div {
   #header #nav-menu {
     position: relative;
     text-align: center;
+  }
+  .adsense-unit {
+    margin: 22px 0;
+    padding: 14px 0;
   }
   #header #nav-menu a {
     padding: 0 15px;
