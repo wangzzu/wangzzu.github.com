@@ -1,0 +1,405 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (十九)：MCP，大模型如何连接外部工具生态 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (十九)：MCP，大模型如何连接外部工具生态</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (十九)：MCP，大模型如何连接外部工具生态</h1><div class="post-meta">Jul 8, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">4,442</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/08/llm-mcp/" href="/2026/07/08/llm-mcp/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么需要-MCP"><span class="toc-number">1.</span> <span class="toc-text">为什么需要 MCP</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MCP-核心架构：Host、Client、Server"><span class="toc-number">2.</span> <span class="toc-text">MCP 核心架构：Host、Client、Server</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MCP-Server-的核心能力：Tools、Resources、Prompts"><span class="toc-number">3.</span> <span class="toc-text">MCP Server 的核心能力：Tools、Resources、Prompts</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Tools"><span class="toc-number">3.1.</span> <span class="toc-text">Tools</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Resources"><span class="toc-number">3.2.</span> <span class="toc-text">Resources</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Prompts"><span class="toc-number">3.3.</span> <span class="toc-text">Prompts</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#三者如何配合"><span class="toc-number">3.4.</span> <span class="toc-text">三者如何配合</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MCP-如何连接外部工具生态"><span class="toc-number">4.</span> <span class="toc-text">MCP 如何连接外部工具生态</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#安全治理与未来演进"><span class="toc-number">5.</span> <span class="toc-text">安全治理与未来演进</span></a></li></ol></div></div><div class="post-content"><p>大模型擅长理解语言、生成内容和进行推理，但它并不天然连接外部世界。它不知道你电脑里的文件、数据库里的最新记录、浏览器当前页面状态，也不能直接访问企业内部系统。要让模型从“回答问题”走向“完成任务”，就必须让它能够安全、标准化地读取资料、调用 API、查询数据库、访问代码仓库、操作浏览器，并触发业务工作流。</p>
+<p>在 MCP 出现之前，每个 AI 应用往往都要自己适配外部工具：代码助手要接文件系统、Git、数据库、终端和浏览器；企业助手要接飞书、Slack、Notion、工单、CRM 和数据平台；不同 Agent 框架又会重复实现类似能力。这会带来典型的 <code>N × M</code> 集成问题：N 个 AI 应用分别适配 M 个外部系统，连接方式、权限模型、工具描述和返回格式都不统一。</p>
+<a id="more"></a>
+<p>MCP，全称 <strong>Model Context Protocol</strong>，可以理解为大模型应用连接外部工具和数据源的一套开放协议。它要解决的核心问题是：让 AI 应用用统一方式发现工具、读取资源、调用能力，并把外部系统返回的结果作为上下文交给模型继续推理。简单说，MCP 不是让模型“多一个工具”，而是为大模型应用提供一套标准化、可组合、可治理的外部能力连接层。</p>
+<h2 id="为什么需要-MCP"><a href="#为什么需要-MCP" class="headerlink" title="为什么需要 MCP"></a>为什么需要 MCP</h2><p>LLM 从聊天问答走向 Agent 之后，核心变化是：模型不再只是生成一段回答，而是要围绕目标持续执行任务。</p>
+<p>比如代码 Agent 要读项目文件、查 Git diff、运行测试、分析日志并修改代码；企业助手要查询知识库、读取权限内文档、访问数据库、调用工单系统，并输出带引用的答案。</p>
+<p>这些任务背后都有一个共同点：模型必须连接外部系统。问题在于，如果每个 AI 应用都自己适配这些系统，工程复杂度会很快失控。</p>
+<p><img src="/images/llm/llm-mcp-01.png" alt="没有统一协议时，不同 AI 应用需要重复适配外部系统"></p>
+<p>这就是典型的 <code>N × M</code> 集成问题：N 个 AI 应用分别对接 M 个外部系统。每个应用都要处理工具描述、认证授权、参数校验、返回格式、错误处理和安全边界，最后很容易变成一堆彼此不兼容的私有集成。</p>
+<p>MCP 的价值，是把外部系统封装成标准 Server，让 AI 应用通过统一协议访问。</p>
+<p><img src="/images/llm/llm-mcp-02.png" alt="MCP 把外部系统封装成标准 Server，让 AI 应用通过统一协议访问"></p>
+<p>可以把 MCP 放在整个 LLM 应用架构中的位置理解成：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>典型技术</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型层</td>
+<td>理解、生成、推理</td>
+<td>LLM / Reasoning Model</td>
+</tr>
+<tr>
+<td>上下文层</td>
+<td>给模型提供资料</td>
+<td>Prompt、RAG、长上下文</td>
+</tr>
+<tr>
+<td>工具层</td>
+<td>让模型调用外部能力</td>
+<td>Function Calling、Tool Use</td>
+</tr>
+<tr>
+<td>协议层</td>
+<td>标准化工具和数据接入</td>
+<td>MCP</td>
+</tr>
+<tr>
+<td>应用层</td>
+<td>完成业务任务</td>
+<td>Agent、Copilot、企业助手</td>
+</tr>
+</tbody>
+</table>
+<p>MCP 不是替代模型，也不是替代 Prompt。它更像是大模型应用和外部世界之间的连接协议。</p>
+<p>一句话概括：<strong>Function Calling 让模型知道可以调用什么函数，MCP 则进一步标准化这些函数、资源和提示模板从哪里来、如何被发现、如何被调用。</strong></p>
+<h2 id="MCP-核心架构：Host、Client、Server"><a href="#MCP-核心架构：Host、Client、Server" class="headerlink" title="MCP 核心架构：Host、Client、Server"></a>MCP 核心架构：Host、Client、Server</h2><p>MCP 采用的是 <strong>Host / Client / Server</strong> 架构。理解这三个角色，是理解 MCP 的关键。很多人第一次看 MCP 时，容易把 Client 和 Server 的关系理解反：在 MCP 里，<strong>AI 应用一侧是 Host 和 Client，外部工具一侧才是 Server</strong>。</p>
+<p><img src="/images/llm/llm-mcp-03.png" alt="MCP 核心架构"></p>
+<p>一个 Host 可以创建多个 MCP Client，每个 Client 通常连接一个 MCP Server。三个角色的关系可以这样理解：</p>
+<ol>
+<li><strong>Host：AI 应用本身，</strong>位于 AI 应用内部，比如 Claude Desktop、代码编辑器、Agent 平台、企业 AI 助手。它负责用户交互、模型调用、上下文组织，以及决定哪些工具结果进入模型。</li>
+<li><strong>Client：Host 内部的连接器，</strong>Client 由 Host 创建，用来和某个 MCP Server 建立连接、发送请求、接收结果。一个 Host 可以同时维护多个 Client，从而连接多个外部系统。</li>
+<li><strong>Server：外部能力提供方，</strong>Server 位于工具或数据源一侧，可以运行在本地，也可以运行在远程。它负责暴露文件、数据库、API、浏览器操作、企业系统等能力。</li>
+</ol>
+<p>MCP 协议层基于 <strong>JSON-RPC 2.0</strong> 消息通信，并包含生命周期管理、能力协商、工具发现、资源读取、Prompt 获取和通知等机制。一个典型流程可以简化为四步：</p>
+<ol>
+<li><strong>连接初始化</strong>：Client 和 Server 建立连接，并进行能力协商；</li>
+<li><strong>能力发现</strong>：Client 获取 Server 暴露的 Tools、Resources、Prompts；</li>
+<li><strong>模型决策</strong>：Host 将可用能力组织进上下文，模型决定是否调用；</li>
+<li><strong>结果回传</strong>：Server 执行调用并返回结果，Host 再交给模型继续推理。</li>
+</ol>
+<p><img src="/images/llm/llm-mcp-04.png" alt="MCP 的核心流程是连接初始化、能力发现、工具调用和结果回传"></p>
+<p>MCP 的通信方式主要有两类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>通信方式</strong></th>
+<th><strong>适合场景</strong></th>
+<th><strong>特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>stdio</td>
+<td>本地 Server</td>
+<td>适合桌面应用、代码助手、本地文件系统</td>
+</tr>
+<tr>
+<td>Streamable HTTP</td>
+<td>远程 Server</td>
+<td>适合企业服务、云端工具、多人共享能力</td>
+</tr>
+</tbody>
+</table>
+<p>所以，MCP 既可以用于本地桌面 Agent，也可以用于企业内部工具平台。前者更适合连接本机文件、终端、浏览器；后者更适合连接企业知识库、数据库、工单系统和内部 API。</p>
+<h2 id="MCP-Server-的核心能力：Tools、Resources、Prompts"><a href="#MCP-Server-的核心能力：Tools、Resources、Prompts" class="headerlink" title="MCP Server 的核心能力：Tools、Resources、Prompts"></a>MCP Server 的核心能力：Tools、Resources、Prompts</h2><p>MCP Server 的核心价值，不是简单把一个 API 暴露出去，而是把外部系统的能力标准化描述出来，让 Host 可以通过 Client 统一发现、读取和调用。</p>
+<p>这一节重点讨论 MCP Server 暴露给 Client 的三类核心 primitives：Tools、Resources、Prompts。需要注意的是，MCP 协议并不只有这三类能力，它还包括 Sampling、Elicitation、Logging 等 Client 侧 primitives，主要用于模型采样、用户信息补充和日志通知等场景。本文先聚焦 Server 如何向大模型应用提供外部能力，这些 Client 侧能力暂不展开。</p>
+<p>简单理解，这三类对象分别对应三件事：</p>
+<ul>
+<li>Tools：模型可以触发什么动作；</li>
+<li>Resources：模型可以读取什么上下文；</li>
+<li>Prompts：某类任务应该如何组织提示词和工作流。</li>
+</ul>
+<p><img src="/images/llm/llm-mcp-05.png" alt="MCP Server 的核心能力：Tools、Resources、Prompts"></p>
+<p>需要注意的是：<strong>MCP Server 是把能力暴露给 MCP Client，真正决定是否交给模型使用的是 Host</strong>。模型通过 Host/Client 来访问 Server。</p>
+<h3 id="Tools"><a href="#Tools" class="headerlink" title="Tools"></a>Tools</h3><p>Tools 是 MCP Server 暴露的可执行能力，适合表达“做一件事”。比如查询订单、执行 SQL、搜索代码、打开网页、创建工单、发送消息等。一个 Tool 通常需要描述清楚几件事：</p>
+<table>
+<thead>
+<tr>
+<th><strong>字段</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>name</td>
+<td>工具唯一名称，供调用时定位工具</td>
+</tr>
+<tr>
+<td>description</td>
+<td>告诉模型这个工具什么时候该用</td>
+</tr>
+<tr>
+<td>inputSchema</td>
+<td>用 JSON Schema 描述输入参数</td>
+</tr>
+<tr>
+<td>output / response</td>
+<td>工具执行后的返回内容，通常体现在 <code>tools/call</code> 的响应里</td>
+</tr>
+</tbody>
+</table>
+<p>例如，一个订单查询工具可以这样描述：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"name"</span>: <span class="string">"query_order"</span>,</span><br><span class="line">  <span class="attr">"description"</span>: <span class="string">"根据订单 ID 查询订单状态"</span>,</span><br><span class="line">  <span class="attr">"inputSchema"</span>: &#123;</span><br><span class="line">    <span class="attr">"type"</span>: <span class="string">"object"</span>,</span><br><span class="line">    <span class="attr">"properties"</span>: &#123;</span><br><span class="line">      <span class="attr">"order_id"</span>: &#123;</span><br><span class="line">        <span class="attr">"type"</span>: <span class="string">"string"</span>,</span><br><span class="line">        <span class="attr">"description"</span>: <span class="string">"订单 ID"</span></span><br><span class="line">      &#125;</span><br><span class="line">    &#125;,</span><br><span class="line">    <span class="attr">"required"</span>: [<span class="string">"order_id"</span>]</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>当模型判断需要查询订单时，Host 会把工具调用转发给对应的 MCP Server：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"jsonrpc"</span>: <span class="string">"2.0"</span>,</span><br><span class="line">  <span class="attr">"id"</span>: <span class="number">2</span>,</span><br><span class="line">  <span class="attr">"method"</span>: <span class="string">"tools/call"</span>,</span><br><span class="line">  <span class="attr">"params"</span>: &#123;</span><br><span class="line">    <span class="attr">"name"</span>: <span class="string">"query_order"</span>,</span><br><span class="line">    <span class="attr">"arguments"</span>: &#123;</span><br><span class="line">      <span class="attr">"order_id"</span>: <span class="string">"ORD-20260707-001"</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Tools 的关键价值是：<strong>让模型从“只生成文本”变成“可以触发外部动作”</strong>。但 <strong>Tool 也是风险最高的一类能力</strong>，因为它可能改变外部系统状态。所以生产系统里，Tool 一定要配合权限控制、参数校验、调用审计和高风险确认。</p>
+<h3 id="Resources"><a href="#Resources" class="headerlink" title="Resources"></a>Resources</h3><p>Resources 是 MCP Server 暴露的数据资源，适合表达“读一份信息”。比如文件内容、数据库 Schema、API 文档、项目 README、网页内容、企业文档、应用运行状态等。Resource 通常通过 URI 标识：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"uri"</span>: <span class="string">"file:///project/README.md"</span>,</span><br><span class="line">  <span class="attr">"name"</span>: <span class="string">"README.md"</span>,</span><br><span class="line">  <span class="attr">"description"</span>: <span class="string">"项目说明文档"</span>,</span><br><span class="line">  <span class="attr">"mimeType"</span>: <span class="string">"text/markdown"</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>读取资源时，Client 可以发送：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"jsonrpc"</span>: <span class="string">"2.0"</span>,</span><br><span class="line">  <span class="attr">"id"</span>: <span class="number">3</span>,</span><br><span class="line">  <span class="attr">"method"</span>: <span class="string">"resources/read"</span>,</span><br><span class="line">  <span class="attr">"params"</span>: &#123;</span><br><span class="line">    <span class="attr">"uri"</span>: <span class="string">"file:///project/README.md"</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Resources 的关键价值是：<strong>让模型获得外部上下文，但不一定执行动作</strong>。这类能力更适合给模型补充事实依据，例如“当前项目结构是什么”“数据库有哪些表”“这份文档里写了什么”。</p>
+<p>Resources 和 RAG 有点像，但它们不是同一层东西：</p>
+<table>
+<thead>
+<tr>
+<th><strong>对比项</strong></th>
+<th><strong>RAG</strong></th>
+<th><strong>MCP Resources</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>核心目标</td>
+<td>检索相关知识</td>
+<td>标准化暴露外部资源</td>
+</tr>
+<tr>
+<td>典型对象</td>
+<td>文档 chunk、向量索引</td>
+<td>文件、Schema、API 响应、应用状态</td>
+</tr>
+<tr>
+<td>触发方式</td>
+<td>根据问题召回</td>
+<td>按资源列表或 URI 读取</td>
+</tr>
+<tr>
+<td>关注重点</td>
+<td>检索质量、排序、引用</td>
+<td>协议、权限、资源描述、上下文接入</td>
+</tr>
+<tr>
+<td>关系</td>
+<td>可以封装成 MCP Server</td>
+<td>可以承载 RAG、文件、数据库等资源入口</td>
+</tr>
+</tbody>
+</table>
+<p>简单说：<strong>RAG 更像知识检索方案，MCP Resources 更像外部上下文接入协议。</strong></p>
+<h3 id="Prompts"><a href="#Prompts" class="headerlink" title="Prompts"></a>Prompts</h3><p>Prompts 是 MCP Server 提供的提示词模板或工作流模板。它适合把某类任务的经验沉淀下来，比如代码审查、SQL 分析、故障排查、文档总结、安全审计等。例如，一个代码审查 Prompt 可以这样描述：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"name"</span>: <span class="string">"code_review"</span>,</span><br><span class="line">  <span class="attr">"description"</span>: <span class="string">"对代码进行质量审查并给出修改建议"</span>,</span><br><span class="line">  <span class="attr">"arguments"</span>: [</span><br><span class="line">    &#123;</span><br><span class="line">      <span class="attr">"name"</span>: <span class="string">"code"</span>,</span><br><span class="line">      <span class="attr">"description"</span>: <span class="string">"需要审查的代码"</span>,</span><br><span class="line">      <span class="attr">"required"</span>: <span class="literal">true</span></span><br><span class="line">    &#125;</span><br><span class="line">  ]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>获取 Prompt 时：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"jsonrpc"</span>: <span class="string">"2.0"</span>,</span><br><span class="line">  <span class="attr">"id"</span>: <span class="number">4</span>,</span><br><span class="line">  <span class="attr">"method"</span>: <span class="string">"prompts/get"</span>,</span><br><span class="line">  <span class="attr">"params"</span>: &#123;</span><br><span class="line">    <span class="attr">"name"</span>: <span class="string">"code_review"</span>,</span><br><span class="line">    <span class="attr">"arguments"</span>: &#123;</span><br><span class="line">      <span class="attr">"code"</span>: <span class="string">"def hello(): print('world')"</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Prompts 的关键价值是：<strong>把领域任务经验沉淀成可复用模板，而不是让每个用户从零写提示词</strong>。</p>
+<p>这对企业系统尤其重要。因为企业内部往往有固定的代码审查规范、事故复盘格式、数据分析模板、客服回复风格。如果这些经验只写在文档里，模型未必能稳定遵循；如果沉淀成 MCP Prompt，Host 就可以按标准方式获取并复用。</p>
+<h3 id="三者如何配合"><a href="#三者如何配合" class="headerlink" title="三者如何配合"></a>三者如何配合</h3><p>Tools、Resources、Prompts 不是彼此孤立的。真正的 Agent 任务里，它们通常会组合使用：Prompt 负责给出任务模板，Resources 负责提供上下文，Tools 负责执行动作。如下图所示：</p>
+<p><img src="/images/llm/llm-mcp-06.png" alt="Prompts 组织任务，Resources 提供上下文，Tools 执行动作"></p>
+<p>例如，一个“分析线上故障”的 Agent 可以先通过 <strong>Prompts</strong> 获取故障排查模板，再通过 <strong>Resources</strong> 读取服务拓扑、监控指标和错误日志，必要时通过 <strong>Tools</strong> 查询工单、执行只读诊断命令、拉取最近发布记录。工具结果会继续回到上下文中，模型再基于这些信息分析故障原因、影响范围和修复建议。</p>
+<p>所以 MCP 的硬核点不只是“能调用工具”，而是把外部能力拆成了三类标准接口：<strong>Prompts 组织任务，Resources 提供上下文，Tools 执行动作</strong>。这套抽象让不同 AI 应用不必重复发明工具协议，也让外部系统可以用统一方式进入 Agent 生态。</p>
+<h2 id="MCP-如何连接外部工具生态"><a href="#MCP-如何连接外部工具生态" class="headerlink" title="MCP 如何连接外部工具生态"></a>MCP 如何连接外部工具生态</h2><p>MCP 真正有价值的地方，不是让模型多调用一个工具，而是把外部系统封装成一组标准化、可组合、可治理的 Server。这样不同 AI 应用就不需要重复适配文件系统、数据库、浏览器、企业系统和开发工具，而是通过统一协议发现和调用这些能力。</p>
+<p><img src="/images/llm/llm-mcp-07.png" alt="MCP Server 可以把不同外部系统标准化接入同一个 Agent"></p>
+<p>常见的 MCP Server 大致可以分成几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Server 类型</strong></th>
+<th><strong>暴露的能力</strong></th>
+<th><strong>典型场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文件系统 / 代码仓库</td>
+<td>读写文件、搜索目录、查看 Git diff</td>
+<td>代码理解、代码修改、项目分析</td>
+</tr>
+<tr>
+<td>数据库 / 数据平台</td>
+<td>Schema、只读 SQL、样例数据、报表摘要</td>
+<td>数据分析、指标解释、业务问答</td>
+</tr>
+<tr>
+<td>浏览器 / UI 环境</td>
+<td>打开页面、读取 DOM、截图、点击、填表</td>
+<td>UI Agent、网页操作、自动化测试</td>
+</tr>
+<tr>
+<td>企业系统</td>
+<td>文档、工单、CRM、审批、IM、监控告警</td>
+<td>企业助手、运维助手、工作流自动化</td>
+</tr>
+<tr>
+<td>开发工具</td>
+<td>CI、日志、Tracing、部署记录、监控</td>
+<td>故障排查、发布分析、代码 Agent</td>
+</tr>
+</tbody>
+</table>
+<p>这里最关键的不是“能不能接上”，而是 <strong>接入后能不能被 Agent 稳定使用</strong>。</p>
+<p>例如数据库 Server 不应该默认给模型任意 SQL 权限，更合理的方式是只读访问、限制库表、限制返回行数、执行前校验 SQL，并把所有查询写入审计日志。浏览器 Server 也类似，模型可以读取页面和截图，但点击、提交、购买、删除等动作应该有明确权限边界。</p>
+<p>对 Agent 来说，MCP 的意义更大。因为 Agent 不是一次性调用工具，而是会在任务执行过程中不断规划、调用、观察和修正。</p>
+<p><img src="/images/llm/llm-mcp-08.png" alt="MCP 可以成为 Agent 工具发现和调用的标准协议层"></p>
+<p>这也是 MCP 和普通 API 调用最大的区别之一：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方式</strong></th>
+<th><strong>特点</strong></th>
+<th><strong>局限</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>普通 API 调用</td>
+<td>开发者提前写死接口调用逻辑</td>
+<td>每个应用都要重复适配</td>
+</tr>
+<tr>
+<td>Function Calling</td>
+<td>模型输出函数名和参数，应用执行对应函数</td>
+<td>工具来源、发现、资源读取仍依赖应用自定义</td>
+</tr>
+<tr>
+<td>MCP</td>
+<td>Server 标准化暴露 Tools、Resources、Prompts，Host 统一发现和调用</td>
+<td>仍需要权限、安全、审计等生产治理</td>
+</tr>
+</tbody>
+</table>
+<p>简单说，MCP 让工具生态从“应用内硬编码”走向“协议化接入”。这会让外部能力更容易复用，也让 Agent 更容易在多个系统之间组合完成任务。</p>
+<h2 id="安全治理与未来演进"><a href="#安全治理与未来演进" class="headerlink" title="安全治理与未来演进"></a>安全治理与未来演进</h2><p>MCP 让模型可以连接更多外部系统，也意味着风险会同步放大。一旦模型能读文件、查数据库、操作浏览器、调用企业 API，错误输出就不只是“答错一句话”，而可能变成真实的业务影响。核心风险可以分成几类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>风险</strong></th>
+<th><strong>说明</strong></th>
+<th><strong>示例</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据越权</td>
+<td>模型读取了用户无权访问的数据</td>
+<td>查询跨部门文档、数据库越权</td>
+</tr>
+<tr>
+<td>工具误调用</td>
+<td>模型调用了错误工具或传错参数</td>
+<td>修改错误工单、发错消息</td>
+</tr>
+<tr>
+<td>高风险操作</td>
+<td>模型触发写入、删除、支付等动作</td>
+<td>删除文件、提交审批、下单</td>
+</tr>
+<tr>
+<td>Prompt Injection</td>
+<td>外部文档诱导模型忽略规则</td>
+<td>网页里隐藏恶意指令</td>
+</tr>
+<tr>
+<td>工具投毒</td>
+<td>Server 或工具描述不可信</td>
+<td>恶意 Server 伪装成可信工具</td>
+</tr>
+<tr>
+<td>结果污染</td>
+<td>工具返回内容未经校验就进入上下文</td>
+<td>错误数据影响最终结论</td>
+</tr>
+<tr>
+<td>审计缺失</td>
+<td>无法回放模型调用链路</td>
+<td>出问题后不知道调用了什么</td>
+</tr>
+</tbody>
+</table>
+<p>MCP 系统的安全边界应该覆盖连接、权限、调用、结果和审计全链路。</p>
+<p><img src="/images/llm/llm-mcp-09.png" alt="MCP 的安全治理需要覆盖连接、权限、调用、结果和审计全链路"></p>
+<p>生产级 MCP 落地时，可以重点把握几条原则：</p>
+<ol>
+<li><strong>Server 必须可信</strong>：只允许连接可信 MCP Server，不要让用户随意加载未知 Server。尤其是能访问文件、浏览器、数据库和企业系统的 Server。</li>
+<li><strong>Tool 最小权限</strong>：每个 Tool 只暴露完成任务所需的最小能力。能只读就不要写，能查询单表就不要开放全库。</li>
+<li><strong>高风险动作显式确认</strong>：写文件、删除数据、发送消息、提交审批、支付、下单等动作，都应该有人类确认或审批流。</li>
+<li><strong>输入输出都要校验</strong>：Server 要校验工具输入，Host 也要校验工具结果。外部内容不能直接无处理地进入模型上下文。</li>
+<li><strong>防 Prompt Injection</strong>：外部资源中的内容必须视为不可信数据，而不是系统指令。网页、文档、邮件、工单评论尤其需要注意。</li>
+<li><strong>审计与回放</strong>：每次工具调用都应该记录：谁发起、调用了哪个 Server、哪个 Tool、参数是什么、返回了什么、是否经过确认。</li>
+<li><strong>版本与兼容</strong>：MCP 有协议版本、Server 版本、工具 Schema 版本。生产环境要避免 Server 升级后工具含义变化，导致 Agent 行为漂移。</li>
+</ol>
+<p>MCP 和现有技术的关系可以这样理解：</p>
+<table>
+<thead>
+<tr>
+<th><strong>技术</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>和 MCP 的关系</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prompt</td>
+<td>如何表达任务</td>
+<td>MCP Prompts 可以沉淀任务模板</td>
+</tr>
+<tr>
+<td>RAG</td>
+<td>如何检索外部知识</td>
+<td>RAG 可以封装成 MCP Server</td>
+</tr>
+<tr>
+<td>Function Calling</td>
+<td>如何让模型调用函数</td>
+<td>MCP 标准化工具发现和调用来源</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td>如何规划和执行任务</td>
+<td>MCP 提供工具生态接入层</td>
+</tr>
+<tr>
+<td>API Gateway</td>
+<td>如何治理服务调用</td>
+<td>MCP 仍需要网关、权限和审计配合</td>
+</tr>
+<tr>
+<td>Plugin</td>
+<td>如何扩展某个应用</td>
+<td>MCP 更偏跨应用、跨工具的协议化连接</td>
+</tr>
+</tbody>
+</table>
+<p>未来 MCP 可能会成为 Agent 应用的重要基础设施。它不会替代模型，也不会替代业务系统，而是把模型、上下文、工具和工作流之间的连接标准化。</p>
+<p>一句话概括：<strong>MCP 的核心价值，不是让模型多一个工具，而是让大模型应用拥有一套标准化、可组合、可治理的外部能力连接层。</strong>它让文件、数据库、浏览器、企业系统和 Agent 工具生态可以被统一暴露、统一发现、统一调用，也让大模型从“会回答问题”进一步走向“能连接系统、执行任务、参与工作流”。</p>
+<hr>
+<p>参考</p>
+<ul>
+<li><a href="https://modelcontextprotocol.io/docs/getting-started/intro" target="_blank" rel="external">What is the Model Context Protocol?</a></li>
+<li><a href="https://modelcontextprotocol.io/docs/learn/architecture" target="_blank" rel="external">MCP Architecture overview</a></li>
+<li><a href="https://modelcontextprotocol.io/docs/learn/server-concepts" target="_blank" rel="external">Understanding MCP servers</a></li>
+<li><a href="https://modelcontextprotocol.io/specification/2025-06-18" target="_blank" rel="external">MCP Specification 2025-06-18</a></li>
+</ul>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/08/llm-mcp/" data-id="cmrc8pxgz0000jflwaa1nl83m" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/07/07/llm-prompt-context-engineering/" class="next">LLM 系列 (十八)：提示词与上下文工程，如何更好地调用大模型能力</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/08/llm-mcp/';
+var disqus_title = 'LLM 系列 (十九)：MCP，大模型如何连接外部工具生态';
+var disqus_url = 'http://matt33.com/2026/07/08/llm-mcp/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/07/08/llm-mcp/">LLM 系列 (十九)：MCP，大模型如何连接外部工具生态</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/07/llm-prompt-context-engineering/">LLM 系列 (十八)：提示词与上下文工程，如何更好地调用大模型能力</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/06/llm-finetune-lora/">LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/05/llm-eval-safety/">LLM 系列 (十六)：评测与安全，如何判断大模型是否真正可靠</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/05/llm-multimodal/">LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/04/llm-agent/">LLM 系列 (十四)：Agent，大模型如何从对话走向行动</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/03/llm-rag/">LLM 系列 (十三)：RAG，大模型如何连接外部知识</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/02/llm-pretraining-data-engineering/">LLM 系列 (十二)：预训练数据工程：大模型的燃料是如何炼成的</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/01/llm-long-context/">LLM 系列 (十一)：长上下文：大模型如何读懂更长的信息</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/06/30/llm-reasoning-model/">LLM 系列 (十)：推理模型：大模型如何从回答走向思考</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
