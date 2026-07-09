@@ -1,0 +1,759 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</h1><div class="post-meta">Jul 9, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">6,415</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/09/llm-model-compression/" href="/2026/07/09/llm-model-compression/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么需要模型压缩"><span class="toc-number">1.</span> <span class="toc-text">为什么需要模型压缩</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#参数显存"><span class="toc-number">1.1.</span> <span class="toc-text">参数显存</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#计算开销"><span class="toc-number">1.2.</span> <span class="toc-text">计算开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#KV-Cache"><span class="toc-number">1.3.</span> <span class="toc-text">KV Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#系统调度开销"><span class="toc-number">1.4.</span> <span class="toc-text">系统调度开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#压缩目标"><span class="toc-number">1.5.</span> <span class="toc-text">压缩目标</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#量化：用更低精度表示模型"><span class="toc-number">2.</span> <span class="toc-text">量化：用更低精度表示模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#量化的基本原理"><span class="toc-number">2.1.</span> <span class="toc-text">量化的基本原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#量化主要压哪里"><span class="toc-number">2.2.</span> <span class="toc-text">量化主要压哪里</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#为什么-INT4-不一定比-INT8-快"><span class="toc-number">2.3.</span> <span class="toc-text">为什么 INT4 不一定比 INT8 快</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PTQ-与-QAT"><span class="toc-number">2.4.</span> <span class="toc-text">PTQ 与 QAT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#量化的核心难点：Outlier"><span class="toc-number">2.5.</span> <span class="toc-text">量化的核心难点：Outlier</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#剪枝、蒸馏与低秩分解：从结构上变小"><span class="toc-number">3.</span> <span class="toc-text">剪枝、蒸馏与低秩分解：从结构上变小</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#剪枝：删掉低重要性结构"><span class="toc-number">3.1.</span> <span class="toc-text">剪枝：删掉低重要性结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#蒸馏：让小模型学习大模型"><span class="toc-number">3.2.</span> <span class="toc-text">蒸馏：让小模型学习大模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#低秩分解：用小矩阵近似大矩阵"><span class="toc-number">3.3.</span> <span class="toc-text">低秩分解：用小矩阵近似大矩阵</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#三类方法如何选择"><span class="toc-number">3.4.</span> <span class="toc-text">三类方法如何选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#KV-Cache-优化与-Speculative-Decoding"><span class="toc-number">4.</span> <span class="toc-text">KV Cache 优化与 Speculative Decoding</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#KV-Cache-为什么贵"><span class="toc-number">4.1.</span> <span class="toc-text">KV Cache 为什么贵</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#KV-Cache-的优化方向"><span class="toc-number">4.2.</span> <span class="toc-text">KV Cache 的优化方向</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Speculative-Decoding：用小模型加速大模型"><span class="toc-number">4.3.</span> <span class="toc-text">Speculative Decoding：用小模型加速大模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Speculative-Decoding-的关键指标"><span class="toc-number">4.4.</span> <span class="toc-text">Speculative Decoding 的关键指标</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#工程选型与总结"><span class="toc-number">5.</span> <span class="toc-text">工程选型与总结</span></a></li></ol></div></div><div class="post-content"><p>大模型能力越来越强，但推理成本也越来越高：参数规模变大，显存占用上升，计算开销增加，长上下文带来更大的 KV Cache，线上服务还要面对延迟、吞吐和并发压力。对于真实业务系统来说，模型不只是“能不能答得好”，还要看它能不能在可接受的成本和延迟下稳定运行。</p>
+<p>模型压缩要解决的正是这个问题：在尽量少损失模型能力的前提下，降低参数存储、显存占用、计算开销和生成延迟。它不是单一技术，而是一组面向推理降本提速的系统优化方法，包括量化、剪枝、蒸馏、低秩分解、KV Cache 优化和 Speculative Decoding。</p>
+<p>这一篇我们重点看清楚：大模型推理成本到底来自哪里，不同压缩技术分别优化哪一部分，以及在生产环境里应该如何根据瓶颈选择合适的压缩与加速方案。</p>
+<a id="more"></a>
+<h2 id="为什么需要模型压缩"><a href="#为什么需要模型压缩" class="headerlink" title="为什么需要模型压缩"></a>为什么需要模型压缩</h2><p>大模型推理成本，主要来自四个部分：<strong>模型权重、计算开销、KV Cache 和系统调度开销</strong>。模型压缩并不是只把参数文件变小，而是要围绕这几类成本做整体优化。可以先用一张图理解，如下所示：</p>
+<p><img src="/images/llm/llm-model-compression-01.png" alt="模型压缩不是只压参数，还要看计算、KV Cache 和系统执行路径"></p>
+<h3 id="参数显存"><a href="#参数显存" class="headerlink" title="参数显存"></a>参数显存</h3><p>模型权重占用可以粗略估算为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">权重显存 ≈ 参数量 × 每个参数字节数</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<table>
+<thead>
+<tr>
+<th><strong>精度</strong></th>
+<th><strong>每个参数字节数</strong></th>
+<th><strong>13B 模型权重显存</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP32</td>
+<td>4 bytes</td>
+<td>约 52 GB</td>
+</tr>
+<tr>
+<td>FP16 / BF16</td>
+<td>2 bytes</td>
+<td>约 26 GB</td>
+</tr>
+<tr>
+<td>INT8</td>
+<td>1 byte</td>
+<td>约 13 GB</td>
+</tr>
+<tr>
+<td>INT4</td>
+<td>0.5 byte</td>
+<td>约 6.5 GB</td>
+</tr>
+</tbody>
+</table>
+<p>这里算的只是<strong>模型权重</strong>，不包含 KV Cache、运行时 buffer、batch 调度和框架额外开销。量化最直接的收益，就是让同一个模型用更低精度存储，从而降低权重显存和内存带宽压力。</p>
+<h3 id="计算开销"><a href="#计算开销" class="headerlink" title="计算开销"></a>计算开销</h3><p>Transformer 推理主要由矩阵乘法构成，尤其是 Attention 投影矩阵和 FFN / MLP 矩阵。推理阶段可以分成两段：</p>
+<ol>
+<li><strong>Prefill</strong>：处理完整输入上下文，Attention 需要看见整段序列，长上下文下计算和显存压力很高；</li>
+<li><strong>Decode</strong>：逐 token 生成，每一步都要经过所有层，并访问历史 KV Cache。</li>
+</ol>
+<p>可以简化理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">每 token 计算量 ≈ 层数 × hidden_size² × 常数项</span><br></pre></td></tr></table></figure>
+<p>这不是严格公式，但能说明核心趋势：层数越多、hidden size 越大，矩阵计算越重。Dense Transformer 每个 token 通常都会经过完整网络路径，所以大模型推理经常不是“算不出来”，而是“算得太贵、太慢”。</p>
+<h3 id="KV-Cache"><a href="#KV-Cache" class="headerlink" title="KV Cache"></a>KV Cache</h3><p>在自回归生成中，模型每生成一个新 token，都需要访问历史 token 的 Key / Value。为了避免重复计算，系统会把每层 Attention 的 K/V 缓存下来，这就是 KV Cache。KV Cache 可以粗略估算为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KV Cache ≈ 2 × layers × tokens × kv_heads × head_dim × bytes × batch_size</span><br></pre></td></tr></table></figure>
+<p>其中 <code>2</code> 表示 Key 和 Value。这意味着：上下文越长、batch 越大、并发越高，KV Cache 占用就越大。长上下文场景里，瓶颈经常不是模型权重，而是 KV Cache。</p>
+<h3 id="系统调度开销"><a href="#系统调度开销" class="headerlink" title="系统调度开销"></a>系统调度开销</h3><p>除了模型权重、计算量和 KV Cache，推理系统本身也会带来额外开销。比如连续批处理、请求调度、kernel 启动、张量并行通信、显存碎片、KV block 管理，都会影响最终的延迟和吞吐。</p>
+<p>这也是为什么模型文件变小之后，推理速度不一定线性提升。真实服务里的性能瓶颈，往往是模型计算、内存带宽、缓存管理和调度策略共同作用的结果。因此，模型压缩通常要和推理引擎优化一起看，而不是只看参数量或模型大小。</p>
+<h3 id="压缩目标"><a href="#压缩目标" class="headerlink" title="压缩目标"></a>压缩目标</h3><p>所以模型压缩可以拆成几类目标：</p>
+<table>
+<thead>
+<tr>
+<th><strong>目标</strong></th>
+<th><strong>典型方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>降低权重显存</td>
+<td>量化、剪枝、低秩分解</td>
+</tr>
+<tr>
+<td>降低计算成本</td>
+<td>量化、剪枝、蒸馏</td>
+</tr>
+<tr>
+<td>降低 KV Cache 成本</td>
+<td>GQA / MQA、KV 量化、Sliding Window / KV Eviction、PagedAttention</td>
+</tr>
+<tr>
+<td>降低生成延迟与提升吞吐</td>
+<td>Speculative Decoding、Prefix Cache、批处理调度</td>
+</tr>
+<tr>
+<td>提升系统执行效率</td>
+<td>Continuous Batching、PagedAttention、Prefix Cache、请求调度</td>
+</tr>
+</tbody>
+</table>
+<p>一句话概括：<strong>模型压缩不是简单把模型文件变小，而是围绕推理成本，对权重、计算、缓存和系统执行路径做整体优化。</strong></p>
+<h2 id="量化：用更低精度表示模型"><a href="#量化：用更低精度表示模型" class="headerlink" title="量化：用更低精度表示模型"></a>量化：用更低精度表示模型</h2><p>量化是大模型压缩里最常见、最实用的一类方法。它的核心思想是：不再总是用 FP16 / BF16 存储和计算模型权重，而是用 INT8、INT4、FP8 等更低精度表示权重、激活值或 KV Cache。量化的收益主要来自两点：</p>
+<ol>
+<li><strong>降低显存占用</strong>：同样数量的参数，用更少 bit 存储；</li>
+<li><strong>降低内存带宽压力</strong>：推理时从显存读取的数据更少。</li>
+</ol>
+<p>但量化不是“无损压缩”。它本质上是用更低数值精度近似原始浮点数，因此一定会引入量化误差。真正的难点不是把模型变成 INT4，而是控制误差，让模型能力尽量不下降。</p>
+<h3 id="量化的基本原理"><a href="#量化的基本原理" class="headerlink" title="量化的基本原理"></a>量化的基本原理</h3><p>量化的基本原理，是用低精度数值近似表示原来的高精度浮点数。可以把它理解成：先统计一组浮点数的范围，再用有限的整数刻度去近似表示它们。一个常见的非对称量化形式可以写成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">q = round(x / scale) + zero_point</span><br><span class="line">x_hat = scale × (q - zero_point)</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<table>
+<thead>
+<tr>
+<th><strong>符号</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>x</td>
+<td>原始浮点值</td>
+</tr>
+<tr>
+<td>q</td>
+<td>量化后的整数值</td>
+</tr>
+<tr>
+<td>scale</td>
+<td>缩放因子</td>
+</tr>
+<tr>
+<td>zero_point</td>
+<td>零点偏移</td>
+</tr>
+<tr>
+<td>x_hat</td>
+<td>反量化后的近似值</td>
+</tr>
+</tbody>
+</table>
+<p>这里展示的是非对称量化。如果采用对称量化，<code>zero_point</code> 通常为 0，公式可以简化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">q = round(x / scale)</span><br><span class="line">x_hat = scale × q</span><br></pre></td></tr></table></figure>
+<p>在 LLM 权重量化中，更常见的是分组量化或通道级量化：不同 group 或 channel 使用不同的 <code>scale</code>，以减少 outlier 对整体量化范围的影响。不同实现会在精度、速度和显存之间做取舍。</p>
+<p><img src="/images/llm/llm-model-compression-02.png" alt="量化通过低精度表示减少权重显存和内存带宽压力"></p>
+<p>例如，对于 INT8 来说，通常只有 256 个可表示刻度；对于 INT4，则只有 16 个刻度。刻度越少，压缩率越高，但表示误差也越大。</p>
+<h3 id="量化主要压哪里"><a href="#量化主要压哪里" class="headerlink" title="量化主要压哪里"></a>量化主要压哪里</h3><p>量化可以作用在不同对象上：</p>
+<table>
+<thead>
+<tr>
+<th><strong>类型</strong></th>
+<th><strong>量化对象</strong></th>
+<th><strong>说明</strong></th>
+<th><strong>难度</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Weight-only Quantization</td>
+<td>权重</td>
+<td>只量化模型权重，激活仍用 FP16 / BF16</td>
+<td>相对简单，常见于 INT4 / INT8 推理</td>
+</tr>
+<tr>
+<td>Weight + Activation Quantization</td>
+<td>权重 + 激活</td>
+<td>权重和激活都量化，计算加速潜力更大</td>
+<td>更难，需要更细致校准</td>
+</tr>
+<tr>
+<td>KV Cache Quantization</td>
+<td>KV Cache</td>
+<td>用低精度存储 Key / Value</td>
+<td>适合长上下文和高并发</td>
+</tr>
+<tr>
+<td>FP8 Quantization</td>
+<td>权重 / 激活</td>
+<td>使用 FP8 做训练或推理</td>
+<td>依赖硬件和框架支持</td>
+</tr>
+</tbody>
+</table>
+<p>其中 <strong>Weight-only Quantization</strong> 最常见，因为它对模型结构侵入较小，也更容易落地。<br>而 <strong>Weight + Activation Quantization</strong> 理论上加速潜力更大，但激活值随输入变化，分布更不稳定，所以更难做好。</p>
+<h3 id="为什么-INT4-不一定比-INT8-快"><a href="#为什么-INT4-不一定比-INT8-快" class="headerlink" title="为什么 INT4 不一定比 INT8 快"></a>为什么 INT4 不一定比 INT8 快</h3><p>很多人会直觉认为：INT4 比 INT8 更小，所以一定更快。实际不一定。推理速度不只取决于模型文件大小，还取决于：</p>
+<ol>
+<li>GPU / NPU 是否原生支持对应精度；</li>
+<li>kernel 是否针对 INT4 做了优化；</li>
+<li>计算时是否需要频繁反量化；</li>
+<li>batch size 和矩阵形状是否适合低精度 kernel；</li>
+<li>瓶颈到底在计算，还是在内存带宽。</li>
+</ol>
+<p>INT4 的主要优势是：</p>
+<ol>
+<li>权重显存更低；</li>
+<li>内存带宽压力更小；</li>
+<li>更容易部署到显存较小的设备上。</li>
+</ol>
+<p>但它也可能带来：</p>
+<ol>
+<li>反量化开销；</li>
+<li>精度损失；</li>
+<li>kernel 支持不足；</li>
+<li>小 batch 下收益不稳定；</li>
+<li>某些层需要保留高精度，实际收益打折。</li>
+</ol>
+<p>所以 INT4 更常见的价值是<strong>降低显存和部署门槛</strong>，而不是在所有场景下都显著提升速度。</p>
+<h3 id="PTQ-与-QAT"><a href="#PTQ-与-QAT" class="headerlink" title="PTQ 与 QAT"></a>PTQ 与 QAT</h3><p>量化通常分为两类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>全称</strong></th>
+<th><strong>核心思路</strong></th>
+<th><strong>特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PTQ</td>
+<td>Post-Training Quantization</td>
+<td>训练后量化</td>
+<td>成本低，常用于推理部署</td>
+</tr>
+<tr>
+<td>QAT</td>
+<td>Quantization-Aware Training</td>
+<td>量化感知训练</td>
+<td>效果更稳，但训练成本高</td>
+</tr>
+</tbody>
+</table>
+<p>实际 LLM 推理里，<strong>PTQ 更常见</strong>。因为重新训练大模型成本很高，很多系统会用少量校准数据统计权重和激活分布，然后选择合适的量化尺度、分组策略和保留高精度的敏感层。</p>
+<p>QAT 则会在训练过程中模拟量化误差，让模型提前适应低精度计算。它通常效果更稳，但成本更高，更适合对精度要求高、部署规模大、值得重新训练的场景。</p>
+<h3 id="量化的核心难点：Outlier"><a href="#量化的核心难点：Outlier" class="headerlink" title="量化的核心难点：Outlier"></a>量化的核心难点：Outlier</h3><p>LLM 量化最难的地方，是模型里经常存在 <strong>outlier</strong>，也就是少数特别大的权重值或激活值。量化需要用有限刻度覆盖一个数值范围。如果范围被少数 outlier 拉得很大，大多数普通值就会挤在很小的区间里，表示精度变差。可以简单理解成：</p>
+<ol>
+<li>没有 outlier：整数刻度集中表示常见数值，误差较小；</li>
+<li>存在 outlier：刻度被少数极端值拉开，普通值表示变粗糙。</li>
+</ol>
+<p>常见解决思路包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>分组量化</td>
+<td>每组权重单独计算 scale，减少大范围误差</td>
+</tr>
+<tr>
+<td>通道级量化</td>
+<td>不同 channel 使用不同 scale</td>
+</tr>
+<tr>
+<td>激活平滑</td>
+<td>把 activation outlier 转移或平滑到权重侧处理</td>
+</tr>
+<tr>
+<td>混合精度</td>
+<td>对敏感层、Embedding、输出层保留 FP16 / BF16</td>
+</tr>
+<tr>
+<td>校准数据</td>
+<td>使用接近真实业务分布的数据统计量化参数</td>
+</tr>
+</tbody>
+</table>
+<p>量化最终是一场 trade-off：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">更低精度 -&gt; 更低显存 / 更低带宽 / 更低部署门槛</span><br><span class="line">更低精度 -&gt; 更大量化误差 / 更高能力退化风险</span><br></pre></td></tr></table></figure>
+<p>一句话概括：<strong>量化是用数值精度换推理成本，核心难点不在“把 FP16 变成 INT4”，而在如何控制量化误差，让模型在更低显存和更低带宽下仍然保持能力稳定。</strong></p>
+<h2 id="剪枝、蒸馏与低秩分解：从结构上变小"><a href="#剪枝、蒸馏与低秩分解：从结构上变小" class="headerlink" title="剪枝、蒸馏与低秩分解：从结构上变小"></a>剪枝、蒸馏与低秩分解：从结构上变小</h2><p>量化主要改变的是<strong>参数表示精度</strong>，模型结构本身通常还在；而剪枝、蒸馏和低秩分解更进一步，目标是让模型在结构上变小，或者让一个更小的模型继承大模型的能力。其区分如下表：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>核心思路</strong></th>
+<th><strong>压缩对象</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>剪枝</td>
+<td>删除低重要性结构</td>
+<td>权重、head、channel、layer</td>
+</tr>
+<tr>
+<td>蒸馏</td>
+<td>让小模型学习大模型行为</td>
+<td>模型能力和任务分布</td>
+</tr>
+<tr>
+<td>低秩分解</td>
+<td>用小矩阵近似大矩阵</td>
+<td>Attention / FFN 线性层</td>
+</tr>
+</tbody>
+</table>
+<p>它们比量化更“激进”：不仅改变模型怎么存储，还可能改变模型结构、参数路径和能力分布。因此这类方法通常需要额外微调、蒸馏或评估来恢复能力。</p>
+<h3 id="剪枝：删掉低重要性结构"><a href="#剪枝：删掉低重要性结构" class="headerlink" title="剪枝：删掉低重要性结构"></a>剪枝：删掉低重要性结构</h3><p>剪枝的核心思想是：模型里并不是所有参数、通道、注意力头和层都同等重要。可以先评估不同结构对输出的影响，再删除影响较小的部分，从而减少参数量和计算量。</p>
+<p><img src="/images/llm/llm-model-compression-03.png" alt="剪枝通过评估重要性、删除低重要性结构并微调恢复能力来压缩模型"></p>
+<p>剪枝可以分成两类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>类型</strong></th>
+<th><strong>做法</strong></th>
+<th><strong>工程效果</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>非结构化剪枝</td>
+<td>删除单个权重，把部分权重置零</td>
+<td>参数稀疏，但不一定真实加速</td>
+</tr>
+<tr>
+<td>结构化剪枝</td>
+<td>删除 head、channel、FFN hidden、layer</td>
+<td>更容易减少真实计算量</td>
+</tr>
+</tbody>
+</table>
+<p>对 LLM 来说，结构化剪枝通常更有工程价值。因为如果只是把一些权重置零，但推理 kernel 仍然按完整矩阵计算，实际延迟可能不会明显下降。常见剪枝对象包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>剪枝对象</strong></th>
+<th><strong>含义</strong></th>
+<th><strong>可能影响</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attention Head</td>
+<td>删除部分注意力头</td>
+<td>影响上下文交互能力</td>
+</tr>
+<tr>
+<td>FFN Hidden Dimension</td>
+<td>减少 MLP 中间维度</td>
+<td>影响非线性表达能力</td>
+</tr>
+<tr>
+<td>Transformer Layer</td>
+<td>删除部分层</td>
+<td>影响整体推理深度</td>
+</tr>
+<tr>
+<td>Vocabulary / Embedding</td>
+<td>裁剪词表或 embedding</td>
+<td>影响语言覆盖范围</td>
+</tr>
+<tr>
+<td>Sparse Block</td>
+<td>删除稀疏矩阵块</td>
+<td>依赖硬件和 kernel 支持</td>
+</tr>
+</tbody>
+</table>
+<p>剪枝最难的是“重要性评估”。常见评估信号包括：</p>
+<ol>
+<li>权重幅度：权重越小，可能越不重要；</li>
+<li>梯度敏感度：删除后 loss 变化越小，越适合剪；</li>
+<li>激活统计：长期不活跃的结构可以优先考虑；</li>
+<li>注意力模式：冗余 head 可能被删除；</li>
+<li>任务评估：以真实任务性能变化作为最终判断。</li>
+</ol>
+<p>但剪枝风险很高。因为模型能力不是线性叠加的，删除一个看起来“不重要”的 head 或 layer，可能对推理、代码、数学等能力产生放大影响。因此剪枝后通常需要 SFT、蒸馏或继续训练来恢复能力。</p>
+<p>一句话说：<strong>剪枝的核心不是“删得越多越好”，而是删掉真实冗余、同时让推理 kernel 能真正少算。</strong></p>
+<h3 id="蒸馏：让小模型学习大模型"><a href="#蒸馏：让小模型学习大模型" class="headerlink" title="蒸馏：让小模型学习大模型"></a>蒸馏：让小模型学习大模型</h3><p>蒸馏的核心思想是：用一个能力更强的 teacher model 作为“老师”，生成高质量监督信号，让更小的 student model 学习它的输出行为、推理方式和任务偏好。</p>
+<p><img src="/images/llm/llm-model-compression-04.png" alt="蒸馏把大模型能力迁移到更小模型上"></p>
+<p>蒸馏不是简单训练“小模型回答标准答案”，而是让小模型学习大模型的输出分布、回答风格、推理过程或偏好行为。常见方式包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>蒸馏方式</strong></th>
+<th><strong>学习目标</strong></th>
+<th><strong>说明</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Logits Distillation</td>
+<td>概率分布</td>
+<td>学 teacher 对各 token 的偏好</td>
+</tr>
+<tr>
+<td>Response Distillation</td>
+<td>最终回答</td>
+<td>学 teacher 的高质量输出</td>
+</tr>
+<tr>
+<td>Reasoning Distillation</td>
+<td>推理过程</td>
+<td>学中间步骤和解题路径</td>
+</tr>
+<tr>
+<td>Feature Distillation</td>
+<td>中间表示</td>
+<td>学 teacher 的隐藏层特征</td>
+</tr>
+<tr>
+<td>Preference Distillation</td>
+<td>偏好排序</td>
+<td>学 teacher 或人类偏好的选择</td>
+</tr>
+</tbody>
+</table>
+<p>在 LLM 场景里，最常见的是 <strong>Response Distillation</strong> 和 <strong>Reasoning Distillation</strong>。例如用大模型生成高质量问答、代码解释、推理链路、领域任务样本，再用这些数据训练小模型。典型流程是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">大模型能力强，但推理太贵</span><br><span class="line">-&gt; 用大模型生成高质量数据</span><br><span class="line">-&gt; 清洗、过滤、去重、构造训练集</span><br><span class="line">-&gt; 训练小模型</span><br><span class="line">-&gt; 小模型服务高频低成本场景</span><br></pre></td></tr></table></figure>
+<p>蒸馏适合这些场景：</p>
+<ol>
+<li>高频、重复、边界清晰的垂直任务；</li>
+<li>大模型作为离线 teacher，小模型在线服务；</li>
+<li>对延迟和成本敏感的业务；</li>
+<li>希望在端侧或私有化环境部署较小模型；</li>
+<li>有足够高质量任务数据和评测集。</li>
+</ol>
+<p>但蒸馏也有明显边界：</p>
+<ol>
+<li>小模型容量有限，很难完整继承大模型通用能力；</li>
+<li>teacher 输出如果有幻觉，student 也会学到；</li>
+<li>蒸馏数据分布太窄，小模型泛化会差；</li>
+<li>推理过程蒸馏可能学到“形式”，不一定学到真正能力；</li>
+<li>仍然需要系统评测，不能只看训练集指标。</li>
+</ol>
+<p>一句话说：<strong>蒸馏不是把大模型无损压成小模型，而是把大模型在特定任务上的行为迁移给更低成本的小模型。</strong></p>
+<h3 id="低秩分解：用小矩阵近似大矩阵"><a href="#低秩分解：用小矩阵近似大矩阵" class="headerlink" title="低秩分解：用小矩阵近似大矩阵"></a>低秩分解：用小矩阵近似大矩阵</h3><p>Transformer 中大量参数集中在线性层里，例如 Attention 的 <code>q_proj / k_proj / v_proj / o_proj</code>，以及 FFN / MLP 的上投影、下投影矩阵。低秩分解的思路是：用两个更小的矩阵近似一个大矩阵。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">W ≈ A × B</span><br></pre></td></tr></table></figure>
+<p>如果原始矩阵是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">W: d_out × d_in</span><br></pre></td></tr></table></figure>
+<p>低秩分解后变成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">A: d_out × r</span><br><span class="line">B: r × d_in</span><br></pre></td></tr></table></figure>
+<p>当 <code>r</code> 远小于 <code>d_in</code> 和 <code>d_out</code> 时，参数量会明显下降。</p>
+<p><img src="/images/llm/llm-model-compression-05.png" alt="低秩分解用两个小矩阵近似一个大矩阵"></p>
+<p>举个简单例子：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">原矩阵 W: 4096 × 4096</span><br><span class="line">参数量 = 16,777,216</span><br><span class="line"></span><br><span class="line">低秩分解 r = 64:</span><br><span class="line">A: 4096 × 64</span><br><span class="line">B: 64 × 4096</span><br><span class="line">参数量 = 524,288</span><br></pre></td></tr></table></figure>
+<p>参数量大约变成原来的 1/32。低秩分解的核心假设是：大矩阵里存在冗余，可以用更低维的子空间近似。这个假设在很多线性层中是有意义的，但并不代表所有层都适合低秩化。rank 太小会明显损伤模型能力，rank 太大则压缩收益有限。</p>
+<p>低秩分解和 LoRA 形式相似，但目标不同：</p>
+<table>
+<thead>
+<tr>
+<th><strong>技术</strong></th>
+<th><strong>公式视角</strong></th>
+<th><strong>目标</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LoRA</td>
+<td><code>W&#39; = W + B × A</code></td>
+<td>冻结原模型，用低秩增量做任务适配</td>
+</tr>
+<tr>
+<td>低秩分解</td>
+<td><code>W ≈ A × B</code></td>
+<td>直接用低秩矩阵近似并替换原权重</td>
+</tr>
+</tbody>
+</table>
+<p>所以 LoRA 更像“低成本适配”，低秩分解更像“结构压缩”。</p>
+<h3 id="三类方法如何选择"><a href="#三类方法如何选择" class="headerlink" title="三类方法如何选择"></a>三类方法如何选择</h3><table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>主要收益</strong></th>
+<th><strong>主要风险</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>剪枝</td>
+<td>减少真实结构和计算</td>
+<td>能力非线性下降</td>
+<td>对结构可控、可重新微调的模型</td>
+</tr>
+<tr>
+<td>蒸馏</td>
+<td>小模型替代大模型</td>
+<td>上限受 student 容量限制</td>
+<td>高频垂直任务、低成本服务</td>
+</tr>
+<tr>
+<td>低秩分解</td>
+<td>压缩大矩阵参数</td>
+<td>rank 选择困难、近似误差</td>
+<td>线性层冗余明显的模型</td>
+</tr>
+</tbody>
+</table>
+<p>一句话概括：<strong>剪枝是删结构，蒸馏是迁移能力，低秩分解是近似矩阵。它们都能让模型变小，但也更容易改变模型能力边界，因此必须配合微调、蒸馏和系统评测一起使用。</strong></p>
+<h2 id="KV-Cache-优化与-Speculative-Decoding"><a href="#KV-Cache-优化与-Speculative-Decoding" class="headerlink" title="KV Cache 优化与 Speculative Decoding"></a>KV Cache 优化与 Speculative Decoding</h2><p>权重被压缩之后，推理瓶颈并不会自动消失。尤其在长上下文、高并发和长输出场景下，系统压力往往会从“模型权重太大”，转向两个更现实的问题：KV Cache 占用大量显存，以及 Decode 阶段逐 token 生成带来的延迟。</p>
+<p>因此，这一节重点看两个方向：KV Cache 优化 和 Speculative Decoding。</p>
+<ul>
+<li>前者通过减少 KV 数量、降低存储精度、提升缓存管理与复用效率，降低长上下文和高并发推理成本；</li>
+<li>后者通过 draft model 预生成、target model 批量验证，减少大模型串行解码等待时间。</li>
+</ul>
+<p>需要注意的是，KV Cache 优化不完全等同于“压缩”。GQA / MQA 更像架构层面的 KV 数量减少，KV 量化是存储精度压缩，PagedAttention 和 Prefix Cache 则更偏缓存管理与复用。它们路径不同，但目标一致：让模型在更长上下文、更高并发下以更低成本完成推理。</p>
+<h3 id="KV-Cache-为什么贵"><a href="#KV-Cache-为什么贵" class="headerlink" title="KV Cache 为什么贵"></a>KV Cache 为什么贵</h3><p>在自回归生成中，模型每生成一个新 token，都需要基于历史上下文计算注意力。为了避免每一步都重新计算历史 token 的 Key / Value，推理系统会把每层 Attention 的 K/V 缓存下来，这就是 KV Cache。</p>
+<p>KV Cache 的大小可以粗略估算为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KV Cache ≈ 2 × layers × tokens × kv_heads × head_dim × bytes × batch_size</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<table>
+<thead>
+<tr>
+<th><strong>变量</strong></th>
+<th><strong>含义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2</td>
+<td>Key 和 Value 两份缓存</td>
+</tr>
+<tr>
+<td>layers</td>
+<td>Transformer 层数</td>
+</tr>
+<tr>
+<td>tokens</td>
+<td>上下文长度</td>
+</tr>
+<tr>
+<td>kv_heads</td>
+<td>KV heads 数量</td>
+</tr>
+<tr>
+<td>head_dim</td>
+<td>每个 head 的维度</td>
+</tr>
+<tr>
+<td>bytes</td>
+<td>每个元素占用字节数</td>
+</tr>
+<tr>
+<td>batch_size</td>
+<td>并发 batch 大小</td>
+</tr>
+</tbody>
+</table>
+<p>这个公式说明了一个关键事实：<strong>KV Cache 会随着上下文长度和并发数线性增长</strong>。当上下文从 8K 扩展到 128K，或者 batch size 提高时，KV Cache 很容易成为主要显存瓶颈。KV Cache 的压力主要体现在四个方面：</p>
+<ol>
+<li>显存占用变高；</li>
+<li>内存带宽压力变大；</li>
+<li>batch 调度更困难；</li>
+<li>长上下文下缓存碎片和复用更复杂。</li>
+</ol>
+<h3 id="KV-Cache-的优化方向"><a href="#KV-Cache-的优化方向" class="headerlink" title="KV Cache 的优化方向"></a>KV Cache 的优化方向</h3><p>常见优化方向可以分成四类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>技术</strong></th>
+<th><strong>优化点</strong></th>
+<th><strong>说明</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MQA / GQA</td>
+<td>减少 KV heads</td>
+<td>多个 Query head 共享 K/V，直接降低 KV Cache</td>
+</tr>
+<tr>
+<td>KV Cache Quantization</td>
+<td>降低单元素字节数</td>
+<td>用 INT8 / INT4 存储 K/V</td>
+</tr>
+<tr>
+<td>Sliding Window / KV Eviction</td>
+<td>减少保留 token 数</td>
+<td>只保留局部窗口或重要历史 token</td>
+</tr>
+<tr>
+<td>Prefix Cache / PagedAttention</td>
+<td>提升缓存管理效率</td>
+<td>复用前缀、分页管理 KV，减少碎片和重复计算</td>
+</tr>
+</tbody>
+</table>
+<p>这里要注意，<strong>PagedAttention 严格来说不是压缩技术</strong>。它不会让单个 KV 元素变小，也不一定减少 token 数量；它更像一种 KV Cache 内存管理机制，通过分页方式提高显存利用率，减少长上下文和高并发下的内存碎片。</p>
+<p><img src="/images/llm/llm-model-compression-06.png" alt="长上下文场景下，KV Cache 优化和权重量化同样重要"></p>
+<p>可以把这些方案对应到 KV Cache 公式里：</p>
+<table>
+<thead>
+<tr>
+<th><strong>公式变量</strong></th>
+<th><strong>优化方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>kv_heads</td>
+<td>MQA / GQA</td>
+</tr>
+<tr>
+<td>bytes</td>
+<td>KV Cache Quantization</td>
+</tr>
+<tr>
+<td>tokens</td>
+<td>Sliding Window、KV Eviction</td>
+</tr>
+<tr>
+<td>batch_size 下的碎片问题</td>
+<td>PagedAttention、Prefix Cache、调度优化</td>
+</tr>
+</tbody>
+</table>
+<p>所以 KV Cache 优化不是单一技术，而是从 <strong>head 数量、数值精度、保留长度、内存管理</strong> 四个方向同时降低成本。</p>
+<h3 id="Speculative-Decoding：用小模型加速大模型"><a href="#Speculative-Decoding：用小模型加速大模型" class="headerlink" title="Speculative Decoding：用小模型加速大模型"></a>Speculative Decoding：用小模型加速大模型</h3><p>KV Cache 优化解决的是“缓存太贵”，但自回归模型还有另一个瓶颈：<strong>Decode 阶段必须逐 token 生成</strong>。</p>
+<p>大模型每生成一个 token，都要经过一次完整 forward。即使单次 forward 很快，长输出任务里，逐 token 串行生成也会带来明显延迟。Speculative Decoding 的核心思想是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">用一个更小、更快的 draft model 先生成多个候选 token</span><br><span class="line">再让大模型 target model 一次性验证这些候选 token</span><br></pre></td></tr></table></figure>
+<p>如果候选 token 被接受，就可以一次推进多个 token，从而减少大模型逐 token 解码的次数。</p>
+<p><img src="/images/llm/llm-model-compression-07.png" alt="Speculative Decoding 用小模型提出候选，大模型负责验证"></p>
+<p>它能加速的原因是：大模型验证多个 token 时可以并行计算，而不是每次只生成一个 token。理想情况下，如果 draft model 提出的候选和 target model 分布接近，大模型一次 forward 就能接受多个 token。</p>
+<h3 id="Speculative-Decoding-的关键指标"><a href="#Speculative-Decoding-的关键指标" class="headerlink" title="Speculative Decoding 的关键指标"></a>Speculative Decoding 的关键指标</h3><p>Speculative Decoding 的收益取决于几个核心指标：</p>
+<table>
+<thead>
+<tr>
+<th><strong>指标</strong></th>
+<th><strong>含义</strong></th>
+<th><strong>影响</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Draft 速度</td>
+<td>小模型生成候选是否足够快</td>
+<td>draft 太慢会抵消收益</td>
+</tr>
+<tr>
+<td>Acceptance Rate</td>
+<td>target 接受候选 token 的比例</td>
+<td>接受率越高，加速越明显</td>
+</tr>
+<tr>
+<td>验证成本</td>
+<td>target 验证候选 token 的开销</td>
+<td>验证过重会降低收益</td>
+</tr>
+<tr>
+<td>输出一致性</td>
+<td>是否保持 target model 的分布</td>
+<td>影响生成质量和稳定性</td>
+</tr>
+<tr>
+<td>系统复杂度</td>
+<td>多模型调度、KV 管理、失败处理</td>
+<td>影响工程落地成本</td>
+</tr>
+</tbody>
+</table>
+<p>它适合的场景：</p>
+<ol>
+<li>大模型 Decode 延迟较高；</li>
+<li>输出长度较长；</li>
+<li>draft model 足够便宜；</li>
+<li>draft 和 target 分布足够接近；</li>
+<li>系统可以承受多模型调度复杂度。</li>
+</ol>
+<p>不适合的场景：</p>
+<ol>
+<li>输出很短，draft 还没带来收益就结束；</li>
+<li>draft 质量太差，大量 token 被拒绝；</li>
+<li>target 本身已经很快，瓶颈不在 Decode；</li>
+<li>系统无法承担额外模型部署和调度成本。</li>
+</ol>
+<p>简单总结一下：<strong>KV Cache 优化解决“历史信息存得太贵”，Speculative Decoding 解决“未来 token 生成得太慢”。前者降低显存和带宽压力，后者减少大模型逐 token 解码次数。</strong></p>
+<h2 id="工程选型与总结"><a href="#工程选型与总结" class="headerlink" title="工程选型与总结"></a>工程选型与总结</h2><p>模型压缩没有一招通吃。不同技术优化的对象不同：有的降低权重显存，有的减少计算路径，有的优化 KV Cache，有的降低逐 token 解码延迟。生产环境里，真正重要的不是“用了哪种压缩技术”，而是先判断系统瓶颈在哪里。</p>
+<table>
+<thead>
+<tr>
+<th><strong>技术</strong></th>
+<th><strong>主要优化对象</strong></th>
+<th><strong>主要收益</strong></th>
+<th><strong>主要风险</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>量化</td>
+<td>权重、激活、KV Cache</td>
+<td>降低显存和带宽</td>
+<td>精度下降、kernel 依赖</td>
+<td>通用推理部署</td>
+</tr>
+<tr>
+<td>剪枝</td>
+<td>Head、Channel、Layer</td>
+<td>减少参数和计算</td>
+<td>能力非线性下降</td>
+<td>结构可控、可重新微调的模型</td>
+</tr>
+<tr>
+<td>蒸馏</td>
+<td>模型能力迁移</td>
+<td>小模型替代大模型</td>
+<td>上限受 student 容量限制</td>
+<td>高频垂直任务</td>
+</tr>
+<tr>
+<td>低秩分解</td>
+<td>Attention / FFN 矩阵</td>
+<td>压缩线性层参数</td>
+<td>rank 选择困难</td>
+<td>矩阵冗余明显的模型</td>
+</tr>
+<tr>
+<td>KV Cache 优化</td>
+<td>K/V 缓存</td>
+<td>降低长上下文显存</td>
+<td>可能影响长程依赖</td>
+<td>长上下文、高并发</td>
+</tr>
+<tr>
+<td>Speculative Decoding</td>
+<td>Decode 过程</td>
+<td>降低生成延迟</td>
+<td>draft 接受率依赖</td>
+<td>长输出、低延迟服务</td>
+</tr>
+</tbody>
+</table>
+<p>生产环境里，可以按目标选择方案：</p>
+<p><img src="/images/llm/llm-model-compression-08.png" alt="模型压缩方案应该从真实瓶颈出发，而不是为了压缩而压缩"></p>
+<p>上线前一定要做评估。压缩带来的收益通常很直观：显存更低、模型更小、吞吐可能更高；但损失往往更隐蔽，比如任务准确率下降、长上下文能力变弱、工具调用不稳定，或者安全拒答能力退化。因此至少要同时评估任务质量、推理延迟、吞吐能力、显存占用、长上下文稳定性，以及 RAG、Function Calling、Agent 等真实应用链路中的表现。</p>
+<p>还要注意，模型变小并不等于推理一定更快。推理性能同时受权重大小、内存带宽、计算 kernel、batch size、KV Cache、调度策略和硬件支持影响。比如 INT4 权重更小，但如果 kernel 不成熟、反量化开销高，实际延迟未必优于 INT8 或 FP16；PagedAttention 不会减少模型参数，却可能显著改善高并发长上下文下的显存利用率。</p>
+<p>更合理的压缩流程是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">定位瓶颈 -&gt; 选择方案 -&gt; 离线评测 -&gt; 压测验证 -&gt; 灰度上线 -&gt; 持续监控</span><br></pre></td></tr></table></figure>
+<p>最终来看，模型压缩的核心不是单纯追求模型文件更小，而是在质量可接受的前提下，系统性降低权重显存、计算开销、KV Cache 成本和生成延迟。真正有效的压缩方案，一定要从线上瓶颈出发，并通过任务质量、延迟、吞吐、显存和安全能力一起评估。</p>
+<p>一句话概括：<strong>模型压缩的目标，是让大模型在真实业务里以更低成本、更低延迟和更低部署门槛稳定运行。</strong></p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/09/llm-model-compression/" data-id="cmrdmfd9k00004blweyp6pvmk" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/07/09/llm-function-calling/" class="next">LLM 系列 (二十)：Function Calling，大模型如何稳定调用工具</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/09/llm-model-compression/';
+var disqus_title = 'LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本';
+var disqus_url = 'http://matt33.com/2026/07/09/llm-model-compression/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hadoop/" style="font-size: 15px;">hadoop</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/07/09/llm-model-compression/">LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/09/llm-function-calling/">LLM 系列 (二十)：Function Calling，大模型如何稳定调用工具</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/08/llm-mcp/">LLM 系列 (十九)：MCP，大模型如何连接外部工具生态</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/07/llm-prompt-context-engineering/">LLM 系列 (十八)：提示词与上下文工程，如何更好地调用大模型能力</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/06/llm-finetune-lora/">LLM 系列 (十七)：从全量微调到 LoRA，大模型如何适配垂直场景</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/05/llm-eval-safety/">LLM 系列 (十六)：评测与安全，如何判断大模型是否真正可靠</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/05/llm-multimodal/">LLM 系列 (十五)：多模态，大模型如何从文字走向理解世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/04/llm-agent/">LLM 系列 (十四)：Agent，大模型如何从对话走向行动</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/03/llm-rag/">LLM 系列 (十三)：RAG，大模型如何连接外部知识</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/02/llm-pretraining-data-engineering/">LLM 系列 (十二)：预训练数据工程：大模型的燃料是如何炼成的</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
