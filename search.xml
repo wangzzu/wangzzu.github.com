@@ -4,6 +4,367 @@
   
     
     <entry>
+      <title><![CDATA[LLM 系列 (二十二)：端侧大模型，大模型如何在本地设备上运行]]></title>
+      <url>http://matt33.com/2026/07/10/llm-on-device/</url>
+      <content type="html"><![CDATA[<p>大模型应用长期以云端推理为主：用户将请求发送到服务器，由 GPU 集群完成计算并返回结果。云端能够承载更大的模型，也便于统一更新和管理，但它始终受到网络延迟、推理成本、数据隐私和离线可用性的约束。</p>
+<p>随着大模型进入输入法、语音助手、本地文件检索、相册理解和手机 Agent 等场景，推理需求开始向用户设备延伸。这些任务通常高频、实时，并涉及大量本地敏感数据，完全依赖云端不仅成本较高，也难以保证稳定的响应速度与隐私边界。</p>
+<p>端侧大模型正是为此而生。它不是将云端模型原封不动地搬进手机，而是在有限的内存、带宽、算力、功耗和散热条件下，重新平衡模型能力与运行成本。其核心目标可以概括为：<strong>模型装得下、推理跑得快，并且能够长时间稳定运行。</strong></p>
+<p>理解端侧大模型，需要抓住四个关键点：</p>
+<ol>
+<li><strong>资源瓶颈</strong>：端侧推理不仅受算力限制，内存容量、内存带宽和持续功耗同样关键；</li>
+<li><strong>模型压缩</strong>：低比特量化既能缩小模型体积，也能减少 Decode 阶段的权重读取和数据搬运；</li>
+<li><strong>异构计算</strong>：CPU、GPU 和 NPU 各有分工，实际性能取决于算子支持、计算图划分和跨硬件调度；</li>
+<li><strong>端云协同</strong>：端侧适合低延迟、离线和隐私敏感任务，复杂推理与大规模知识处理仍可以交给云端。</li>
+</ol>
+<p><img src="/images/llm/llm-on-device-01.png" alt="端侧大模型是模型、硬件、运行时和应用架构共同优化的结果"></p>
+<a id="more"></a>
+<h2 id="为什么需要端侧大模型"><a href="#为什么需要端侧大模型" class="headerlink" title="为什么需要端侧大模型"></a>为什么需要端侧大模型</h2><p>端侧大模型，是指模型的主要推理过程发生在手机、电脑、车机、机器人或其他本地设备上。它既可以完全离线运行，也可以与云端模型协同，根据任务类型动态选择推理位置。</p>
+<p>相比完全依赖云端，端侧推理主要解决五类问题：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>云端推理的限制</strong></th>
+<th><strong>端侧推理的价值</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>延迟</td>
+<td>受网络传输和云端排队影响</td>
+<td>在本地快速响应</td>
+</tr>
+<tr>
+<td>隐私</td>
+<td>数据需要离开用户设备</td>
+<td>敏感数据可以留在本地</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>每次请求都会消耗云端算力</td>
+<td>高频、简单任务可以本地处理</td>
+</tr>
+<tr>
+<td>离线</td>
+<td>弱网或无网环境无法使用</td>
+<td>没有网络时仍能运行</td>
+</tr>
+<tr>
+<td>个性化</td>
+<td>难以持续获取完整设备状态</td>
+<td>可以结合文件、偏好和本地上下文</td>
+</tr>
+</tbody>
+</table>
+<p>典型应用包括：</p>
+<ol>
+<li>本地文件总结、搜索与个人知识问答；</li>
+<li>输入法补全、文本改写和离线翻译；</li>
+<li>语音识别、实时字幕和会议摘要；</li>
+<li>相册分类、图片理解和 OCR；</li>
+<li>手机 Agent 的屏幕理解与操作规划；</li>
+<li>车机、机器人和工业终端的实时决策。</li>
+</ol>
+<h3 id="业内实践：端侧智能的不同形态"><a href="#业内实践：端侧智能的不同形态" class="headerlink" title="业内实践：端侧智能的不同形态"></a>业内实践：端侧智能的不同形态</h3><p>端侧智能并不只有“把模型下载到设备”这一种实现方式。当前业内主要存在三种形态：应用直接运行本地模型、操作系统提供共享模型服务，以及终端与云端模型协同工作。</p>
+<table>
+<thead>
+<tr>
+<th><strong>代表实践</strong></th>
+<th><strong>落地方式</strong></th>
+<th><strong>技术形态</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://www.tesla.com/support/grok" target="_blank" rel="external">Tesla Grok</a></td>
+<td>车机提供语音交互和导航入口，由云端模型完成理解与生成</td>
+<td>端云协同</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/documentation/FoundationModels" target="_blank" rel="external">Apple Foundation Models</a></td>
+<td>应用调用 Apple Intelligence 的端侧模型，完成生成、结构化输出和工具调用</td>
+<td>系统级端侧模型</td>
+</tr>
+<tr>
+<td><a href="https://developer.android.com/ai/gemini-nano" target="_blank" rel="external">Android Gemini Nano</a></td>
+<td>模型由 AICore 统一分发、更新并调用本地硬件执行</td>
+<td>系统级端侧模型</td>
+</tr>
+<tr>
+<td><a href="https://learn.microsoft.com/en-us/windows/ai/apis/phi-silica-transparency-note" target="_blank" rel="external">Windows Phi Silica</a></td>
+<td>应用通过 Windows AI API 使用运行在 NPU 或 GPU 上的本地模型</td>
+<td>PC 本地推理</td>
+</tr>
+</tbody>
+</table>
+<p>特斯拉是端云协同的典型案例。Grok 已经进入车机系统，用户可以通过语音进行问答、搜索目的地并发起导航；但它仍需要网络连接，交互内容由 xAI 处理。因此，当前形态更接近：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">车机负责语音交互、导航接入与结果呈现</span><br><span class="line">                    +</span><br><span class="line">云端大模型负责语言理解和生成</span><br></pre></td></tr></table></figure>
+<p>Apple、Android 和 Windows 则更接近真正的端侧推理。模型由操作系统统一管理，应用通过平台 API 使用生成、摘要、信息提取和工具调用能力，不需要每个应用分别下载和维护完整模型。这种方式还能统一处理模型更新、硬件调度和安全策略。</p>
+<h3 id="端侧并不等于完全本地"><a href="#端侧并不等于完全本地" class="headerlink" title="端侧并不等于完全本地"></a>端侧并不等于完全本地</h3><p>端侧大模型的重点并不是让所有计算都发生在本地，而是根据任务特征选择最合适的执行位置：</p>
+<ul>
+<li>高频、实时、离线和隐私敏感任务优先在端侧完成；</li>
+<li>复杂推理、超长上下文和大规模知识处理交给云端；</li>
+<li>本地设备负责获取环境信息、执行工具并验证最终结果。</li>
+</ul>
+<p>因此，端侧与云端并不是相互替代的关系。更现实的方向，是让端侧模型承担用户身边的感知与执行，让云端模型提供更高的能力上限，两者共同组成完整的智能系统。</p>
+<h2 id="端侧推理：硬件分工与性能瓶颈"><a href="#端侧推理：硬件分工与性能瓶颈" class="headerlink" title="端侧推理：硬件分工与性能瓶颈"></a>端侧推理：硬件分工与性能瓶颈</h2><p>Transformer 的主要计算来自 Attention 和 FFN/MLP 中的矩阵乘法。端侧设备通常同时包含 CPU、GPU 和 NPU，但真实推理性能并不只取决于硬件标称算力，还取决于模型算子、数据精度和内存布局能否与硬件匹配。</p>
+<table>
+<thead>
+<tr>
+<th><strong>硬件</strong></th>
+<th><strong>主要优势</strong></th>
+<th><strong>典型职责</strong></th>
+<th><strong>主要限制</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU</td>
+<td>通用性强、控制灵活</td>
+<td>Tokenizer、采样、调度及通用算子</td>
+<td>大规模矩阵计算效率较低</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>并行能力强、算子灵活</td>
+<td>Attention、FFN 和多模态编码</td>
+<td>功耗较高，持续运行容易发热</td>
+</tr>
+<tr>
+<td>NPU</td>
+<td>低精度计算能效高</td>
+<td>INT8/INT4 张量计算</td>
+<td>算子、Shape 和量化格式受限</td>
+</tr>
+</tbody>
+</table>
+<p>实际部署中，端侧模型既可以完整运行在单一后端，也可以由 Runtime 根据算子支持情况划分到 CPU、GPU 和 NPU。采用混合执行时，需要重点关注算子回退和跨硬件数据搬运。</p>
+<p><img src="/images/llm/llm-on-device-02.png" alt="端侧 Runtime 根据算子类型、数据精度和硬件能力划分计算图"></p>
+<p>这里最容易被忽略的是<strong>算子回退</strong>。当 NPU 不支持某个算子、动态 Shape 或量化格式时，该部分会退回 CPU 或 GPU 执行，并可能引入张量复制、数据类型转换、内存布局转换和设备同步。频繁的数据搬运会抵消硬件加速收益，因此 NPU 的峰值算力并不能直接代表模型的真实推理速度。</p>
+<h3 id="Prefill-与-Decode"><a href="#Prefill-与-Decode" class="headerlink" title="Prefill 与 Decode"></a>Prefill 与 Decode</h3><p>LLM 推理可以拆成两个特征明显不同的阶段：</p>
+<table>
+<thead>
+<tr>
+<th><strong>阶段</strong></th>
+<th><strong>主要工作</strong></th>
+<th><strong>计算特征</strong></th>
+<th><strong>主要指标与瓶颈</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prefill</td>
+<td>并行处理完整 Prompt，建立 KV Cache</td>
+<td>大规模矩阵乘法</td>
+<td>影响首 Token 延迟，通常更依赖计算能力</td>
+</tr>
+<tr>
+<td>Decode</td>
+<td>每轮生成一个 Token，并复用历史 KV Cache</td>
+<td>小 Batch、重复读取权重和缓存</td>
+<td>影响生成速度，通常更依赖内存带宽</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-on-device-03.png" alt="Prefill 决定首 Token 延迟，Decode 决定持续生成速度"></p>
+<p>端侧推理的 Batch 通常很小。对于 Dense 模型，Decode 每生成一个 Token，基本都要读取全部模型权重；随着上下文变长，还需要读取越来越大的 KV Cache。因此，其理想吞吐上限可以粗略表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Decode Token/s</span><br><span class="line">≈ 有效内存带宽</span><br><span class="line">  ÷ 每个 Token 需要读取的数据量</span><br></pre></td></tr></table></figure>
+<p>这里的读取量不仅包括模型权重，还包括 KV Cache、中间张量以及跨硬件的数据传输。实际速度还会受到量化内核、缓存命中率、算子融合和设备同步等因素影响。</p>
+<p>这也解释了为什么低比特量化对端侧推理如此重要：它不仅缩小模型文件，也减少了每个 Token 生成时需要搬运的权重数据；而 GQA、MQA 和 KV Cache 量化，则进一步降低长上下文带来的缓存压力。</p>
+<h2 id="模型压缩：让模型装得下"><a href="#模型压缩：让模型装得下" class="headerlink" title="模型压缩：让模型装得下"></a>模型压缩：让模型装得下</h2><p>端侧设备的内存和存储空间有限，未经压缩的大模型通常无法直接部署。关于量化、蒸馏、剪枝等技术的具体原理，上一篇文章《<a href="https://matt33.com/2026/07/09/llm-model-compression/">LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</a>》已经详细介绍，本节只关注它们对端侧推理的直接影响。端侧模型压缩主要有两个方向：</p>
+<ol>
+<li><strong>减小参数规模</strong>：使用更小的模型，从源头减少权重、计算量和内存访问；</li>
+<li><strong>降低参数精度</strong>：将 FP16/BF16 权重量化为 INT8、INT4，减少模型体积和 Decode 阶段的数据搬运。</li>
+</ol>
+<p>模型权重的理论大小可以粗略估算为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">权重大小 ≈ 参数量 × 每个参数的比特数 ÷ 8</span><br></pre></td></tr></table></figure>
+<p>以 7B 模型为例：</p>
+<table>
+<thead>
+<tr>
+<th><strong>权重精度</strong></th>
+<th><strong>理论权重大小</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP16 / BF16</td>
+<td>约 14 GB</td>
+</tr>
+<tr>
+<td>INT8</td>
+<td>约 7 GB</td>
+</tr>
+<tr>
+<td>INT4</td>
+<td>约 3.5 GB</td>
+</tr>
+</tbody>
+</table>
+<p>这只是模型权重的大小。实际运行还需要为 KV Cache、临时张量、Runtime Buffer、Tokenizer 和应用本身预留内存。因此，一个理论上能够装入设备的模型，实际运行时仍可能出现内存不足。</p>
+<p>端侧部署更常见的策略是：<strong>先选择满足任务能力要求的最小模型，再根据目标硬件进行 INT8 或 INT4 量化。</strong> 需要注意，模型文件变小并不代表推理一定更快；如果设备缺少对应的低比特计算内核，反量化和数据重排反而可能增加开销。</p>
+<p>当模型能够装入设备后，下一步要解决的就是 KV Cache、运行时内存和硬件调度问题。</p>
+<h2 id="内存与运行时：从能加载到稳定运行"><a href="#内存与运行时：从能加载到稳定运行" class="headerlink" title="内存与运行时：从能加载到稳定运行"></a>内存与运行时：从能加载到稳定运行</h2><p>模型文件能够加载，只说明静态权重可以放入设备，并不代表模型能够稳定推理。生成过程中，KV Cache、临时张量和硬件后端缓冲区会继续占用内存，因此端侧真正需要关注的是<strong>峰值内存</strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">峰值内存 ≈ 模型权重</span><br><span class="line">         + KV Cache</span><br><span class="line">         + 激活与临时张量</span><br><span class="line">         + Runtime Buffer</span><br><span class="line">         + Tokenizer与应用数据</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>内存组成</strong></th>
+<th><strong>特点</strong></th>
+<th><strong>主要影响因素</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型权重</td>
+<td>相对固定</td>
+<td>参数量、量化精度</td>
+</tr>
+<tr>
+<td>KV Cache</td>
+<td>随上下文持续增长</td>
+<td>层数、Token 数、KV Head、精度</td>
+</tr>
+<tr>
+<td>激活与临时张量</td>
+<td>计算过程中动态产生</td>
+<td>Prompt 长度、算子实现</td>
+</tr>
+<tr>
+<td>Runtime Buffer</td>
+<td>由推理后端管理</td>
+<td>内存规划、数据复制、硬件划分</td>
+</tr>
+<tr>
+<td>应用数据</td>
+<td>与模型共享设备内存</td>
+<td>UI、图片、文件和其他业务模块</td>
+</tr>
+</tbody>
+</table>
+<p>即使设备采用统一内存，模型、操作系统和应用仍然共享同一片资源。峰值占用过高会触发内存回收、应用退出，甚至导致模型加载成功后在长对话中崩溃。</p>
+<h3 id="KV-Cache：从架构选型到运行时管理"><a href="#KV-Cache：从架构选型到运行时管理" class="headerlink" title="KV Cache：从架构选型到运行时管理"></a>KV Cache：从架构选型到运行时管理</h3><p>KV Cache 会随上下文长度持续增长，是端侧模型权重之外最主要的动态内存开销。实际可用空间可以粗略理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">KV Cache 可用预算</span><br><span class="line">≈ 设备可用内存</span><br><span class="line">- 模型权重</span><br><span class="line">- Runtime Buffer</span><br><span class="line">- 系统与应用预留内存</span><br></pre></td></tr></table></figure>
+<p>端侧的 KV Cache 优化需要分成两个阶段：</p>
+<ol>
+<li><strong>模型选型阶段</strong>：优先选择采用 GQA 或 MQA 的模型。这类架构通过减少 KV Head 数量，从源头降低每个 Token 对应的缓存大小。GQA/MQA 属于模型结构，模型部署后通常不能由 Runtime 临时开启。</li>
+<li><strong>运行时阶段</strong>：根据设备内存设置上下文上限，并在 Runtime 支持的情况下使用 KV Cache 量化、Sliding Window、历史摘要或受控 RAG，避免上下文无限增长。</li>
+</ol>
+<p><strong>GQA/MQA 决定模型先天需要多少 KV Cache，运行时策略决定有限的 KV Cache 应该如何分配和回收。</strong></p>
+<blockquote>
+<p>当 KV Cache 接近预算上限时，系统应主动压缩或淘汰低价值历史信息；如果任务必须保留完整长上下文，则可以切换到内存更充足的云端模型。</p>
+</blockquote>
+<h3 id="端侧-Runtime"><a href="#端侧-Runtime" class="headerlink" title="端侧 Runtime"></a>端侧 Runtime</h3><p>端侧 Runtime 负责加载模型、管理内存、执行计算图，并将不同算子调度到 CPU、GPU 或 NPU。一个完整的部署链路通常包括：</p>
+<p><img src="/images/llm/llm-on-device-04.png" alt="端侧部署需要经过模型压缩、图编译、硬件适配和真机验证"></p>
+<p>常见运行时包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Runtime</strong></th>
+<th><strong>主要特点</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="external">llama.cpp</a></td>
+<td>GGUF 量化、CPU/GPU 混合推理</td>
+<td>本地电脑、跨平台原型和轻量应用</td>
+</tr>
+<tr>
+<td><a href="https://docs.pytorch.org/executorch/stable/llm/getting-started.html" target="_blank" rel="external">ExecuTorch</a></td>
+<td>PyTorch 模型导出、量化和硬件后端适配</td>
+<td>Android、iOS 和嵌入式部署</td>
+</tr>
+<tr>
+<td><a href="https://developers.google.com/edge/litert" target="_blank" rel="external">LiteRT</a></td>
+<td>CPU/GPU/NPU 推理与设备端图编译</td>
+<td>Android、iOS、桌面和 IoT</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/documentation/technologyoverviews/machine-learning" target="_blank" rel="external">Core ML</a></td>
+<td>Apple 平台模型转换与硬件调度</td>
+<td>iPhone、iPad 和 Mac</td>
+</tr>
+</tbody>
+</table>
+<p>不同 Runtime 支持的模型结构、量化格式和硬件后端并不完全一致。模型选型之前就需要确定目标设备和 Runtime，否则可能出现模型已经完成量化，却无法使用目标 NPU 内核的情况。</p>
+<h3 id="真机性能评测"><a href="#真机性能评测" class="headerlink" title="真机性能评测"></a>真机性能评测</h3><p>端侧性能不能只看一次 Token/s。端侧模型的性能评测通常需要关注以下指标：</p>
+<ol>
+<li><strong>TTFT</strong>：从用户提交请求到生成首个 Token 的时间，反映模型的首屏响应速度。</li>
+<li><strong>Prefill 吞吐</strong>：模型处理输入 Prompt 的速度，决定长文本进入模型需要等待多久。</li>
+<li><strong>Decode Token/s</strong>：模型每秒能够生成的 Token 数量，反映持续输出速度。</li>
+<li><strong>峰值内存</strong>：推理过程中出现的最大内存占用，用于判断长上下文下是否会内存溢出。</li>
+<li><strong>模型加载时间</strong>：模型从存储进入内存并完成初始化的时间，影响冷启动和模型切换体验。</li>
+<li><strong>Energy/token</strong>：每生成一个 Token 消耗的能量，用于衡量推理能效及电池压力。</li>
+<li><strong>热稳定性</strong>：设备持续推理后是否因发热触发降频，影响长期吞吐的稳定性。</li>
+<li><strong>精度回归</strong>：模型经过量化、图优化和硬件迁移后，原有任务能力是否明显下降。</li>
+<li><strong>设备覆盖率</strong>：模型在不同芯片、内存配置和系统版本上能否稳定运行。</li>
+</ol>
+<p>真机测试还需要覆盖冷启动与热启动、短输入与长输入、短回答与持续生成，以及不同内存和芯片档位。端侧设备受到温度、电量和系统调度策略影响，短时间跑分快并不代表能够持续稳定运行。</p>
+<p>因此，端侧 Runtime 优化的目标不是获得某一次最高 Token/s，而是在给定设备上同时满足<strong>内存不溢出、延迟可接受、功耗可控制、能力不明显退化</strong>。</p>
+<h2 id="从本地助手到端云协同"><a href="#从本地助手到端云协同" class="headerlink" title="从本地助手到端云协同"></a>从本地助手到端云协同</h2><p>端侧大模型的价值，最终体现在真实应用中。随着模型获得本地数据访问、多模态理解和工具调用能力，端侧应用会从“生成答案”逐步走向“感知环境并执行任务”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>应用形态</strong></th>
+<th><strong>核心能力</strong></th>
+<th><strong>典型任务</strong></th>
+<th><strong>关键约束</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本地助手</td>
+<td>检索、理解和生成</td>
+<td>文件总结、相册搜索、离线翻译</td>
+<td>数据权限与本地索引</td>
+</tr>
+<tr>
+<td>手机 Agent</td>
+<td>多模态理解与工具调用</td>
+<td>操作 App、填写表单、执行流程</td>
+<td>操作安全与状态校验</td>
+</tr>
+<tr>
+<td>端云协同</td>
+<td>动态任务路由</td>
+<td>本地处理简单任务，云端处理复杂推理</td>
+<td>隐私、网络和结果一致性</td>
+</tr>
+</tbody>
+</table>
+<p>本地助手主要读取设备中的文件、照片、邮件、日历和个人知识库；手机 Agent 则更进一步，需要理解屏幕状态、规划下一步动作，并通过系统接口完成操作。</p>
+<p><img src="/images/llm/llm-on-device-05.png" alt="手机 Agent 通过感知、规划、执行和反馈形成任务闭环"></p>
+<p>端侧 Agent 能够直接接触设备文件、账户和系统能力，因此不能只依赖模型自行判断。生产系统至少需要建立四层约束：</p>
+<ol>
+<li><strong>能力边界</strong>：只开放经过注册的工具和系统接口，并校验调用参数；</li>
+<li><strong>权限边界</strong>：使用最小权限访问本地数据，高风险操作必须由用户确认；</li>
+<li><strong>执行校验</strong>：操作完成后重新读取设备状态，确认结果符合预期；</li>
+<li><strong>安全审计</strong>：高风险操作在沙箱中执行，并保存完整调用日志。</li>
+</ol>
+<p>端侧模型虽然具备隐私、低延迟和离线优势，但受模型规模、上下文和设备资源限制，无法独立处理所有任务。因此，更现实的产品形态是端云协同。</p>
+<p><img src="/images/llm/llm-on-device-06.png" alt="端云路由需要综合考虑隐私、网络、任务复杂度和设备状态"></p>
+<p>端云协同不是简单地根据模型大小做选择，而是一套动态决策机制：</p>
+<ul>
+<li>隐私敏感、离线、高频和低延迟任务优先在端侧处理；</li>
+<li>复杂推理、长上下文和大规模知识检索交给云端模型；</li>
+<li>本地先完成数据筛选和脱敏，只向云端发送完成任务所需的最少信息；</li>
+<li>云端返回结果后，仍由端侧完成权限检查、工具执行和状态验证。</li>
+</ul>
+<p>未来端侧大模型主要会沿着四个方向演进：</p>
+<ol>
+<li><strong>模型与硬件协同</strong>：小模型、低比特计算、NPU 算子和编译工具进一步结合；</li>
+<li><strong>本地多模态与知识</strong>：语音、图片、屏幕理解和本地 RAG 在设备内协同运行；</li>
+<li><strong>个性化与记忆</strong>：利用本地 Adapter、用户偏好和长期记忆提供个性化能力；</li>
+<li><strong>Agent 与动态路由</strong>：端侧完成感知和执行，云端按需提供复杂推理能力。</li>
+</ol>
+<p>端侧大模型的目标，不是把能力最强的模型搬到手机上，而是在设备资源和安全边界内，构建一套能够持续运行、理解本地环境并完成实际任务的智能系统。</p>
+<p>一句话概括：<strong>云端大模型负责拓展能力上限，端侧大模型负责让智能以更低延迟、更强隐私和更自然的方式进入用户设备。</strong></p>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本]]></title>
       <url>http://matt33.com/2026/07/09/llm-model-compression/</url>
       <content type="html"><![CDATA[<p>大模型能力越来越强，但推理成本也越来越高：参数规模变大，显存占用上升，计算开销增加，长上下文带来更大的 KV Cache，线上服务还要面对延迟、吞吐和并发压力。对于真实业务系统来说，模型不只是“能不能答得好”，还要看它能不能在可接受的成本和延迟下稳定运行。</p>

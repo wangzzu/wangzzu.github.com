@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-09T14:30:00.000Z</updated>
+  <updated>2026-07-10T15:50:00.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,393 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (二十二)：端侧大模型，大模型如何在本地设备上运行</title>
+    <link href="http://matt33.com/2026/07/10/llm-on-device/"/>
+    <id>http://matt33.com/2026/07/10/llm-on-device/</id>
+    <published>2026-07-10T15:50:00.000Z</published>
+    <updated>2026-07-10T15:50:00.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>大模型应用长期以云端推理为主：用户将请求发送到服务器，由 GPU 集群完成计算并返回结果。云端能够承载更大的模型，也便于统一更新和管理，但它始终受到网络延迟、推理成本、数据隐私和离线可用性的约束。</p>
+<p>随着大模型进入输入法、语音助手、本地文件检索、相册理解和手机 Agent 等场景，推理需求开始向用户设备延伸。这些任务通常高频、实时，并涉及大量本地敏感数据，完全依赖云端不仅成本较高，也难以保证稳定的响应速度与隐私边界。</p>
+<p>端侧大模型正是为此而生。它不是将云端模型原封不动地搬进手机，而是在有限的内存、带宽、算力、功耗和散热条件下，重新平衡模型能力与运行成本。其核心目标可以概括为：<strong>模型装得下、推理跑得快，并且能够长时间稳定运行。</strong></p>
+<p>理解端侧大模型，需要抓住四个关键点：</p>
+<ol>
+<li><strong>资源瓶颈</strong>：端侧推理不仅受算力限制，内存容量、内存带宽和持续功耗同样关键；</li>
+<li><strong>模型压缩</strong>：低比特量化既能缩小模型体积，也能减少 Decode 阶段的权重读取和数据搬运；</li>
+<li><strong>异构计算</strong>：CPU、GPU 和 NPU 各有分工，实际性能取决于算子支持、计算图划分和跨硬件调度；</li>
+<li><strong>端云协同</strong>：端侧适合低延迟、离线和隐私敏感任务，复杂推理与大规模知识处理仍可以交给云端。</li>
+</ol>
+<p><img src="/images/llm/llm-on-device-01.png" alt="端侧大模型是模型、硬件、运行时和应用架构共同优化的结果"></p>
+<a id="more"></a>
+<h2 id="为什么需要端侧大模型"><a href="#为什么需要端侧大模型" class="headerlink" title="为什么需要端侧大模型"></a>为什么需要端侧大模型</h2><p>端侧大模型，是指模型的主要推理过程发生在手机、电脑、车机、机器人或其他本地设备上。它既可以完全离线运行，也可以与云端模型协同，根据任务类型动态选择推理位置。</p>
+<p>相比完全依赖云端，端侧推理主要解决五类问题：</p>
+<table>
+<thead>
+<tr>
+<th><strong>问题</strong></th>
+<th><strong>云端推理的限制</strong></th>
+<th><strong>端侧推理的价值</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>延迟</td>
+<td>受网络传输和云端排队影响</td>
+<td>在本地快速响应</td>
+</tr>
+<tr>
+<td>隐私</td>
+<td>数据需要离开用户设备</td>
+<td>敏感数据可以留在本地</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>每次请求都会消耗云端算力</td>
+<td>高频、简单任务可以本地处理</td>
+</tr>
+<tr>
+<td>离线</td>
+<td>弱网或无网环境无法使用</td>
+<td>没有网络时仍能运行</td>
+</tr>
+<tr>
+<td>个性化</td>
+<td>难以持续获取完整设备状态</td>
+<td>可以结合文件、偏好和本地上下文</td>
+</tr>
+</tbody>
+</table>
+<p>典型应用包括：</p>
+<ol>
+<li>本地文件总结、搜索与个人知识问答；</li>
+<li>输入法补全、文本改写和离线翻译；</li>
+<li>语音识别、实时字幕和会议摘要；</li>
+<li>相册分类、图片理解和 OCR；</li>
+<li>手机 Agent 的屏幕理解与操作规划；</li>
+<li>车机、机器人和工业终端的实时决策。</li>
+</ol>
+<h3 id="业内实践：端侧智能的不同形态"><a href="#业内实践：端侧智能的不同形态" class="headerlink" title="业内实践：端侧智能的不同形态"></a>业内实践：端侧智能的不同形态</h3><p>端侧智能并不只有“把模型下载到设备”这一种实现方式。当前业内主要存在三种形态：应用直接运行本地模型、操作系统提供共享模型服务，以及终端与云端模型协同工作。</p>
+<table>
+<thead>
+<tr>
+<th><strong>代表实践</strong></th>
+<th><strong>落地方式</strong></th>
+<th><strong>技术形态</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://www.tesla.com/support/grok" target="_blank" rel="external">Tesla Grok</a></td>
+<td>车机提供语音交互和导航入口，由云端模型完成理解与生成</td>
+<td>端云协同</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/documentation/FoundationModels" target="_blank" rel="external">Apple Foundation Models</a></td>
+<td>应用调用 Apple Intelligence 的端侧模型，完成生成、结构化输出和工具调用</td>
+<td>系统级端侧模型</td>
+</tr>
+<tr>
+<td><a href="https://developer.android.com/ai/gemini-nano" target="_blank" rel="external">Android Gemini Nano</a></td>
+<td>模型由 AICore 统一分发、更新并调用本地硬件执行</td>
+<td>系统级端侧模型</td>
+</tr>
+<tr>
+<td><a href="https://learn.microsoft.com/en-us/windows/ai/apis/phi-silica-transparency-note" target="_blank" rel="external">Windows Phi Silica</a></td>
+<td>应用通过 Windows AI API 使用运行在 NPU 或 GPU 上的本地模型</td>
+<td>PC 本地推理</td>
+</tr>
+</tbody>
+</table>
+<p>特斯拉是端云协同的典型案例。Grok 已经进入车机系统，用户可以通过语音进行问答、搜索目的地并发起导航；但它仍需要网络连接，交互内容由 xAI 处理。因此，当前形态更接近：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">车机负责语音交互、导航接入与结果呈现</span><br><span class="line">                    +</span><br><span class="line">云端大模型负责语言理解和生成</span><br></pre></td></tr></table></figure>
+<p>Apple、Android 和 Windows 则更接近真正的端侧推理。模型由操作系统统一管理，应用通过平台 API 使用生成、摘要、信息提取和工具调用能力，不需要每个应用分别下载和维护完整模型。这种方式还能统一处理模型更新、硬件调度和安全策略。</p>
+<h3 id="端侧并不等于完全本地"><a href="#端侧并不等于完全本地" class="headerlink" title="端侧并不等于完全本地"></a>端侧并不等于完全本地</h3><p>端侧大模型的重点并不是让所有计算都发生在本地，而是根据任务特征选择最合适的执行位置：</p>
+<ul>
+<li>高频、实时、离线和隐私敏感任务优先在端侧完成；</li>
+<li>复杂推理、超长上下文和大规模知识处理交给云端；</li>
+<li>本地设备负责获取环境信息、执行工具并验证最终结果。</li>
+</ul>
+<p>因此，端侧与云端并不是相互替代的关系。更现实的方向，是让端侧模型承担用户身边的感知与执行，让云端模型提供更高的能力上限，两者共同组成完整的智能系统。</p>
+<h2 id="端侧推理：硬件分工与性能瓶颈"><a href="#端侧推理：硬件分工与性能瓶颈" class="headerlink" title="端侧推理：硬件分工与性能瓶颈"></a>端侧推理：硬件分工与性能瓶颈</h2><p>Transformer 的主要计算来自 Attention 和 FFN/MLP 中的矩阵乘法。端侧设备通常同时包含 CPU、GPU 和 NPU，但真实推理性能并不只取决于硬件标称算力，还取决于模型算子、数据精度和内存布局能否与硬件匹配。</p>
+<table>
+<thead>
+<tr>
+<th><strong>硬件</strong></th>
+<th><strong>主要优势</strong></th>
+<th><strong>典型职责</strong></th>
+<th><strong>主要限制</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU</td>
+<td>通用性强、控制灵活</td>
+<td>Tokenizer、采样、调度及通用算子</td>
+<td>大规模矩阵计算效率较低</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>并行能力强、算子灵活</td>
+<td>Attention、FFN 和多模态编码</td>
+<td>功耗较高，持续运行容易发热</td>
+</tr>
+<tr>
+<td>NPU</td>
+<td>低精度计算能效高</td>
+<td>INT8/INT4 张量计算</td>
+<td>算子、Shape 和量化格式受限</td>
+</tr>
+</tbody>
+</table>
+<p>实际部署中，端侧模型既可以完整运行在单一后端，也可以由 Runtime 根据算子支持情况划分到 CPU、GPU 和 NPU。采用混合执行时，需要重点关注算子回退和跨硬件数据搬运。</p>
+<p><img src="/images/llm/llm-on-device-02.png" alt="端侧 Runtime 根据算子类型、数据精度和硬件能力划分计算图"></p>
+<p>这里最容易被忽略的是<strong>算子回退</strong>。当 NPU 不支持某个算子、动态 Shape 或量化格式时，该部分会退回 CPU 或 GPU 执行，并可能引入张量复制、数据类型转换、内存布局转换和设备同步。频繁的数据搬运会抵消硬件加速收益，因此 NPU 的峰值算力并不能直接代表模型的真实推理速度。</p>
+<h3 id="Prefill-与-Decode"><a href="#Prefill-与-Decode" class="headerlink" title="Prefill 与 Decode"></a>Prefill 与 Decode</h3><p>LLM 推理可以拆成两个特征明显不同的阶段：</p>
+<table>
+<thead>
+<tr>
+<th><strong>阶段</strong></th>
+<th><strong>主要工作</strong></th>
+<th><strong>计算特征</strong></th>
+<th><strong>主要指标与瓶颈</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prefill</td>
+<td>并行处理完整 Prompt，建立 KV Cache</td>
+<td>大规模矩阵乘法</td>
+<td>影响首 Token 延迟，通常更依赖计算能力</td>
+</tr>
+<tr>
+<td>Decode</td>
+<td>每轮生成一个 Token，并复用历史 KV Cache</td>
+<td>小 Batch、重复读取权重和缓存</td>
+<td>影响生成速度，通常更依赖内存带宽</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/llm-on-device-03.png" alt="Prefill 决定首 Token 延迟，Decode 决定持续生成速度"></p>
+<p>端侧推理的 Batch 通常很小。对于 Dense 模型，Decode 每生成一个 Token，基本都要读取全部模型权重；随着上下文变长，还需要读取越来越大的 KV Cache。因此，其理想吞吐上限可以粗略表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Decode Token/s</span><br><span class="line">≈ 有效内存带宽</span><br><span class="line">  ÷ 每个 Token 需要读取的数据量</span><br></pre></td></tr></table></figure>
+<p>这里的读取量不仅包括模型权重，还包括 KV Cache、中间张量以及跨硬件的数据传输。实际速度还会受到量化内核、缓存命中率、算子融合和设备同步等因素影响。</p>
+<p>这也解释了为什么低比特量化对端侧推理如此重要：它不仅缩小模型文件，也减少了每个 Token 生成时需要搬运的权重数据；而 GQA、MQA 和 KV Cache 量化，则进一步降低长上下文带来的缓存压力。</p>
+<h2 id="模型压缩：让模型装得下"><a href="#模型压缩：让模型装得下" class="headerlink" title="模型压缩：让模型装得下"></a>模型压缩：让模型装得下</h2><p>端侧设备的内存和存储空间有限，未经压缩的大模型通常无法直接部署。关于量化、蒸馏、剪枝等技术的具体原理，上一篇文章《<a href="https://matt33.com/2026/07/09/llm-model-compression/">LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</a>》已经详细介绍，本节只关注它们对端侧推理的直接影响。端侧模型压缩主要有两个方向：</p>
+<ol>
+<li><strong>减小参数规模</strong>：使用更小的模型，从源头减少权重、计算量和内存访问；</li>
+<li><strong>降低参数精度</strong>：将 FP16/BF16 权重量化为 INT8、INT4，减少模型体积和 Decode 阶段的数据搬运。</li>
+</ol>
+<p>模型权重的理论大小可以粗略估算为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">权重大小 ≈ 参数量 × 每个参数的比特数 ÷ 8</span><br></pre></td></tr></table></figure>
+<p>以 7B 模型为例：</p>
+<table>
+<thead>
+<tr>
+<th><strong>权重精度</strong></th>
+<th><strong>理论权重大小</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP16 / BF16</td>
+<td>约 14 GB</td>
+</tr>
+<tr>
+<td>INT8</td>
+<td>约 7 GB</td>
+</tr>
+<tr>
+<td>INT4</td>
+<td>约 3.5 GB</td>
+</tr>
+</tbody>
+</table>
+<p>这只是模型权重的大小。实际运行还需要为 KV Cache、临时张量、Runtime Buffer、Tokenizer 和应用本身预留内存。因此，一个理论上能够装入设备的模型，实际运行时仍可能出现内存不足。</p>
+<p>端侧部署更常见的策略是：<strong>先选择满足任务能力要求的最小模型，再根据目标硬件进行 INT8 或 INT4 量化。</strong> 需要注意，模型文件变小并不代表推理一定更快；如果设备缺少对应的低比特计算内核，反量化和数据重排反而可能增加开销。</p>
+<p>当模型能够装入设备后，下一步要解决的就是 KV Cache、运行时内存和硬件调度问题。</p>
+<h2 id="内存与运行时：从能加载到稳定运行"><a href="#内存与运行时：从能加载到稳定运行" class="headerlink" title="内存与运行时：从能加载到稳定运行"></a>内存与运行时：从能加载到稳定运行</h2><p>模型文件能够加载，只说明静态权重可以放入设备，并不代表模型能够稳定推理。生成过程中，KV Cache、临时张量和硬件后端缓冲区会继续占用内存，因此端侧真正需要关注的是<strong>峰值内存</strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">峰值内存 ≈ 模型权重</span><br><span class="line">         + KV Cache</span><br><span class="line">         + 激活与临时张量</span><br><span class="line">         + Runtime Buffer</span><br><span class="line">         + Tokenizer与应用数据</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th><strong>内存组成</strong></th>
+<th><strong>特点</strong></th>
+<th><strong>主要影响因素</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型权重</td>
+<td>相对固定</td>
+<td>参数量、量化精度</td>
+</tr>
+<tr>
+<td>KV Cache</td>
+<td>随上下文持续增长</td>
+<td>层数、Token 数、KV Head、精度</td>
+</tr>
+<tr>
+<td>激活与临时张量</td>
+<td>计算过程中动态产生</td>
+<td>Prompt 长度、算子实现</td>
+</tr>
+<tr>
+<td>Runtime Buffer</td>
+<td>由推理后端管理</td>
+<td>内存规划、数据复制、硬件划分</td>
+</tr>
+<tr>
+<td>应用数据</td>
+<td>与模型共享设备内存</td>
+<td>UI、图片、文件和其他业务模块</td>
+</tr>
+</tbody>
+</table>
+<p>即使设备采用统一内存，模型、操作系统和应用仍然共享同一片资源。峰值占用过高会触发内存回收、应用退出，甚至导致模型加载成功后在长对话中崩溃。</p>
+<h3 id="KV-Cache：从架构选型到运行时管理"><a href="#KV-Cache：从架构选型到运行时管理" class="headerlink" title="KV Cache：从架构选型到运行时管理"></a>KV Cache：从架构选型到运行时管理</h3><p>KV Cache 会随上下文长度持续增长，是端侧模型权重之外最主要的动态内存开销。实际可用空间可以粗略理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">KV Cache 可用预算</span><br><span class="line">≈ 设备可用内存</span><br><span class="line">- 模型权重</span><br><span class="line">- Runtime Buffer</span><br><span class="line">- 系统与应用预留内存</span><br></pre></td></tr></table></figure>
+<p>端侧的 KV Cache 优化需要分成两个阶段：</p>
+<ol>
+<li><strong>模型选型阶段</strong>：优先选择采用 GQA 或 MQA 的模型。这类架构通过减少 KV Head 数量，从源头降低每个 Token 对应的缓存大小。GQA/MQA 属于模型结构，模型部署后通常不能由 Runtime 临时开启。</li>
+<li><strong>运行时阶段</strong>：根据设备内存设置上下文上限，并在 Runtime 支持的情况下使用 KV Cache 量化、Sliding Window、历史摘要或受控 RAG，避免上下文无限增长。</li>
+</ol>
+<p><strong>GQA/MQA 决定模型先天需要多少 KV Cache，运行时策略决定有限的 KV Cache 应该如何分配和回收。</strong></p>
+<blockquote>
+<p>当 KV Cache 接近预算上限时，系统应主动压缩或淘汰低价值历史信息；如果任务必须保留完整长上下文，则可以切换到内存更充足的云端模型。</p>
+</blockquote>
+<h3 id="端侧-Runtime"><a href="#端侧-Runtime" class="headerlink" title="端侧 Runtime"></a>端侧 Runtime</h3><p>端侧 Runtime 负责加载模型、管理内存、执行计算图，并将不同算子调度到 CPU、GPU 或 NPU。一个完整的部署链路通常包括：</p>
+<p><img src="/images/llm/llm-on-device-04.png" alt="端侧部署需要经过模型压缩、图编译、硬件适配和真机验证"></p>
+<p>常见运行时包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Runtime</strong></th>
+<th><strong>主要特点</strong></th>
+<th><strong>适合场景</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="external">llama.cpp</a></td>
+<td>GGUF 量化、CPU/GPU 混合推理</td>
+<td>本地电脑、跨平台原型和轻量应用</td>
+</tr>
+<tr>
+<td><a href="https://docs.pytorch.org/executorch/stable/llm/getting-started.html" target="_blank" rel="external">ExecuTorch</a></td>
+<td>PyTorch 模型导出、量化和硬件后端适配</td>
+<td>Android、iOS 和嵌入式部署</td>
+</tr>
+<tr>
+<td><a href="https://developers.google.com/edge/litert" target="_blank" rel="external">LiteRT</a></td>
+<td>CPU/GPU/NPU 推理与设备端图编译</td>
+<td>Android、iOS、桌面和 IoT</td>
+</tr>
+<tr>
+<td><a href="https://developer.apple.com/documentation/technologyoverviews/machine-learning" target="_blank" rel="external">Core ML</a></td>
+<td>Apple 平台模型转换与硬件调度</td>
+<td>iPhone、iPad 和 Mac</td>
+</tr>
+</tbody>
+</table>
+<p>不同 Runtime 支持的模型结构、量化格式和硬件后端并不完全一致。模型选型之前就需要确定目标设备和 Runtime，否则可能出现模型已经完成量化，却无法使用目标 NPU 内核的情况。</p>
+<h3 id="真机性能评测"><a href="#真机性能评测" class="headerlink" title="真机性能评测"></a>真机性能评测</h3><p>端侧性能不能只看一次 Token/s。端侧模型的性能评测通常需要关注以下指标：</p>
+<ol>
+<li><strong>TTFT</strong>：从用户提交请求到生成首个 Token 的时间，反映模型的首屏响应速度。</li>
+<li><strong>Prefill 吞吐</strong>：模型处理输入 Prompt 的速度，决定长文本进入模型需要等待多久。</li>
+<li><strong>Decode Token/s</strong>：模型每秒能够生成的 Token 数量，反映持续输出速度。</li>
+<li><strong>峰值内存</strong>：推理过程中出现的最大内存占用，用于判断长上下文下是否会内存溢出。</li>
+<li><strong>模型加载时间</strong>：模型从存储进入内存并完成初始化的时间，影响冷启动和模型切换体验。</li>
+<li><strong>Energy/token</strong>：每生成一个 Token 消耗的能量，用于衡量推理能效及电池压力。</li>
+<li><strong>热稳定性</strong>：设备持续推理后是否因发热触发降频，影响长期吞吐的稳定性。</li>
+<li><strong>精度回归</strong>：模型经过量化、图优化和硬件迁移后，原有任务能力是否明显下降。</li>
+<li><strong>设备覆盖率</strong>：模型在不同芯片、内存配置和系统版本上能否稳定运行。</li>
+</ol>
+<p>真机测试还需要覆盖冷启动与热启动、短输入与长输入、短回答与持续生成，以及不同内存和芯片档位。端侧设备受到温度、电量和系统调度策略影响，短时间跑分快并不代表能够持续稳定运行。</p>
+<p>因此，端侧 Runtime 优化的目标不是获得某一次最高 Token/s，而是在给定设备上同时满足<strong>内存不溢出、延迟可接受、功耗可控制、能力不明显退化</strong>。</p>
+<h2 id="从本地助手到端云协同"><a href="#从本地助手到端云协同" class="headerlink" title="从本地助手到端云协同"></a>从本地助手到端云协同</h2><p>端侧大模型的价值，最终体现在真实应用中。随着模型获得本地数据访问、多模态理解和工具调用能力，端侧应用会从“生成答案”逐步走向“感知环境并执行任务”。</p>
+<table>
+<thead>
+<tr>
+<th><strong>应用形态</strong></th>
+<th><strong>核心能力</strong></th>
+<th><strong>典型任务</strong></th>
+<th><strong>关键约束</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本地助手</td>
+<td>检索、理解和生成</td>
+<td>文件总结、相册搜索、离线翻译</td>
+<td>数据权限与本地索引</td>
+</tr>
+<tr>
+<td>手机 Agent</td>
+<td>多模态理解与工具调用</td>
+<td>操作 App、填写表单、执行流程</td>
+<td>操作安全与状态校验</td>
+</tr>
+<tr>
+<td>端云协同</td>
+<td>动态任务路由</td>
+<td>本地处理简单任务，云端处理复杂推理</td>
+<td>隐私、网络和结果一致性</td>
+</tr>
+</tbody>
+</table>
+<p>本地助手主要读取设备中的文件、照片、邮件、日历和个人知识库；手机 Agent 则更进一步，需要理解屏幕状态、规划下一步动作，并通过系统接口完成操作。</p>
+<p><img src="/images/llm/llm-on-device-05.png" alt="手机 Agent 通过感知、规划、执行和反馈形成任务闭环"></p>
+<p>端侧 Agent 能够直接接触设备文件、账户和系统能力，因此不能只依赖模型自行判断。生产系统至少需要建立四层约束：</p>
+<ol>
+<li><strong>能力边界</strong>：只开放经过注册的工具和系统接口，并校验调用参数；</li>
+<li><strong>权限边界</strong>：使用最小权限访问本地数据，高风险操作必须由用户确认；</li>
+<li><strong>执行校验</strong>：操作完成后重新读取设备状态，确认结果符合预期；</li>
+<li><strong>安全审计</strong>：高风险操作在沙箱中执行，并保存完整调用日志。</li>
+</ol>
+<p>端侧模型虽然具备隐私、低延迟和离线优势，但受模型规模、上下文和设备资源限制，无法独立处理所有任务。因此，更现实的产品形态是端云协同。</p>
+<p><img src="/images/llm/llm-on-device-06.png" alt="端云路由需要综合考虑隐私、网络、任务复杂度和设备状态"></p>
+<p>端云协同不是简单地根据模型大小做选择，而是一套动态决策机制：</p>
+<ul>
+<li>隐私敏感、离线、高频和低延迟任务优先在端侧处理；</li>
+<li>复杂推理、长上下文和大规模知识检索交给云端模型；</li>
+<li>本地先完成数据筛选和脱敏，只向云端发送完成任务所需的最少信息；</li>
+<li>云端返回结果后，仍由端侧完成权限检查、工具执行和状态验证。</li>
+</ul>
+<p>未来端侧大模型主要会沿着四个方向演进：</p>
+<ol>
+<li><strong>模型与硬件协同</strong>：小模型、低比特计算、NPU 算子和编译工具进一步结合；</li>
+<li><strong>本地多模态与知识</strong>：语音、图片、屏幕理解和本地 RAG 在设备内协同运行；</li>
+<li><strong>个性化与记忆</strong>：利用本地 Adapter、用户偏好和长期记忆提供个性化能力；</li>
+<li><strong>Agent 与动态路由</strong>：端侧完成感知和执行，云端按需提供复杂推理能力。</li>
+</ol>
+<p>端侧大模型的目标，不是把能力最强的模型搬到手机上，而是在设备资源和安全边界内，构建一套能够持续运行、理解本地环境并完成实际任务的智能系统。</p>
+<p>一句话概括：<strong>云端大模型负责拓展能力上限，端侧大模型负责让智能以更低延迟、更强隐私和更自然的方式进入用户设备。</strong></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;大模型应用长期以云端推理为主：用户将请求发送到服务器，由 GPU 集群完成计算并返回结果。云端能够承载更大的模型，也便于统一更新和管理，但它始终受到网络延迟、推理成本、数据隐私和离线可用性的约束。&lt;/p&gt;
+&lt;p&gt;随着大模型进入输入法、语音助手、本地文件检索、相册理解和手机 Agent 等场景，推理需求开始向用户设备延伸。这些任务通常高频、实时，并涉及大量本地敏感数据，完全依赖云端不仅成本较高，也难以保证稳定的响应速度与隐私边界。&lt;/p&gt;
+&lt;p&gt;端侧大模型正是为此而生。它不是将云端模型原封不动地搬进手机，而是在有限的内存、带宽、算力、功耗和散热条件下，重新平衡模型能力与运行成本。其核心目标可以概括为：&lt;strong&gt;模型装得下、推理跑得快，并且能够长时间稳定运行。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;理解端侧大模型，需要抓住四个关键点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;资源瓶颈&lt;/strong&gt;：端侧推理不仅受算力限制，内存容量、内存带宽和持续功耗同样关键；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;模型压缩&lt;/strong&gt;：低比特量化既能缩小模型体积，也能减少 Decode 阶段的权重读取和数据搬运；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;异构计算&lt;/strong&gt;：CPU、GPU 和 NPU 各有分工，实际性能取决于算子支持、计算图划分和跨硬件调度；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;端云协同&lt;/strong&gt;：端侧适合低延迟、离线和隐私敏感任务，复杂推理与大规模知识处理仍可以交给云端。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img src=&quot;/images/llm/llm-on-device-01.png&quot; alt=&quot;端侧大模型是模型、硬件、运行时和应用架构共同优化的结果&quot;&gt;&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</title>
@@ -8766,1276 +9153,6 @@
     <summary type="html">
     
       &lt;p&gt;前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (二)：机器如何把语言变成数学</title>
-    <link href="http://matt33.com/2026/06/21/llm-math-basics/"/>
-    <id>http://matt33.com/2026/06/21/llm-math-basics/</id>
-    <published>2026-06-21T10:10:00.000Z</published>
-    <updated>2026-06-28T15:28:01.040Z</updated>
-    
-    <content type="html"><![CDATA[<p>上一篇我们从大模型的发展脉络出发，回顾了语言模型如何从早期的统计方法，一步步走向 Transformer、GPT，以及今天无处不在的大模型应用。如果说第一篇回答的是“LLM 是怎么发展到今天的”，那么这一篇想往下多走一层，回答一个更底层的问题：<strong>LLM 为什么能被训练出来？机器到底是怎样把语言变成可计算、可优化、可生成的东西？</strong></p>
-<p>无论是 Transformer 里的 Attention，预训练里的 loss，微调时的梯度更新，RAG 里的向量检索，还是 LoRA 里的低秩矩阵，本质上都绕不开几类基础数学概念。不过，这篇并不是要把大家重新拉回大学数学课堂。我们不会从定理证明开始，也不会堆大量公式。更重要的是建立一套直觉：<strong>机器如何把文字变成向量，如何计算词与词之间的关系，如何预测下一个 token，又如何通过错误和梯度一步步修正自己</strong>。</p>
-<a id="more"></a>
-<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>LLM 看起来像是在“理解语言”，但从机器的视角看，它一直在做三件事：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">预测 -&gt; 评估 -&gt; 修正</span><br></pre></td></tr></table></figure>
-<p>给定一句话：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我今天早上喝了一杯 __</span><br></pre></td></tr></table></figure>
-<p>模型会输出一组概率：</p>
-<table>
-<thead>
-<tr>
-<th>候选 token</th>
-<th>概率</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>咖啡</td>
-<td>0.62</td>
-</tr>
-<tr>
-<td>水</td>
-<td>0.18</td>
-</tr>
-<tr>
-<td>茶</td>
-<td>0.11</td>
-</tr>
-<tr>
-<td>牛奶</td>
-<td>0.06</td>
-</tr>
-<tr>
-<td>其他</td>
-<td>0.03</td>
-</tr>
-</tbody>
-</table>
-<p>这件事背后已经包含了 LLM 最核心的数学链路（这些数学概念和 LLM 概念，会在本系列文章中给读者介绍明白）：</p>
-<table>
-<thead>
-<tr>
-<th>机器要解决的问题</th>
-<th>背后的数学</th>
-<th>对应的 LLM 概念</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>文字怎么变成数字？</td>
-<td>向量、矩阵、张量</td>
-<td>token、embedding</td>
-</tr>
-<tr>
-<td>词之间怎么产生关系？</td>
-<td>点积、相似度、矩阵乘法</td>
-<td>attention、Q/K/V</td>
-</tr>
-<tr>
-<td>下一个词怎么预测？</td>
-<td>条件概率、Softmax</td>
-<td>next token prediction</td>
-</tr>
-<tr>
-<td>错误怎么衡量？</td>
-<td>交叉熵、最大似然</td>
-<td>loss</td>
-</tr>
-<tr>
-<td>参数怎么修正？</td>
-<td>梯度、链式法则</td>
-<td>backpropagation</td>
-</tr>
-<tr>
-<td>模型怎么变好？</td>
-<td>梯度下降、优化器</td>
-<td>training、fine-tuning</td>
-</tr>
-</tbody>
-</table>
-<p><img src="/images/llm/llm-math-01.png" alt="LLM 数学基础图"></p>
-<p>可以把 LLM 的数学主线先简化成下面这张图：</p>
-<p><img src="/images/llm/llm-math-02.png" alt="LLM 训练中核心计算流程"></p>
-<p>LLM 本质上是在做一件事：先把语言翻译成数字，再用数学计算关系，最后用错误信号反过来修正模型。</p>
-<p>总而言之，LLM 的数学不是抽象公式，而是一套让机器理解语言的翻译系统：NLP 告诉我们语言问题难在哪里，线性代数把文字变成向量，Transformer 用 Attention 计算上下文关系，概率论把生成变成“预测下一个 token”，微积分把错误转化为梯度，优化方法则推动模型在一次次更新中变得更好。</p>
-<blockquote>
-<p>如果上面的概念这里完全搞不清楚，也没关系，接下来这个系列的文章，从本章开始会逐步给读者介绍清楚，不过前提是读者有大学数学的基础，明白线性代数、概率统计、微积分的基础原理。</p>
-</blockquote>
-<h2 id="表示与关系：语言如何变成向量并计算相关性"><a href="#表示与关系：语言如何变成向量并计算相关性" class="headerlink" title="表示与关系：语言如何变成向量并计算相关性"></a>表示与关系：语言如何变成向量并计算相关性</h2><p>这一节本质上要解决两个问题：</p>
-<ol>
-<li>语言如何变成机器可以计算的数字？</li>
-<li>模型如何计算词与词之间的关系？</li>
-</ol>
-<p>这两个问题对应 LLM 中非常核心的两类能力：</p>
-<ol>
-<li>一类是“表示”：把文字变成向量。</li>
-<li>一类是“关系”：计算这些向量之间谁和谁更相关。</li>
-</ol>
-<p>如果说人类读一句话靠语感、经验和上下文，那么机器读一句话，第一步就是把它翻译成<strong>数学结构</strong>。</p>
-<h3 id="从文字到-Token：模型处理语言的最小单位"><a href="#从文字到-Token：模型处理语言的最小单位" class="headerlink" title="从文字到 Token：模型处理语言的最小单位"></a>从文字到 Token：模型处理语言的最小单位</h3><p>在进入向量、矩阵和 Attention 之前，需要先理解一个基础概念：<strong>Token</strong>。人类读文章时，看到的是字、词、句子和段落；但 LLM 并不是直接以“完整句子”为单位处理语言。它会先通过 <strong>Tokenizer</strong>，把文本切分成一个个更小的单位，这些单位就叫做 token。</p>
-<ul>
-<li>Token 可以是一个字、一个词、一个词的一部分，也可以是标点符号。不同模型使用的 tokenizer 不同，切分结果也可能不一样。</li>
-</ul>
-<p>例如一句话：我喜欢喝咖啡。</p>
-<p>可能会被切成：</p>
-<ul>
-<li>我 / 喜欢 / 喝 / 咖啡 / 。</li>
-</ul>
-<p>也可能被切成更细的片段。</p>
-<p>在模型内部，每个 token 会先被转换成一个编号，再进一步转换成向量。</p>
-<p><img src="/images/llm/llm-math-03.png" alt="文本的 Tokenization 过程"></p>
-<p>Token 是 LLM 处理语言的基本单位，文本必须先被切成 token，才能继续变成向量并进入模型计算（后面我们讲 embedding、向量空间、Attention、预测下一个 token，都是建立在 token 这个基本单位之上的）。</p>
-<h3 id="语言的表示：从-token-到向量空间"><a href="#语言的表示：从-token-到向量空间" class="headerlink" title="语言的表示：从 token 到向量空间"></a>语言的表示：从 token 到向量空间</h3><p>计算机并不真正认识“猫”“狗”“咖啡”这些词。对机器来说，它们必须先变成数字，才能参与计算。在线性代数里，最常见的四个对象是：</p>
-<table>
-<thead>
-<tr>
-<th>对象</th>
-<th>直觉</th>
-<th>在 LLM 里的样子</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>标量</td>
-<td>一个数字，比如 loss = 2.13</td>
-<td>loss</td>
-</tr>
-<tr>
-<td>向量</td>
-<td>一串数字，一个语义坐标</td>
-<td>一个 token 的 embedding</td>
-</tr>
-<tr>
-<td>矩阵</td>
-<td>一张数字表，一次表示变换</td>
-<td>一层权重、Q/K/V 变换</td>
-</tr>
-<tr>
-<td>张量</td>
-<td>更高维的数字容器</td>
-<td>batch、序列、hidden state</td>
-</tr>
-</tbody>
-</table>
-<p>这里也用一张图来理解它们的样式：</p>
-<p><img src="/images/llm/llm-math-04.png" alt="线性代数中的常见对象"></p>
-<p>也就是说，LLM 里大多数计算，本质上不是在处理“文字”，而是在处理这些数字结构。</p>
-<blockquote>
-<p>当然只有 token embedding 还不够，Transformer 还需要位置表示，让模型知道 token 在句子中的顺序，否则“我喜欢你”和“你喜欢我”在词集合上很像，但语义完全不同（这部分会在下一篇文章中介绍）。</p>
-</blockquote>
-<h4 id="为什么语言要变成向量？"><a href="#为什么语言要变成向量？" class="headerlink" title="为什么语言要变成向量？"></a>为什么语言要变成向量？</h4><p>最朴素的方式，是给每个词一个编号，或者使用 one-hot 表示（<code>one-hot</code> 是一种把“类别”表示成向量的方法）。例如：</p>
-<table>
-<thead>
-<tr>
-<th>词</th>
-<th>one-hot 表示</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>猫</td>
-<td><code>[1, 0, 0, 0]</code></td>
-</tr>
-<tr>
-<td>狗</td>
-<td><code>[0, 1, 0, 0]</code></td>
-</tr>
-<tr>
-<td>桌子</td>
-<td><code>[0, 0, 1, 0]</code></td>
-</tr>
-<tr>
-<td>咖啡</td>
-<td><code>[0, 0, 0, 1]</code></td>
-</tr>
-</tbody>
-</table>
-<p>这种方式简单，但有几个明显问题：</p>
-<ol>
-<li>太稀疏：词表很大时，每个向量都非常长；</li>
-<li>没有语义距离：“猫”和“狗”看起来跟“猫”和“桌子”一样远；</li>
-<li>不适合泛化：模型很难知道哪些词意思接近。</li>
-</ol>
-<p>而 Embedding 的思路是：不再用一堆 0 和 1 表示词，而是给每个 token 一个稠密向量。例如：</p>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>embedding 示例</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>猫</td>
-<td>[0.21, -0.13, 0.88, …]</td>
-</tr>
-<tr>
-<td>狗</td>
-<td>[0.24, -0.10, 0.82, …]</td>
-</tr>
-<tr>
-<td>桌子</td>
-<td>[-0.57, 0.62, 0.09, …]</td>
-</tr>
-</tbody>
-</table>
-<p>这些数字不是人工写死的，而是在训练过程中学出来的。它们的目标是让语义相近的词，在向量空间里也更接近。</p>
-<h4 id="向量：语义的坐标"><a href="#向量：语义的坐标" class="headerlink" title="向量：语义的坐标"></a>向量：语义的坐标</h4><p>可以把 embedding 想成一个语义地图：</p>
-<p><img src="/images/llm/llm-math-05.png" alt="语言的 Embedding"></p>
-<p>真实 embedding 当然不是二维，而可能是几百、几千甚至更高维。但直觉类似：语义相近的 token，向量位置也更接近。</p>
-<p>向量化之后，很多语言的问题也变成了数学问题：</p>
-<ol>
-<li>“猫”和“狗”是不是更接近？  –&gt;  两个向量距离是否更近？</li>
-<li>“苹果”在句子里是什么意思？ –&gt; 上下文向量落在哪个语义区域？</li>
-<li>一段文档和问题是否相关？ –&gt; 文档向量和问题向量相似度多高？</li>
-</ol>
-<h4 id="矩阵：表示变换器"><a href="#矩阵：表示变换器" class="headerlink" title="矩阵：表示变换器"></a>矩阵：表示变换器</h4><p>向量表示一个对象，矩阵表示一种变换。在 Transformer 里，很多操作都可以理解成：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新表示 = 旧表示 × 参数矩阵</span><br></pre></td></tr></table></figure>
-<p><img src="/images/llm/llm-math-06.png" alt="Transformer 中三个核心矩阵"></p>
-<p>Transformer 中的 <code>Wq/Wk/Wv</code> 是参数矩阵，<code>Q/K/V</code>是 token 向量经过这些矩阵线性投影后得到的表示：</p>
-<table>
-<thead>
-<tr>
-<th>符号</th>
-<th>可以怎么理解</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>X</code></td>
-<td>当前 token 的向量表示</td>
-</tr>
-<tr>
-<td><code>Wq</code></td>
-<td>把 token 变成“我要找什么”的矩阵</td>
-</tr>
-<tr>
-<td><code>Wk</code></td>
-<td>把 token 变成“我能提供什么线索”的矩阵</td>
-</tr>
-<tr>
-<td><code>Wv</code></td>
-<td>把 token 变成“我真正携带的信息”的矩阵</td>
-</tr>
-</tbody>
-</table>
-<p>这里可以记住一句话：矩阵是 LLM 里最常见的“表示变换器”。</p>
-<h4 id="张量：把一批句子组织起来"><a href="#张量：把一批句子组织起来" class="headerlink" title="张量：把一批句子组织起来"></a>张量：把一批句子组织起来</h4><p>当我们只看一个 token，它是向量。当我们看一句话，它是矩阵。当我们一次处理多句话，它就变成了张量。下面举个例子：</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">batch_size</span> <span class="string">=</span> <span class="number">4</span></span><br><span class="line"><span class="string">sequence_length</span> <span class="string">=</span> <span class="number">128</span></span><br><span class="line"><span class="string">hidden_dim</span> <span class="string">=</span> <span class="number">768</span></span><br></pre></td></tr></table></figure>
-<p>可以理解为：一次处理 4 句话、每句话 128 个 token、每个 token 用 768 维向量表示。如下图所示：</p>
-<p><img src="/images/llm/llm-math-07.png" alt="张量结构"></p>
-<h3 id="关系的计算：从相似度到-Attention"><a href="#关系的计算：从相似度到-Attention" class="headerlink" title="关系的计算：从相似度到 Attention"></a>关系的计算：从相似度到 Attention</h3><h4 id="相似度：模型怎么判断“像不像”"><a href="#相似度：模型怎么判断“像不像”" class="headerlink" title="相似度：模型怎么判断“像不像”"></a>相似度：模型怎么判断“像不像”</h4><p>当词变成向量之后，模型就可以计算它们之间的关系。常见的相似度计算方式有：</p>
-<table>
-<thead>
-<tr>
-<th><strong>方法</strong></th>
-<th><strong>基本原理</strong></th>
-<th><strong>常见位置</strong></th>
-<th><strong>适合场景</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>点积</td>
-<td>将两个向量对应维度相乘后求和。  <br>两个向量方向越一致、数值越大，分数越高</td>
-<td>Attention score</td>
-<td>适合在模型内部快速计算相关性，尤其是 Q 和 K 的匹配</td>
-</tr>
-<tr>
-<td>余弦相似度</td>
-<td>计算两个向量夹角的余弦值，重点看方向是否接近。  <br>不太关心向量长度，更关心“语义方向”是否一致</td>
-<td>向量检索、RAG、语义搜索</td>
-<td>适合比较文本、问题、文档之间的语义相似度</td>
-</tr>
-<tr>
-<td>欧氏距离</td>
-<td>计算两个点在空间中的直线距离。  <br>两个点离得越近，表示越相似</td>
-<td>聚类、传统机器学习、部分向量检索场景</td>
-<td>适合空间距离有明确意义的场景，但在高维语义向量中不一定总是最优</td>
-</tr>
-</tbody>
-</table>
-<h4 id="SVD、低秩：复杂矩阵里的主要方向"><a href="#SVD、低秩：复杂矩阵里的主要方向" class="headerlink" title="SVD、低秩：复杂矩阵里的主要方向"></a>SVD、低秩：复杂矩阵里的主要方向</h4><p>对于一个复杂矩阵里，往往不是每个方向都同等重要，有些方向承载了主要信息，有些方向只是细节或噪声。SVD（奇异值分解） 是分析矩阵结构的一种分解方法，低秩近似是用少量主要方向表达矩阵信息的思想；它们常用来理解降维、压缩和 LoRA 背后的数学直觉。</p>
-<table>
-<thead>
-<tr>
-<th><strong>概念</strong></th>
-<th><strong>基本原理</strong></th>
-<th><strong>和 LLM 的关系</strong></th>
-<th><strong>常见应用</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>SVD</td>
-<td>将一个矩阵分解成几个更简单的矩阵，拆出其中最重要的方向和强度（把复杂矩阵拆成几个主要方向）</td>
-<td>帮助理解降维、压缩、低秩近似</td>
-<td>模型压缩、降维、矩阵分析、理解 LoRA 的数学基础</td>
-</tr>
-<tr>
-<td>低秩</td>
-<td>如果一个矩阵的大部分信息可以由少数几个方向表达，就可以用更小的矩阵近似它（用更少参数表达主要变化）</td>
-<td>LoRA 利用低秩矩阵近似参数更新，不必完整微调整个大矩阵</td>
-<td>LoRA、参数高效微调、模型压缩</td>
-</tr>
-</tbody>
-</table>
-<p><img src="/images/llm/llm-math-08.png" alt="复杂矩阵处理的主要方向"></p>
-<h4 id="关系的计算：相似度与-Attention"><a href="#关系的计算：相似度与-Attention" class="headerlink" title="关系的计算：相似度与 Attention"></a>关系的计算：相似度与 Attention</h4><p>线性代数让 token 有了向量。接下来，模型要回答两个更关键的问题：</p>
-<ul>
-<li>当前 token 应该从上下文里看哪些 token？</li>
-<li>每个 token 应该贡献多少信息？</li>
-</ul>
-<p>这里举个例子，有一句话：小明把书放进书包，因为它太重了。</p>
-<ul>
-<li>这里的“它”指的是“书”，还是“书包”？</li>
-</ul>
-<p>人类会根据语义判断。模型也需要计算：当前 token 应该重点关注上下文中的哪些 token。</p>
-<p>这件事可以拆成三个动作：</p>
-<table>
-<thead>
-<tr>
-<th>动作</th>
-<th>数学形式</th>
-<th>作用</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>算相关性</td>
-<td>点积</td>
-<td>判断两个 token 是否匹配</td>
-</tr>
-<tr>
-<td>分配权重</td>
-<td>Softmax</td>
-<td>把相关性分数变成注意力比例</td>
-<td>让重要 token 贡献更多</td>
-</tr>
-</tbody>
-</table>
-<p>放回刚才的句子，可以这样理解：</p>
-<p><img src="/images/llm/llm-math-09.png" alt="示例的 Attention 权重分配"></p>
-<p>这不是说模型一定永远这样判断，而是展示 Attention 权重的阅读方式：权重越高，当前 token 从那里拿到的信息越多。</p>
-<h5 id="什么是-Attention（注意力机制）"><a href="#什么是-Attention（注意力机制）" class="headerlink" title="什么是 Attention（注意力机制）"></a>什么是 Attention（注意力机制）</h5><p>继续用上面的示例：小明把书放进书包，因为它太重了。</p>
-<p>当人类理解“它”时，会自然回头看前面的词，并判断“它”更可能指向“书”，而不是“小明”或“放进”。这说明，一个词的含义往往不是孤立决定的，而是<strong>由上下文共同决定的</strong>。</p>
-<p>如何解决这个问题呢？</p>
-<ul>
-<li>2014 年，Dzmitry Bahdanau、Kyunghyun Cho、Yoshua Bengio 在论文《<a href="https://arxiv.org/abs/1409.0473" target="_blank" rel="external">Neural Machine Translation by Jointly Learning to Align and Translate</a>》中提出了 Attention 机制，用来解决机器翻译中长句被压缩成单一向量后信息丢失、词语对齐困难的问题。</li>
-<li>后来，Vaswani 等人在 2017 年的论文《<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="external">Attention Is All You Need</a>》中进一步将 Attention 发展为 Transformer 的核心结构，在 Transformer 中采用并系统化了 Q/K/V 形式的 scaled dot-product attention，让模型能够判断：当前 token 想找什么信息，哪些 token 与它相关，以及最终应该读取哪些内容。</li>
-</ul>
-<p>Attention 的核心思想简单来说，<strong>就是让模型在处理某个 token 时，能够动态地判断上下文中哪些 token 更重要，并给它们分配不同的权重</strong>。</p>
-<blockquote>
-<p>后续会有一篇文章，专门来分析这篇跨时代意义的论文 —— transformer，这里读者简单了解其中使用到的数学理论即可。</p>
-</blockquote>
-<h5 id="Q、K、V：同一个向量的三种线性投影"><a href="#Q、K、V：同一个向量的三种线性投影" class="headerlink" title="Q、K、V：同一个向量的三种线性投影"></a>Q、K、V：同一个向量的三种线性投影</h5><p>在 Transformer 中，每个 token 进入模型后，都会先变成一个向量。然后模型会用三个不同的矩阵，把这个向量变换成三种不同的表示：</p>
-<table>
-<thead>
-<tr>
-<th><strong>名称</strong></th>
-<th><strong>数学含义</strong></th>
-<th><strong>直觉理解</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Q（Query）</td>
-<td>当前 token 的查询向量</td>
-<td>我想找什么信息</td>
-</tr>
-<tr>
-<td>K（Key）</td>
-<td>其他 token 的匹配向量</td>
-<td>我这里有什么特征可以被匹配</td>
-</tr>
-<tr>
-<td>V（Value）</td>
-<td>其他 token 的内容向量</td>
-<td>如果被关注，真正传递什么信息</td>
-</tr>
-</tbody>
-</table>
-<p>从数学上看，Q、K、V 本质上都是矩阵乘法（Transformer 内部的机制这里先不做过多赘述，简单有一个了解即可，重点关注背后的数学原理）。</p>
-<p><img src="/images/llm/llm-math-10.png" alt="Q/K/V 的核心工作原理"></p>
-<h5 id="Softmax：把分数变成权重"><a href="#Softmax：把分数变成权重" class="headerlink" title="Softmax：把分数变成权重"></a>Softmax：把分数变成权重</h5><p>在 Transformer 中，用 Q 和 K 计算完相关性后，会得到一组分数。比如当前 token 在看其他 token 时，可能得到这样的分数：</p>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>分数</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我</td>
-<td>1.2</td>
-</tr>
-<tr>
-<td>喜欢</td>
-<td>2.5</td>
-</tr>
-<tr>
-<td>咖啡</td>
-<td>0.8</td>
-</tr>
-</tbody>
-</table>
-<p>这些分数本身还不能直接当作“关注比例”，因为它们可能很大、很小，甚至可能是负数。Softmax 的作用，就是把这些分数转换成一组更好理解的权重（不过 Softmax 不是简单线性归一化，它会先对分数做指数变换，再归一化，因此会放大高分项的优势）：</p>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>原始分数</strong></th>
-<th><strong>Softmax 后的权重</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我</td>
-<td>1.2</td>
-<td>0.18</td>
-</tr>
-<tr>
-<td>喜欢</td>
-<td>2.5</td>
-<td>0.66</td>
-</tr>
-<tr>
-<td>咖啡</td>
-<td>0.8</td>
-<td>0.16</td>
-</tr>
-</tbody>
-</table>
-<p>Softmax 有两个重要特点：</p>
-<ol>
-<li>所有权重都是正数： 不会出现负的关注比例；</li>
-<li>所有权重加起来等于 1： 可以理解成一组分配比例。</li>
-</ol>
-<p>所以，Softmax 背后的数学概念很简单：它把一组“相关性分数”，转换成一组“信息分配权重”。</p>
-<h2 id="预测与评估：概率、Softmax-与交叉熵"><a href="#预测与评估：概率、Softmax-与交叉熵" class="headerlink" title="预测与评估：概率、Softmax 与交叉熵"></a>预测与评估：概率、Softmax 与交叉熵</h2><p>前面我们讲了：语言会先变成 token，再变成向量，模型通过矩阵乘法、相似度、Attention 等方式计算上下文关系。但计算完关系之后，模型最终还是要回答一个非常具体的问题：<strong>在当前上下文后面，下一个 token 最可能是什么？</strong></p>
-<p>可以先看一张总图：</p>
-<p><img src="/images/llm/llm-math-11.png" alt="LLM 中 Token 如何预测"></p>
-<p>在本章节中，重点会介绍的数学概念，及 LLM 中的应用如下：</p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>数学概念</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>下一个词是什么？</td>
-<td>条件概率</td>
-</tr>
-<tr>
-<td>分数怎么变成概率？</td>
-<td>Softmax</td>
-</tr>
-<tr>
-<td>结果为什么有时稳定、有时发散？</td>
-<td>期望、方差</td>
-</tr>
-<tr>
-<td>新信息为什么会改变回答？</td>
-<td>贝叶斯思想</td>
-</tr>
-<tr>
-<td>怎么知道模型错了多少？</td>
-<td>交叉熵</td>
-</tr>
-</tbody>
-</table>
-<h3 id="LLM-输出的是概率分布"><a href="#LLM-输出的是概率分布" class="headerlink" title="LLM 输出的是概率分布"></a>LLM 输出的是概率分布</h3><p>LLM 每一步生成时，不是直接从数据库里取一个答案，而是在预测下一个 token 的概率分布。当我们输入：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我早上喝了一杯</span><br></pre></td></tr></table></figure>
-<p>模型并不是从数据库里查找“下一句话应该是什么”，而是在所有可能 token 里预测概率。例如：</p>
-<table>
-<thead>
-<tr>
-<th><strong>候选 token</strong></th>
-<th><strong>模型预测概率</strong></th>
-<th><strong>直觉理解</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>咖啡</td>
-<td>0.62</td>
-<td>最可能</td>
-</tr>
-<tr>
-<td>水</td>
-<td>0.18</td>
-<td>也合理</td>
-</tr>
-<tr>
-<td>茶</td>
-<td>0.11</td>
-<td>有可能</td>
-</tr>
-<tr>
-<td>牛奶</td>
-<td>0.06</td>
-<td>概率较低</td>
-</tr>
-<tr>
-<td>其他</td>
-<td>0.03</td>
-<td>很多低概率 token 的合计</td>
-</tr>
-</tbody>
-</table>
-<p>所以，LLM 生成文本的基本单位不是“一句话”，而是“一步一步预测下一个 token”。</p>
-<table>
-<thead>
-<tr>
-<th><strong>我们看到的现象</strong></th>
-<th><strong>背后的数学解释</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>模型可以继续写文章</td>
-<td>每一步都在预测下一个 token</td>
-</tr>
-<tr>
-<td>同一个问题可能生成不同回答</td>
-<td>采样来自概率分布</td>
-</tr>
-<tr>
-<td>有些回答更稳定，有些回答更发散</td>
-<td>概率分布有时集中，有时分散</td>
-</tr>
-<tr>
-<td>temperature 可以控制创造性</td>
-<td>改变概率分布的尖锐程度</td>
-</tr>
-</tbody>
-</table>
-<h3 id="条件概率：上下文决定下一个-token"><a href="#条件概率：上下文决定下一个-token" class="headerlink" title="条件概率：上下文决定下一个 token"></a>条件概率：上下文决定下一个 token</h3><p>语言模型真正学习的是：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(下一个 token | 前面的上下文)</span><br></pre></td></tr></table></figure>
-<p>这句话读起来像公式（也就是条件概率，在上下文确定的前提下，下一个 token 出现的概率），但意思很简单：在已经看到这些文字的前提下，下一个词最可能是什么？</p>
-<p>同一个词，在不同上下文里的概率会完全不同。</p>
-<table>
-<thead>
-<tr>
-<th><strong>上下文</strong></th>
-<th><strong>更可能的下一个 token</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我早上喝了一杯</td>
-<td>咖啡、水、牛奶</td>
-</tr>
-<tr>
-<td>程序抛出了一个</td>
-<td>异常、错误</td>
-</tr>
-<tr>
-<td>请把这段代码转换成</td>
-<td>Python、Java、SQL</td>
-</tr>
-<tr>
-<td>今天天气非常</td>
-<td>好、热、冷</td>
-</tr>
-</tbody>
-</table>
-<p>这也是为什么 prompt 很重要。</p>
-<p>prompt 本质上是在改变上下文，而上下文会改变后续 token 的概率分布。</p>
-<p><img src="/images/llm/llm-math-12.png" alt="prompt 对模型结果的影响"></p>
-<p>举个例子：</p>
-<table>
-<thead>
-<tr>
-<th><strong>Prompt</strong></th>
-<th><strong>“苹果”更可能表示什么</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我削了一个苹果</td>
-<td>水果</td>
-</tr>
-<tr>
-<td>苹果发布了新品</td>
-<td>公司</td>
-</tr>
-<tr>
-<td>苹果股价上涨</td>
-<td>公司</td>
-</tr>
-<tr>
-<td>这个苹果很甜</td>
-<td>水果</td>
-</tr>
-</tbody>
-</table>
-<p>模型并不是先“理解苹果的唯一含义”，而是根据上下文让某些含义的概率升高。</p>
-<h3 id="期望、方差和不确定性：为什么有的回答稳定，有的回答发散"><a href="#期望、方差和不确定性：为什么有的回答稳定，有的回答发散" class="headerlink" title="期望、方差和不确定性：为什么有的回答稳定，有的回答发散"></a>期望、方差和不确定性：为什么有的回答稳定，有的回答发散</h3><p>概率分布不只是告诉我们“谁最大”，还告诉我们模型有多确定。这里可以简单理解三个概念：</p>
-<table>
-<thead>
-<tr>
-<th><strong>概念</strong></th>
-<th>原理</th>
-<th><strong>在 LLM 里的表现</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>期望</td>
-<td>对所有可能结果按概率加权平均，表示模型预测的中心趋势</td>
-<td>模型大概率会往哪个方向回答</td>
-</tr>
-<tr>
-<td>方差</td>
-<td>衡量结果相对期望的分散程度，方差越大，输出越不稳定</td>
-<td>回答是否稳定</td>
-</tr>
-<tr>
-<td>不确定性</td>
-<td>当多个 token 或答案路径的概率都接近时，模型难以唯一确定最优选择</td>
-<td>模型可能生成不同答案</td>
-</tr>
-</tbody>
-</table>
-<p>比如一个确定性问题：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">2 + 2 = ?</span><br></pre></td></tr></table></figure>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>概率</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>4</td>
-<td>0.96</td>
-</tr>
-<tr>
-<td>3</td>
-<td>0.01</td>
-</tr>
-<tr>
-<td>5</td>
-<td>0.01</td>
-</tr>
-<tr>
-<td>其他</td>
-<td>0.02</td>
-</tr>
-</tbody>
-</table>
-<p>这个分布很集中，模型回答通常稳定。</p>
-<p>再看一个开放问题：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">请给我一个创业方向</span><br></pre></td></tr></table></figure>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>概率</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>AI</td>
-<td>0.22</td>
-</tr>
-<tr>
-<td>教育</td>
-<td>0.18</td>
-</tr>
-<tr>
-<td>工具</td>
-<td>0.15</td>
-</tr>
-<tr>
-<td>内容</td>
-<td>0.12</td>
-</tr>
-<tr>
-<td>其他</td>
-<td>0.33</td>
-</tr>
-</tbody>
-</table>
-<p>这个分布更分散，所以模型可能给出不同答案。</p>
-<table>
-<thead>
-<tr>
-<th><strong>分布形状</strong></th>
-<th><strong>直觉</strong></th>
-<th><strong>常见场景</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>很集中</td>
-<td>模型很确定</td>
-<td>数学题、事实题、格式明确的问题</td>
-</tr>
-<tr>
-<td>比较分散</td>
-<td>多个答案都合理</td>
-<td>创意写作、方案建议、开放讨论</td>
-</tr>
-<tr>
-<td>过于分散</td>
-<td>模型方向不清楚</td>
-<td>prompt 太模糊、约束太少</td>
-</tr>
-</tbody>
-</table>
-<p>所以 temperature、top-k、top-p 这些生成参数，本质上都是在控制如何从概率分布中选择下一个 token。</p>
-<h3 id="贝叶斯思想：新信息会改变模型判断"><a href="#贝叶斯思想：新信息会改变模型判断" class="headerlink" title="贝叶斯思想：新信息会改变模型判断"></a>贝叶斯思想：新信息会改变模型判断</h3><blockquote>
-<p>贝叶斯思想可以简单理解为一句话：<strong>我们不是一次性判断真相，而是根据新证据不断更新自己的判断。</strong></p>
-</blockquote>
-<p>贝叶斯可以用一句话理解：<strong>看到新证据后，应该更新原来的判断</strong>。而在 LLM 里，prompt 就是类似一种“新证据”会改变后续的模型输出。比如“苹果”这个词，本身有多种含义：</p>
-<table>
-<thead>
-<tr>
-<th><strong>新上下文</strong></th>
-<th><strong>模型更可能的判断</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我削了一个苹果</td>
-<td>苹果是水果</td>
-</tr>
-<tr>
-<td>苹果发布了新品</td>
-<td>苹果是公司</td>
-</tr>
-<tr>
-<td>苹果股价上涨</td>
-<td>苹果是公司</td>
-</tr>
-<tr>
-<td>这个苹果很甜</td>
-<td>苹果是水果</td>
-</tr>
-</tbody>
-</table>
-<p>这不是模型在查字典，而是上下文改变了不同含义的概率。</p>
-<p><img src="/images/llm/llm-math-13.png" alt="贝叶斯"></p>
-<p>所以，贝叶斯思想对理解 LLM 很有帮助：模型不是一次性固定答案，而是在不断根据上下文更新“接下来什么更可能”。</p>
-<h3 id="交叉熵与最大似然：怎么衡量模型预测得好不好"><a href="#交叉熵与最大似然：怎么衡量模型预测得好不好" class="headerlink" title="交叉熵与最大似然：怎么衡量模型预测得好不好"></a>交叉熵与最大似然：怎么衡量模型预测得好不好</h3><p>有了概率之后，训练还需要回答另一个问题：模型这次预测，到底错了多少？假设真实答案是“咖啡”，模型给出下面的概率：</p>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>预测概率</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>水</td>
-<td>0.5</td>
-</tr>
-<tr>
-<td>咖啡</td>
-<td>0.2</td>
-</tr>
-<tr>
-<td>茶</td>
-<td>0.2</td>
-</tr>
-<tr>
-<td>牛奶</td>
-<td>0.1</td>
-</tr>
-</tbody>
-</table>
-<p>人能看出来：模型不太对，因为正确答案“咖啡”的概率只有 0.20。但机器需要一个数字来表示错误程度，这个数字就是 <strong>loss</strong>（交叉熵就是一种常见的损失函数）。</p>
-<p>语言模型常用的 loss 是交叉熵。对单个 token 来说，可以先这样理解：</p>
-<ul>
-<li>正确 token 的概率越高，loss 越小；</li>
-<li>正确 token 的概率越低，loss 越大。</li>
-</ul>
-<table>
-<thead>
-<tr>
-<th><strong>真实 token</strong></th>
-<th><strong>模型给真实 token 的概率</strong></th>
-<th><strong>loss 直觉</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>咖啡</td>
-<td>0.9</td>
-<td>很小</td>
-</tr>
-<tr>
-<td>咖啡</td>
-<td>0.6</td>
-<td>较小</td>
-</tr>
-<tr>
-<td>咖啡</td>
-<td>0.2</td>
-<td>较大</td>
-</tr>
-<tr>
-<td>咖啡</td>
-<td>0.01</td>
-<td>非常大</td>
-</tr>
-</tbody>
-</table>
-<p>交叉熵不只是看“有没有猜中”，还看模型是不是把足够多的概率分给了正确答案。</p>
-<table>
-<thead>
-<tr>
-<th><strong>预测情况</strong></th>
-<th><strong>惩罚</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>答对且很自信</td>
-<td>很小</td>
-</tr>
-<tr>
-<td>答对但不自信</td>
-<td>中等</td>
-</tr>
-<tr>
-<td>答错但不自信</td>
-<td>较大</td>
-</tr>
-<tr>
-<td>答错还很自信</td>
-<td>很大</td>
-</tr>
-</tbody>
-</table>
-<p>从另一个角度看，训练语言模型就是最大似然：让训练语料里的句子，在模型看来越来越“可能出现”。</p>
-<table>
-<thead>
-<tr>
-<th><strong>LLM 说法</strong></th>
-<th><strong>数学术语</strong></th>
-<th>数学原理</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>让模型更像训练数据那样说话</td>
-<td>最大似然</td>
-<td>模型会计算一段训练文本出现的概率，并不断调整参数，让训练数据中的句子在模型看来“更可能出现”。</td>
-</tr>
-<tr>
-<td>让正确 token 概率更高</td>
-<td>最小化交叉熵</td>
-<td>交叉熵关注真实 token 被分到的概率。如果正确 token 概率越高，loss 越小；如果正确 token 概率很低，loss 就会变大。</td>
-</tr>
-<tr>
-<td>让预测错误变少</td>
-<td>最小化 loss</td>
-<td>loss 是所有训练样本预测误差的汇总指标，训练通过反向传播和优化器让平均 loss 下降</td>
-</tr>
-</tbody>
-</table>
-<p>LLM 的生成，是不断根据上下文预测下一个 token 的概率；LLM 的训练，是不断让正确 token 的概率变高，让交叉熵 loss 变低。</p>
-<h2 id="学习与优化：模型如何从错误中变好"><a href="#学习与优化：模型如何从错误中变好" class="headerlink" title="学习与优化：模型如何从错误中变好"></a>学习与优化：模型如何从错误中变好</h2><p>前面讲到，交叉熵会把模型预测错误变成一个数字：loss。但模型不能只知道“我错了”，还必须知道：</p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>数学概念</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>错误怎么表示成目标？</td>
-<td>目标函数、损失函数</td>
-</tr>
-<tr>
-<td>参数该往哪里改？</td>
-<td>导数、偏导数、梯度</td>
-</tr>
-<tr>
-<td>错误怎么传回前面层？</td>
-<td>链式法则、反向传播</td>
-</tr>
-<tr>
-<td>参数怎么一步步更新？</td>
-<td>梯度下降、优化器</td>
-</tr>
-<tr>
-<td>怎么避免训练不稳定？</td>
-<td>正则化、凸优化思想、约束优化</td>
-</tr>
-</tbody>
-</table>
-<h3 id="损失函数：把“模型错了”变成数学目标"><a href="#损失函数：把“模型错了”变成数学目标" class="headerlink" title="损失函数：把“模型错了”变成数学目标"></a>损失函数：把“模型错了”变成数学目标</h3><p>训练 LLM，本质上是在最小化一个函数：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Loss = 模型预测结果 和 真实答案之间的差距</span><br></pre></td></tr></table></figure>
-<p>更数学一点，可以写成：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">min L(θ)</span><br></pre></td></tr></table></figure>
-<p>这里：</p>
-<table>
-<thead>
-<tr>
-<th><strong>符号</strong></th>
-<th><strong>含义</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>θ</td>
-<td>模型里的所有参数</td>
-</tr>
-<tr>
-<td>L(θ)</td>
-<td>当前参数下的 loss</td>
-</tr>
-<tr>
-<td>min</td>
-<td>希望找到一组参数，让 loss 尽可能小</td>
-</tr>
-</tbody>
-</table>
-<p>在语言模型里，常见目标是：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">让真实下一个 token 的概率尽可能高</span><br></pre></td></tr></table></figure>
-<p>所以训练目标可以理解为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">最小化交叉熵（Loss） = 最大化训练文本出现的概率</span><br></pre></td></tr></table></figure>
-<p>到这里的话，一个“模型表现好不好”，被定义成一个可以计算、可以优化的函数。</p>
-<h3 id="导数、偏导数、梯度：找到参数应该怎么改"><a href="#导数、偏导数、梯度：找到参数应该怎么改" class="headerlink" title="导数、偏导数、梯度：找到参数应该怎么改"></a>导数、偏导数、梯度：找到参数应该怎么改</h3><p>LLM 有大量参数，训练时要回答一个问题：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果某个参数稍微变大一点，loss 会变大还是变小？</span><br></pre></td></tr></table></figure>
-<p>这就是导数要解决的问题。</p>
-<table>
-<thead>
-<tr>
-<th><strong>概念</strong></th>
-<th><strong>数学原理</strong></th>
-<th><strong>在 LLM 中的作用</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>导数</td>
-<td>衡量一个变量变化时，函数如何变化</td>
-<td>看参数变化会不会影响 loss</td>
-</tr>
-<tr>
-<td>偏导数</td>
-<td>多个变量中，只看其中一个变量的影响。</td>
-<td>看某个参数对 loss 的影响</td>
-</tr>
-<tr>
-<td>梯度</td>
-<td>所有偏导数组成的向量</td>
-<td>给出整体参数更新方向</td>
-</tr>
-</tbody>
-</table>
-<p>这三个数学概念，简单举个例子：</p>
-<table>
-<thead>
-<tr>
-<th><strong>概念</strong></th>
-<th><strong>计算方式示例</strong></th>
-<th><strong>含义</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>导数</td>
-<td>如果 <code>f(x) = x²</code>，那么 <code>f&#39;(x) = 2x</code></td>
-<td>当 <code>x</code> 变化一点时，<code>f(x)</code> 会怎么变</td>
-</tr>
-<tr>
-<td>偏导数</td>
-<td>如果 <code>L(w, b) = (wx + b - y)²</code>，分别求 <code>∂L/∂w</code> 和 <code>∂L/∂b</code></td>
-<td>只看 <code>w</code> 或 <code>b</code> 单独变化时，对 loss 的影响</td>
-</tr>
-<tr>
-<td>梯度</td>
-<td><code>∇L = [∂L/∂w, ∂L/∂b]</code></td>
-<td>把所有参数对 loss 的影响组合起来</td>
-</tr>
-</tbody>
-</table>
-<p>这里最重要的数学结论是：</p>
-<table>
-<thead>
-<tr>
-<th><strong>方向</strong></th>
-<th><strong>含义</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>梯度方向</td>
-<td>loss 上升最快的方向</td>
-</tr>
-<tr>
-<td>负梯度方向</td>
-<td>loss 下降最快的方向</td>
-</tr>
-</tbody>
-</table>
-<p>所以训练经常有句话：loss 告诉模型“错了多少”，梯度告诉模型“往哪里改”。</p>
-<h3 id="反向传播：用链式法则把错误传回每一层"><a href="#反向传播：用链式法则把错误传回每一层" class="headerlink" title="反向传播：用链式法则把错误传回每一层"></a>反向传播：用链式法则把错误传回每一层</h3><p>反向传播是 Transformer 能够被大规模训练的关键机制之一。如果没有反向传播，模型即使知道最后预测错了，也很难判断前面每一层、每一个参数应该承担多少责任，更谈不上在工业界进行大规模训练和优化。</p>
-<p>我们知道，Transformer 由多层神经网络结构组成。从 Embedding 层，到多层 Attention 和 Feed Forward，再到最终输出层，信息是一步步向前计算的。那么问题来了：如果最后一层输出错了，loss 很大，模型应该如何把这个错误传回前面的层，并据此修改每一层的参数呢？</p>
-<p>这就是反向传播解决的问题，而反向传播背后的数学原理就是<strong>链式法则</strong>。</p>
-<p>简单写成：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">如果 L 依赖 y，y 又依赖 x，</span><br><span class="line">那么 L 对 x 的影响可以拆成：</span><br><span class="line"></span><br><span class="line">dL/dx = dL/dy × dy/dx （dy/dx 表示 y 对 x 求导数）</span><br></pre></td></tr></table></figure>
-<p>放到神经网络里反向传播的路径是 <code>Loss → 输出层 → 中间层 → Embedding 层</code>，如下图所示：</p>
-<p><img src="/images/llm/llm-math-14.png" alt="Transformer 中反向传播应用"></p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>反向传播怎么回答</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>最后错了多少？</td>
-<td>计算 loss</td>
-</tr>
-<tr>
-<td>哪一层影响了错误？</td>
-<td>计算该层输出对 loss 的影响</td>
-</tr>
-<tr>
-<td>哪个参数该改？</td>
-<td>计算参数梯度</td>
-</tr>
-<tr>
-<td>改多少？</td>
-<td>梯度大小和学习率共同决定</td>
-</tr>
-</tbody>
-</table>
-<p>一句话理解：反向传播不是新的数学魔法，而是<strong>链式法则在神经网络里的工程实现</strong>。</p>
-<h3 id="梯度下降与优化器：让-loss-一步步变小"><a href="#梯度下降与优化器：让-loss-一步步变小" class="headerlink" title="梯度下降与优化器：让 loss 一步步变小"></a>梯度下降与优化器：让 loss 一步步变小</h3><p>有了梯度，就可以更新参数。最基础的更新公式是：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">θ_new = θ_old - η × ∇L(θ)</span><br></pre></td></tr></table></figure>
-<p>这里：</p>
-<table>
-<thead>
-<tr>
-<th><strong>符号</strong></th>
-<th><strong>含义</strong></th>
-<th>LLM 中的含义</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>θ_old</td>
-<td>当前参数</td>
-<td>当前模型里的所有权重参数，比如 Embedding、Attention、FFN 里的矩阵参数</td>
-</tr>
-<tr>
-<td>θ_new</td>
-<td>更新后的参数</td>
-<td>经过一次训练 step 后的新模型参数</td>
-</tr>
-<tr>
-<td>η</td>
-<td>学习率</td>
-<td>每次参数更新的步长</td>
-</tr>
-<tr>
-<td>∇L(θ)</td>
-<td>当前梯度</td>
-<td>当前 batch 数据中，每个参数对 loss 的影响方向和大小</td>
-</tr>
-<tr>
-<td>-∇L(θ)</td>
-<td>loss 下降方向</td>
-<td>让 loss 下降最快的方向</td>
-</tr>
-</tbody>
-</table>
-<p>这就是梯度下降。</p>
-<p>真实 LLM 训练里，通常不会只用最朴素的梯度下降，而会用更复杂的优化器，例如 Adam。</p>
-<table>
-<thead>
-<tr>
-<th><strong>优化方法</strong></th>
-<th><strong>数学思想</strong></th>
-<th><strong>直觉理解</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>SGD</td>
-<td>按当前梯度更新参数</td>
-<td>每次看当前坡度走一步</td>
-</tr>
-<tr>
-<td>Momentum</td>
-<td>累积历史梯度方向</td>
-<td>不只看当前一步，也看惯性</td>
-</tr>
-<tr>
-<td>Adam</td>
-<td>同时估计梯度均值和梯度波动</td>
-<td>给不同参数自适应调整步长</td>
-</tr>
-</tbody>
-</table>
-<p>这一小节重点是：优化器决定怎么用梯度更新参数，学习率决定每一步走多大。</p>
-<h3 id="训练稳定性：正则化、凸优化与约束思想"><a href="#训练稳定性：正则化、凸优化与约束思想" class="headerlink" title="训练稳定性：正则化、凸优化与约束思想"></a>训练稳定性：正则化、凸优化与约束思想</h3><p>真实训练中，loss 不会一直平滑下降，常见问题很多，如下：</p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>表现</strong></th>
-<th><strong>数学原因</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>学习率太大</td>
-<td>loss 震荡或爆炸</td>
-<td>每一步跨得太远</td>
-</tr>
-<tr>
-<td>学习率太小</td>
-<td>训练很慢</td>
-<td>每一步变化太小</td>
-</tr>
-<tr>
-<td>梯度爆炸</td>
-<td>参数更新失控</td>
-<td>梯度数值过大</td>
-</tr>
-<tr>
-<td>梯度消失</td>
-<td>前面层学不动</td>
-<td>梯度经过多层后变得很小</td>
-</tr>
-<tr>
-<td>过拟合</td>
-<td>训练集好，测试集差</td>
-<td>模型记住噪声而不是规律</td>
-</tr>
-</tbody>
-</table>
-<p>正则化就是解决过拟合的一类方法。数学上，它通常是在原来的 loss 后面加一个惩罚项：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">L_total = L_train + λR(θ)</span><br></pre></td></tr></table></figure>
-<table>
-<thead>
-<tr>
-<th><strong>部分</strong></th>
-<th><strong>含义</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>L_train</td>
-<td>训练误差</td>
-</tr>
-<tr>
-<td>R(θ)</td>
-<td>对参数复杂度的惩罚</td>
-</tr>
-<tr>
-<td>λ</td>
-<td>惩罚强度</td>
-</tr>
-</tbody>
-</table>
-<p>最后可以用一张表简单介绍几个优化概念：</p>
-<table>
-<thead>
-<tr>
-<th><strong>概念</strong></th>
-<th><strong>数学原理</strong></th>
-<th><strong>对理解 LLM 的帮助</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>凸优化</td>
-<td>如果目标函数是凸的，局部最优就是全局最优</td>
-<td>帮助理解什么是“好优化问题”</td>
-</tr>
-<tr>
-<td>岭回归</td>
-<td>在 loss 里加入 L2 参数惩罚</td>
-<td>理解正则化</td>
-</tr>
-<tr>
-<td>拉格朗日乘子</td>
-<td>把约束条件合并进优化目标</td>
-<td>理解带约束优化</td>
-</tr>
-<tr>
-<td>Proximal Gradient</td>
-<td>把普通梯度下降和复杂正则项结合</td>
-<td>理解稀疏化、约束优化</td>
-</tr>
-<tr>
-<td>凸松弛</td>
-<td>把难优化问题放宽成更容易求解的问题</td>
-<td>理解近似求解思想</td>
-</tr>
-</tbody>
-</table>
-<p>LLM 的学习过程，就是把预测错误定义成 loss，用梯度找到参数修改方向，用反向传播把错误传回每一层，再通过优化器一步步更新参数。数学上看，它不是“模型突然理解了语言”，而是在大量样本上持续最小化一个目标函数。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>到这里，我们并不是把大学数学重新学了一遍，而是把和 LLM 最相关的几类数学概念重新串了起来。LLM 看起来是在理解语言、生成文字，但从数学上看，它背后一直在做几件非常基础的事情：</p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>数学工具</strong></th>
-<th><strong>在 LLM 中的作用</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>语言怎么被机器处理？</td>
-<td>Token、向量、矩阵</td>
-<td>把文字变成可计算的数字表示</td>
-</tr>
-<tr>
-<td>词和词之间怎么建立关系？</td>
-<td>点积、余弦相似度、Attention</td>
-<td>计算 token 之间的相关性</td>
-</tr>
-<tr>
-<td>下一个 token 怎么预测？</td>
-<td>条件概率、Softmax</td>
-<td>把模型分数变成概率分布</td>
-</tr>
-<tr>
-<td>模型错了怎么衡量？</td>
-<td>交叉熵、最大似然、loss</td>
-<td>把预测错误变成可优化的数字</td>
-</tr>
-<tr>
-<td>模型怎么变好？</td>
-<td>梯度、反向传播、优化器</td>
-<td>根据错误调整参数</td>
-</tr>
-</tbody>
-</table>
-<p>所以，LLM 的核心并不是“机器突然懂了语言”，而是把语言问题转化成了一系列可以计算、可以预测、可以优化的问题。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;上一篇我们从大模型的发展脉络出发，回顾了语言模型如何从早期的统计方法，一步步走向 Transformer、GPT，以及今天无处不在的大模型应用。如果说第一篇回答的是“LLM 是怎么发展到今天的”，那么这一篇想往下多走一层，回答一个更底层的问题：&lt;strong&gt;LLM 为什么能被训练出来？机器到底是怎样把语言变成可计算、可优化、可生成的东西？&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;无论是 Transformer 里的 Attention，预训练里的 loss，微调时的梯度更新，RAG 里的向量检索，还是 LoRA 里的低秩矩阵，本质上都绕不开几类基础数学概念。不过，这篇并不是要把大家重新拉回大学数学课堂。我们不会从定理证明开始，也不会堆大量公式。更重要的是建立一套直觉：&lt;strong&gt;机器如何把文字变成向量，如何计算词与词之间的关系，如何预测下一个 token，又如何通过错误和梯度一步步修正自己&lt;/strong&gt;。&lt;/p&gt;
     
     </summary>
     
