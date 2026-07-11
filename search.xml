@@ -4,6 +4,293 @@
   
     
     <entry>
+      <title><![CDATA[LLM 系列 (二十三)：数据飞轮，大模型能力如何持续进化]]></title>
+      <url>http://matt33.com/2026/07/11/llm-data-flywheel/</url>
+      <content type="html"><![CDATA[<p>大模型上线并不意味着能力建设结束。真实用户的问题远比训练集复杂：业务规则持续变化，输入分布不断漂移，RAG、工具和 Prompt 也会频繁升级。模型在离线评测中表现良好，进入生产环境后仍可能出现幻觉、格式错误、工具误调用和安全误判。</p>
+<p>这些线上失败既是问题，也是改进模型和系统的重要数据来源之一。通过采集反馈与执行轨迹、定位失败原因、挖掘高价值样本，再经过标注、训练、评测和灰度发布，系统可以把真实问题持续转化为经过验证的能力提升。</p>
+<a id="more"></a>  
+<p>这就是数据飞轮：不是让模型直接学习所有用户日志，而是建立一条从“线上失败”到“验证后改进”的可控闭环。</p>
+<p>要理解数据飞轮，可以先记住四个结论：</p>
+<ol>
+<li>用户反馈只是原始信号，并不等于训练标签；</li>
+<li>高价值难例通常比大量普通样本更有训练价值；</li>
+<li>训练集与评测集必须隔离，否则指标会被数据污染；</li>
+<li>数据飞轮优化的是整个 LLM 系统，不只是模型参数。</li>
+</ol>
+<p><img src="/images/llm/llm-data-flywheel-01.png" alt="数据飞轮把线上反馈转化为数据、模型和系统能力"></p>
+<h2 id="为什么需要数据飞轮"><a href="#为什么需要数据飞轮" class="headerlink" title="为什么需要数据飞轮"></a>为什么需要数据飞轮</h2><p>模型训练完成后，参数和能力基本固定，但生产环境始终在变化。可以将这种差异理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">训练分布 P_train(x) ≠ 持续变化的生产分布 P_prod(x, t)</span><br></pre></td></tr></table></figure>
+<p>随着时间推移，用户表达方式、任务复杂度和业务规则都会发生变化；Prompt、RAG、工具接口和安全策略的升级，也可能引入新的失败模式。公开 Benchmark 能衡量模型的通用能力，却无法完整覆盖真实业务中的数据分布和系统链路。</p>
+<p>因此，模型上线后仍需持续解决三个问题：</p>
+<ol>
+<li><strong>发现问题</strong>：模型在哪些真实任务和系统环节中失败；</li>
+<li><strong>选择数据</strong>：哪些样本具有足够的训练价值和业务影响；</li>
+<li><strong>验证改进</strong>：新版本是否修复问题，同时保持原有能力与安全边界。</li>
+</ol>
+<p><img src="/images/llm/llm-data-flywheel-02.png" alt="数据飞轮通过“观测、归因、优化、验证”闭环，将线上问题转化为持续改进"></p>
+<p>从上图可以看出，数据飞轮真正建立的不是一条简单的“日志到训练”链路，而是一套<strong>让 LLM 系统持续发现问题、选择正确优化方式并验证改进结果的工程机制</strong>。</p>
+<h2 id="从反馈到高质量数据"><a href="#从反馈到高质量数据" class="headerlink" title="从反馈到高质量数据"></a>从反馈到高质量数据</h2><p>线上日志只是带有噪声的行为记录，并不能直接作为训练数据。它需要依次经过任务轨迹还原、隐私治理、失败归因和价值筛选，才能转化为可训练、可评测的数据资产。</p>
+<h3 id="采集完整任务轨迹"><a href="#采集完整任务轨迹" class="headerlink" title="采集完整任务轨迹"></a>采集完整任务轨迹</h3><p>仅记录“用户问题和模型回答”无法判断问题根因。一次错误可能来自 Prompt、RAG、模型生成、工具执行或安全策略，因此需要用 Trace 串联完整任务链路。</p>
+<table>
+<thead>
+<tr>
+<th><strong>信号类型</strong></th>
+<th><strong>典型内容</strong></th>
+<th><strong>主要作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>用户反馈</td>
+<td>点赞、点踩、修改、重新生成</td>
+<td>识别主观偏好与明显错误</td>
+</tr>
+<tr>
+<td>行为信号</td>
+<td>放弃、复制、任务完成、人工接管</td>
+<td>判断回答是否真正解决问题</td>
+</tr>
+<tr>
+<td>模型信息</td>
+<td>模型、Prompt、采样参数版本</td>
+<td>复现当时的生成环境</td>
+</tr>
+<tr>
+<td>RAG 轨迹</td>
+<td>Query、召回文档、Rerank 分数</td>
+<td>判断知识是否正确召回</td>
+</tr>
+<tr>
+<td>工具轨迹</td>
+<td>工具名称、参数、返回值、错误码</td>
+<td>定位选择和执行错误</td>
+</tr>
+<tr>
+<td>校验结果</td>
+<td>格式、安全、引用、执行验证</td>
+<td>提供可自动判断的质量信号</td>
+</tr>
+</tbody>
+</table>
+<p>一个简化的 Trace 可以表示为：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"trace_id"</span>: <span class="string">"trace_1024"</span>,</span><br><span class="line">  <span class="attr">"input_redacted"</span>: <span class="string">"..."</span>,</span><br><span class="line">  <span class="attr">"model_version"</span>: <span class="string">"model_v8"</span>,</span><br><span class="line">  <span class="attr">"prompt_version"</span>: <span class="string">"prompt_v12"</span>,</span><br><span class="line">  <span class="attr">"retrieval"</span>: &#123;</span><br><span class="line">    <span class="attr">"query"</span>: <span class="string">"..."</span>,</span><br><span class="line">    <span class="attr">"knowledge_base_version"</span>: <span class="string">"kb_v6"</span>,</span><br><span class="line">    <span class="attr">"retriever_version"</span>: <span class="string">"retriever_v3"</span>,</span><br><span class="line">    <span class="attr">"reranker_version"</span>: <span class="string">"reranker_v2"</span>,</span><br><span class="line">    <span class="attr">"document_ids"</span>: [<span class="string">"doc_17"</span>, <span class="string">"doc_28"</span>]</span><br><span class="line">  &#125;,</span><br><span class="line">  <span class="attr">"tool_calls"</span>: [&#123;</span><br><span class="line">    <span class="attr">"name"</span>: <span class="string">"query_order"</span>,</span><br><span class="line">    <span class="attr">"tool_version"</span>: <span class="string">"order_api_v4"</span>,</span><br><span class="line">    <span class="attr">"arguments"</span>: &#123;<span class="attr">"order_id"</span>: <span class="string">"..."</span>&#125;,</span><br><span class="line">    <span class="attr">"status"</span>: <span class="string">"failed"</span>,</span><br><span class="line">    <span class="attr">"error_code"</span>: <span class="string">"INVALID_ARGUMENT"</span></span><br><span class="line">  &#125;],</span><br><span class="line">  <span class="attr">"policy_version"</span>: <span class="string">"policy_v5"</span>,</span><br><span class="line">  <span class="attr">"response"</span>: <span class="string">"..."</span>,</span><br><span class="line">  <span class="attr">"user_feedback"</span>: <span class="string">"negative"</span>,</span><br><span class="line">  <span class="attr">"task_outcome"</span>: <span class="string">"failed"</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中，模型、Prompt、知识库、工具和策略版本都需要记录。否则即使保留了输入输出，也很难复现当时的系统行为，更无法判断后续修改是否真正解决了问题。</p>
+<h3 id="清洗、脱敏与数据分层"><a href="#清洗、脱敏与数据分层" class="headerlink" title="清洗、脱敏与数据分层"></a>清洗、脱敏与数据分层</h3><p>Trace 中可能包含个人信息、企业机密、访问凭证、恶意指令和大量重复内容，必须经过治理后才能进入数据集。</p>
+<p><img src="/images/llm/llm-data-flywheel-03.png" alt="线上日志必须经过权限、质量和标注治理，才能进入训练与评测"></p>
+<p>如上图所述，这部分核心的处理如下：</p>
+<ol>
+<li><strong>隐私脱敏</strong>：移除姓名、手机号、密钥、Token 和内部敏感字段；</li>
+<li><strong>内容过滤</strong>：识别 Prompt Injection、恶意输入和无效会话；</li>
+<li><strong>重复治理</strong>：使用精确 Hash、MinHash、SimHash 和向量聚类处理近重复样本；</li>
+<li><strong>数据血缘</strong>：记录来源、权限、处理步骤、标注方式和版本信息；</li>
+<li><strong>来源标记</strong>：区分人工数据、真实用户数据和模型生成数据；</li>
+<li><strong>评测隔离</strong>：按用户、会话、文档和时间分组切分，防止相似样本同时进入训练集与评测集。</li>
+</ol>
+<p>Raw Zone 应限制访问并设置保留周期；Curated Zone 用于分析和挖掘；Gold Zone 则保存通过审核、可以进入训练或评测的数据。每次转换都需要可追踪、可复现。</p>
+<h3 id="难例挖掘"><a href="#难例挖掘" class="headerlink" title="难例挖掘"></a>难例挖掘</h3><p>难例（Hard Example）是当前模型容易失败或表现不稳定的样本；其中，根因明确、标签可靠且能代表同类问题的高价值难例，通常比大量重复的普通样本更能提供有效的训练信号。一个简化的样本优先级可以表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">priority(x) =</span><br><span class="line">    w1 × failure_score</span><br><span class="line">  + w2 × uncertainty</span><br><span class="line">  + w3 × business_impact</span><br><span class="line">  + w4 × novelty</span><br><span class="line">  + w5 × verifier_failure</span><br><span class="line">  - w6 × duplicate_score</span><br><span class="line">  - w7 × label_noise</span><br></pre></td></tr></table></figure>
+<p>各项含义如下：</p>
+<ul>
+<li><code>failure_score</code>：任务是否失败、是否收到明确负面反馈；</li>
+<li><code>uncertainty</code>：Token 概率熵、多次采样分歧或多个 Judge 评分分歧；</li>
+<li><code>business_impact</code>：问题对交易、安全或核心流程的影响；</li>
+<li><code>novelty</code>：样本是否代表训练集中未覆盖的新分布；</li>
+<li><code>verifier_failure</code>：代码测试、引用校验、规则检查是否失败；</li>
+<li><code>duplicate_score</code>：与已有数据的重复程度；</li>
+<li><code>label_noise</code>：问题是否模糊、冲突或难以形成可靠标签。</li>
+</ul>
+<p>需要注意，这些信号的取值范围并不相同。例如，任务失败可能是 0/1，业务影响可能是 1～5，而模型熵和重复度又有各自的数值范围。因此，在加权计算之前，需要先将各项信号归一化到统一尺度。权重也应根据标注通过率、业务影响和下游训练收益持续校准，避免多个高度相关的信号被重复计分。成熟系统还可以使用 Learning-to-Rank 模型代替固定权重，对候选样本进行排序。</p>
+<p><img src="/images/llm/llm-data-flywheel-04.png" alt="难例挖掘综合失败、影响、不确定性和新颖度，而不是只依赖用户点踩"></p>
+<p>需要注意，高不确定性不一定代表高训练价值：它也可能来自问题本身存在歧义或标签错误。因此，难例必须经过归因和可标注性检查。同时，训练数据中还要保留一定比例的正常样本、历史能力样本和安全样本，避免模型过度拟合少数失败场景。</p>
+<p>难例挖掘的目标不是简单收集“模型不会的问题”，而是找到那些根因明确、标签可靠、具有业务价值，并且训练后能够泛化到同类任务的样本。</p>
+<h2 id="数据如何转化为模型能力"><a href="#数据如何转化为模型能力" class="headerlink" title="数据如何转化为模型能力"></a>数据如何转化为模型能力</h2><p>线上样本经过清洗和难例筛选后，仍不能直接用于训练。它还需要完成三个步骤：把反馈转成可靠标签、选择匹配的训练目标，并通过数据混合控制能力提升的方向。</p>
+<h3 id="自动标注与人工审核"><a href="#自动标注与人工审核" class="headerlink" title="自动标注与人工审核"></a>自动标注与人工审核</h3><p>不同任务的“正确答案”并不相同。代码可以运行测试，结构化输出可以校验 Schema，而开放问答和用户偏好通常需要模型或人工判断。</p>
+<p><img src="/images/llm/llm-data-flywheel-05.png" alt="确定性任务优先使用执行结果，模糊和高风险任务交给人工审核"></p>
+<p>不同数据类型，主要的标注方式如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据类型</strong></th>
+<th><strong>主要标注方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>可执行代码、可验证 SQL、答案确定的数学题</td>
+<td>编译器、测试用例、执行器</td>
+</tr>
+<tr>
+<td>JSON、函数参数</td>
+<td>Schema、类型和业务规则校验</td>
+</tr>
+<tr>
+<td>开放式回答</td>
+<td>多个 Judge 按统一 Rubric 评分</td>
+</tr>
+<tr>
+<td>回答偏好</td>
+<td>人工或用户进行 Pairwise 排序</td>
+</tr>
+<tr>
+<td>法律、医疗、安全</td>
+<td>领域专家审核</td>
+</tr>
+<tr>
+<td>Agent 轨迹</td>
+<td>工具结果、任务状态和最终结果联合判断</td>
+</tr>
+</tbody>
+</table>
+<p>自动标注并不意味着完全取消人工参与。系统需要记录标注模型、Prompt、规则和版本，并将低置信度、模型间分歧以及高风险样本交给人工复核。评测集还应独立抽样和严格审核，与训练数据保持隔离，避免评测结果失真。</p>
+<p>除了为真实样本生成标签，LLM 还可以根据少量种子数据扩展新的指令、问题和答案，这类方法通常称为<strong>合成数据生成</strong>。<a href="https://arxiv.org/abs/2212.10560" target="_blank" rel="external">Self-Instruct</a> 就展示了“模型生成指令、过滤后再用于训练”的技术路线，可以降低大规模人工构造数据的成本。但合成数据更适合补充真实数据，而不是完全替代用户反馈和专家样本。如果模型未经验证地反复学习自身生成的内容，错误和分布偏差可能持续累积，造成长尾信息丢失和模型能力退化，即“模型坍塌”（参考：<a href="https://www.nature.com/articles/s41586-024-07566-y" target="_blank" rel="external">AI models collapse when trained on recursively generated data</a>）。</p>
+<h3 id="不同数据对应不同训练目标"><a href="#不同数据对应不同训练目标" class="headerlink" title="不同数据对应不同训练目标"></a>不同数据对应不同训练目标</h3><p>数据结构决定了模型获得什么监督信号，也决定了应该采用哪种训练方法。</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据形式</strong></th>
+<th><strong>训练方式</strong></th>
+<th><strong>主要作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>领域原始文本</td>
+<td>持续预训练</td>
+<td>学习领域语言与知识分布</td>
+</tr>
+<tr>
+<td>指令与标准答案</td>
+<td>SFT</td>
+<td>学习任务行为、格式和表达</td>
+</tr>
+<tr>
+<td>Chosen / Rejected</td>
+<td>DPO、RLHF</td>
+<td>学习人类偏好和行为边界</td>
+</tr>
+<tr>
+<td>Agent 执行轨迹</td>
+<td>轨迹微调、过程监督</td>
+<td>学习工具选择和多步执行</td>
+</tr>
+<tr>
+<td>安全攻击与拒答样本</td>
+<td>Safety SFT、偏好训练</td>
+<td>调整安全边界</td>
+</tr>
+</tbody>
+</table>
+<p>SFT 使用标准答案进行最大似然训练：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">L_SFT(θ) = -Σ_&#123;t=1&#125;^&#123;T&#125; log π_θ(y_t^* | x, y_&#123;&lt;t&#125;^*)</span><br></pre></td></tr></table></figure>
+<p>其中，<code>y_t^*</code> 表示标准答案中的第 <code>t</code> 个 Token。在指令微调中，通常只计算回答部分的 Loss，Prompt 和 Padding Token 会通过 Loss Mask 排除。</p>
+<p>它会提高模型在输入 <code>x</code> 下生成目标答案 <code>y*</code> 的概率，适合稳定指令遵循、输出格式和领域表达。偏好数据通常表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(x, y+, y-)</span><br></pre></td></tr></table></figure>
+<p>其中 <code>y+</code> 是更优回答，<code>y-</code> 是较差回答。RLHF 通常先训练奖励模型，再通过强化学习优化策略；<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="external">DPO</a> 则直接学习两个回答之间的偏好差异：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Δθ   = log πθ(y+|x)   - log πθ(y-|x)</span><br><span class="line">Δref = log πref(y+|x) - log πref(y-|x)</span><br><span class="line"></span><br><span class="line">L_DPO = -E log σ(β × (Δθ - Δref))</span><br></pre></td></tr></table></figure>
+<p><code>πref</code> 是冻结的参考模型，用于防止模型行为偏移过大；<code>β</code> 控制偏好优化与参考模型约束之间的权衡。简单理解：</p>
+<ul>
+<li>SFT 告诉模型“应该怎样回答”；</li>
+<li>DPO/RLHF 告诉模型“两个回答中哪个更好”；</li>
+<li>过程监督为推理或执行过程中的中间步骤提供质量信号，帮助模型学习哪些规划、动作和状态转换更合理。</li>
+</ul>
+<h3 id="数据混合与能力保持"><a href="#数据混合与能力保持" class="headerlink" title="数据混合与能力保持"></a>数据混合与能力保持</h3><p>持续训练不能只使用最新失败样本。否则模型可能过度适配少数场景，并造成通用能力下降或安全边界退化。训练数据通常来自多个数据分布：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">p_train(x) =</span><br><span class="line">    λ1 × p_replay(x)</span><br><span class="line">  + λ2 × p_new(x)</span><br><span class="line">  + λ3 × p_hard(x)</span><br><span class="line">  + λ4 × p_safety(x)</span><br><span class="line">  + λ5 × p_domain(x)</span><br><span class="line"></span><br><span class="line">Σ λi = 1</span><br></pre></td></tr></table></figure>
+<p>这里描述的是训练时的采样概率：</p>
+<ul>
+<li><code>replay</code>：历史高质量数据，用于保持原有能力；</li>
+<li><code>new</code>：最新线上数据，用于适应输入分布变化；</li>
+<li><code>hard</code>：高价值难例，用于修复明确能力缺口；</li>
+<li><code>safety</code>：攻击、拒答和边界样本；</li>
+<li><code>domain</code>：垂直领域任务和专业表达。</li>
+</ul>
+<p>当不同数据集规模差距很大时，还可以使用温度采样：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">p_i = n_i^α / Σ n_j^α，0 &lt; α &lt; 1</span><br></pre></td></tr></table></figure>
+<p>其中，<code>n_i</code> 是第 <code>i</code> 个数据源的样本规模。直接按数据量采样时，大规模数据源可能主导训练；设置 <code>α &lt; 1</code> 可以压平不同数据源之间的规模差异，提高小规模数据源的相对采样概率（需要注意：这一方法只能平衡数据规模，不能自动判断数据价值；样本质量仍需通过质量评分、业务影响或梯度贡献单独衡量）。</p>
+<p>各类数据权重不应长期固定，而应根据回归评测中的能力缺口动态调整。同时，可以利用梯度相似度、影响函数或代理模型评分，估计样本对目标能力的贡献。<a href="https://arxiv.org/abs/2402.04333" target="_blank" rel="external">LESS</a> 就使用低秩梯度特征选择更相关的指令数据。</p>
+<p>因此，从数据到能力的关键不在于“训练了多少数据”，而在于标签是否可靠、训练目标是否匹配，以及数据混合是否保持了模型整体能力。</p>
+<h2 id="持续评测与发布闭环"><a href="#持续评测与发布闭环" class="headerlink" title="持续评测与发布闭环"></a>持续评测与发布闭环</h2><p>训练完成不代表飞轮闭合。只有新版本经过评测、灰度并产生真实收益，数据才真正转化为能力。</p>
+<p><img src="/images/llm/llm-data-flywheel-06.png" alt="数据、模型、评测和发布都需要版本化，并支持快速回滚"></p>
+<p>评测体系至少要覆盖：</p>
+<ol>
+<li><strong>数据质量</strong>：标注一致率、抽检通过率、重复率和任务分布覆盖率；</li>
+<li><strong>数据安全</strong>：敏感信息残留率、异常样本率，以及训练集与评测集重合率；</li>
+<li><strong>目标能力</strong>：任务成功率、准确率、格式通过率和偏好胜率；</li>
+<li><strong>能力回归</strong>：通用问答、代码、推理和原有业务能力是否下降；</li>
+<li><strong>系统质量</strong>：RAG 忠实度、工具成功率和 Agent 完成率；</li>
+<li><strong>安全边界</strong>：攻击成功率、越权访问、过度拒答和敏感信息泄露；</li>
+<li><strong>工程指标</strong>：TTFT、Token/s、推理成本、错误率和资源占用；</li>
+<li><strong>业务结果</strong>：问题解决率、人工转接率、用户修订率和任务完成率；</li>
+<li><strong>飞轮效率</strong>：问题修复周期、单位有效样本成本，以及每千条有效数据带来的指标提升。</li>
+</ol>
+<p>评测集需要按用户、会话、模板和时间进行隔离，并对训练数据做近重复检测。固定 Golden Set 用于长期能力回归，滚动评测集（Rolling Eval Set）用于覆盖最新线上问题；发布阶段的 Shadow Deployment 则用于复制真实流量，在不影响用户的情况下验证新版本。</p>
+<p>生产环境通常采用“周期性离线训练 + 持续线上评测”，而不是让模型直接根据单个用户反馈在线更新。这样才能保证数据可审计、模型可复现、问题可回滚。</p>
+<h2 id="生产边界与未来演进"><a href="#生产边界与未来演进" class="headerlink" title="生产边界与未来演进"></a>生产边界与未来演进</h2><p>数据飞轮不会天然向正方向运转。线上反馈本身带有噪声和偏差，如果数据来源、失败归因或评测机制不可靠，闭环反而可能持续放大错误。</p>
+<table>
+<thead>
+<tr>
+<th><strong>核心风险</strong></th>
+<th><strong>典型表现</strong></th>
+<th><strong>主要治理方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>反馈偏差</td>
+<td>少数极端用户主导数据分布</td>
+<td>多信号融合、分层采样</td>
+</tr>
+<tr>
+<td>错误归因</td>
+<td>将检索或工具故障当成模型问题</td>
+<td>保存完整 Trace，进行根因分类</td>
+</tr>
+<tr>
+<td>数据投毒</td>
+<td>恶意输入被收录为训练样本</td>
+<td>来源校验、异常检测、隔离审核</td>
+</tr>
+<tr>
+<td>奖励投机</td>
+<td>模型迎合评分，但没有真正完成任务</td>
+<td>引入执行结果和业务指标</td>
+</tr>
+<tr>
+<td>灾难性遗忘</td>
+<td>新能力提升，原有能力下降</td>
+<td>Replay 数据与全量回归评测</td>
+</tr>
+<tr>
+<td>评测污染</td>
+<td>测试样本进入训练集</td>
+<td>数据血缘、分组切分和版本隔离</td>
+</tr>
+<tr>
+<td>合成数据退化</td>
+<td>输出趋同，长尾信息逐渐丢失</td>
+<td>保留真实数据并加强质量验证</td>
+</tr>
+<tr>
+<td>隐私泄露</td>
+<td>用户或企业信息进入模型参数</td>
+<td>授权、脱敏、访问控制与审计</td>
+</tr>
+</tbody>
+</table>
+<p>未来，数据飞轮将从简单的“收集反馈再训练”，逐步演进为更精细的持续优化系统：</p>
+<ol>
+<li><strong>数据选择更精准</strong>：结合不确定性、梯度影响、样本新颖度和业务价值选择数据；</li>
+<li><strong>反馈粒度更深入</strong>：从最终回答扩展到 Agent 的规划、工具调用和完整执行轨迹；</li>
+<li><strong>验证机制更可靠</strong>：由规则、执行器、多个 Judge 和人工专家共同验证标签；</li>
+<li><strong>训练策略更动态</strong>：根据评测暴露的能力缺口，调整数据配比和训练课程；</li>
+<li><strong>优化范围更完整</strong>：同时改进模型、Prompt、RAG、工具、安全策略和推理系统。</li>
+</ol>
+<p>一个成熟的数据飞轮应当具备三个特征：<strong>线上信号可以追溯，训练数据可以解释，模型更新可以验证和回滚。</strong></p>
+<p>数据飞轮的价值不在于持续积累更多日志，而在于建立一条从真实问题到可靠改进的工程链路：发现失败、定位根因、构造数据、优化系统，并通过评测和灰度发布把改进安全地带回生产环境。</p>
+<p>一句话概括：<strong>数据飞轮让大模型的每一次真实失败，都有机会转化为下一次经过验证的能力提升。</strong></p>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[LLM 系列 (二十二)：端侧大模型，大模型如何在本地设备上运行]]></title>
       <url>http://matt33.com/2026/07/10/llm-on-device/</url>
       <content type="html"><![CDATA[<p>大模型应用长期以云端推理为主：用户将请求发送到服务器，由 GPU 集群完成计算并返回结果。云端能够承载更大的模型，也便于统一更新和管理，但它始终受到网络延迟、推理成本、数据隐私和离线可用性的约束。</p>

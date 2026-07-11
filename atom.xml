@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-10T15:50:00.000Z</updated>
+  <updated>2026-07-11T04:42:34.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,310 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (二十三)：数据飞轮，大模型能力如何持续进化</title>
+    <link href="http://matt33.com/2026/07/11/llm-data-flywheel/"/>
+    <id>http://matt33.com/2026/07/11/llm-data-flywheel/</id>
+    <published>2026-07-11T04:42:34.000Z</published>
+    <updated>2026-07-11T04:42:34.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>大模型上线并不意味着能力建设结束。真实用户的问题远比训练集复杂：业务规则持续变化，输入分布不断漂移，RAG、工具和 Prompt 也会频繁升级。模型在离线评测中表现良好，进入生产环境后仍可能出现幻觉、格式错误、工具误调用和安全误判。</p>
+<p>这些线上失败既是问题，也是改进模型和系统的重要数据来源之一。通过采集反馈与执行轨迹、定位失败原因、挖掘高价值样本，再经过标注、训练、评测和灰度发布，系统可以把真实问题持续转化为经过验证的能力提升。</p>
+<a id="more"></a>  
+<p>这就是数据飞轮：不是让模型直接学习所有用户日志，而是建立一条从“线上失败”到“验证后改进”的可控闭环。</p>
+<p>要理解数据飞轮，可以先记住四个结论：</p>
+<ol>
+<li>用户反馈只是原始信号，并不等于训练标签；</li>
+<li>高价值难例通常比大量普通样本更有训练价值；</li>
+<li>训练集与评测集必须隔离，否则指标会被数据污染；</li>
+<li>数据飞轮优化的是整个 LLM 系统，不只是模型参数。</li>
+</ol>
+<p><img src="/images/llm/llm-data-flywheel-01.png" alt="数据飞轮把线上反馈转化为数据、模型和系统能力"></p>
+<h2 id="为什么需要数据飞轮"><a href="#为什么需要数据飞轮" class="headerlink" title="为什么需要数据飞轮"></a>为什么需要数据飞轮</h2><p>模型训练完成后，参数和能力基本固定，但生产环境始终在变化。可以将这种差异理解为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">训练分布 P_train(x) ≠ 持续变化的生产分布 P_prod(x, t)</span><br></pre></td></tr></table></figure>
+<p>随着时间推移，用户表达方式、任务复杂度和业务规则都会发生变化；Prompt、RAG、工具接口和安全策略的升级，也可能引入新的失败模式。公开 Benchmark 能衡量模型的通用能力，却无法完整覆盖真实业务中的数据分布和系统链路。</p>
+<p>因此，模型上线后仍需持续解决三个问题：</p>
+<ol>
+<li><strong>发现问题</strong>：模型在哪些真实任务和系统环节中失败；</li>
+<li><strong>选择数据</strong>：哪些样本具有足够的训练价值和业务影响；</li>
+<li><strong>验证改进</strong>：新版本是否修复问题，同时保持原有能力与安全边界。</li>
+</ol>
+<p><img src="/images/llm/llm-data-flywheel-02.png" alt="数据飞轮通过“观测、归因、优化、验证”闭环，将线上问题转化为持续改进"></p>
+<p>从上图可以看出，数据飞轮真正建立的不是一条简单的“日志到训练”链路，而是一套<strong>让 LLM 系统持续发现问题、选择正确优化方式并验证改进结果的工程机制</strong>。</p>
+<h2 id="从反馈到高质量数据"><a href="#从反馈到高质量数据" class="headerlink" title="从反馈到高质量数据"></a>从反馈到高质量数据</h2><p>线上日志只是带有噪声的行为记录，并不能直接作为训练数据。它需要依次经过任务轨迹还原、隐私治理、失败归因和价值筛选，才能转化为可训练、可评测的数据资产。</p>
+<h3 id="采集完整任务轨迹"><a href="#采集完整任务轨迹" class="headerlink" title="采集完整任务轨迹"></a>采集完整任务轨迹</h3><p>仅记录“用户问题和模型回答”无法判断问题根因。一次错误可能来自 Prompt、RAG、模型生成、工具执行或安全策略，因此需要用 Trace 串联完整任务链路。</p>
+<table>
+<thead>
+<tr>
+<th><strong>信号类型</strong></th>
+<th><strong>典型内容</strong></th>
+<th><strong>主要作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>用户反馈</td>
+<td>点赞、点踩、修改、重新生成</td>
+<td>识别主观偏好与明显错误</td>
+</tr>
+<tr>
+<td>行为信号</td>
+<td>放弃、复制、任务完成、人工接管</td>
+<td>判断回答是否真正解决问题</td>
+</tr>
+<tr>
+<td>模型信息</td>
+<td>模型、Prompt、采样参数版本</td>
+<td>复现当时的生成环境</td>
+</tr>
+<tr>
+<td>RAG 轨迹</td>
+<td>Query、召回文档、Rerank 分数</td>
+<td>判断知识是否正确召回</td>
+</tr>
+<tr>
+<td>工具轨迹</td>
+<td>工具名称、参数、返回值、错误码</td>
+<td>定位选择和执行错误</td>
+</tr>
+<tr>
+<td>校验结果</td>
+<td>格式、安全、引用、执行验证</td>
+<td>提供可自动判断的质量信号</td>
+</tr>
+</tbody>
+</table>
+<p>一个简化的 Trace 可以表示为：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"trace_id"</span>: <span class="string">"trace_1024"</span>,</span><br><span class="line">  <span class="attr">"input_redacted"</span>: <span class="string">"..."</span>,</span><br><span class="line">  <span class="attr">"model_version"</span>: <span class="string">"model_v8"</span>,</span><br><span class="line">  <span class="attr">"prompt_version"</span>: <span class="string">"prompt_v12"</span>,</span><br><span class="line">  <span class="attr">"retrieval"</span>: &#123;</span><br><span class="line">    <span class="attr">"query"</span>: <span class="string">"..."</span>,</span><br><span class="line">    <span class="attr">"knowledge_base_version"</span>: <span class="string">"kb_v6"</span>,</span><br><span class="line">    <span class="attr">"retriever_version"</span>: <span class="string">"retriever_v3"</span>,</span><br><span class="line">    <span class="attr">"reranker_version"</span>: <span class="string">"reranker_v2"</span>,</span><br><span class="line">    <span class="attr">"document_ids"</span>: [<span class="string">"doc_17"</span>, <span class="string">"doc_28"</span>]</span><br><span class="line">  &#125;,</span><br><span class="line">  <span class="attr">"tool_calls"</span>: [&#123;</span><br><span class="line">    <span class="attr">"name"</span>: <span class="string">"query_order"</span>,</span><br><span class="line">    <span class="attr">"tool_version"</span>: <span class="string">"order_api_v4"</span>,</span><br><span class="line">    <span class="attr">"arguments"</span>: &#123;<span class="attr">"order_id"</span>: <span class="string">"..."</span>&#125;,</span><br><span class="line">    <span class="attr">"status"</span>: <span class="string">"failed"</span>,</span><br><span class="line">    <span class="attr">"error_code"</span>: <span class="string">"INVALID_ARGUMENT"</span></span><br><span class="line">  &#125;],</span><br><span class="line">  <span class="attr">"policy_version"</span>: <span class="string">"policy_v5"</span>,</span><br><span class="line">  <span class="attr">"response"</span>: <span class="string">"..."</span>,</span><br><span class="line">  <span class="attr">"user_feedback"</span>: <span class="string">"negative"</span>,</span><br><span class="line">  <span class="attr">"task_outcome"</span>: <span class="string">"failed"</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中，模型、Prompt、知识库、工具和策略版本都需要记录。否则即使保留了输入输出，也很难复现当时的系统行为，更无法判断后续修改是否真正解决了问题。</p>
+<h3 id="清洗、脱敏与数据分层"><a href="#清洗、脱敏与数据分层" class="headerlink" title="清洗、脱敏与数据分层"></a>清洗、脱敏与数据分层</h3><p>Trace 中可能包含个人信息、企业机密、访问凭证、恶意指令和大量重复内容，必须经过治理后才能进入数据集。</p>
+<p><img src="/images/llm/llm-data-flywheel-03.png" alt="线上日志必须经过权限、质量和标注治理，才能进入训练与评测"></p>
+<p>如上图所述，这部分核心的处理如下：</p>
+<ol>
+<li><strong>隐私脱敏</strong>：移除姓名、手机号、密钥、Token 和内部敏感字段；</li>
+<li><strong>内容过滤</strong>：识别 Prompt Injection、恶意输入和无效会话；</li>
+<li><strong>重复治理</strong>：使用精确 Hash、MinHash、SimHash 和向量聚类处理近重复样本；</li>
+<li><strong>数据血缘</strong>：记录来源、权限、处理步骤、标注方式和版本信息；</li>
+<li><strong>来源标记</strong>：区分人工数据、真实用户数据和模型生成数据；</li>
+<li><strong>评测隔离</strong>：按用户、会话、文档和时间分组切分，防止相似样本同时进入训练集与评测集。</li>
+</ol>
+<p>Raw Zone 应限制访问并设置保留周期；Curated Zone 用于分析和挖掘；Gold Zone 则保存通过审核、可以进入训练或评测的数据。每次转换都需要可追踪、可复现。</p>
+<h3 id="难例挖掘"><a href="#难例挖掘" class="headerlink" title="难例挖掘"></a>难例挖掘</h3><p>难例（Hard Example）是当前模型容易失败或表现不稳定的样本；其中，根因明确、标签可靠且能代表同类问题的高价值难例，通常比大量重复的普通样本更能提供有效的训练信号。一个简化的样本优先级可以表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">priority(x) =</span><br><span class="line">    w1 × failure_score</span><br><span class="line">  + w2 × uncertainty</span><br><span class="line">  + w3 × business_impact</span><br><span class="line">  + w4 × novelty</span><br><span class="line">  + w5 × verifier_failure</span><br><span class="line">  - w6 × duplicate_score</span><br><span class="line">  - w7 × label_noise</span><br></pre></td></tr></table></figure>
+<p>各项含义如下：</p>
+<ul>
+<li><code>failure_score</code>：任务是否失败、是否收到明确负面反馈；</li>
+<li><code>uncertainty</code>：Token 概率熵、多次采样分歧或多个 Judge 评分分歧；</li>
+<li><code>business_impact</code>：问题对交易、安全或核心流程的影响；</li>
+<li><code>novelty</code>：样本是否代表训练集中未覆盖的新分布；</li>
+<li><code>verifier_failure</code>：代码测试、引用校验、规则检查是否失败；</li>
+<li><code>duplicate_score</code>：与已有数据的重复程度；</li>
+<li><code>label_noise</code>：问题是否模糊、冲突或难以形成可靠标签。</li>
+</ul>
+<p>需要注意，这些信号的取值范围并不相同。例如，任务失败可能是 0/1，业务影响可能是 1～5，而模型熵和重复度又有各自的数值范围。因此，在加权计算之前，需要先将各项信号归一化到统一尺度。权重也应根据标注通过率、业务影响和下游训练收益持续校准，避免多个高度相关的信号被重复计分。成熟系统还可以使用 Learning-to-Rank 模型代替固定权重，对候选样本进行排序。</p>
+<p><img src="/images/llm/llm-data-flywheel-04.png" alt="难例挖掘综合失败、影响、不确定性和新颖度，而不是只依赖用户点踩"></p>
+<p>需要注意，高不确定性不一定代表高训练价值：它也可能来自问题本身存在歧义或标签错误。因此，难例必须经过归因和可标注性检查。同时，训练数据中还要保留一定比例的正常样本、历史能力样本和安全样本，避免模型过度拟合少数失败场景。</p>
+<p>难例挖掘的目标不是简单收集“模型不会的问题”，而是找到那些根因明确、标签可靠、具有业务价值，并且训练后能够泛化到同类任务的样本。</p>
+<h2 id="数据如何转化为模型能力"><a href="#数据如何转化为模型能力" class="headerlink" title="数据如何转化为模型能力"></a>数据如何转化为模型能力</h2><p>线上样本经过清洗和难例筛选后，仍不能直接用于训练。它还需要完成三个步骤：把反馈转成可靠标签、选择匹配的训练目标，并通过数据混合控制能力提升的方向。</p>
+<h3 id="自动标注与人工审核"><a href="#自动标注与人工审核" class="headerlink" title="自动标注与人工审核"></a>自动标注与人工审核</h3><p>不同任务的“正确答案”并不相同。代码可以运行测试，结构化输出可以校验 Schema，而开放问答和用户偏好通常需要模型或人工判断。</p>
+<p><img src="/images/llm/llm-data-flywheel-05.png" alt="确定性任务优先使用执行结果，模糊和高风险任务交给人工审核"></p>
+<p>不同数据类型，主要的标注方式如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据类型</strong></th>
+<th><strong>主要标注方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>可执行代码、可验证 SQL、答案确定的数学题</td>
+<td>编译器、测试用例、执行器</td>
+</tr>
+<tr>
+<td>JSON、函数参数</td>
+<td>Schema、类型和业务规则校验</td>
+</tr>
+<tr>
+<td>开放式回答</td>
+<td>多个 Judge 按统一 Rubric 评分</td>
+</tr>
+<tr>
+<td>回答偏好</td>
+<td>人工或用户进行 Pairwise 排序</td>
+</tr>
+<tr>
+<td>法律、医疗、安全</td>
+<td>领域专家审核</td>
+</tr>
+<tr>
+<td>Agent 轨迹</td>
+<td>工具结果、任务状态和最终结果联合判断</td>
+</tr>
+</tbody>
+</table>
+<p>自动标注并不意味着完全取消人工参与。系统需要记录标注模型、Prompt、规则和版本，并将低置信度、模型间分歧以及高风险样本交给人工复核。评测集还应独立抽样和严格审核，与训练数据保持隔离，避免评测结果失真。</p>
+<p>除了为真实样本生成标签，LLM 还可以根据少量种子数据扩展新的指令、问题和答案，这类方法通常称为<strong>合成数据生成</strong>。<a href="https://arxiv.org/abs/2212.10560" target="_blank" rel="external">Self-Instruct</a> 就展示了“模型生成指令、过滤后再用于训练”的技术路线，可以降低大规模人工构造数据的成本。但合成数据更适合补充真实数据，而不是完全替代用户反馈和专家样本。如果模型未经验证地反复学习自身生成的内容，错误和分布偏差可能持续累积，造成长尾信息丢失和模型能力退化，即“模型坍塌”（参考：<a href="https://www.nature.com/articles/s41586-024-07566-y" target="_blank" rel="external">AI models collapse when trained on recursively generated data</a>）。</p>
+<h3 id="不同数据对应不同训练目标"><a href="#不同数据对应不同训练目标" class="headerlink" title="不同数据对应不同训练目标"></a>不同数据对应不同训练目标</h3><p>数据结构决定了模型获得什么监督信号，也决定了应该采用哪种训练方法。</p>
+<table>
+<thead>
+<tr>
+<th><strong>数据形式</strong></th>
+<th><strong>训练方式</strong></th>
+<th><strong>主要作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>领域原始文本</td>
+<td>持续预训练</td>
+<td>学习领域语言与知识分布</td>
+</tr>
+<tr>
+<td>指令与标准答案</td>
+<td>SFT</td>
+<td>学习任务行为、格式和表达</td>
+</tr>
+<tr>
+<td>Chosen / Rejected</td>
+<td>DPO、RLHF</td>
+<td>学习人类偏好和行为边界</td>
+</tr>
+<tr>
+<td>Agent 执行轨迹</td>
+<td>轨迹微调、过程监督</td>
+<td>学习工具选择和多步执行</td>
+</tr>
+<tr>
+<td>安全攻击与拒答样本</td>
+<td>Safety SFT、偏好训练</td>
+<td>调整安全边界</td>
+</tr>
+</tbody>
+</table>
+<p>SFT 使用标准答案进行最大似然训练：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">L_SFT(θ) = -Σ_&#123;t=1&#125;^&#123;T&#125; log π_θ(y_t^* | x, y_&#123;&lt;t&#125;^*)</span><br></pre></td></tr></table></figure>
+<p>其中，<code>y_t^*</code> 表示标准答案中的第 <code>t</code> 个 Token。在指令微调中，通常只计算回答部分的 Loss，Prompt 和 Padding Token 会通过 Loss Mask 排除。</p>
+<p>它会提高模型在输入 <code>x</code> 下生成目标答案 <code>y*</code> 的概率，适合稳定指令遵循、输出格式和领域表达。偏好数据通常表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(x, y+, y-)</span><br></pre></td></tr></table></figure>
+<p>其中 <code>y+</code> 是更优回答，<code>y-</code> 是较差回答。RLHF 通常先训练奖励模型，再通过强化学习优化策略；<a href="https://arxiv.org/abs/2305.18290" target="_blank" rel="external">DPO</a> 则直接学习两个回答之间的偏好差异：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Δθ   = log πθ(y+|x)   - log πθ(y-|x)</span><br><span class="line">Δref = log πref(y+|x) - log πref(y-|x)</span><br><span class="line"></span><br><span class="line">L_DPO = -E log σ(β × (Δθ - Δref))</span><br></pre></td></tr></table></figure>
+<p><code>πref</code> 是冻结的参考模型，用于防止模型行为偏移过大；<code>β</code> 控制偏好优化与参考模型约束之间的权衡。简单理解：</p>
+<ul>
+<li>SFT 告诉模型“应该怎样回答”；</li>
+<li>DPO/RLHF 告诉模型“两个回答中哪个更好”；</li>
+<li>过程监督为推理或执行过程中的中间步骤提供质量信号，帮助模型学习哪些规划、动作和状态转换更合理。</li>
+</ul>
+<h3 id="数据混合与能力保持"><a href="#数据混合与能力保持" class="headerlink" title="数据混合与能力保持"></a>数据混合与能力保持</h3><p>持续训练不能只使用最新失败样本。否则模型可能过度适配少数场景，并造成通用能力下降或安全边界退化。训练数据通常来自多个数据分布：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">p_train(x) =</span><br><span class="line">    λ1 × p_replay(x)</span><br><span class="line">  + λ2 × p_new(x)</span><br><span class="line">  + λ3 × p_hard(x)</span><br><span class="line">  + λ4 × p_safety(x)</span><br><span class="line">  + λ5 × p_domain(x)</span><br><span class="line"></span><br><span class="line">Σ λi = 1</span><br></pre></td></tr></table></figure>
+<p>这里描述的是训练时的采样概率：</p>
+<ul>
+<li><code>replay</code>：历史高质量数据，用于保持原有能力；</li>
+<li><code>new</code>：最新线上数据，用于适应输入分布变化；</li>
+<li><code>hard</code>：高价值难例，用于修复明确能力缺口；</li>
+<li><code>safety</code>：攻击、拒答和边界样本；</li>
+<li><code>domain</code>：垂直领域任务和专业表达。</li>
+</ul>
+<p>当不同数据集规模差距很大时，还可以使用温度采样：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">p_i = n_i^α / Σ n_j^α，0 &lt; α &lt; 1</span><br></pre></td></tr></table></figure>
+<p>其中，<code>n_i</code> 是第 <code>i</code> 个数据源的样本规模。直接按数据量采样时，大规模数据源可能主导训练；设置 <code>α &lt; 1</code> 可以压平不同数据源之间的规模差异，提高小规模数据源的相对采样概率（需要注意：这一方法只能平衡数据规模，不能自动判断数据价值；样本质量仍需通过质量评分、业务影响或梯度贡献单独衡量）。</p>
+<p>各类数据权重不应长期固定，而应根据回归评测中的能力缺口动态调整。同时，可以利用梯度相似度、影响函数或代理模型评分，估计样本对目标能力的贡献。<a href="https://arxiv.org/abs/2402.04333" target="_blank" rel="external">LESS</a> 就使用低秩梯度特征选择更相关的指令数据。</p>
+<p>因此，从数据到能力的关键不在于“训练了多少数据”，而在于标签是否可靠、训练目标是否匹配，以及数据混合是否保持了模型整体能力。</p>
+<h2 id="持续评测与发布闭环"><a href="#持续评测与发布闭环" class="headerlink" title="持续评测与发布闭环"></a>持续评测与发布闭环</h2><p>训练完成不代表飞轮闭合。只有新版本经过评测、灰度并产生真实收益，数据才真正转化为能力。</p>
+<p><img src="/images/llm/llm-data-flywheel-06.png" alt="数据、模型、评测和发布都需要版本化，并支持快速回滚"></p>
+<p>评测体系至少要覆盖：</p>
+<ol>
+<li><strong>数据质量</strong>：标注一致率、抽检通过率、重复率和任务分布覆盖率；</li>
+<li><strong>数据安全</strong>：敏感信息残留率、异常样本率，以及训练集与评测集重合率；</li>
+<li><strong>目标能力</strong>：任务成功率、准确率、格式通过率和偏好胜率；</li>
+<li><strong>能力回归</strong>：通用问答、代码、推理和原有业务能力是否下降；</li>
+<li><strong>系统质量</strong>：RAG 忠实度、工具成功率和 Agent 完成率；</li>
+<li><strong>安全边界</strong>：攻击成功率、越权访问、过度拒答和敏感信息泄露；</li>
+<li><strong>工程指标</strong>：TTFT、Token/s、推理成本、错误率和资源占用；</li>
+<li><strong>业务结果</strong>：问题解决率、人工转接率、用户修订率和任务完成率；</li>
+<li><strong>飞轮效率</strong>：问题修复周期、单位有效样本成本，以及每千条有效数据带来的指标提升。</li>
+</ol>
+<p>评测集需要按用户、会话、模板和时间进行隔离，并对训练数据做近重复检测。固定 Golden Set 用于长期能力回归，滚动评测集（Rolling Eval Set）用于覆盖最新线上问题；发布阶段的 Shadow Deployment 则用于复制真实流量，在不影响用户的情况下验证新版本。</p>
+<p>生产环境通常采用“周期性离线训练 + 持续线上评测”，而不是让模型直接根据单个用户反馈在线更新。这样才能保证数据可审计、模型可复现、问题可回滚。</p>
+<h2 id="生产边界与未来演进"><a href="#生产边界与未来演进" class="headerlink" title="生产边界与未来演进"></a>生产边界与未来演进</h2><p>数据飞轮不会天然向正方向运转。线上反馈本身带有噪声和偏差，如果数据来源、失败归因或评测机制不可靠，闭环反而可能持续放大错误。</p>
+<table>
+<thead>
+<tr>
+<th><strong>核心风险</strong></th>
+<th><strong>典型表现</strong></th>
+<th><strong>主要治理方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>反馈偏差</td>
+<td>少数极端用户主导数据分布</td>
+<td>多信号融合、分层采样</td>
+</tr>
+<tr>
+<td>错误归因</td>
+<td>将检索或工具故障当成模型问题</td>
+<td>保存完整 Trace，进行根因分类</td>
+</tr>
+<tr>
+<td>数据投毒</td>
+<td>恶意输入被收录为训练样本</td>
+<td>来源校验、异常检测、隔离审核</td>
+</tr>
+<tr>
+<td>奖励投机</td>
+<td>模型迎合评分，但没有真正完成任务</td>
+<td>引入执行结果和业务指标</td>
+</tr>
+<tr>
+<td>灾难性遗忘</td>
+<td>新能力提升，原有能力下降</td>
+<td>Replay 数据与全量回归评测</td>
+</tr>
+<tr>
+<td>评测污染</td>
+<td>测试样本进入训练集</td>
+<td>数据血缘、分组切分和版本隔离</td>
+</tr>
+<tr>
+<td>合成数据退化</td>
+<td>输出趋同，长尾信息逐渐丢失</td>
+<td>保留真实数据并加强质量验证</td>
+</tr>
+<tr>
+<td>隐私泄露</td>
+<td>用户或企业信息进入模型参数</td>
+<td>授权、脱敏、访问控制与审计</td>
+</tr>
+</tbody>
+</table>
+<p>未来，数据飞轮将从简单的“收集反馈再训练”，逐步演进为更精细的持续优化系统：</p>
+<ol>
+<li><strong>数据选择更精准</strong>：结合不确定性、梯度影响、样本新颖度和业务价值选择数据；</li>
+<li><strong>反馈粒度更深入</strong>：从最终回答扩展到 Agent 的规划、工具调用和完整执行轨迹；</li>
+<li><strong>验证机制更可靠</strong>：由规则、执行器、多个 Judge 和人工专家共同验证标签；</li>
+<li><strong>训练策略更动态</strong>：根据评测暴露的能力缺口，调整数据配比和训练课程；</li>
+<li><strong>优化范围更完整</strong>：同时改进模型、Prompt、RAG、工具、安全策略和推理系统。</li>
+</ol>
+<p>一个成熟的数据飞轮应当具备三个特征：<strong>线上信号可以追溯，训练数据可以解释，模型更新可以验证和回滚。</strong></p>
+<p>数据飞轮的价值不在于持续积累更多日志，而在于建立一条从真实问题到可靠改进的工程链路：发现失败、定位根因、构造数据、优化系统，并通过评测和灰度发布把改进安全地带回生产环境。</p>
+<p>一句话概括：<strong>数据飞轮让大模型的每一次真实失败，都有机会转化为下一次经过验证的能力提升。</strong></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;大模型上线并不意味着能力建设结束。真实用户的问题远比训练集复杂：业务规则持续变化，输入分布不断漂移，RAG、工具和 Prompt 也会频繁升级。模型在离线评测中表现良好，进入生产环境后仍可能出现幻觉、格式错误、工具误调用和安全误判。&lt;/p&gt;
+&lt;p&gt;这些线上失败既是问题，也是改进模型和系统的重要数据来源之一。通过采集反馈与执行轨迹、定位失败原因、挖掘高价值样本，再经过标注、训练、评测和灰度发布，系统可以把真实问题持续转化为经过验证的能力提升。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (二十二)：端侧大模型，大模型如何在本地设备上运行</title>
@@ -8446,704 +8750,6 @@
     
       &lt;p&gt;前三篇文章里，我们已经分别从三个角度为理解大语言模型打了基础：第一篇看发展脉络，知道 LLM 是怎么一步步演进出来的；第二篇看数学基础，理解向量、概率、损失函数、梯度这些底层工具；第三篇看算法基础，从 NLP、词向量、感知机、神经网络，一路讲到 CNN、RNN 和双向 RNN。到了第四篇，我们终于可以进入现代大语言模型最核心的一块内容：&lt;strong&gt;Transformer&lt;/strong&gt;。&lt;/p&gt;
 &lt;p&gt;如果说前几篇是在回答“机器如何把语言变成可以计算的问题”，那么这一篇要回答的是另一个更关键的问题：&lt;strong&gt;为什么后来的主流大语言模型，几乎都选择了 Transformer 作为核心架构？&lt;/strong&gt;&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (三)：算法原理篇：机器是如何学会语言的</title>
-    <link href="http://matt33.com/2026/06/22/llm-algorithm-principles/"/>
-    <id>http://matt33.com/2026/06/22/llm-algorithm-principles/</id>
-    <published>2026-06-22T10:10:00.000Z</published>
-    <updated>2026-06-23T16:58:12.426Z</updated>
-    
-    <content type="html"><![CDATA[<p>前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。</p>
-<a id="more"></a>
-<p>我们不追求推导公式，也不会一上来就深入 Transformer 的细节。本文更希望回答一个核心问题：</p>
-<ul>
-<li>机器到底是如何一步步学会处理语言的？</li>
-</ul>
-<p>理解这个问题之后，再去看 LLM、Transformer、Attention、预训练、微调这些概念，就不会只是记住一堆名词，而是能知道它们分别解决了什么问题，为什么会一步步演进到今天的大语言模型。</p>
-<p>读完这篇文章，希望你能清晰回答下面几个问题：</p>
-<ol>
-<li>为什么要把文本变成 token 和向量？</li>
-<li>为什么模型可以从数据中学习？</li>
-<li>为什么神经网络比手写规则更强？</li>
-<li>为什么传统序列模型不够用？</li>
-<li>为什么 Transformer 会成为大模型的核心架构？</li>
-</ol>
-<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>简单来说，这篇文章是为后面深入理解 Transformer 和 LLM 工作原理做准备。我们会从 NLP、词向量、感知机、神经网络讲起，再一路过渡到 CNN、RNN、双向 RNN 等经典模型。核心概念如下表所示：</p>
-<table>
-<thead>
-<tr>
-<th>概念</th>
-<th>它解决什么问题</th>
-<th>它的不足</th>
-<th>和 LLM 的关系</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>NLP</td>
-<td>让机器处理自然语言</td>
-<td>语言有歧义和上下文</td>
-<td>定义了 LLM 要处理的问题</td>
-</tr>
-<tr>
-<td>Token</td>
-<td>把文本拆成基本单位</td>
-<td>切分方式会影响理解</td>
-<td>LLM 的输入和输出单位</td>
-</tr>
-<tr>
-<td>词向量</td>
-<td>把 token 变成可计算的语义向量</td>
-<td>早期词向量难表达上下文变化</td>
-<td>LLM 计算语言的基础表示</td>
-</tr>
-<tr>
-<td>感知机</td>
-<td>让机器学会简单分类</td>
-<td>只能处理线性问题</td>
-<td>神经网络的原始雏形</td>
-</tr>
-<tr>
-<td>神经网络</td>
-<td>自动学习复杂特征</td>
-<td>需要大量数据和训练</td>
-<td>LLM 的基本学习框架</td>
-</tr>
-<tr>
-<td>CNN</td>
-<td>捕捉局部词组特征</td>
-<td>不擅长长距离依赖</td>
-<td>早期文本分类常用模型</td>
-</tr>
-<tr>
-<td>RNN / 双向 RNN</td>
-<td>按顺序读取文本上下文</td>
-<td>训练慢，长文本容易遗忘</td>
-<td>Transformer 出现前的重要序列模型</td>
-</tr>
-<tr>
-<td>Attention</td>
-<td>动态关注相关信息</td>
-<td>本篇只做引出</td>
-<td>Transformer 的核心入口</td>
-</tr>
-</tbody>
-</table>
-<p><img src="/images/llm/llm-algorithm-01.png" alt="文章核心内容思路"></p>
-<h2 id="NLP：让机器处理语言"><a href="#NLP：让机器处理语言" class="headerlink" title="NLP：让机器处理语言"></a>NLP：让机器处理语言</h2><p>NLP，全称 Natural Language Processing，也就是自然语言处理，研究的是<strong>如何让机器处理、理解和生成自然语言</strong>。它并不是大语言模型出现后才有的概念，早期 NLP 主要依赖人工编写规则和词典，后来逐渐发展到基于统计的方法，再到机器学习和深度学习方法。</p>
-<p>对非算法同学来说，可以先不用把 NLP 想得太玄。它本质上是在做一件事：把自然语言问题，转换成机器学习任务。比如：</p>
-<table>
-<thead>
-<tr>
-<th>人类要解决的问题</th>
-<th>对应的机器学习任务</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>这条评论是好评还是差评</td>
-<td>文本分类</td>
-</tr>
-<tr>
-<td>这句话里的公司名是什么</td>
-<td>序列标注</td>
-</tr>
-<tr>
-<td>两个问题是不是同一个意思</td>
-<td>文本匹配</td>
-</tr>
-<tr>
-<td>把中文翻译成英文</td>
-<td>序列生成</td>
-</tr>
-<tr>
-<td>根据文档回答问题</td>
-<td>阅读理解或生成</td>
-</tr>
-<tr>
-<td>根据上文继续写</td>
-<td>语言建模</td>
-</tr>
-</tbody>
-</table>
-<h3 id="语言为什么难？"><a href="#语言为什么难？" class="headerlink" title="语言为什么难？"></a>语言为什么难？</h3><p>自然语言难处理，主要不是因为字多，而是因为它不够“规整”。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">苹果很好吃。</span><br><span class="line">苹果发布了新产品。</span><br></pre></td></tr></table></figure>
-<p>同样是<code>苹果</code>，第一个是水果，第二个是公司。机器如果只看字面，很难判断。再比如：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个模型不太稳定。</span><br></pre></td></tr></table></figure>
-<p>在不同场景里，<code>模型</code>可能是机器学习模型、业务模型、3D 模型，也可能只是一个抽象方案。也就是说，语言的含义往往不是由单个词决定的，而是由上下文、语序、场景和表达意图共同决定的。</p>
-<p>可以把自然语言的难点简单总结成下面几类：</p>
-<table>
-<thead>
-<tr>
-<th><strong>难点</strong></th>
-<th><strong>NLP 术语</strong></th>
-<th><strong>例子</strong></th>
-<th><strong>机器为什么难</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>一词多义</td>
-<td>词义消歧</td>
-<td>苹果、模型、银行</td>
-<td>同一个词在不同上下文里含义不同</td>
-</tr>
-<tr>
-<td>指代关系</td>
-<td>指代消解</td>
-<td>它、这个、那个</td>
-<td>必须结合前后文判断指的是谁</td>
-</tr>
-<tr>
-<td>语序变化</td>
-<td>句法分析</td>
-<td>狗咬人，人咬狗</td>
-<td>词一样但顺序不同，意思完全不同</td>
-</tr>
-<tr>
-<td>同义表达</td>
-<td>语义匹配</td>
-<td>页面很卡、打开很慢</td>
-<td>表达不同，但语义可能相同</td>
-</tr>
-<tr>
-<td>隐含意图</td>
-<td>意图识别</td>
-<td>页面有点慢</td>
-<td>可能不是描述现象，而是在提出优化诉求</td>
-</tr>
-</tbody>
-</table>
-<p>所以，NLP 的第一步并不是让机器“真正理解语言”，而是先把这些灵活、模糊、上下文相关的自然语言，转换成机器可以表示、计算和学习的形式。</p>
-<h3 id="从文本到-token"><a href="#从文本到-token" class="headerlink" title="从文本到 token"></a>从文本到 token</h3><p>模型不能直接处理一整段原始文本。对模型来说，文本需要先被拆成一个个更小的基本单位，这个单位就叫 <strong>token</strong>。比如下面这句话：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">我喜欢机器学习</span><br></pre></td></tr></table></figure>
-<p>经过 tokenizer 处理后，可能会被拆成：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[我] [喜欢] [机器] [学习]</span><br></pre></td></tr></table></figure>
-<p>也可能被拆成：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[我] [喜欢] [机器学习]</span><br></pre></td></tr></table></figure>
-<p>不同模型使用的 tokenizer 不完全一样，所以切分结果也可能不同。但它们的目标是一致的：把连续的自然语言文本，转换成模型可以接收的 token 序列。</p>
-<p>接下来，每个 token 通常会被映射成一个对应的编号，也就是 token id。比如可以简单理解为：</p>
-<ul>
-<li>[我] -&gt; 101</li>
-<li>[喜欢] -&gt; 245</li>
-<li>[机器学习] -&gt; 1024</li>
-</ul>
-<p>这样，文本就从“文字”变成了“数字序列”。tokenizer 整体流程如下所示：</p>
-<p><img src="/images/llm/llm-algorithm-02.png" alt="tokenizer 流程"></p>
-<p>不过，到这一步还不够。token id 只是编号，本身并不包含语义信息。模型知道 101、245、1024 是不同的编号，但并不知道“机器学习”和“深度学习”更接近，也不知道“猫”和“狗”比“猫”和“桌子”更相似。</p>
-<p>所以，下一步还需要 embedding，把这些 token 编号转换成真正可以表达语义关系的向量。</p>
-<h3 id="Embedding：让-token-有意义"><a href="#Embedding：让-token-有意义" class="headerlink" title="Embedding：让 token 有意义"></a>Embedding：让 token 有意义</h3><p>Embedding 可以简单理解为：给每个 token 分配一个向量，让模型能够用数学方式计算词与词之间的关系。也就是说，模型不再只知道“猫”“狗”“桌子”是三个不同的 token，而是能够进一步表示它们在语义上的远近关系。</p>
-<table>
-<thead>
-<tr>
-<th>token</th>
-<th>向量直觉</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>猫</td>
-<td>接近动物、宠物</td>
-</tr>
-<tr>
-<td>狗</td>
-<td>接近动物、宠物</td>
-</tr>
-<tr>
-<td>桌子</td>
-<td>接近家具</td>
-</tr>
-<tr>
-<td>学习</td>
-<td>接近教育、训练</td>
-</tr>
-</tbody>
-</table>
-<p>在这样的向量空间里，“猫”和“狗”应该更接近，因为它们都和动物、宠物相关；而“猫”和“桌子”距离会更远，因为它们属于完全不同的语义类别。</p>
-<p>这就是 embedding 的核心作用：<strong>把离散的 token，变成可以计算相似度和语义关系的向量</strong>。</p>
-<blockquote>
-<p>不同模型中，token 的切分方式不同、token 的 embedding 也是不同，embedding 是对应模型训练出来的参数。</p>
-</blockquote>
-<h3 id="词向量：从-one-hot-到-word2vec"><a href="#词向量：从-one-hot-到-word2vec" class="headerlink" title="词向量：从 one-hot 到 word2vec"></a>词向量：从 one-hot 到 word2vec</h3><p>在词向量出现之前，常见的文本表示方式是 one-hot（词向量可以看作 embedding 的一种，主要指把词表示成向量）。假设词表里只有 4 个词，每个词都可以用一个只有一位是 1、其余都是 0 的向量表示：</p>
-<table>
-<thead>
-<tr>
-<th>词</th>
-<th>one-hot 表示</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>猫</td>
-<td><code>[1, 0, 0, 0]</code></td>
-</tr>
-<tr>
-<td>狗</td>
-<td><code>[0, 1, 0, 0]</code></td>
-</tr>
-<tr>
-<td>桌子</td>
-<td><code>[0, 0, 1, 0]</code></td>
-</tr>
-<tr>
-<td>学习</td>
-<td><code>[0, 0, 0, 1]</code></td>
-</tr>
-</tbody>
-</table>
-<p>one-hot 的好处是简单，能清楚表示“这个词是谁”。但它的问题也很明显：它不能表示“这个词和谁更像”。</p>
-<p>比如“猫”和“狗”在语义上更接近，因为它们都和动物、宠物有关；而“猫”和“桌子”明显不是一类东西。但在 one-hot 表示里，这些词都是彼此独立的编号，模型看不出它们之间的语义远近。</p>
-<p>词向量的出现，就是为了解决这个问题。</p>
-<ul>
-<li>word2vec 这类方法的核心直觉是：一个词的意思，可以从它经常出现的上下文中学出来。</li>
-</ul>
-<p>比如：我 今天 喝 了 一杯 咖啡</p>
-<p>如果“咖啡”经常出现在“喝”“一杯”“早上”这些词附近，模型就会逐渐学到：咖啡更可能和饮品、早餐、杯子这些语义场景相关。</p>
-<p><img src="/images/llm/llm-algorithm-03.png" alt="word2vec"></p>
-<p>word2vec 中经典训练方式有两类：</p>
-<table>
-<thead>
-<tr>
-<th>方法</th>
-<th>直觉</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>CBOW</td>
-<td>根据上下文预测中间词</td>
-</tr>
-<tr>
-<td>Skip-gram</td>
-<td>根据中心词预测周围词</td>
-</tr>
-</tbody>
-</table>
-<p>这类词向量的价值在于，它把词从离散编号，放进了一个连续的语义空间。这样一来，模型不仅知道“猫”和“狗”是不同的词，还能知道它们在语义上比“猫”和“桌子”更接近。不过，早期词向量也有明显不足：</p>
-<table>
-<thead>
-<tr>
-<th>不足</th>
-<th>例子</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>一个词通常只有一个固定向量</td>
-<td>“苹果”既可能是水果，也可能是公司</td>
-</tr>
-<tr>
-<td>上下文变化表达不够细</td>
-<td>“模型不稳定”在不同场景含义不同</td>
-</tr>
-<tr>
-<td>主要学习词级别关系</td>
-<td>对长句结构和篇章关系表达有限</td>
-</tr>
-</tbody>
-</table>
-<p>后来 BERT、GPT 这类模型进一步发展出了上下文相关表示。也就是说，同一个 token 在不同句子里，经过模型计算后可以得到不同的上下文表示。</p>
-<h2 id="感知机：机器学习的最小原型"><a href="#感知机：机器学习的最小原型" class="headerlink" title="感知机：机器学习的最小原型"></a>感知机：机器学习的最小原型</h2><p>理解神经网络之前，可以先理解<strong>感知机</strong>。感知机是一个非常早期、非常简单的机器学习模型。它可以看作神经网络的最小原型。</p>
-<p><img src="/images/llm/llm-algorithm-04.png" alt="感知机"></p>
-<p>感知机要解决的问题很简单：给定一些输入特征，模型能不能学会做一个基本判断？比如，我们想判断一封邮件是不是垃圾邮件，可以先把邮件拆成一些特征：</p>
-<table>
-<thead>
-<tr>
-<th>特征</th>
-<th>含义</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>是否包含“中奖”</td>
-<td>可疑词</td>
-</tr>
-<tr>
-<td>是否包含链接</td>
-<td>可疑行为</td>
-</tr>
-<tr>
-<td>发件人是否陌生</td>
-<td>来源特征</td>
-</tr>
-<tr>
-<td>邮件长度</td>
-<td>内容特征</td>
-</tr>
-</tbody>
-</table>
-<p>感知机会给每个特征一个权重，然后算一个总分。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">总分 = 特征1 * 权重1 + 特征2 * 权重2 + ... + 偏置</span><br></pre></td></tr></table></figure>
-<p>如果总分超过某个阈值，就判断为垃圾邮件，否则不是。</p>
-<p>所以，感知机本质上就像一张自动学习出来的打分表。它不是靠人手写“如果出现中奖就一定是垃圾邮件”这样的死规则，而是通过数据学习每个特征到底应该占多大权重。</p>
-<h3 id="感知机为什么重要？"><a href="#感知机为什么重要？" class="headerlink" title="感知机为什么重要？"></a>感知机为什么重要？</h3><p>感知机的重要性在于，它把“机器如何学习”这件事变得非常具体。在感知机之前，我们很容易把机器判断理解成一堆人工规则：如果出现某个词，就执行某个判断。但感知机提供了另一种思路：</p>
-<ul>
-<li>模型不再完全依赖人手写规则，而是<strong>通过数据不断调整权重</strong>。</li>
-</ul>
-<p>比如一开始，模型可能把“包含链接”这个特征看得太重，导致很多正常邮件也被误判成垃圾邮件。经过训练后，如果模型发现自己判断错了，就会调整相关权重。下一次再遇到类似样本时，判断就可能更准确。</p>
-<p>也就是说，感知机已经具备了机器学习最核心的雏形：<strong>预测、犯错、调整，再预测</strong>。</p>
-<p>它和后来的神经网络之间，也有很自然的对应关系：</p>
-<table>
-<thead>
-<tr>
-<th>感知机里的东西</th>
-<th>后来神经网络里的对应物</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>输入特征</td>
-<td>输入向量</td>
-</tr>
-<tr>
-<td>权重</td>
-<td>参数</td>
-</tr>
-<tr>
-<td>加权求和</td>
-<td>线性变换</td>
-</tr>
-<tr>
-<td>阈值判断</td>
-<td>激活函数</td>
-</tr>
-<tr>
-<td>调整权重</td>
-<td>训练</td>
-</tr>
-</tbody>
-</table>
-<h3 id="感知机的不足"><a href="#感知机的不足" class="headerlink" title="感知机的不足"></a>感知机的不足</h3><p>感知机的优点是简单，缺点也正是太简单。它主要适合处理“<strong>线性可分</strong>”的问题。简单来说，如果两类样本可以用一条直线分开，感知机就比较擅长；如果样本分布更复杂，无法用一条直线清楚分开，感知机就会很吃力。</p>
-<p>可以把它想象成下面这种情况：一边是类别 A，一边是类别 B，中间只需要一条分界线，就能把它们区分开。</p>
-<p><img src="/images/llm/llm-algorithm-05.png" alt="感知机"></p>
-<p>但真实语言问题显然没有这么简单。一句话的含义，往往不是几个特征简单加权就能判断出来的。比如，“这家店的服务可真好，等了两个小时都没人理我”。这句话里，如果只看 “服务”“真好”这些词，模型可能会判断成正面评价，但结合后半句看，实际可能是在表达不满。</p>
-<p>语言里有词语组合、上下文变化、语气反转、长距离依赖等复杂现象。单个感知机很难处理这些非线性、上下文相关的问题。所以，我们需要更强的模型：<strong>能够把简单特征不断组合，学习更复杂的表示</strong>。这就走向了<strong>神经网络</strong>。</p>
-<h2 id="神经网络：从简单到复杂"><a href="#神经网络：从简单到复杂" class="headerlink" title="神经网络：从简单到复杂"></a>神经网络：从简单到复杂</h2><p>神经网络可以粗略理解为：把很多类似感知机的计算单元连接起来，形成一个可以学习复杂模式的系统。感知机只做一次加权求和。神经网络会把这种计算堆很多层。如下图所示：</p>
-<p><img src="/images/llm/llm-algorithm-06.png" alt="神经网络"></p>
-<p>每一层都会对输入做一次表示变换。层数多了以后，模型就有机会学习更复杂的关系。</p>
-<h3 id="为什么需要“多层”？"><a href="#为什么需要“多层”？" class="headerlink" title="为什么需要“多层”？"></a>为什么需要“多层”？</h3><p>可以用图片识别来类比：模型最底层可能先识别边缘、颜色、纹理；中间层再组合出局部形状；更高层才逐渐识别出完整对象，比如猫、狗、汽车。</p>
-<p>语言处理里也类似。模型不是一开始就能理解“这句话表达了什么意图”，它通常需要从更基础的信息一层层组合上来：</p>
-<table>
-<thead>
-<tr>
-<th>层次</th>
-<th>可能学习到什么</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>底层</td>
-<td>token、词形、局部搭配</td>
-</tr>
-<tr>
-<td>中层</td>
-<td>短语、语法关系</td>
-</tr>
-<tr>
-<td>高层</td>
-<td>语义、意图、任务模式</td>
-</tr>
-</tbody>
-</table>
-<p>这就是“表示学习”的直觉：模型不只是接收特征，而是在训练中自己学习更有用的中间表示。</p>
-<h3 id="神经网络如何训练？"><a href="#神经网络如何训练？" class="headerlink" title="神经网络如何训练？"></a>神经网络如何训练？</h3><p>神经网络的训练循环可以概括成三个词：<strong>预测 -&gt; 评估 -&gt; 修正</strong></p>
-<p>这和人做题有点像：先根据当前能力做出答案，再对照标准答案看错在哪里，最后根据错误调整方法。模型训练也是类似的过程。完整流程可以简化成下面这张图：</p>
-<p><img src="/images/llm/llm-algorithm-07.png" alt="神经网络核心处理流程"></p>
-<p>其中几个关键概念可以这样理解：</p>
-<table>
-<thead>
-<tr>
-<th>概念</th>
-<th>小白解释</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>前向传播</td>
-<td>输入一路经过模型，得到预测</td>
-</tr>
-<tr>
-<td>Loss</td>
-<td>模型预测和正确答案之间的差距</td>
-</tr>
-<tr>
-<td>反向传播</td>
-<td>把错误反向传回每一层</td>
-</tr>
-<tr>
-<td>梯度</td>
-<td>参数应该往哪个方向改</td>
-</tr>
-<tr>
-<td>梯度下降</td>
-<td>沿着让错误变小的方向更新参数</td>
-</tr>
-</tbody>
-</table>
-<p>模型不是一次就学会的，而是在大量样本上不断预测、犯错、修正，再继续预测。训练的过程，本质上就是让模型的参数一点点变得更合适。</p>
-<h3 id="神经网络的不足"><a href="#神经网络的不足" class="headerlink" title="神经网络的不足"></a>神经网络的不足</h3><p>神经网络比感知机强很多，它可以通过多层结构学习更复杂的模式。但普通的前馈神经网络并不天然适合处理语言。原因很简单：<strong>语言是有顺序的</strong>。比如，下面两句话：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">我不喜欢这个方案。</span><br><span class="line">我喜欢这个方案。</span><br></pre></td></tr></table></figure>
-<p>这两句话只差一个“不”，但含义完全不同。如果模型只是把词当成一组特征，而不能理解它们出现的位置和顺序，就很容易判断错误。</p>
-<p>所以，对于语言任务来说，仅仅能学习复杂特征还不够。模型还必须能够处理 token 之间的顺序关系、上下文关系，以及长句中前后信息的依赖关系。这就引出了下一类模型：能够处理文本结构和上下文关系的经典神经网络，比如 CNN、RNN、LSTM 和双向 RNN。</p>
-<h2 id="序列模型：让模型读懂上下文"><a href="#序列模型：让模型读懂上下文" class="headerlink" title="序列模型：让模型读懂上下文"></a>序列模型：让模型读懂上下文</h2><p>语言不是一组孤立的特征，而是一串有顺序的 token。前面的词会影响后面的词，后面的表达也依赖前面的上下文。因此，在 NLP 中有一个非常核心的问题：</p>
-<ul>
-<li>给定前面的内容，模型能不能预测接下来最可能出现什么？</li>
-</ul>
-<p>这就是语言模型要解决的问题。</p>
-<h3 id="语言模型：预测下一个-token"><a href="#语言模型：预测下一个-token" class="headerlink" title="语言模型：预测下一个 token"></a>语言模型：预测下一个 token</h3><p>语言模型最朴素的直觉，就是根据前面的内容，预测接下来最可能出现什么。比如：</p>
-<ul>
-<li>我今天早上喝了一杯 __</li>
-</ul>
-<p>模型需要判断空白处更可能出现哪个 token：</p>
-<table>
-<thead>
-<tr>
-<th>候选 token</th>
-<th>可能性</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>咖啡</td>
-<td>高</td>
-</tr>
-<tr>
-<td>水</td>
-<td>中</td>
-</tr>
-<tr>
-<td>茶</td>
-<td>中</td>
-</tr>
-<tr>
-<td>桌子</td>
-<td>低</td>
-</tr>
-</tbody>
-</table>
-<p>这个过程看起来像“填空题”，但它非常关键。因为只要上下文足够丰富，很多 NLP 任务都可以转化成“继续生成后面的内容”。比如：</p>
-<table>
-<thead>
-<tr>
-<th>任务</th>
-<th>输入方式</th>
-<th>输出方式</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>翻译</td>
-<td>请翻译这句话</td>
-<td>生成译文</td>
-</tr>
-<tr>
-<td>摘要</td>
-<td>请总结这篇文章</td>
-<td>生成摘要</td>
-</tr>
-<tr>
-<td>问答</td>
-<td>根据材料回答问题</td>
-<td>生成答案</td>
-</tr>
-<tr>
-<td>分类</td>
-<td>判断正面还是负面</td>
-<td>生成类别</td>
-</tr>
-<tr>
-<td>写代码</td>
-<td>根据需求写函数</td>
-<td>生成代码</td>
-</tr>
-</tbody>
-</table>
-<p>这就是大语言模型的统一性：它没有为每个任务单独设计一套模型，而是把很多任务都转化成“给定上下文后继续生成”。</p>
-<p>所以，LLM 的很多能力，底层都可以先用一句话来理解：<strong>根据上下文，预测下一个 token</strong>。</p>
-<h3 id="模型一：CNN-捕捉局部特征"><a href="#模型一：CNN-捕捉局部特征" class="headerlink" title="模型一：CNN 捕捉局部特征"></a>模型一：CNN 捕捉局部特征</h3><p>很多人第一次接触 CNN（Convolutional Neural Network，又叫做卷积神经网络），是在图像识别里。图像里的 CNN 会用卷积核扫描图片的局部区域，提取边缘、纹理、形状等特征。文本里也可以使用 CNN。只不过它扫描的不是像素，而是一串 token 对应的向量。</p>
-<p>可以把它理解成：</p>
-<ul>
-<li>CNN 擅长从文本中抓局部模式，比如几个词组成的短语。</li>
-</ul>
-<p>例如：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个 产品 非常 好用</span><br></pre></td></tr></table></figure>
-<p>CNN 可以用不同大小的窗口扫过句子：</p>
-<p><img src="/images/llm/llm-algorithm-08.png" alt="CNN"></p>
-<p>在早期文本分类里，CNN 很实用。比如情感分析中，“非常好用”“极其糟糕”“不推荐购买”这些局部短语很有判断价值。但 CNN 的不足也明显：</p>
-<table>
-<thead>
-<tr>
-<th>优点</th>
-<th>不足</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>擅长提取局部 n-gram 特征</td>
-<td>对很远的词之间关系不敏感</td>
-</tr>
-<tr>
-<td>并行效率较好</td>
-<td>需要通过多层堆叠扩大感受野</td>
-</tr>
-<tr>
-<td>适合分类任务</td>
-<td>不天然适合逐步生成文本</td>
-</tr>
-</tbody>
-</table>
-<p>所以，CNN 在 NLP 里更像是一个“局部特征提取器”。它能很好地抓住短语级别的模式，但不擅长处理长距离依赖。也就是说，如果一句话前面很远的信息会影响后面的判断，CNN 就会比较吃力。</p>
-<h3 id="模型二：RNN-按顺序读取文本"><a href="#模型二：RNN-按顺序读取文本" class="headerlink" title="模型二：RNN 按顺序读取文本"></a>模型二：RNN 按顺序读取文本</h3><p>RNN，全称 Recurrent Neural Network，中文叫循环神经网络。它是一类专门用来处理序列数据的模型，比如文本、语音、时间序列等。它的基本思路是：</p>
-<ul>
-<li>从左到右依次读取文本，每读一个 token，就把当前 token 的信息和前面已经读到的信息合并起来，更新成一个新的隐藏状态。</li>
-</ul>
-<p>可以简单理解为，RNN 在读一句话时，会一边读当前词，一边带着前面的“记忆”继续往后读。如下图所示：</p>
-<p><img src="/images/llm/llm-algorithm-09.png" alt="RNN"></p>
-<p>这里的 <code>状态</code> 可以理解为模型到目前为止读到的信息摘要。每读一个新的 token，模型都会更新一次状态。相比 CNN，RNN 更适合表达文本顺序，因为它不是只看局部窗口，而是按顺序一步步读取整句话。</p>
-<p>比如读到“我不喜欢这个方案”时，RNN 有机会把“不”这个信息传到后面，影响对整句话的判断。但 RNN 有两个经典问题：</p>
-<table>
-<thead>
-<tr>
-<th>问题</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>长距离依赖困难</td>
-<td>前面很远的信息传到后面时容易变弱</td>
-</tr>
-<tr>
-<td>并行能力弱</td>
-<td>后一个状态依赖前一个状态，训练不容易并行</td>
-</tr>
-</tbody>
-</table>
-<p>所以，RNN 比 CNN 更擅长处理顺序，但当文本变长时，它对长距离上下文的记忆能力仍然有限。</p>
-<h3 id="模型三：LSTM-和-GRU-试图增强记忆"><a href="#模型三：LSTM-和-GRU-试图增强记忆" class="headerlink" title="模型三：LSTM 和 GRU 试图增强记忆"></a>模型三：LSTM 和 GRU 试图增强记忆</h3><p>LSTM 和 GRU 都是 RNN 的改进版本。它们出现的主要目的，是缓解普通 RNN 容易“忘记前文”的问题。普通 RNN 在读取长文本时，前面的信息需要一步步传到后面。句子越长，早期信息越容易被稀释。LSTM 和 GRU 的改进思路是：给模型增加一种 <code>门控机制</code>。</p>
-<p>可以先不用记复杂结构，只抓住一个直觉：LSTM / GRU 给模型增加了 <code>门</code>，让模型自己决定哪些信息要记住，哪些信息要忘掉。</p>
-<p><img src="/images/llm/llm-algorithm-10.png" alt="LSTM / GRU简化流程"></p>
-<p>比如这句话：我昨天在朋友推荐的一家店里喝了一杯咖啡。如果模型要预测或理解最后的“咖啡”，它需要记住前面的“喝了一杯”。LSTM/GRU 就是在努力让这种关键信息不要太快丢失。</p>
-<p>所以，相比普通 RNN，LSTM / GRU 更擅长<strong>处理稍长一些的上下文</strong>，也曾经广泛用于机器翻译、语音识别、文本分类等任务。但它们仍然没有彻底解决问题：</p>
-<table>
-<thead>
-<tr>
-<th>不足</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>仍然偏顺序处理</td>
-<td>长文本训练效率有限</td>
-</tr>
-<tr>
-<td>远距离信息仍可能衰减</td>
-<td>只是缓解，不是根治</td>
-</tr>
-<tr>
-<td>很难直接建模任意两个 token 的关系</td>
-<td>信息主要通过状态逐步传递</td>
-</tr>
-</tbody>
-</table>
-<p>也就是说，LSTM / GRU 让模型“记得更久了一些”，但还没有让模型真正做到“直接看到所有相关信息”。</p>
-<h3 id="模型四：双向-RNN-同时看前后文"><a href="#模型四：双向-RNN-同时看前后文" class="headerlink" title="模型四：双向 RNN 同时看前后文"></a>模型四：双向 RNN 同时看前后文</h3><p>普通 RNN 通常是从左往右读取文本，因此它在处理当前位置时，主要依赖已经读过的前文信息。但很多语言理解任务，只看前文是不够的，还需要结合后文一起判断。</p>
-<p>比如： 苹果 发布 了 新产品</p>
-<p>如果只看“苹果”前面的内容，几乎没有有效信息；但如果同时看到后面的“发布”“新产品”，就更容易判断这里的“苹果”指的是公司，而不是水果。</p>
-<p>双向 RNN 的思路就是：<strong>让模型从两个方向同时读句子</strong>。</p>
-<ol>
-<li>一条 RNN 从左往右读，获取前文信息；</li>
-<li>另一条 RNN 从右往左读，获取后文信息；</li>
-<li>最后把两个方向的信息合并起来，得到更完整的上下文表示。</li>
-</ol>
-<p>可以简单理解为：</p>
-<p><img src="/images/llm/llm-algorithm-11.png" alt="双向 RNN"></p>
-<p>双向 RNN 在很多语言理解任务中非常有用，比如命名实体识别、文本分类、序列标注、句子匹配等。因为这些任务通常可以先看到完整句子，再做判断。不过，双向 RNN 也有自己的边界：</p>
-<table>
-<thead>
-<tr>
-<th>场景</th>
-<th>是否适合</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>句子理解、分类、标注</td>
-<td>适合</td>
-</tr>
-<tr>
-<td>实时生成下一个 token</td>
-<td>不太适合，因为它依赖未来信息</td>
-</tr>
-</tbody>
-</table>
-<p>原因也很直观：生成式语言模型在写下一个 token 时，只能根据已经出现的内容继续往后生成，不能提前看到未来答案。因此，双向 RNN 更适合理解类任务，而不适合作为自回归生成模型的直接结构。</p>
-<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>把这些经典模型放在一起看，脉络就很清楚：</p>
-<table>
-<thead>
-<tr>
-<th>模型</th>
-<th>擅长什么</th>
-<th>主要不足</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>CNN</td>
-<td>抓局部短语特征</td>
-<td>不擅长长距离依赖</td>
-</tr>
-<tr>
-<td>RNN</td>
-<td>按顺序建模文本</td>
-<td>长文本容易遗忘，训练慢</td>
-</tr>
-<tr>
-<td>LSTM / GRU</td>
-<td>增强记忆能力</td>
-<td>仍然偏顺序传递</td>
-</tr>
-<tr>
-<td>双向 RNN</td>
-<td>同时利用前后文</td>
-<td>不适合自回归生成</td>
-</tr>
-</tbody>
-</table>
-<p>这些模型都在不同阶段推动了 NLP 的发展，但它们也都没有彻底解决一个核心问题：长距离依赖。比如：</p>
-<ul>
-<li>虽然我昨天在朋友推荐的那家开在巷子深处、装修很有特色、排队也很久的咖啡店里坐了很久，但最后只点了一杯 __</li>
-</ul>
-<p>要预测最后空白处的词，模型需要记住前面较早出现的“咖啡店”。如果前文信息在传递过程中被不断稀释，模型可能就无法准确判断这里更可能是“咖啡”，而不是“水”“酒”或其他东西。</p>
-<p>这就是 Transformer 出现前，序列建模面临的关键挑战：如何让模型在处理当前位置时，更高效地找到上下文中真正相关的信息。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>回到文章开头提出的问题：机器到底是如何一步步学会处理语言的？</p>
-<p>现在我们可以把这条路径串起来看：</p>
-<ol>
-<li>首先，NLP 把自然语言问题转换成机器可以处理的任务；</li>
-<li>接着，token 和 embedding 把文本从“文字”变成可计算的数字表示；</li>
-<li>然后，感知机和神经网络说明模型并不是靠人手写规则，而是可以通过数据不断调整参数、学习规律；</li>
-<li>再往后，CNN、RNN、LSTM/GRU、双向 RNN 等模型不断尝试处理语言中的局部特征、顺序关系和上下文依赖；</li>
-<li>最后，Transformer 通过 Attention 机制，让模型能够更直接地关注上下文中真正相关的信息。</li>
-</ol>
-<p>所以，LLM 并不是突然出现的“魔法”。它背后是一条长期演进出来的技术路线。LLM 的能力不是来自某一个单点技术，而是来自语言表示、模型训练、上下文建模和大规模数据共同作用的结果。</p>
-<p>最后，用一张图总结本文的核心内容：从语言进入模型，到模型学会预测，再到 Transformer 成为现代 LLM 的核心架构。</p>
-<p><img src="/images/llm/llm-algorithm-12.png" alt="总结"></p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;前两篇文章分别介绍了大模型的发展脉络和基础数学知识。到了第三篇，我们还需要补上一块很关键的地基：基本的算法原理。不过，这里的“算法原理”并不是一堂严肃的算法课。本文会尽量站在非算法同学的视角，用更通俗、直观的方式，把语言模型背后那些看起来复杂、晦涩的概念拆开讲清楚。&lt;/p&gt;
     
     </summary>
     
