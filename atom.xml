@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-11T04:42:34.000Z</updated>
+  <updated>2026-07-11T14:23:30.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,441 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (二十四)：个性化与记忆，大模型如何理解每一个用户</title>
+    <link href="http://matt33.com/2026/07/11/llm-personalization-memory/"/>
+    <id>http://matt33.com/2026/07/11/llm-personalization-memory/</id>
+    <published>2026-07-11T14:23:30.000Z</published>
+    <updated>2026-07-11T14:23:30.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>大语言模型的单次推理本身近似无状态：模型只能看到当前请求、上下文以及参数中已有的知识，并不会自动保存跨会话的用户状态。一次对话结束后，用户偏好、项目背景和未完成任务如果没有被外部系统记录，下一次交互时仍需要重新提供。</p>
+<p>长上下文可以让模型一次读入更多历史，却不等于真正的记忆。持续拼接聊天记录不仅会增加 Token 成本和推理延迟，还会引入大量无关信息；更重要的是，它缺少独立的写入、检索、更新、冲突处理和删除机制。能“放下历史”，不代表能准确找到并使用历史。</p>
+<a id="more"></a>  
+<p>因此，个性化助手需要在 LLM 之外构建一套可管理的记忆系统：从交互中提取有长期价值的信息，按照用户和记忆类型分类存储，在需要时检索相关内容，并通过版本、时间、置信度和权限处理更新、过期与删除。本文将围绕这条主线，介绍用户画像、分层记忆、偏好学习、记忆检索以及隐私治理的核心技术。</p>
+<p>理解个性化与记忆，可以先记住五个结论：</p>
+<ol>
+<li><strong>记忆位于模型之外</strong>：生产系统中的用户记忆通常保存在外部存储，而不是直接写入模型参数；</li>
+<li><strong>记忆不是聊天记录</strong>：系统保存的是经过提取和归纳的事实、事件、偏好与经验；</li>
+<li><strong>明确声明优先</strong>：用户主动表达的偏好，应当高于模型根据单次行为做出的推断；</li>
+<li><strong>记忆必须可追溯</strong>：每条记忆都需要包含来源、时间、置信度、版本和访问权限；</li>
+<li><strong>记忆具有完整生命周期</strong>：可靠系统不仅要会写入和检索，还要支持更新、失效、遗忘与删除。</li>
+</ol>
+<p><img src="/images/llm/llm-personalization-memory-01.png" alt="个性化助手依赖用户状态、分层记忆、记忆生命周期和安全治理共同协作"></p>
+<h2 id="为什么需要个性化与记忆"><a href="#为什么需要个性化与记忆" class="headerlink" title="为什么需要个性化与记忆"></a>为什么需要个性化与记忆</h2><p>普通 LLM 应用通常接收当前 Prompt，根据上下文生成一次回答：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">当前输入 + 当前上下文 -&gt; LLM -&gt; 回答</span><br></pre></td></tr></table></figure>
+<p>个性化助手则需要结合用户的长期状态：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">当前输入 + 当前任务状态 + 相关用户记忆 + 系统规则</span><br><span class="line">    -&gt; LLM</span><br><span class="line">    -&gt; 个性化回答或行动</span><br></pre></td></tr></table></figure>
+<p>它解决的不只是“记住用户叫什么”，还包括：</p>
+<ol>
+<li><strong>交互连续性</strong>：跨会话保留项目背景、任务进度和历史决策；</li>
+<li><strong>偏好适配</strong>：按照用户习惯调整语言、格式、工具和工作方式；</li>
+<li><strong>状态追踪</strong>：记住未完成任务、承诺事项和外部环境变化；</li>
+<li><strong>减少重复输入</strong>：避免用户反复说明时区、角色和固定约束；</li>
+<li><strong>长期协作</strong>：让 Agent 可以根据过去的执行结果改进后续任务。</li>
+</ol>
+<p>需要区分四个容易混淆的概念：</p>
+<table>
+<thead>
+<tr>
+<th><strong>机制</strong></th>
+<th><strong>保存在哪里</strong></th>
+<th><strong>生命周期</strong></th>
+<th><strong>主要作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>上下文窗口</td>
+<td>当前 Prompt</td>
+<td>单次请求</td>
+<td>保持当前推理连贯</td>
+</tr>
+<tr>
+<td>工作记忆</td>
+<td>上下文或临时状态库</td>
+<td>当前任务</td>
+<td>保存计划和中间结果</td>
+</tr>
+<tr>
+<td>长期记忆</td>
+<td>外部数据库或记忆服务</td>
+<td>跨会话</td>
+<td>保存用户事实、事件和经验</td>
+</tr>
+<tr>
+<td>参数个性化</td>
+<td>模型权重或 Adapter</td>
+<td>模型版本周期</td>
+<td>学习稳定的群体行为模式</td>
+</tr>
+</tbody>
+</table>
+<p>长上下文解决的是“当前能读多少”，长期记忆解决的是“跨会话应该保留什么”。微调可以改变模型整体行为，却不适合频繁写入、更新和删除每个用户的信息。</p>
+<p>因此，生产系统通常优先采用外部记忆：它更容易追踪来源、控制权限、及时更新和响应用户删除请求。</p>
+<h2 id="记忆系统的分层架构"><a href="#记忆系统的分层架构" class="headerlink" title="记忆系统的分层架构"></a>记忆系统的分层架构</h2><p>工程中的记忆分类可以借鉴人类记忆，但不需要完全照搬认知科学。对 LLM 系统来说，分层的主要目的，是让不同信息采用不同的存储、检索、更新和过期策略。</p>
+<h3 id="四类记忆"><a href="#四类记忆" class="headerlink" title="四类记忆"></a>四类记忆</h3><p>一个实用的记忆系统通常包含四类记忆：</p>
+<table>
+<thead>
+<tr>
+<th><strong>记忆类型</strong></th>
+<th><strong>保存内容</strong></th>
+<th><strong>典型生命周期</strong></th>
+<th><strong>示例</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作记忆</td>
+<td>当前计划、中间结果、工具状态</td>
+<td>分钟或小时</td>
+<td>正在分析的代码文件</td>
+</tr>
+<tr>
+<td>情景记忆</td>
+<td>发生过的具体事件</td>
+<td>天或更久</td>
+<td>上周完成了一次系统升级</td>
+</tr>
+<tr>
+<td>语义记忆</td>
+<td>稳定事实、用户画像和偏好</td>
+<td>长期保存</td>
+<td>用户时区是上海</td>
+</tr>
+<tr>
+<td>程序记忆</td>
+<td>可复用流程和执行经验</td>
+<td>持续更新</td>
+<td>发布前先执行测试和灰度</td>
+</tr>
+</tbody>
+</table>
+<p>四类记忆解决的问题不同：</p>
+<ul>
+<li><strong>工作记忆</strong>回答“当前任务进行到哪里”；</li>
+<li><strong>情景记忆</strong>记录“过去发生过什么”；</li>
+<li><strong>语义记忆</strong>描述“用户是谁、偏好什么”；</li>
+<li><strong>程序记忆</strong>总结“以后遇到类似任务应该怎样做”。</li>
+</ul>
+<p>其中，工作记忆通常与当前任务绑定，任务结束后可以清理；情景记忆以时间和事件为核心；语义记忆需要处理事实更新与偏好冲突；程序记忆既可以属于某个用户，也可以作为项目或团队共享经验。</p>
+<p><a href="https://arxiv.org/abs/2310.08560" target="_blank" rel="external">MemGPT</a> 使用类似操作系统分层存储的思路，在有限上下文和外部存储之间调度信息。<a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="external">Generative Agents</a> 则将经历写入记忆流，结合相关性、近期性和重要性检索记忆，并通过反思形成更高层结论。</p>
+<p><img src="/images/llm/llm-personalization-memory-02.png" alt="Memory Controller 根据任务、身份和权限，在不同记忆层之间完成写入、检索、更新与删除"></p>
+<h3 id="记忆数据模型"><a href="#记忆数据模型" class="headerlink" title="记忆数据模型"></a>记忆数据模型</h3><p>用户画像不应该只是一段不断改写的自然语言总结。这样容易混合事实和推断，也难以处理来源追踪、局部更新、信息冲突和用户删除。更稳的方式，是把记忆保存为结构化、原子化、可版本化的信息单元：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"memory_id"</span>: <span class="string">"mem_1024"</span>,</span><br><span class="line">  <span class="attr">"tenant_id"</span>: <span class="string">"tenant_12"</span>,</span><br><span class="line">  <span class="attr">"user_id"</span>: <span class="string">"user_hash_28"</span>,</span><br><span class="line">  <span class="attr">"scope"</span>: <span class="string">"user"</span>,</span><br><span class="line">  <span class="attr">"type"</span>: <span class="string">"preference"</span>,</span><br><span class="line">  <span class="attr">"key"</span>: <span class="string">"meeting_time_preference"</span>,</span><br><span class="line">  <span class="attr">"value"</span>: <span class="string">"工作日会议尽量安排在上午 10 点之后"</span>,</span><br><span class="line">  <span class="attr">"source"</span>: <span class="string">"explicit_user_statement"</span>,</span><br><span class="line">  <span class="attr">"evidence_refs"</span>: [<span class="string">"trace_7821"</span>],</span><br><span class="line">  <span class="attr">"confidence"</span>: <span class="number">1.0</span>,</span><br><span class="line">  <span class="attr">"importance"</span>: <span class="number">0.8</span>,</span><br><span class="line">  <span class="attr">"created_at"</span>: <span class="string">"2026-07-10T09:30:00+08:00"</span>,</span><br><span class="line">  <span class="attr">"last_accessed_at"</span>: <span class="string">"2026-07-11T11:00:00+08:00"</span>,</span><br><span class="line">  <span class="attr">"valid_from"</span>: <span class="string">"2026-07-10"</span>,</span><br><span class="line">  <span class="attr">"valid_until"</span>: <span class="literal">null</span>,</span><br><span class="line">  <span class="attr">"status"</span>: <span class="string">"active"</span>,</span><br><span class="line">  <span class="attr">"sensitivity"</span>: <span class="string">"normal"</span>,</span><br><span class="line">  <span class="attr">"version"</span>: <span class="number">3</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这些字段分别解决不同的治理问题：</p>
+<ul>
+<li><code>tenant_id / user_id / scope</code>：确定记忆属于哪个租户、用户、项目或任务；</li>
+<li><code>type</code>：决定记忆的检索、更新和过期策略；</li>
+<li><code>source</code>：区分用户声明、工具结果和模型推断；</li>
+<li><code>evidence_refs</code>：将记忆回溯到原始对话或执行轨迹；</li>
+<li><code>confidence</code>：表示当前信息的可信程度；</li>
+<li><code>importance</code>：控制写入、检索和保留优先级；</li>
+<li><code>valid_from / valid_until</code>：描述信息生效和失效的时间范围；</li>
+<li><code>status / version</code>：支持替代、过期、删除和历史追踪；</li>
+<li><code>sensitivity</code>：决定加密、访问和展示权限。</li>
+</ul>
+<p>明确事实与推断偏好必须分开处理。用户说“以后都用中文回答”，可以作为高置信度的明确偏好；用户偶尔跳过一次长回答，只能形成一条低置信度行为信号，不能直接推断为“永远只喜欢短回答”。</p>
+<p>换句话说，用户画像不是模型对用户的一次性总结，而是由多条有来源、有时间、有置信度、可以独立更新和删除的记忆共同组成。</p>
+<h2 id="记忆如何写入、检索、更新与遗忘"><a href="#记忆如何写入、检索、更新与遗忘" class="headerlink" title="记忆如何写入、检索、更新与遗忘"></a>记忆如何写入、检索、更新与遗忘</h2><p>记忆系统最核心的能力不是保存信息，而是管理信息的完整生命周期：什么值得写入、当前任务需要检索什么、新旧信息如何合并，以及哪些内容应当过期或删除。</p>
+<p><img src="/images/llm/llm-personalization-memory-03.png" alt="记忆从候选状态开始，经过写入、强化、替代、过期或删除，形成完整生命周期"></p>
+<h3 id="记忆写入"><a href="#记忆写入" class="headerlink" title="记忆写入"></a>记忆写入</h3><p>如果把每轮对话都写入长期记忆，系统很快会积累大量重复、临时甚至错误的信息。因此，候选记忆需要经过 Memory Write Gate 判断：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">value_score(m) =</span><br><span class="line">    w1 × explicitness</span><br><span class="line">  + w2 × stability</span><br><span class="line">  + w3 × future_utility</span><br><span class="line">  + w4 × confidence</span><br><span class="line">  - w5 × contradiction_risk</span><br><span class="line"></span><br><span class="line">write(m) =</span><br><span class="line">    value_score(m) &gt;= threshold(type)</span><br><span class="line">    AND policy_allows(user, source, sensitivity, purpose)</span><br></pre></td></tr></table></figure>
+<p>各项信号需要先归一化，再按照记忆类型设置不同阈值：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">write(m) =</span><br><span class="line">    score(m) &gt;= threshold(type)</span><br><span class="line">    AND policy_allows(m)</span><br></pre></td></tr></table></figure>
+<p><code>policy_allows</code> 是隐私、来源和权限形成的硬约束。即使用户明确要求保存某条信息，密码、访问密钥等高敏感内容也不应直接进入普通长期记忆。</p>
+<p>适合写入的内容通常包括：</p>
+<ol>
+<li>用户明确要求系统记住的信息；</li>
+<li>稳定且重复出现的偏好；</li>
+<li>对未来任务有价值的项目背景和决策；</li>
+<li>已完成任务的关键结果；</li>
+<li>经过授权工具验证的事实和环境状态。</li>
+</ol>
+<p>不适合直接写入长期记忆的内容包括：</p>
+<ol>
+<li>寒暄、临时情绪和一次性表达；</li>
+<li>单次行为产生的未经确认推断；</li>
+<li>密码、访问密钥和高敏感原始内容；</li>
+<li>来自网页、邮件或外部文档的可执行指令；</li>
+<li>无法追踪来源或存在明显冲突的信息。</li>
+</ol>
+<p>完整的写入流程通常是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">交互事件</span><br><span class="line">  -&gt; 候选信息抽取</span><br><span class="line">  -&gt; 原子化与分类</span><br><span class="line">  -&gt; 去重与冲突检测</span><br><span class="line">  -&gt; 敏感信息识别</span><br><span class="line">  -&gt; 来源可信度评估</span><br><span class="line">  -&gt; 写入门控</span><br><span class="line">  -&gt; 临时记忆或长期记忆</span><br></pre></td></tr></table></figure>
+<p>其中，原子化是把一段对话拆成可以独立更新的事实。例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">不推荐：</span><br><span class="line">用户喜欢中文、上午开会，并且正在做支付项目。</span><br><span class="line"></span><br><span class="line">推荐：</span><br><span class="line">language_preference = zh-CN</span><br><span class="line">meeting_time_preference = after_10_am</span><br><span class="line">current_project = payment_system</span><br></pre></td></tr></table></figure>
+<p>原子化之后，每条信息才能独立检索、更新、过期和删除。</p>
+<h3 id="记忆检索"><a href="#记忆检索" class="headerlink" title="记忆检索"></a>记忆检索</h3><p>用户的全部记忆不能一次性放入 Prompt。系统需要根据当前任务，从正确的用户和数据范围内检索少量相关记忆。</p>
+<p><img src="/images/llm/llm-personalization-memory-04.png" alt="记忆检索先完成身份和权限过滤，再结合语义、关键词、时间和类型进行多路召回"></p>
+<p>权限和敏感级别属于硬约束，应当在召回之前生效，而不是先搜索所有用户数据，再从结果中删除无权限内容。工程上通常会通过租户 Namespace、用户 ID 和 ACL Metadata 限定检索范围。候选记忆的排序分数可以简化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">score(m, q) =</span><br><span class="line">    α × semantic_relevance</span><br><span class="line">  + β × lexical_relevance</span><br><span class="line">  + γ × task_match</span><br><span class="line">  + δ × time_score</span><br><span class="line">  + ε × importance</span><br><span class="line">  + κ × confidence</span><br><span class="line">  + μ × source_trust</span><br><span class="line">  - ζ × conflict_risk</span><br></pre></td></tr></table></figure>
+<p>排序前需要将各项软信号归一化到统一尺度，并根据离线评测和线上任务成功率持续校准权重；权限、租户和敏感级别属于召回前的硬过滤条件，不参与相关性排序。上述参数含义如下：</p>
+<ul>
+<li><code>semantic_relevance</code>：记忆与当前任务的语义相关性；</li>
+<li><code>lexical_relevance</code>：名称、错误码等关键词匹配程度；</li>
+<li><code>task_match</code>：记忆类型与当前任务是否匹配；</li>
+<li><code>time_score</code>：记忆在时间上是否仍然有效；</li>
+<li><code>importance</code>：记忆对未来任务的重要程度；</li>
+<li><code>confidence</code>：当前信息的可信程度；</li>
+<li><code>source_trust</code>：用户声明、工具结果和模型推断具有不同可信级别；</li>
+<li><code>conflict_risk</code>：记忆是否存在未解决的冲突。</li>
+</ul>
+<p>时间分数可以使用指数衰减：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">time_score(m) = exp(-Δt / τ_type)</span><br></pre></td></tr></table></figure>
+<p><code>τ_type</code> 由记忆类型决定。临时任务状态的衰减速度较快；用户明确声明的语言、时区和无障碍偏好，则可以使用更长的衰减周期，或者只在收到新声明时更新。需要区分两个概念：</p>
+<ul>
+<li><strong>时间衰减</strong>只影响记忆的检索排序；</li>
+<li><strong>TTL 到期</strong>才会让记忆进入过期状态。</li>
+</ul>
+<p>第一阶段召回后，还可以使用 MMR 降低结果之间的重复度：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">MMR(m) =</span><br><span class="line">    λ × relevance(m, q)</span><br><span class="line">  - (1 - λ) × max similarity(m, selected)</span><br></pre></td></tr></table></figure>
+<p>它在相关性与多样性之间进行平衡，避免 Top-K 全是同一事实的不同表述。</p>
+<p>最终进入 Prompt 的 Memory Context 应当包含内容、来源、时间和置信度，并被明确标记为参考数据。记忆不能拥有高于 System Prompt 的指令权限，也不能直接把外部文档中的操作指令传递给 Agent。</p>
+<h3 id="更新与遗忘"><a href="#更新与遗忘" class="headerlink" title="更新与遗忘"></a>更新与遗忘</h3><p>记忆并不是写入后永久不变。不同信息需要采用不同的更新策略：</p>
+<table>
+<thead>
+<tr>
+<th><strong>记忆变化</strong></th>
+<th><strong>更新方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>新事件发生</td>
+<td>追加新的情景记忆</td>
+</tr>
+<tr>
+<td>用户修改明确偏好</td>
+<td>创建新版本，并将旧版本标记为 Superseded</td>
+</tr>
+<tr>
+<td>多次行为支持同一偏好</td>
+<td>合并证据并提高置信度</td>
+</tr>
+<tr>
+<td>新旧事实发生冲突</td>
+<td>保留来源和时间，进入冲突处理</td>
+</tr>
+<tr>
+<td>临时状态长期未使用</td>
+<td>降低检索权重或通过 TTL 过期</td>
+</tr>
+<tr>
+<td>用户要求忘记</td>
+<td>删除正文、索引、缓存和派生画像</td>
+</tr>
+<tr>
+<td>记忆已被删除</td>
+<td>写入不含原始内容的 Tombstone</td>
+</tr>
+</tbody>
+</table>
+<p>冲突不能使用一套固定优先级处理，而应根据记忆类型判断：</p>
+<ol>
+<li><strong>主观偏好</strong>：以用户最新的明确声明为准；</li>
+<li><strong>客观状态</strong>：优先采用经过授权工具或权威数据源验证的结果；</li>
+<li><strong>隐式偏好</strong>：多次、跨场景的行为证据高于单次行为；</li>
+<li><strong>来源和时间不确定</strong>：保留冲突并请求用户确认，而不是自动覆盖。</li>
+</ol>
+<p>例如，用户曾经说“会议尽量安排在上午”，后来又明确表示“这个月下午更方便”，系统不应删除全部历史，而应创建新版本，并标记新偏好的有效时间。</p>
+<p>Tombstone 只保存被删除记忆的标识、版本和删除时间，不应继续保存原始敏感内容。它用于阻止缓存、异步任务和数据同步重新写回已经删除的信息。真正的删除需要覆盖：</p>
+<ol>
+<li>主数据库；</li>
+<li>向量索引和全文索引；</li>
+<li>应用缓存与检索缓存；</li>
+<li>聚合生成的用户画像；</li>
+<li>异步任务和下游数据副本。</li>
+</ol>
+<p>如果用户记忆已经进入模型训练数据，仅删除外部记忆并不能将信息从模型参数中移除。因此，个人记忆默认应保存在参数之外；将其用于训练时，需要单独的授权、数据血缘和删除治理机制。</p>
+<h3 id="记忆系统如何落地"><a href="#记忆系统如何落地" class="headerlink" title="记忆系统如何落地"></a>记忆系统如何落地</h3><p>在生产系统中，记忆通常由独立的 Memory Service 管理。它负责连接 Agent、存储和检索系统，对外提供写入、查询、更新和删除能力。</p>
+<p><img src="/images/llm/llm-personalization-memory-05.png" alt="Memory Service 连接记忆存储、检索索引和 LLM，形成读取与写入闭环"></p>
+<p>核心 Infra 组件可以归纳以下几部分：</p>
+<table>
+<thead>
+<tr>
+<th><strong>组件</strong></th>
+<th><strong>主要职责</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Memory Service</td>
+<td>提供记忆写入、检索、更新和删除接口</td>
+</tr>
+<tr>
+<td>Primary Store</td>
+<td>保存记忆正文、来源、版本和状态</td>
+</tr>
+<tr>
+<td>Retrieval Index</td>
+<td>提供向量检索、关键词检索和元数据过滤</td>
+</tr>
+<tr>
+<td>Redis / Cache</td>
+<td>保存当前任务状态和热点记忆</td>
+</tr>
+<tr>
+<td>Async Worker</td>
+<td>异步完成记忆抽取、去重和索引更新</td>
+</tr>
+<tr>
+<td>Security</td>
+<td>负责用户隔离、权限、加密和删除审计</td>
+</tr>
+</tbody>
+</table>
+<p>整个系统需要遵循三个原则：</p>
+<ol>
+<li><strong>正文与索引分离</strong>：Primary Store 保存完整记忆，是唯一事实来源；向量和关键词索引只用于加速检索，可以重新构建。</li>
+<li><strong>读取同步，写入分级</strong>：当前任务需要的记忆同步检索；用户明确要求记住或删除的信息同步处理，模型推断出的偏好则异步审核后写入。</li>
+<li><strong>权限贯穿全链路</strong>：检索前先校验用户和租户，删除时同时清理正文、向量索引、关键词索引和缓存。</li>
+</ol>
+<p>早期系统可以使用较简单的组合：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PostgreSQL + pgvector</span><br><span class="line">Redis</span><br><span class="line">异步任务队列</span><br><span class="line">Embedding / Reranker Service</span><br></pre></td></tr></table></figure>
+<p>随着记忆规模和并发增长，再逐步拆分独立的向量数据库、搜索服务和消息队列。</p>
+<h2 id="个性化助手如何构建"><a href="#个性化助手如何构建" class="headerlink" title="个性化助手如何构建"></a>个性化助手如何构建</h2><p>个性化助手不是“给模型加一段用户画像”，而是一个围绕用户状态运行的系统。它需要在回答前读取相关记忆，在任务结束后根据结果决定是否更新记忆。整个过程可以拆成两条链路：</p>
+<ul>
+<li><strong>同步读取链路</strong>：识别用户与任务，检索相关记忆，组装上下文后调用 LLM；</li>
+<li><strong>异步写入链路</strong>：根据对话、工具结果和用户反馈生成候选记忆，经过校验后再写入。</li>
+</ul>
+<p><img src="/images/llm/llm-personalization-memory-06.png" alt="个性化助手在生成前读取记忆，在任务完成后通过写入门控更新记忆"></p>
+<h3 id="个性化策略：先使用可控的方法"><a href="#个性化策略：先使用可控的方法" class="headerlink" title="个性化策略：先使用可控的方法"></a>个性化策略：先使用可控的方法</h3><p>个性化并不只有“记忆”一种实现方式。不同问题应采用不同层级的方案：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方式</strong></th>
+<th><strong>适合解决的问题</strong></th>
+<th><strong>优势</strong></th>
+<th><strong>主要限制</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>明确用户配置</td>
+<td>语言、时区、无障碍需求</td>
+<td>可解释、立即生效</td>
+<td>只能覆盖显式设置</td>
+</tr>
+<tr>
+<td>Profile Prompt</td>
+<td>少量稳定偏好</td>
+<td>实现简单</td>
+<td>画像过长会占用上下文</td>
+</tr>
+<tr>
+<td>外部记忆检索</td>
+<td>历史事件、项目背景、任务状态</td>
+<td>可更新、可删除、可追溯</td>
+<td>依赖检索和冲突处理</td>
+</tr>
+<tr>
+<td>偏好排序模型</td>
+<td>回答风格、内容优先级</td>
+<td>能利用行为信号</td>
+<td>容易受到反馈噪声影响</td>
+</tr>
+<tr>
+<td>微调或 Adapter</td>
+<td>稳定的群体任务模式</td>
+<td>行为一致性更强</td>
+<td>更新慢，难逐用户删除</td>
+</tr>
+</tbody>
+</table>
+<p>对大多数产品来说，更合理的选择顺序是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">明确用户配置</span><br><span class="line">    -&gt; Profile Prompt</span><br><span class="line">    -&gt; 外部记忆检索</span><br><span class="line">    -&gt; 群体级偏好排序</span><br><span class="line">    -&gt; 必要时再做参数级个性化</span><br></pre></td></tr></table></figure>
+<p><a href="https://arxiv.org/abs/2304.11406" target="_blank" rel="external">LaMP</a> 表明，从用户历史中检索相关信息可以提升个性化输出质量；<a href="https://arxiv.org/abs/2504.19413" target="_blank" rel="external">Mem0</a> 则展示了从对话中动态提取、整合和检索长期记忆的系统路线。</p>
+<p>逐用户微调通常不是第一选择。它成本高、更新慢，也很难解释某条用户数据如何影响模型参数。相比之下，外部记忆更容易更新、回滚和删除；参数级个性化更适合稳定的任务模式或用户群体偏好。</p>
+<h3 id="隐式偏好学习：从行为信号到可靠偏好"><a href="#隐式偏好学习：从行为信号到可靠偏好" class="headerlink" title="隐式偏好学习：从行为信号到可靠偏好"></a>隐式偏好学习：从行为信号到可靠偏好</h3><p>用户点击、跳过、修改、重新生成和任务完成情况，都可以提供偏好信号。但这些信号并不等于明确标签：</p>
+<ul>
+<li>没有点击不一定代表不喜欢；</li>
+<li>重新生成可能是事实错误，也可能只是希望换一种表达；</li>
+<li>单次选择不能代表长期偏好；</li>
+<li>不同任务中的偏好可能完全不同。</li>
+</ul>
+<p>因此，隐式偏好不应直接覆盖用户画像，而应先作为带证据的弱信号保存：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">evidence(preference) =</span><br><span class="line">    Σ decay(time_i)</span><br><span class="line">    × signal_strength_i</span><br><span class="line">    × context_match_i</span><br></pre></td></tr></table></figure>
+<p>只有当同类信号在多个时间点、多个相似场景中持续出现，并超过置信度阈值时，系统才将其提升为稳定偏好。</p>
+<p>例如，用户连续多次将“详细解释”改成“只给结论”，可以逐步提高“偏好简洁回答”的置信度；但在复杂排障场景下，系统仍应保留输出详细分析的能力，而不是机械缩短所有回答。</p>
+<p>对于回答风格、推荐顺序等低风险决策，系统可以使用用户级或群体级 Reranker、Contextual Bandit 等方法持续学习。但支付、发送、删除和权限修改等高风险动作，不应通过在线探索学习，而必须遵循明确规则和人工确认。</p>
+<p>个性化的核心不是让模型迎合每一次行为，而是在用户明确意图、长期偏好、当前任务和系统安全之间保持可控平衡。</p>
+<h2 id="安全、评测与未来演进"><a href="#安全、评测与未来演进" class="headerlink" title="安全、评测与未来演进"></a>安全、评测与未来演进</h2><p>记忆让模型更了解用户，也让系统持有更多跨会话、持续生效的状态。一条错误、过期或恶意记忆，可能在未来多个任务中反复影响模型行为，因此记忆系统必须同时具备安全边界、质量评测和用户控制能力。</p>
+<table>
+<thead>
+<tr>
+<th><strong>风险</strong></th>
+<th><strong>典型问题</strong></th>
+<th><strong>主要治理方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>跨用户泄露</td>
+<td>检索到其他用户或租户的记忆</td>
+<td>租户隔离、检索前鉴权、ACL 过滤</td>
+</tr>
+<tr>
+<td>记忆投毒</td>
+<td>恶意内容被写入并在后续任务触发</td>
+<td>来源可信度、写入门控、检索过滤</td>
+</tr>
+<tr>
+<td>错误或过期记忆</td>
+<td>旧偏好覆盖当前需求</td>
+<td>证据来源、版本管理、时间语义</td>
+</tr>
+<tr>
+<td>过度个性化</td>
+<td>历史偏好限制当前选择</td>
+<td>保留多样性、允许关闭个性化</td>
+</tr>
+<tr>
+<td>隐私推断</td>
+<td>系统推断并保存敏感属性</td>
+<td>最小化收集、明确授权、敏感字段限制</td>
+</tr>
+<tr>
+<td>删除不完整</td>
+<td>索引、缓存或画像仍保留副本</td>
+<td>Tombstone、级联删除、审计验证</td>
+</tr>
+</tbody>
+</table>
+<p>记忆内容应当被视为低权限参考数据，而不是可直接执行的系统指令。来自网页、邮件、RAG 文档和工具结果的内容，不能未经校验就写入用户长期记忆；即使被检索出来，也不能覆盖 System Prompt 或绕过工具权限。近期研究已开始系统分析持久化记忆带来的 <a href="https://arxiv.org/abs/2606.04329" target="_blank" rel="external">Memory Poisoning 风险</a>。</p>
+<p>评估记忆系统时，不能只看模型是否“记住一个事实”，而要覆盖完整生命周期：</p>
+<ul>
+<li><strong>写入质量</strong>：该记的是否写入，不该记的是否被拒绝；</li>
+<li><strong>检索质量</strong>：相关记忆能否在 Top-K 中被找回并排在前面；</li>
+<li><strong>更新质量</strong>：新事实能否正确替代旧事实，冲突能否被识别；</li>
+<li><strong>遗忘质量</strong>：删除后正文、索引、缓存和派生画像是否全部清理；</li>
+<li><strong>个性化收益</strong>：记忆是否提升任务成功率、偏好胜率和用户满意度；</li>
+<li><strong>安全边界</strong>：是否存在跨用户泄露、投毒写入或敏感信息误用。</li>
+</ul>
+<p><a href="https://arxiv.org/abs/2410.10813" target="_blank" rel="external">LongMemEval</a> 将长期记忆评测拆分为信息提取、跨会话推理、时间推理、知识更新和拒答能力；<a href="https://arxiv.org/abs/2402.17753" target="_blank" rel="external">LoCoMo</a> 则关注跨多次会话的长期对话、事件总结和时间因果关系。它们都说明：上下文窗口能够放下历史，不代表模型能够准确使用历史。</p>
+<p>未来，个性化与记忆会沿着四个方向继续演进：</p>
+<ol>
+<li><strong>多模态与 Agent 经验记忆</strong>：从记住文本事实，扩展到语音、图片、界面操作、任务策略和失败经验；</li>
+<li><strong>结构化记忆</strong>：通过图结构显式建模用户、项目、事件和时间关系；</li>
+<li><strong>端侧私人记忆</strong>：将敏感画像和个人数据尽量保留在本地设备；</li>
+<li><strong>用户可控记忆</strong>：让用户能够查看、修改、暂停、导出和删除系统记忆。</li>
+</ol>
+<p>个性化的目标，不是无限收集用户信息，而是在明确授权和安全边界内，使用最少、最相关的信息提供持续一致的服务。</p>
+<p>一句话概括：<strong>真正理解用户的大模型，不只是能够记住过去，还要知道什么值得记住、何时应该更新，以及什么时候必须忘记。</strong></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;大语言模型的单次推理本身近似无状态：模型只能看到当前请求、上下文以及参数中已有的知识，并不会自动保存跨会话的用户状态。一次对话结束后，用户偏好、项目背景和未完成任务如果没有被外部系统记录，下一次交互时仍需要重新提供。&lt;/p&gt;
+&lt;p&gt;长上下文可以让模型一次读入更多历史，却不等于真正的记忆。持续拼接聊天记录不仅会增加 Token 成本和推理延迟，还会引入大量无关信息；更重要的是，它缺少独立的写入、检索、更新、冲突处理和删除机制。能“放下历史”，不代表能准确找到并使用历史。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (二十三)：数据飞轮，大模型能力如何持续进化</title>
@@ -8089,667 +8524,6 @@
     
       &lt;p&gt;过去几年，LLM 能力的提升很大程度上来自 &lt;strong&gt;Scaling Law&lt;/strong&gt;：当模型参数量、训练数据规模和计算量持续扩大时，模型的 loss 往往会呈现较稳定的下降趋势，模型能力也会随之提升。简单来说，规模化训练证明了一件事：&lt;strong&gt;更大的模型、更大的数据、更大的算力，通常可以带来更强的模型能力。&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;但 Scaling Law 也带来了一个现实问题：如果能力提升依赖规模扩展，那么训练成本、推理成本、显存占用和部署复杂度也会同步上升。模型越大，每个 token 需要经过的参数越多；上下文越长，Attention 和 KV Cache 的压力越大；多模态输入又会引入更多 token 和更复杂的计算路径。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (四)：Transformer 架构篇：大模型为什么选择了 Transformer</title>
-    <link href="http://matt33.com/2026/06/23/llm-transformer-architecture/"/>
-    <id>http://matt33.com/2026/06/23/llm-transformer-architecture/</id>
-    <published>2026-06-23T10:10:00.000Z</published>
-    <updated>2026-06-23T10:10:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>前三篇文章里，我们已经分别从三个角度为理解大语言模型打了基础：第一篇看发展脉络，知道 LLM 是怎么一步步演进出来的；第二篇看数学基础，理解向量、概率、损失函数、梯度这些底层工具；第三篇看算法基础，从 NLP、词向量、感知机、神经网络，一路讲到 CNN、RNN 和双向 RNN。到了第四篇，我们终于可以进入现代大语言模型最核心的一块内容：<strong>Transformer</strong>。</p>
-<p>如果说前几篇是在回答“机器如何把语言变成可以计算的问题”，那么这一篇要回答的是另一个更关键的问题：<strong>为什么后来的主流大语言模型，几乎都选择了 Transformer 作为核心架构？</strong></p>
-<a id="more"></a>
-<p>这篇文章仍然不是论文精读，也不会一上来就推公式。我们会继续站在普通开发者的视角，把 Transformer 拆成几个容易理解的部分：它想解决什么问题，Attention 到底在做什么，Self-Attention 为什么能理解上下文，Multi-Head Attention 为什么要从多个角度看文本，位置编码解决了什么问题，Transformer Block 又是如何一层层堆出大模型能力的。</p>
-<p>先不用急着记住每个概念的细节，可以先把下面这张表当成本文的地图：</p>
-<table>
-<thead>
-<tr>
-<th><strong>概念</strong></th>
-<th><strong>它解决什么问题</strong></th>
-<th><strong>直觉理解</strong></th>
-<th><strong>和 LLM 的关系</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Transformer</td>
-<td>重新设计序列建模方式</td>
-<td>不再一个词一个词慢慢传，而是让 token 直接建立关系</td>
-<td>现代 LLM 的核心架构</td>
-</tr>
-<tr>
-<td>Attention</td>
-<td>找到当前 token 应该关注谁</td>
-<td>读一句话时，自动把注意力放到相关词上</td>
-<td>Transformer 的核心机制</td>
-</tr>
-<tr>
-<td>Self-Attention</td>
-<td>让一句话内部 token 互相关注</td>
-<td>每个 token 都能参考其他 token</td>
-<td>理解上下文的关键</td>
-</tr>
-<tr>
-<td>Multi-Head Attention</td>
-<td>从多个角度看关系</td>
-<td>有的头看语法，有的头看指代，有的头看语义</td>
-<td>提升表达能力</td>
-</tr>
-<tr>
-<td>Positional Encoding</td>
-<td>补充位置信息</td>
-<td>告诉模型 token 的顺序</td>
-<td>让模型知道“狗咬人”和“人咬狗”不同</td>
-</tr>
-<tr>
-<td>Transformer Block</td>
-<td>把注意力、前馈网络、残差连接组合起来</td>
-<td>一个可重复堆叠的计算单元</td>
-<td>LLM 就是很多层 block 堆起来</td>
-</tr>
-<tr>
-<td>Decoder-only</td>
-<td>只根据前文预测后文</td>
-<td>不能偷看未来，只能一步步生成</td>
-<td>GPT 类模型的主流结构</td>
-</tr>
-</tbody>
-</table>
-<p>整体路线可以理解成这样：</p>
-<p><img src="/images/llm/llm-transformer-01.png" alt="Transformer 架构篇整体路线图"></p>
-<h2 id="为什么需要-Transformer？"><a href="#为什么需要-Transformer？" class="headerlink" title="为什么需要 Transformer？"></a>为什么需要 Transformer？</h2><p>在第三篇文章里，我们讲过 RNN、LSTM、GRU、双向 RNN 这些经典序列模型。它们的共同特点是：按顺序处理文本。</p>
-<p>比如一句话：<code>我 今天 早上 喝 了 一杯 咖啡</code></p>
-<p>RNN 会从左到右一个 token 一个 token 地读，每一步都把前面读到的信息压缩进一个隐藏状态。</p>
-<p><img src="/images/llm/llm-transformer-02.png" alt="RNN 按顺序读取文本"></p>
-<p>这种方式很符合人类阅读的直觉，但对机器学习来说有几个明显问题：</p>
-<ol>
-<li><strong>信息传递路径太长</strong>：如果后面的词需要参考很前面的内容，信息要经过很多步传递。传得越远，越容易变弱。LSTM 和 GRU 虽然通过“门”机制缓解了这个问题，但没有彻底解决；</li>
-<li><strong>训练不易并行</strong>：RNN 的后一步依赖前一步。要算第 10 个 token，必须先算完前 9 个 token。这对大规模训练很不友好；</li>
-<li><strong>所有历史信息都被压缩进状态里</strong>：一段长文本里有很多细节，如果都压进一个隐藏状态，模型很容易丢失重要信息。</li>
-</ol>
-<p>Transformer 的思路完全不同：不要让信息一步步传递，而是让每个 token 都可以直接看见其他 token。</p>
-<p>可以把 RNN 和 Transformer 的区别理解成这样：</p>
-<p><img src="/images/llm/llm-transformer-03.png" alt="RNN 与 Transformer 序列建模方式对比"></p>
-<p>这就是 Transformer 的核心变化：</p>
-<ul>
-<li>它把“顺序传递信息”，改成了“直接计算 token 与 token 之间的关系”。</li>
-</ul>
-<p>这件事看起来简单，但非常关键。因为语言理解的本质，很多时候不是看单个词，而是看词和词之间的关系。</p>
-<p>比如：<code>苹果 发布 了 新产品</code></p>
-<p>如果模型要理解“苹果”，就不能只看这个词本身，还要看后面的“发布”“新产品”。这些上下文会告诉模型，这里的“苹果”更可能是公司，而不是水果。</p>
-<p>Transformer 之所以重要，就是因为它提供了一种更直接、更高效的方式，让模型在文本内部建立这种关系。</p>
-<h2 id="Attention：关注相关信息"><a href="#Attention：关注相关信息" class="headerlink" title="Attention：关注相关信息"></a>Attention：关注相关信息</h2><p>Attention，中文通常翻译为<strong>注意力机制</strong>。</p>
-<p>它的直觉很简单：当模型处理某个 token 时，不是平均看所有信息，而是自动判断哪些 token 更重要，然后重点参考它们。</p>
-<ol>
-<li><p>比如这句话：<code>苹果 发布 了 新产品</code></p>
-<ol>
-<li>当模型处理“苹果”时，它应该更多关注<code>发布</code> <code>新产品</code>，而不是只看<code>苹果</code>两个字。</li>
-</ol>
-</li>
-<li><p>再比如：<code>这家店 服务 真好，等了 两个小时 都没人 理我</code></p>
-<ol>
-<li>如果模型只看<code>服务</code> <code>真好</code>，可能会判断成正面评价。但如果它注意到后面的<code>等了两个小时</code> <code>没人理我</code>，就更容易理解这里其实是在表达不满。</li>
-</ol>
-</li>
-</ol>
-<p>Attention 的作用就是：<strong>给不同 token 分配不同权重，让模型知道当前应该重点看哪里。</strong></p>
-<p>可以把 Attention 理解成一个信息检索过程。模型面对一句话时，每个 token 都会做三件事：</p>
-<table>
-<thead>
-<tr>
-<th><strong>名称</strong></th>
-<th><strong>英文</strong></th>
-<th><strong>直觉理解</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Query</td>
-<td>Q</td>
-<td>当前 token 想找什么信息</td>
-</tr>
-<tr>
-<td>Key</td>
-<td>K</td>
-<td>每个 token 可以被匹配的标签</td>
-</tr>
-<tr>
-<td>Value</td>
-<td>V</td>
-<td>每个 token 真正携带的信息内容</td>
-</tr>
-</tbody>
-</table>
-<p>用更通俗的话说：</p>
-<ol>
-<li>Query 像是“我现在想问什么问题”；</li>
-<li>Key 像是“我这里有什么信息可以被你匹配”；</li>
-<li>Value 像是“如果你觉得我重要，就从我这里取走的信息”；</li>
-</ol>
-<p>每个 token 的 embedding 会分别经过三组不同的参数变换，得到 <code>Q</code>、<code>K</code>、<code>V</code>。当前 token 会用自己的 Q 去和所有 token 的 K 做匹配，得到注意力分数；再经过 softmax 变成权重；最后用这些权重对所有 token 的 V 做加权求和，得到当前 token 的新表示。流程可以简化成这样：</p>
-<p><img src="/images/llm/llm-transformer-04.png" alt="Attention 的 QKV 计算流程"></p>
-<p>举个例子：句子：<code>苹果 发布 了 新产品</code></p>
-<p>当模型处理 <code>苹果</code> 这个 token 时，它不能只看<code>苹果</code>本身，还需要结合上下文判断它到底指什么。在这句话里，<code>发布</code> <code>新产品</code> 这些 token 对理解 <code>苹果</code> 更重要，所以模型会给它们更高的关注权重：</p>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>可能的关注程度</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>苹果</td>
-<td>中</td>
-</tr>
-<tr>
-<td>发布</td>
-<td>高</td>
-</tr>
-<tr>
-<td>了</td>
-<td>低</td>
-</tr>
-<tr>
-<td>新产品</td>
-<td>高</td>
-</tr>
-</tbody>
-</table>
-<p>经过 Attention 计算之后，<code>苹果</code> 的表示就不再只是一个孤立的词向量，而是融合了上下文信息的新表示。</p>
-<p>这也是 Attention 很关键的地方：同一个 token，在不同语境下可以得到不同的表示</p>
-<ul>
-<li>在<code>苹果很好吃</code>里，<code>苹果</code>的表示会靠近水果。</li>
-<li>在<code>苹果发布了新产品</code>里，<code>苹果</code>的表示会靠近公司。</li>
-</ul>
-<p>这一步，是从传统词向量走向现代语言模型的关键。</p>
-<h2 id="Self-Attention：理解上下文"><a href="#Self-Attention：理解上下文" class="headerlink" title="Self-Attention：理解上下文"></a>Self-Attention：理解上下文</h2><p>前面讲的 Attention，本质上是在说：当前 token 可以关注其他信息。那 Self-Attention 又是什么？</p>
-<p>Self-Attention 的意思是：一句话内部的 token 之间，互相计算注意力。</p>
-<p>这里的 Self，指的是 Query、Key、Value 都来自同一段输入文本。</p>
-<p>比如输入：<code>我 喜欢 机器 学习</code></p>
-<p>在 Self-Attention 里，每个 token 都会和其他 token 建立关系：</p>
-<p><img src="/images/llm/llm-transformer-05.png" alt="Self-Attention 更新 token 表示"></p>
-<p>注意这里的 <code>新的 token 表示</code> 很重要。进入 Self-Attention 之前，<code>学习</code> 只是一个 token 的向量。</p>
-<p>经过 Self-Attention 之后，<code>学习</code> 的表示已经融合了上下文，知道它前面有 <code>机器</code>，所以这里更可能指<code>机器学习</code>这个技术概念，而不是普通意义上的学习行为（在 Self-Attention 中，句子里的每个 token 的向量表示都会被更新，变成融合上下文的新表示）。</p>
-<p>Self-Attention 可以理解为给句子内部建立了一张关系网：</p>
-<p><img src="/images/llm/llm-transformer-06.png" alt="Self-Attention 句内关系网络"></p>
-<p>在真实模型里，这张关系网不是人工指定的，而是通过训练学出来的。模型会在大量文本中逐渐学会：</p>
-<ul>
-<li>哪些词之间经常有关联。</li>
-<li>哪些词决定语义。</li>
-<li>哪些词影响情感。</li>
-<li>哪些词表示指代关系。</li>
-<li>哪些词对预测下一个 token 更重要。</li>
-</ul>
-<p>不过，一个 Attention 视角可能还不够。语言关系很复杂，同一句话可以从不同角度理解。</p>
-<p>比如：<code>小明 把 书 放在 桌子 上，因为 它 很重</code></p>
-<p>这里的<code>它</code>可能需要结合上下文判断指代对象。模型可能需要同时关注语法结构、实体关系、位置关系、语义合理性。</p>
-<p>所以 Transformer 引入了 Multi-Head Attention，也就是<strong>多头注意力</strong>。</p>
-<p>多头注意力可以理解成：让模型用多个视角同时观察同一句话。</p>
-<table>
-<thead>
-<tr>
-<th><strong>注意力头</strong></th>
-<th><strong>可能关注的关系</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Head 1</td>
-<td>相邻词和短语搭配</td>
-</tr>
-<tr>
-<td>Head 2</td>
-<td>主语、谓语、宾语关系</td>
-</tr>
-<tr>
-<td>Head 3</td>
-<td>指代关系</td>
-</tr>
-<tr>
-<td>Head 4</td>
-<td>情感和语气</td>
-</tr>
-<tr>
-<td>Head 5</td>
-<td>长距离依赖</td>
-</tr>
-</tbody>
-</table>
-<p>这些分工不是人手写进去的，而是模型在训练过程中自己学出来的。</p>
-<p>可以简单理解成：</p>
-<ul>
-<li>单头 Attention 像一个人读句子。</li>
-<li>多头 Attention 像一组人从不同角度读同一句话，最后把各自看到的信息合起来。</li>
-</ul>
-<p><img src="/images/llm/llm-transformer-07.png" alt="Multi-Head Attention 多头视角"></p>
-<p>这就是 Transformer 表达能力强的重要原因之一：它不是只用一种方式理解文本，而是可以在多个语义空间里同时建模 token 之间的关系。</p>
-<h2 id="Transformer-Block：堆叠模型能力"><a href="#Transformer-Block：堆叠模型能力" class="headerlink" title="Transformer Block：堆叠模型能力"></a>Transformer Block：堆叠模型能力</h2><p>Attention 是 Transformer 的核心机制，但一个真正可训练、可堆叠的模型，不能只有 Attention。</p>
-<p>原因很简单：Attention 主要解决的是“当前 token 应该参考哪些上下文信息”。但拿到上下文信息之后，模型还需要继续加工这些信息、保留原始信息、稳定每一层的计算结果。否则，模型层数一深，训练就容易变得不稳定。</p>
-<p>所以在 Transformer 里，Attention 通常会被封装进一个更完整的基础模块中，这个模块就叫 <strong>Transformer Block</strong>。</p>
-<p>可以把 Transformer Block 理解为：<strong>Transformer 里可以反复堆叠的一层“语言理解单元”</strong>。</p>
-<p>每经过一个 Transformer Block，token 的表示都会被更新一次：先通过 Self-Attention 和上下文建立关系，再通过前馈网络进一步加工，最后输出给下一层。</p>
-<p>一个完整的 Transformer Block 通常包含几部分：</p>
-<table>
-<thead>
-<tr>
-<th><strong>组件</strong></th>
-<th><strong>作用</strong></th>
-<th><strong>直觉理解</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Multi-Head Self-Attention</td>
-<td>建模 token 之间的关系</td>
-<td>让每个 token 知道该看谁</td>
-</tr>
-<tr>
-<td>Feed Forward Network</td>
-<td>进一步加工 token 表示</td>
-<td>对上下文信息做消化和提炼</td>
-</tr>
-<tr>
-<td>Residual Connection</td>
-<td>保留原始信息</td>
-<td>避免层数太深时信息丢失</td>
-</tr>
-<tr>
-<td>LayerNorm</td>
-<td>稳定每层计算</td>
-<td>让训练过程更平稳</td>
-</tr>
-</tbody>
-</table>
-<p>整体结构如下所示：</p>
-<p><img src="/images/llm/llm-transformer-08.png" alt="Transformer Block 结构"></p>
-<p>这里有几个点特别重要。</p>
-<h3 id="Transformer-需要位置编码"><a href="#Transformer-需要位置编码" class="headerlink" title="Transformer 需要位置编码"></a>Transformer 需要位置编码</h3><p>Self-Attention 擅长计算 token 之间的关系，但它本身并不天然知道 token 的先后顺序。</p>
-<p>也就是说，如果只看 Self-Attention，模型更关心“哪些 token 之间有关联”，但还需要额外的信息告诉它：“谁在前，谁在后”。</p>
-<p>而语言里的顺序非常重要。比如：</p>
-<ul>
-<li><code>狗 咬 人</code></li>
-<li><code>人 咬 狗</code></li>
-</ul>
-<p>这两个句子使用的是同样的 token，但顺序不同，意思就完全变了。</p>
-<p>所以在 Transformer 中，模型需要引入位置信息。常见做法是在 token embedding 的基础上加入位置编码，或者在 Attention 计算过程中引入相对位置信息。可以先简单理解为：位置编码的作用，就是告诉模型每个 token 在句子中的位置，让模型能够区分不同顺序带来的语义差异。</p>
-<h3 id="Feed-Forward-Network-加工信息"><a href="#Feed-Forward-Network-加工信息" class="headerlink" title="Feed Forward Network 加工信息"></a>Feed Forward Network 加工信息</h3><p>Attention 主要解决“看谁”的问题。</p>
-<p>Feed Forward Network 更像是对每个 token 的表示做一次非线性加工，让模型有能力表达更复杂的模式。</p>
-<p>可以粗略理解为：</p>
-<ul>
-<li>Attention 负责汇总上下文。</li>
-<li>Feed Forward 负责消化和加工上下文。</li>
-</ul>
-<h3 id="残差连接和-LayerNorm-稳定训练"><a href="#残差连接和-LayerNorm-稳定训练" class="headerlink" title="残差连接和 LayerNorm 稳定训练"></a>残差连接和 LayerNorm 稳定训练</h3><p>现代 LLM 往往有很多层 Transformer Block。如果每一层都直接覆盖上一层的信息，训练会很不稳定，也容易出现梯度消失、信息丢失等问题。</p>
-<ul>
-<li>残差连接：不要让每一层从零开始重写信息，而是在原有信息基础上做增量修改。</li>
-<li>LayerNorm：把每一层的数值范围整理得更稳定，避免训练过程中数值忽大忽小。</li>
-</ul>
-<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>所以，一个 Transformer Block 不是一个神秘黑盒，而是一组配合明确的组件：</p>
-<ol>
-<li>Attention 负责找关系。</li>
-<li>Feed Forward 负责加工表示。</li>
-<li>Position 负责补顺序。</li>
-<li>Residual 和 LayerNorm 负责让深层网络稳定训练。</li>
-</ol>
-<p>大模型就是把这样的 block 堆很多层。</p>
-<p><img src="/images/llm/llm-transformer-09.png" alt="多层 Transformer Block 堆叠"></p>
-<p>层数越多，参数越多，模型就越有机会学习更复杂的语言规律。当然，这也意味着需要更多数据、更大算力和更复杂的训练工程。</p>
-<h2 id="Transformer-如何跑起来？"><a href="#Transformer-如何跑起来？" class="headerlink" title="Transformer 如何跑起来？"></a>Transformer 如何跑起来？</h2><p>前面我们已经分别看了 Attention、Self-Attention、Multi-Head Attention、位置编码、Feed Forward Network、残差连接和 LayerNorm。到这里，读者可能会有一个很自然的问题：<strong>这些组件组合在一起之后，Transformer 到底是怎么处理一句话的？</strong></p>
-<p>这一节我们就把整个流程串起来。先不用纠结每一步背后的公式，只需要理解一件事：</p>
-<ul>
-<li>Transformer 的工作过程，就是不断更新每个 token 的表示，让它从一个孤立的词，逐渐变成融合上下文信息的语义表示。</li>
-</ul>
-<p>假设输入一句话：<code>我 喜欢 机器 学习</code></p>
-<p><strong>第一步，Tokenizer 会先把文本切成 token</strong>，并转换成 token id。</p>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>token id</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我</td>
-<td>101</td>
-</tr>
-<tr>
-<td>喜欢</td>
-<td>245</td>
-</tr>
-<tr>
-<td>机器</td>
-<td>830</td>
-</tr>
-<tr>
-<td>学习</td>
-<td>512</td>
-</tr>
-</tbody>
-</table>
-<p>这些 id 只是编号，本身没有语义。模型还不能直接理解它们。</p>
-<p><strong>第二步，Embedding 层会把每个 token id 转成向量</strong>。</p>
-<table>
-<thead>
-<tr>
-<th><strong>token</strong></th>
-<th><strong>初始向量直觉</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我</td>
-<td>和说话人、主体相关</td>
-</tr>
-<tr>
-<td>喜欢</td>
-<td>和情感、偏好相关</td>
-</tr>
-<tr>
-<td>机器</td>
-<td>和设备、技术相关</td>
-</tr>
-<tr>
-<td>学习</td>
-<td>和教育、训练、学习行为相关</td>
-</tr>
-</tbody>
-</table>
-<p>到这一步，每个 token 都有了一个初始表示，但它仍然比较孤立。比如 <code>学习</code>还不知道自己前面有<code>机器</code>，所以还不能确定这里是不是<code>机器学习</code>这个技术概念。</p>
-<p><strong>第三步，模型会加入位置信息</strong>。</p>
-<p>因为 Self-Attention 本身更擅长计算 token 之间的关系，但它并不天然知道顺序。加入位置信息后，模型才知道：</p>
-<ol>
-<li><code>我</code>在第 1 个位置；</li>
-<li><code>喜欢</code>在第 2 个位置；</li>
-<li><code>机器</code>在第 3 个位置；</li>
-<li><code>学习</code>在第 4 个位置。</li>
-</ol>
-<p>这一步很重要，因为<code>机器 学习</code>和<code>学习 机器</code>的含义并不一样。</p>
-<p><strong>第四步，进入 Self-Attention</strong>。</p>
-<p>每个 token 都会生成三类向量：<code>Q</code>、<code>K</code>、<code>V</code>。</p>
-<p>可以继续用前面的直觉理解：</p>
-<table>
-<thead>
-<tr>
-<th><strong>向量</strong></th>
-<th><strong>作用</strong></th>
-<th><strong>直觉</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Q</td>
-<td>Query</td>
-<td>我想找什么信息</td>
-</tr>
-<tr>
-<td>K</td>
-<td>Key</td>
-<td>我有什么信息可被匹配</td>
-</tr>
-<tr>
-<td>V</td>
-<td>Value</td>
-<td>我真正提供什么内容</td>
-</tr>
-</tbody>
-</table>
-<p>以<code>学习</code>为例，它会用自己的 <code>Q</code> 去匹配其他 token 的 <code>K</code>，判断哪些 token 对理解自己更重要。</p>
-<table>
-<thead>
-<tr>
-<th><strong>被关注 token</strong></th>
-<th><strong>对理解<code>学习</code>的重要程度</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>我</td>
-<td>低</td>
-</tr>
-<tr>
-<td>喜欢</td>
-<td>中</td>
-</tr>
-<tr>
-<td>机器</td>
-<td>高</td>
-</tr>
-<tr>
-<td>学习</td>
-<td>中</td>
-</tr>
-</tbody>
-</table>
-<p>因为<code>机器</code>和<code>学习</code>之间关系很强，所以<code>学习</code>会更多吸收<code>机器</code>的信息。经过这一步，<code>学习</code>的表示就不再只是普通的学习行为，而更接近<code>机器学习</code>这个技术概念。</p>
-<p><strong>第五步，Multi-Head Attention 会从多个角度重复这个过程</strong>。</p>
-<ul>
-<li>一个注意力头可能关注短语搭配，比如 <code>机器 + 学习</code>；</li>
-<li>另一个注意力头可能关注主谓关系，比如<code>我 + 喜欢</code>；</li>
-<li>还有的注意力头可能关注更长距离的语义关系。</li>
-</ul>
-<p>多个头的结果会被合并起来，形成更丰富的 token 表示。</p>
-<p><strong>第六步，Feed Forward Network 会继续加工每个 token 的表示</strong>。</p>
-<p>如果说 Attention 解决的是“应该看谁”，那么 FFN 更像是在做“看完之后怎么理解”。</p>
-<p>它会对每个 token 的表示做进一步变换，让模型有能力表达更复杂的语义模式。</p>
-<p><strong>第七步，残差连接和 LayerNorm 会帮助信息稳定传递</strong>。</p>
-<p>残差连接让模型不要每一层都完全重写信息，而是在原有表示上做增量修改。</p>
-<p>LayerNorm 则让每一层的数值分布更稳定，避免深层模型训练时出现数值波动太大的问题。</p>
-<p><strong>第八步，这样的 Transformer Block 会重复很多层</strong>。</p>
-<ul>
-<li>第一层可能更多学习局部词语关系；</li>
-<li>中间层可能学习短语、语法、指代关系；</li>
-<li>更高层可能学习语义、意图和任务模式。</li>
-</ul>
-<p>这不是人工规定的分工，而是模型在大量数据训练中逐渐形成的表示能力。</p>
-<p>最后，如果是 GPT 这类 Decoder-only 模型，最顶层会输出一个概率分布，用来预测下一个 token。</p>
-<p>比如输入：<code>我 喜欢 机器 学习</code></p>
-<p>模型可能预测：</p>
-<table>
-<thead>
-<tr>
-<th><strong>候选 token</strong></th>
-<th><strong>可能性</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>。</td>
-<td>高</td>
-</tr>
-<tr>
-<td>和</td>
-<td>中</td>
-</tr>
-<tr>
-<td>相关</td>
-<td>中</td>
-</tr>
-<tr>
-<td>桌子</td>
-<td>低</td>
-</tr>
-</tbody>
-</table>
-<p>模型选择一个 token 之后，再把它拼回上下文，继续生成后面的内容。</p>
-<p>整个流程可以用一张图串起来：</p>
-<p><img src="/images/llm/llm-transformer-14.png" alt="Transformer 完整运作流程"></p>
-<p>可以把这张图记成一句话：<strong>文本先变成 token，token 再变成向量，向量经过多层 Transformer Block 不断融合上下文，最后输出下一个 token 的概率</strong>。</p>
-<p>这样，Transformer 就不再是一堆独立概念，而是一条完整的计算链路。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>讲到这里，我们已经知道 Transformer 的核心能力是：通过 Attention，让文本中的 token 直接建立关系。</p>
-<p>但 Transformer 本身并不等同于 GPT，也不只用于生成式大语言模型。它更像是一套基础架构，可以根据任务目标，组合成不同类型的模型。常见的 Transformer 架构大致有三类：</p>
-<table>
-<thead>
-<tr>
-<th><strong>架构</strong></th>
-<th><strong>代表模型</strong></th>
-<th><strong>适合任务</strong></th>
-<th><strong>特点</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Encoder-only</td>
-<td>BERT</td>
-<td>理解、分类、标注</td>
-<td>可以看完整上下文</td>
-</tr>
-<tr>
-<td>Decoder-only</td>
-<td>GPT</td>
-<td>文本生成、对话、代码生成</td>
-<td>只能看前文，预测后文</td>
-</tr>
-<tr>
-<td>Encoder-Decoder</td>
-<td>T5、早期翻译模型</td>
-<td>翻译、摘要</td>
-<td>一边理解输入，一边生成输出</td>
-</tr>
-</tbody>
-</table>
-<p>其中，GPT 这类大语言模型主要采用 Decoder-only 架构。</p>
-<p>这里需要区分训练阶段和生成阶段：生成时，模型确实是一个 token 一个 token 往后生成；但训练时，模型可以一次性看到一整段文本，并通过 Causal Mask 让每个位置只能关注它前面的 token，从而并行学习每个位置的“下一个 token”预测。</p>
-<p>原因也很直观：GPT 的核心任务是生成文本，而生成文本本质上就是不断预测下一个 token。</p>
-<p>比如输入：<code>我今天早上喝了一杯</code></p>
-<p>模型需要预测下一个最可能出现的 token：</p>
-<table>
-<thead>
-<tr>
-<th><strong>候选 token</strong></th>
-<th><strong>可能性</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>咖啡</td>
-<td>高</td>
-</tr>
-<tr>
-<td>水</td>
-<td>中</td>
-</tr>
-<tr>
-<td>茶</td>
-<td>中</td>
-</tr>
-<tr>
-<td>桌子</td>
-<td>低</td>
-</tr>
-</tbody>
-</table>
-<p>如果模型生成了“咖啡”，它会把“咖啡”拼回原来的上下文里，再继续预测下一个 token。</p>
-<p><img src="/images/llm/llm-transformer-11.png" alt="自回归生成流程"></p>
-<p>这就是<strong>自回归生成</strong>。</p>
-<p>所谓自回归，可以简单理解为：模型每次只生成一个 token，然后把这个 token 放回上下文，再继续生成下一个 token。</p>
-<p>这个过程看起来简单，但它带来了一个很重要的约束：模型在生成当前位置时，只能看到已经出现的内容，不能提前看到后面的答案。</p>
-<p>例如模型在预测 <code>咖啡</code>时，只能看到：<code>我今天早上喝了一杯</code>。它不能提前看到完整句子：<code>我今天早上喝了一杯咖啡。</code></p>
-<p>否则就相当于考试时提前看到了答案。</p>
-<p>为了保证这一点，Decoder-only Transformer 会使用 <strong>Causal Mask</strong>，也就是因果掩码。</p>
-<ul>
-<li>Causal Mask 的作用是：当前位置只能关注自己和前面的 token，不能关注后面的 token。</li>
-</ul>
-<p><img src="/images/llm/llm-transformer-12.png" alt="Causal Mask 因果掩码"></p>
-<p>这样一来，Decoder-only Transformer 就和语言模型的训练目标非常匹配：<strong>给定前文，预测下一个 token</strong>。</p>
-<p>现在我们就可以回到文章开头的问题：<strong>为什么大模型选择了 Transformer？</strong></p>
-<p>可以从五个角度理解：</p>
-<ol>
-<li><strong>Transformer 能直接建模 token 之间的关系</strong>：它不需要像 RNN 那样把信息一步步往后传，而是可以通过 Attention 让任意两个 token 直接建立联系。这让模型更容易捕捉长距离依赖和复杂上下文关系。</li>
-<li><strong>Transformer 更适合并行训练</strong>：RNN 需要按顺序一步步计算，而 Transformer 在训练阶段可以让一段文本里的 token 同时参与计算。这对大规模数据训练非常重要，也更适合 GPU 这类并行计算硬件。</li>
-<li><strong>Transformer 的表达能力更强</strong>：Self-Attention、Multi-Head Attention、多层 Transformer Block 叠加之后，模型可以从多个角度学习语言中的语义、语法、指代、上下文和任务模式。</li>
-<li><strong>Transformer 更适合规模化</strong>：现代 LLM 的一个重要特点是规模很大：数据多、参数多、训练计算量大。Transformer 架构在规模变大之后，仍然能持续受益于更多数据和更多参数，这让它成为大模型时代的基础架构。</li>
-<li><strong>Transformer 和“预测下一个 token”的目标非常契合</strong>：Decoder-only Transformer 天然适合自回归生成，而很多 NLP 任务都可以转换成文本生成任务。</li>
-</ol>
-<table>
-<thead>
-<tr>
-<th><strong>任务</strong></th>
-<th><strong>输入方式</strong></th>
-<th><strong>输出方式</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>翻译</td>
-<td>请把这句话翻译成英文</td>
-<td>生成译文</td>
-</tr>
-<tr>
-<td>摘要</td>
-<td>请总结这篇文章</td>
-<td>生成摘要</td>
-</tr>
-<tr>
-<td>问答</td>
-<td>根据材料回答问题</td>
-<td>生成答案</td>
-</tr>
-<tr>
-<td>分类</td>
-<td>判断这条评论是正面还是负面</td>
-<td>生成类别</td>
-</tr>
-<tr>
-<td>写代码</td>
-<td>根据需求写一个函数</td>
-<td>生成代码</td>
-</tr>
-</tbody>
-</table>
-<p>这就是 LLM 很重要的统一性： 很多看起来不同的任务，最后都可以变成“给定上下文，继续生成文本”。</p>
-<p>可以用一张图总结 Transformer 到 LLM 的整体流程：</p>
-<p><img src="/images/llm/llm-transformer-13.png" alt="Transformer 到 LLM 整体流程"></p>
-<p>所以，Transformer 不是大模型的全部，但它是现代大语言模型最核心的计算骨架。</p>
-<p>它解决的不是某一个单点问题，而是一组关键问题：</p>
-<table>
-<thead>
-<tr>
-<th><strong>关键问题</strong></th>
-<th><strong>Transformer 的解决方式</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>如何理解上下文？</td>
-<td>用 Attention 建立 token 之间的关系</td>
-</tr>
-<tr>
-<td>如何处理长距离依赖？</td>
-<td>让远距离 token 可以直接互相关注</td>
-</tr>
-<tr>
-<td>如何提升训练效率？</td>
-<td>支持更好的并行计算</td>
-</tr>
-<tr>
-<td>如何增强表达能力？</td>
-<td>通过多头注意力和多层 block 堆叠</td>
-</tr>
-<tr>
-<td>如何生成文本？</td>
-<td>用 Decoder-only 架构预测下一个 token</td>
-</tr>
-</tbody>
-</table>
-<p>理解了 Transformer，再看后面的预训练、指令微调、SFT、RLHF、RAG、Agent、多模态、推理模型，就会清楚很多。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;前三篇文章里，我们已经分别从三个角度为理解大语言模型打了基础：第一篇看发展脉络，知道 LLM 是怎么一步步演进出来的；第二篇看数学基础，理解向量、概率、损失函数、梯度这些底层工具；第三篇看算法基础，从 NLP、词向量、感知机、神经网络，一路讲到 CNN、RNN 和双向 RNN。到了第四篇，我们终于可以进入现代大语言模型最核心的一块内容：&lt;strong&gt;Transformer&lt;/strong&gt;。&lt;/p&gt;
-&lt;p&gt;如果说前几篇是在回答“机器如何把语言变成可以计算的问题”，那么这一篇要回答的是另一个更关键的问题：&lt;strong&gt;为什么后来的主流大语言模型，几乎都选择了 Transformer 作为核心架构？&lt;/strong&gt;&lt;/p&gt;
     
     </summary>
     

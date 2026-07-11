@@ -4,6 +4,424 @@
   
     
     <entry>
+      <title><![CDATA[LLM 系列 (二十四)：个性化与记忆，大模型如何理解每一个用户]]></title>
+      <url>http://matt33.com/2026/07/11/llm-personalization-memory/</url>
+      <content type="html"><![CDATA[<p>大语言模型的单次推理本身近似无状态：模型只能看到当前请求、上下文以及参数中已有的知识，并不会自动保存跨会话的用户状态。一次对话结束后，用户偏好、项目背景和未完成任务如果没有被外部系统记录，下一次交互时仍需要重新提供。</p>
+<p>长上下文可以让模型一次读入更多历史，却不等于真正的记忆。持续拼接聊天记录不仅会增加 Token 成本和推理延迟，还会引入大量无关信息；更重要的是，它缺少独立的写入、检索、更新、冲突处理和删除机制。能“放下历史”，不代表能准确找到并使用历史。</p>
+<a id="more"></a>  
+<p>因此，个性化助手需要在 LLM 之外构建一套可管理的记忆系统：从交互中提取有长期价值的信息，按照用户和记忆类型分类存储，在需要时检索相关内容，并通过版本、时间、置信度和权限处理更新、过期与删除。本文将围绕这条主线，介绍用户画像、分层记忆、偏好学习、记忆检索以及隐私治理的核心技术。</p>
+<p>理解个性化与记忆，可以先记住五个结论：</p>
+<ol>
+<li><strong>记忆位于模型之外</strong>：生产系统中的用户记忆通常保存在外部存储，而不是直接写入模型参数；</li>
+<li><strong>记忆不是聊天记录</strong>：系统保存的是经过提取和归纳的事实、事件、偏好与经验；</li>
+<li><strong>明确声明优先</strong>：用户主动表达的偏好，应当高于模型根据单次行为做出的推断；</li>
+<li><strong>记忆必须可追溯</strong>：每条记忆都需要包含来源、时间、置信度、版本和访问权限；</li>
+<li><strong>记忆具有完整生命周期</strong>：可靠系统不仅要会写入和检索，还要支持更新、失效、遗忘与删除。</li>
+</ol>
+<p><img src="/images/llm/llm-personalization-memory-01.png" alt="个性化助手依赖用户状态、分层记忆、记忆生命周期和安全治理共同协作"></p>
+<h2 id="为什么需要个性化与记忆"><a href="#为什么需要个性化与记忆" class="headerlink" title="为什么需要个性化与记忆"></a>为什么需要个性化与记忆</h2><p>普通 LLM 应用通常接收当前 Prompt，根据上下文生成一次回答：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">当前输入 + 当前上下文 -&gt; LLM -&gt; 回答</span><br></pre></td></tr></table></figure>
+<p>个性化助手则需要结合用户的长期状态：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">当前输入 + 当前任务状态 + 相关用户记忆 + 系统规则</span><br><span class="line">    -&gt; LLM</span><br><span class="line">    -&gt; 个性化回答或行动</span><br></pre></td></tr></table></figure>
+<p>它解决的不只是“记住用户叫什么”，还包括：</p>
+<ol>
+<li><strong>交互连续性</strong>：跨会话保留项目背景、任务进度和历史决策；</li>
+<li><strong>偏好适配</strong>：按照用户习惯调整语言、格式、工具和工作方式；</li>
+<li><strong>状态追踪</strong>：记住未完成任务、承诺事项和外部环境变化；</li>
+<li><strong>减少重复输入</strong>：避免用户反复说明时区、角色和固定约束；</li>
+<li><strong>长期协作</strong>：让 Agent 可以根据过去的执行结果改进后续任务。</li>
+</ol>
+<p>需要区分四个容易混淆的概念：</p>
+<table>
+<thead>
+<tr>
+<th><strong>机制</strong></th>
+<th><strong>保存在哪里</strong></th>
+<th><strong>生命周期</strong></th>
+<th><strong>主要作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>上下文窗口</td>
+<td>当前 Prompt</td>
+<td>单次请求</td>
+<td>保持当前推理连贯</td>
+</tr>
+<tr>
+<td>工作记忆</td>
+<td>上下文或临时状态库</td>
+<td>当前任务</td>
+<td>保存计划和中间结果</td>
+</tr>
+<tr>
+<td>长期记忆</td>
+<td>外部数据库或记忆服务</td>
+<td>跨会话</td>
+<td>保存用户事实、事件和经验</td>
+</tr>
+<tr>
+<td>参数个性化</td>
+<td>模型权重或 Adapter</td>
+<td>模型版本周期</td>
+<td>学习稳定的群体行为模式</td>
+</tr>
+</tbody>
+</table>
+<p>长上下文解决的是“当前能读多少”，长期记忆解决的是“跨会话应该保留什么”。微调可以改变模型整体行为，却不适合频繁写入、更新和删除每个用户的信息。</p>
+<p>因此，生产系统通常优先采用外部记忆：它更容易追踪来源、控制权限、及时更新和响应用户删除请求。</p>
+<h2 id="记忆系统的分层架构"><a href="#记忆系统的分层架构" class="headerlink" title="记忆系统的分层架构"></a>记忆系统的分层架构</h2><p>工程中的记忆分类可以借鉴人类记忆，但不需要完全照搬认知科学。对 LLM 系统来说，分层的主要目的，是让不同信息采用不同的存储、检索、更新和过期策略。</p>
+<h3 id="四类记忆"><a href="#四类记忆" class="headerlink" title="四类记忆"></a>四类记忆</h3><p>一个实用的记忆系统通常包含四类记忆：</p>
+<table>
+<thead>
+<tr>
+<th><strong>记忆类型</strong></th>
+<th><strong>保存内容</strong></th>
+<th><strong>典型生命周期</strong></th>
+<th><strong>示例</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作记忆</td>
+<td>当前计划、中间结果、工具状态</td>
+<td>分钟或小时</td>
+<td>正在分析的代码文件</td>
+</tr>
+<tr>
+<td>情景记忆</td>
+<td>发生过的具体事件</td>
+<td>天或更久</td>
+<td>上周完成了一次系统升级</td>
+</tr>
+<tr>
+<td>语义记忆</td>
+<td>稳定事实、用户画像和偏好</td>
+<td>长期保存</td>
+<td>用户时区是上海</td>
+</tr>
+<tr>
+<td>程序记忆</td>
+<td>可复用流程和执行经验</td>
+<td>持续更新</td>
+<td>发布前先执行测试和灰度</td>
+</tr>
+</tbody>
+</table>
+<p>四类记忆解决的问题不同：</p>
+<ul>
+<li><strong>工作记忆</strong>回答“当前任务进行到哪里”；</li>
+<li><strong>情景记忆</strong>记录“过去发生过什么”；</li>
+<li><strong>语义记忆</strong>描述“用户是谁、偏好什么”；</li>
+<li><strong>程序记忆</strong>总结“以后遇到类似任务应该怎样做”。</li>
+</ul>
+<p>其中，工作记忆通常与当前任务绑定，任务结束后可以清理；情景记忆以时间和事件为核心；语义记忆需要处理事实更新与偏好冲突；程序记忆既可以属于某个用户，也可以作为项目或团队共享经验。</p>
+<p><a href="https://arxiv.org/abs/2310.08560" target="_blank" rel="external">MemGPT</a> 使用类似操作系统分层存储的思路，在有限上下文和外部存储之间调度信息。<a href="https://arxiv.org/abs/2304.03442" target="_blank" rel="external">Generative Agents</a> 则将经历写入记忆流，结合相关性、近期性和重要性检索记忆，并通过反思形成更高层结论。</p>
+<p><img src="/images/llm/llm-personalization-memory-02.png" alt="Memory Controller 根据任务、身份和权限，在不同记忆层之间完成写入、检索、更新与删除"></p>
+<h3 id="记忆数据模型"><a href="#记忆数据模型" class="headerlink" title="记忆数据模型"></a>记忆数据模型</h3><p>用户画像不应该只是一段不断改写的自然语言总结。这样容易混合事实和推断，也难以处理来源追踪、局部更新、信息冲突和用户删除。更稳的方式，是把记忆保存为结构化、原子化、可版本化的信息单元：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"memory_id"</span>: <span class="string">"mem_1024"</span>,</span><br><span class="line">  <span class="attr">"tenant_id"</span>: <span class="string">"tenant_12"</span>,</span><br><span class="line">  <span class="attr">"user_id"</span>: <span class="string">"user_hash_28"</span>,</span><br><span class="line">  <span class="attr">"scope"</span>: <span class="string">"user"</span>,</span><br><span class="line">  <span class="attr">"type"</span>: <span class="string">"preference"</span>,</span><br><span class="line">  <span class="attr">"key"</span>: <span class="string">"meeting_time_preference"</span>,</span><br><span class="line">  <span class="attr">"value"</span>: <span class="string">"工作日会议尽量安排在上午 10 点之后"</span>,</span><br><span class="line">  <span class="attr">"source"</span>: <span class="string">"explicit_user_statement"</span>,</span><br><span class="line">  <span class="attr">"evidence_refs"</span>: [<span class="string">"trace_7821"</span>],</span><br><span class="line">  <span class="attr">"confidence"</span>: <span class="number">1.0</span>,</span><br><span class="line">  <span class="attr">"importance"</span>: <span class="number">0.8</span>,</span><br><span class="line">  <span class="attr">"created_at"</span>: <span class="string">"2026-07-10T09:30:00+08:00"</span>,</span><br><span class="line">  <span class="attr">"last_accessed_at"</span>: <span class="string">"2026-07-11T11:00:00+08:00"</span>,</span><br><span class="line">  <span class="attr">"valid_from"</span>: <span class="string">"2026-07-10"</span>,</span><br><span class="line">  <span class="attr">"valid_until"</span>: <span class="literal">null</span>,</span><br><span class="line">  <span class="attr">"status"</span>: <span class="string">"active"</span>,</span><br><span class="line">  <span class="attr">"sensitivity"</span>: <span class="string">"normal"</span>,</span><br><span class="line">  <span class="attr">"version"</span>: <span class="number">3</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这些字段分别解决不同的治理问题：</p>
+<ul>
+<li><code>tenant_id / user_id / scope</code>：确定记忆属于哪个租户、用户、项目或任务；</li>
+<li><code>type</code>：决定记忆的检索、更新和过期策略；</li>
+<li><code>source</code>：区分用户声明、工具结果和模型推断；</li>
+<li><code>evidence_refs</code>：将记忆回溯到原始对话或执行轨迹；</li>
+<li><code>confidence</code>：表示当前信息的可信程度；</li>
+<li><code>importance</code>：控制写入、检索和保留优先级；</li>
+<li><code>valid_from / valid_until</code>：描述信息生效和失效的时间范围；</li>
+<li><code>status / version</code>：支持替代、过期、删除和历史追踪；</li>
+<li><code>sensitivity</code>：决定加密、访问和展示权限。</li>
+</ul>
+<p>明确事实与推断偏好必须分开处理。用户说“以后都用中文回答”，可以作为高置信度的明确偏好；用户偶尔跳过一次长回答，只能形成一条低置信度行为信号，不能直接推断为“永远只喜欢短回答”。</p>
+<p>换句话说，用户画像不是模型对用户的一次性总结，而是由多条有来源、有时间、有置信度、可以独立更新和删除的记忆共同组成。</p>
+<h2 id="记忆如何写入、检索、更新与遗忘"><a href="#记忆如何写入、检索、更新与遗忘" class="headerlink" title="记忆如何写入、检索、更新与遗忘"></a>记忆如何写入、检索、更新与遗忘</h2><p>记忆系统最核心的能力不是保存信息，而是管理信息的完整生命周期：什么值得写入、当前任务需要检索什么、新旧信息如何合并，以及哪些内容应当过期或删除。</p>
+<p><img src="/images/llm/llm-personalization-memory-03.png" alt="记忆从候选状态开始，经过写入、强化、替代、过期或删除，形成完整生命周期"></p>
+<h3 id="记忆写入"><a href="#记忆写入" class="headerlink" title="记忆写入"></a>记忆写入</h3><p>如果把每轮对话都写入长期记忆，系统很快会积累大量重复、临时甚至错误的信息。因此，候选记忆需要经过 Memory Write Gate 判断：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">value_score(m) =</span><br><span class="line">    w1 × explicitness</span><br><span class="line">  + w2 × stability</span><br><span class="line">  + w3 × future_utility</span><br><span class="line">  + w4 × confidence</span><br><span class="line">  - w5 × contradiction_risk</span><br><span class="line"></span><br><span class="line">write(m) =</span><br><span class="line">    value_score(m) &gt;= threshold(type)</span><br><span class="line">    AND policy_allows(user, source, sensitivity, purpose)</span><br></pre></td></tr></table></figure>
+<p>各项信号需要先归一化，再按照记忆类型设置不同阈值：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">write(m) =</span><br><span class="line">    score(m) &gt;= threshold(type)</span><br><span class="line">    AND policy_allows(m)</span><br></pre></td></tr></table></figure>
+<p><code>policy_allows</code> 是隐私、来源和权限形成的硬约束。即使用户明确要求保存某条信息，密码、访问密钥等高敏感内容也不应直接进入普通长期记忆。</p>
+<p>适合写入的内容通常包括：</p>
+<ol>
+<li>用户明确要求系统记住的信息；</li>
+<li>稳定且重复出现的偏好；</li>
+<li>对未来任务有价值的项目背景和决策；</li>
+<li>已完成任务的关键结果；</li>
+<li>经过授权工具验证的事实和环境状态。</li>
+</ol>
+<p>不适合直接写入长期记忆的内容包括：</p>
+<ol>
+<li>寒暄、临时情绪和一次性表达；</li>
+<li>单次行为产生的未经确认推断；</li>
+<li>密码、访问密钥和高敏感原始内容；</li>
+<li>来自网页、邮件或外部文档的可执行指令；</li>
+<li>无法追踪来源或存在明显冲突的信息。</li>
+</ol>
+<p>完整的写入流程通常是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">交互事件</span><br><span class="line">  -&gt; 候选信息抽取</span><br><span class="line">  -&gt; 原子化与分类</span><br><span class="line">  -&gt; 去重与冲突检测</span><br><span class="line">  -&gt; 敏感信息识别</span><br><span class="line">  -&gt; 来源可信度评估</span><br><span class="line">  -&gt; 写入门控</span><br><span class="line">  -&gt; 临时记忆或长期记忆</span><br></pre></td></tr></table></figure>
+<p>其中，原子化是把一段对话拆成可以独立更新的事实。例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">不推荐：</span><br><span class="line">用户喜欢中文、上午开会，并且正在做支付项目。</span><br><span class="line"></span><br><span class="line">推荐：</span><br><span class="line">language_preference = zh-CN</span><br><span class="line">meeting_time_preference = after_10_am</span><br><span class="line">current_project = payment_system</span><br></pre></td></tr></table></figure>
+<p>原子化之后，每条信息才能独立检索、更新、过期和删除。</p>
+<h3 id="记忆检索"><a href="#记忆检索" class="headerlink" title="记忆检索"></a>记忆检索</h3><p>用户的全部记忆不能一次性放入 Prompt。系统需要根据当前任务，从正确的用户和数据范围内检索少量相关记忆。</p>
+<p><img src="/images/llm/llm-personalization-memory-04.png" alt="记忆检索先完成身份和权限过滤，再结合语义、关键词、时间和类型进行多路召回"></p>
+<p>权限和敏感级别属于硬约束，应当在召回之前生效，而不是先搜索所有用户数据，再从结果中删除无权限内容。工程上通常会通过租户 Namespace、用户 ID 和 ACL Metadata 限定检索范围。候选记忆的排序分数可以简化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">score(m, q) =</span><br><span class="line">    α × semantic_relevance</span><br><span class="line">  + β × lexical_relevance</span><br><span class="line">  + γ × task_match</span><br><span class="line">  + δ × time_score</span><br><span class="line">  + ε × importance</span><br><span class="line">  + κ × confidence</span><br><span class="line">  + μ × source_trust</span><br><span class="line">  - ζ × conflict_risk</span><br></pre></td></tr></table></figure>
+<p>排序前需要将各项软信号归一化到统一尺度，并根据离线评测和线上任务成功率持续校准权重；权限、租户和敏感级别属于召回前的硬过滤条件，不参与相关性排序。上述参数含义如下：</p>
+<ul>
+<li><code>semantic_relevance</code>：记忆与当前任务的语义相关性；</li>
+<li><code>lexical_relevance</code>：名称、错误码等关键词匹配程度；</li>
+<li><code>task_match</code>：记忆类型与当前任务是否匹配；</li>
+<li><code>time_score</code>：记忆在时间上是否仍然有效；</li>
+<li><code>importance</code>：记忆对未来任务的重要程度；</li>
+<li><code>confidence</code>：当前信息的可信程度；</li>
+<li><code>source_trust</code>：用户声明、工具结果和模型推断具有不同可信级别；</li>
+<li><code>conflict_risk</code>：记忆是否存在未解决的冲突。</li>
+</ul>
+<p>时间分数可以使用指数衰减：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">time_score(m) = exp(-Δt / τ_type)</span><br></pre></td></tr></table></figure>
+<p><code>τ_type</code> 由记忆类型决定。临时任务状态的衰减速度较快；用户明确声明的语言、时区和无障碍偏好，则可以使用更长的衰减周期，或者只在收到新声明时更新。需要区分两个概念：</p>
+<ul>
+<li><strong>时间衰减</strong>只影响记忆的检索排序；</li>
+<li><strong>TTL 到期</strong>才会让记忆进入过期状态。</li>
+</ul>
+<p>第一阶段召回后，还可以使用 MMR 降低结果之间的重复度：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">MMR(m) =</span><br><span class="line">    λ × relevance(m, q)</span><br><span class="line">  - (1 - λ) × max similarity(m, selected)</span><br></pre></td></tr></table></figure>
+<p>它在相关性与多样性之间进行平衡，避免 Top-K 全是同一事实的不同表述。</p>
+<p>最终进入 Prompt 的 Memory Context 应当包含内容、来源、时间和置信度，并被明确标记为参考数据。记忆不能拥有高于 System Prompt 的指令权限，也不能直接把外部文档中的操作指令传递给 Agent。</p>
+<h3 id="更新与遗忘"><a href="#更新与遗忘" class="headerlink" title="更新与遗忘"></a>更新与遗忘</h3><p>记忆并不是写入后永久不变。不同信息需要采用不同的更新策略：</p>
+<table>
+<thead>
+<tr>
+<th><strong>记忆变化</strong></th>
+<th><strong>更新方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>新事件发生</td>
+<td>追加新的情景记忆</td>
+</tr>
+<tr>
+<td>用户修改明确偏好</td>
+<td>创建新版本，并将旧版本标记为 Superseded</td>
+</tr>
+<tr>
+<td>多次行为支持同一偏好</td>
+<td>合并证据并提高置信度</td>
+</tr>
+<tr>
+<td>新旧事实发生冲突</td>
+<td>保留来源和时间，进入冲突处理</td>
+</tr>
+<tr>
+<td>临时状态长期未使用</td>
+<td>降低检索权重或通过 TTL 过期</td>
+</tr>
+<tr>
+<td>用户要求忘记</td>
+<td>删除正文、索引、缓存和派生画像</td>
+</tr>
+<tr>
+<td>记忆已被删除</td>
+<td>写入不含原始内容的 Tombstone</td>
+</tr>
+</tbody>
+</table>
+<p>冲突不能使用一套固定优先级处理，而应根据记忆类型判断：</p>
+<ol>
+<li><strong>主观偏好</strong>：以用户最新的明确声明为准；</li>
+<li><strong>客观状态</strong>：优先采用经过授权工具或权威数据源验证的结果；</li>
+<li><strong>隐式偏好</strong>：多次、跨场景的行为证据高于单次行为；</li>
+<li><strong>来源和时间不确定</strong>：保留冲突并请求用户确认，而不是自动覆盖。</li>
+</ol>
+<p>例如，用户曾经说“会议尽量安排在上午”，后来又明确表示“这个月下午更方便”，系统不应删除全部历史，而应创建新版本，并标记新偏好的有效时间。</p>
+<p>Tombstone 只保存被删除记忆的标识、版本和删除时间，不应继续保存原始敏感内容。它用于阻止缓存、异步任务和数据同步重新写回已经删除的信息。真正的删除需要覆盖：</p>
+<ol>
+<li>主数据库；</li>
+<li>向量索引和全文索引；</li>
+<li>应用缓存与检索缓存；</li>
+<li>聚合生成的用户画像；</li>
+<li>异步任务和下游数据副本。</li>
+</ol>
+<p>如果用户记忆已经进入模型训练数据，仅删除外部记忆并不能将信息从模型参数中移除。因此，个人记忆默认应保存在参数之外；将其用于训练时，需要单独的授权、数据血缘和删除治理机制。</p>
+<h3 id="记忆系统如何落地"><a href="#记忆系统如何落地" class="headerlink" title="记忆系统如何落地"></a>记忆系统如何落地</h3><p>在生产系统中，记忆通常由独立的 Memory Service 管理。它负责连接 Agent、存储和检索系统，对外提供写入、查询、更新和删除能力。</p>
+<p><img src="/images/llm/llm-personalization-memory-05.png" alt="Memory Service 连接记忆存储、检索索引和 LLM，形成读取与写入闭环"></p>
+<p>核心 Infra 组件可以归纳以下几部分：</p>
+<table>
+<thead>
+<tr>
+<th><strong>组件</strong></th>
+<th><strong>主要职责</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Memory Service</td>
+<td>提供记忆写入、检索、更新和删除接口</td>
+</tr>
+<tr>
+<td>Primary Store</td>
+<td>保存记忆正文、来源、版本和状态</td>
+</tr>
+<tr>
+<td>Retrieval Index</td>
+<td>提供向量检索、关键词检索和元数据过滤</td>
+</tr>
+<tr>
+<td>Redis / Cache</td>
+<td>保存当前任务状态和热点记忆</td>
+</tr>
+<tr>
+<td>Async Worker</td>
+<td>异步完成记忆抽取、去重和索引更新</td>
+</tr>
+<tr>
+<td>Security</td>
+<td>负责用户隔离、权限、加密和删除审计</td>
+</tr>
+</tbody>
+</table>
+<p>整个系统需要遵循三个原则：</p>
+<ol>
+<li><strong>正文与索引分离</strong>：Primary Store 保存完整记忆，是唯一事实来源；向量和关键词索引只用于加速检索，可以重新构建。</li>
+<li><strong>读取同步，写入分级</strong>：当前任务需要的记忆同步检索；用户明确要求记住或删除的信息同步处理，模型推断出的偏好则异步审核后写入。</li>
+<li><strong>权限贯穿全链路</strong>：检索前先校验用户和租户，删除时同时清理正文、向量索引、关键词索引和缓存。</li>
+</ol>
+<p>早期系统可以使用较简单的组合：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PostgreSQL + pgvector</span><br><span class="line">Redis</span><br><span class="line">异步任务队列</span><br><span class="line">Embedding / Reranker Service</span><br></pre></td></tr></table></figure>
+<p>随着记忆规模和并发增长，再逐步拆分独立的向量数据库、搜索服务和消息队列。</p>
+<h2 id="个性化助手如何构建"><a href="#个性化助手如何构建" class="headerlink" title="个性化助手如何构建"></a>个性化助手如何构建</h2><p>个性化助手不是“给模型加一段用户画像”，而是一个围绕用户状态运行的系统。它需要在回答前读取相关记忆，在任务结束后根据结果决定是否更新记忆。整个过程可以拆成两条链路：</p>
+<ul>
+<li><strong>同步读取链路</strong>：识别用户与任务，检索相关记忆，组装上下文后调用 LLM；</li>
+<li><strong>异步写入链路</strong>：根据对话、工具结果和用户反馈生成候选记忆，经过校验后再写入。</li>
+</ul>
+<p><img src="/images/llm/llm-personalization-memory-06.png" alt="个性化助手在生成前读取记忆，在任务完成后通过写入门控更新记忆"></p>
+<h3 id="个性化策略：先使用可控的方法"><a href="#个性化策略：先使用可控的方法" class="headerlink" title="个性化策略：先使用可控的方法"></a>个性化策略：先使用可控的方法</h3><p>个性化并不只有“记忆”一种实现方式。不同问题应采用不同层级的方案：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方式</strong></th>
+<th><strong>适合解决的问题</strong></th>
+<th><strong>优势</strong></th>
+<th><strong>主要限制</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>明确用户配置</td>
+<td>语言、时区、无障碍需求</td>
+<td>可解释、立即生效</td>
+<td>只能覆盖显式设置</td>
+</tr>
+<tr>
+<td>Profile Prompt</td>
+<td>少量稳定偏好</td>
+<td>实现简单</td>
+<td>画像过长会占用上下文</td>
+</tr>
+<tr>
+<td>外部记忆检索</td>
+<td>历史事件、项目背景、任务状态</td>
+<td>可更新、可删除、可追溯</td>
+<td>依赖检索和冲突处理</td>
+</tr>
+<tr>
+<td>偏好排序模型</td>
+<td>回答风格、内容优先级</td>
+<td>能利用行为信号</td>
+<td>容易受到反馈噪声影响</td>
+</tr>
+<tr>
+<td>微调或 Adapter</td>
+<td>稳定的群体任务模式</td>
+<td>行为一致性更强</td>
+<td>更新慢，难逐用户删除</td>
+</tr>
+</tbody>
+</table>
+<p>对大多数产品来说，更合理的选择顺序是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">明确用户配置</span><br><span class="line">    -&gt; Profile Prompt</span><br><span class="line">    -&gt; 外部记忆检索</span><br><span class="line">    -&gt; 群体级偏好排序</span><br><span class="line">    -&gt; 必要时再做参数级个性化</span><br></pre></td></tr></table></figure>
+<p><a href="https://arxiv.org/abs/2304.11406" target="_blank" rel="external">LaMP</a> 表明，从用户历史中检索相关信息可以提升个性化输出质量；<a href="https://arxiv.org/abs/2504.19413" target="_blank" rel="external">Mem0</a> 则展示了从对话中动态提取、整合和检索长期记忆的系统路线。</p>
+<p>逐用户微调通常不是第一选择。它成本高、更新慢，也很难解释某条用户数据如何影响模型参数。相比之下，外部记忆更容易更新、回滚和删除；参数级个性化更适合稳定的任务模式或用户群体偏好。</p>
+<h3 id="隐式偏好学习：从行为信号到可靠偏好"><a href="#隐式偏好学习：从行为信号到可靠偏好" class="headerlink" title="隐式偏好学习：从行为信号到可靠偏好"></a>隐式偏好学习：从行为信号到可靠偏好</h3><p>用户点击、跳过、修改、重新生成和任务完成情况，都可以提供偏好信号。但这些信号并不等于明确标签：</p>
+<ul>
+<li>没有点击不一定代表不喜欢；</li>
+<li>重新生成可能是事实错误，也可能只是希望换一种表达；</li>
+<li>单次选择不能代表长期偏好；</li>
+<li>不同任务中的偏好可能完全不同。</li>
+</ul>
+<p>因此，隐式偏好不应直接覆盖用户画像，而应先作为带证据的弱信号保存：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">evidence(preference) =</span><br><span class="line">    Σ decay(time_i)</span><br><span class="line">    × signal_strength_i</span><br><span class="line">    × context_match_i</span><br></pre></td></tr></table></figure>
+<p>只有当同类信号在多个时间点、多个相似场景中持续出现，并超过置信度阈值时，系统才将其提升为稳定偏好。</p>
+<p>例如，用户连续多次将“详细解释”改成“只给结论”，可以逐步提高“偏好简洁回答”的置信度；但在复杂排障场景下，系统仍应保留输出详细分析的能力，而不是机械缩短所有回答。</p>
+<p>对于回答风格、推荐顺序等低风险决策，系统可以使用用户级或群体级 Reranker、Contextual Bandit 等方法持续学习。但支付、发送、删除和权限修改等高风险动作，不应通过在线探索学习，而必须遵循明确规则和人工确认。</p>
+<p>个性化的核心不是让模型迎合每一次行为，而是在用户明确意图、长期偏好、当前任务和系统安全之间保持可控平衡。</p>
+<h2 id="安全、评测与未来演进"><a href="#安全、评测与未来演进" class="headerlink" title="安全、评测与未来演进"></a>安全、评测与未来演进</h2><p>记忆让模型更了解用户，也让系统持有更多跨会话、持续生效的状态。一条错误、过期或恶意记忆，可能在未来多个任务中反复影响模型行为，因此记忆系统必须同时具备安全边界、质量评测和用户控制能力。</p>
+<table>
+<thead>
+<tr>
+<th><strong>风险</strong></th>
+<th><strong>典型问题</strong></th>
+<th><strong>主要治理方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>跨用户泄露</td>
+<td>检索到其他用户或租户的记忆</td>
+<td>租户隔离、检索前鉴权、ACL 过滤</td>
+</tr>
+<tr>
+<td>记忆投毒</td>
+<td>恶意内容被写入并在后续任务触发</td>
+<td>来源可信度、写入门控、检索过滤</td>
+</tr>
+<tr>
+<td>错误或过期记忆</td>
+<td>旧偏好覆盖当前需求</td>
+<td>证据来源、版本管理、时间语义</td>
+</tr>
+<tr>
+<td>过度个性化</td>
+<td>历史偏好限制当前选择</td>
+<td>保留多样性、允许关闭个性化</td>
+</tr>
+<tr>
+<td>隐私推断</td>
+<td>系统推断并保存敏感属性</td>
+<td>最小化收集、明确授权、敏感字段限制</td>
+</tr>
+<tr>
+<td>删除不完整</td>
+<td>索引、缓存或画像仍保留副本</td>
+<td>Tombstone、级联删除、审计验证</td>
+</tr>
+</tbody>
+</table>
+<p>记忆内容应当被视为低权限参考数据，而不是可直接执行的系统指令。来自网页、邮件、RAG 文档和工具结果的内容，不能未经校验就写入用户长期记忆；即使被检索出来，也不能覆盖 System Prompt 或绕过工具权限。近期研究已开始系统分析持久化记忆带来的 <a href="https://arxiv.org/abs/2606.04329" target="_blank" rel="external">Memory Poisoning 风险</a>。</p>
+<p>评估记忆系统时，不能只看模型是否“记住一个事实”，而要覆盖完整生命周期：</p>
+<ul>
+<li><strong>写入质量</strong>：该记的是否写入，不该记的是否被拒绝；</li>
+<li><strong>检索质量</strong>：相关记忆能否在 Top-K 中被找回并排在前面；</li>
+<li><strong>更新质量</strong>：新事实能否正确替代旧事实，冲突能否被识别；</li>
+<li><strong>遗忘质量</strong>：删除后正文、索引、缓存和派生画像是否全部清理；</li>
+<li><strong>个性化收益</strong>：记忆是否提升任务成功率、偏好胜率和用户满意度；</li>
+<li><strong>安全边界</strong>：是否存在跨用户泄露、投毒写入或敏感信息误用。</li>
+</ul>
+<p><a href="https://arxiv.org/abs/2410.10813" target="_blank" rel="external">LongMemEval</a> 将长期记忆评测拆分为信息提取、跨会话推理、时间推理、知识更新和拒答能力；<a href="https://arxiv.org/abs/2402.17753" target="_blank" rel="external">LoCoMo</a> 则关注跨多次会话的长期对话、事件总结和时间因果关系。它们都说明：上下文窗口能够放下历史，不代表模型能够准确使用历史。</p>
+<p>未来，个性化与记忆会沿着四个方向继续演进：</p>
+<ol>
+<li><strong>多模态与 Agent 经验记忆</strong>：从记住文本事实，扩展到语音、图片、界面操作、任务策略和失败经验；</li>
+<li><strong>结构化记忆</strong>：通过图结构显式建模用户、项目、事件和时间关系；</li>
+<li><strong>端侧私人记忆</strong>：将敏感画像和个人数据尽量保留在本地设备；</li>
+<li><strong>用户可控记忆</strong>：让用户能够查看、修改、暂停、导出和删除系统记忆。</li>
+</ol>
+<p>个性化的目标，不是无限收集用户信息，而是在明确授权和安全边界内，使用最少、最相关的信息提供持续一致的服务。</p>
+<p>一句话概括：<strong>真正理解用户的大模型，不只是能够记住过去，还要知道什么值得记住、何时应该更新，以及什么时候必须忘记。</strong></p>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[LLM 系列 (二十三)：数据飞轮，大模型能力如何持续进化]]></title>
       <url>http://matt33.com/2026/07/11/llm-data-flywheel/</url>
       <content type="html"><![CDATA[<p>大模型上线并不意味着能力建设结束。真实用户的问题远比训练集复杂：业务规则持续变化，输入分布不断漂移，RAG、工具和 Prompt 也会频繁升级。模型在离线评测中表现良好，进入生产环境后仍可能出现幻觉、格式错误、工具误调用和安全误判。</p>
