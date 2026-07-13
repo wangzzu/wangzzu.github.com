@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-11T14:23:30.000Z</updated>
+  <updated>2026-07-13T16:57:28.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,459 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (二十五)：AI Coding，大模型如何改变软件开发</title>
+    <link href="http://matt33.com/2026/07/14/llm-ai-coding/"/>
+    <id>http://matt33.com/2026/07/14/llm-ai-coding/</id>
+    <published>2026-07-13T16:57:28.000Z</published>
+    <updated>2026-07-13T16:57:28.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>软件开发是大语言模型最早展现规模化价值的领域之一。代码不仅具有语言的表达能力，还具备严格语法、明确依赖和可执行反馈。模型生成的结果可以通过编译器、静态检查和自动化测试进行验证，使 AI 能够形成“生成、执行、观察、修正”的完整反馈闭环。</p>
+<p>AI Coding 的形态也由此不断演进：早期产品主要在编辑器中预测下一行代码；随后开始结合当前文件、仓库结构和开发者指令完成跨文件修改；如今，Coding Agent 已经能够调用文件系统、终端、Git 和测试工具，围绕一个工程目标持续探索、实现和验证，最终交付可审查的代码变更。</p>
+<a id="more"></a>
+<p>这场变化的核心并不只是让代码写得更快，而是重新定义人与软件工程系统的协作方式：开发者负责定义目标、约束与验收标准，Agent 负责理解仓库、执行修改和验证结果，最终由人类完成风险判断与交付决策。本文将从产品与模型演进、上下文与 Agent 技术内核、真实开发流程以及工程安全四个方面，理解 AI Coding 如何从代码补全工具走向软件工程 Agent。</p>
+<h2 id="从-Copilot-到-Coding-Agent：产品范式演进"><a href="#从-Copilot-到-Coding-Agent：产品范式演进" class="headerlink" title="从 Copilot 到 Coding Agent：产品范式演进"></a>从 Copilot 到 Coding Agent：产品范式演进</h2><p>AI Coding 的演进，本质上是模型参与软件开发的范围不断扩大：早期模型只预测光标后面的代码，随后开始理解文件和仓库上下文，如今则可以围绕一个工程目标持续检索、修改、执行和验证。</p>
+<h3 id="Phase1：预测下一段代码"><a href="#Phase1：预测下一段代码" class="headerlink" title="Phase1：预测下一段代码"></a>Phase1：预测下一段代码</h3><p>代码补全是最早成熟的 AI Coding 形态。模型根据光标之前的代码、当前文件和少量相邻上下文，预测开发者接下来可能输入的内容：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(next tokens | prefix, current file, nearby context)</span><br></pre></td></tr></table></figure>
+<p>2021 年，GitHub 发布 <a href="https://github.blog/news-insights/product-news/introducing-github-copilot-ai-pair-programmer/" target="_blank" rel="external">Copilot 技术预览</a>，将这种能力带入主流 IDE：模型可以根据开发者正在编写的代码，建议整行代码或完整函数。</p>
+<p>传统从左到右生成只看光标之前的内容，而代码编辑经常需要同时理解后面的函数、类型和调用方。因此，代码模型还常使用 Fill-in-the-Middle，也就是根据前缀和后缀补全中间内容：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[Prefix] + [Suffix] -&gt; [Missing Code]</span><br></pre></td></tr></table></figure>
+<p>这种方式适合补全函数、生成样板代码、补充类型和错误处理，但模型通常缺少完整任务状态。它可能生成语法正确的代码，却不知道项目中已经存在相同实现，也无法判断修改是否违反仓库约束。</p>
+<p>这一阶段的交付单位主要是 Token、代码行或函数，模型被动响应开发者当前的光标位置。</p>
+<h3 id="Phase2：IDE-中的上下文协作"><a href="#Phase2：IDE-中的上下文协作" class="headerlink" title="Phase2：IDE 中的上下文协作"></a>Phase2：IDE 中的上下文协作</h3><p>随后，AI Coding 从单点补全扩展到代码问答、Inline Edit 和多文件修改。开发者不再只接受下一行建议，而是可以直接提出任务：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">解释这个模块的鉴权流程。</span><br><span class="line">给这个函数增加缓存。</span><br><span class="line">为这次修改补充单元测试。</span><br><span class="line">把旧接口迁移到新的客户端。</span><br></pre></td></tr></table></figure>
+<p>这类系统会结合当前文件、Open Tabs、代码库索引、符号定义、调用关系和 Git Diff，为模型构建与当前任务相关的上下文。</p>
+<ul>
+<li>Cursor 将 Tab、Inline Edit 和 Agent 集成到同一个 IDE 中：Tab 负责低延迟补全，Inline Edit 负责局部修改，Agent 则可以探索代码库、编辑多个文件并调用终端工具。</li>
+</ul>
+<p>这一阶段的核心变化不是把补全框变成聊天窗口，而是让模型获得仓库级上下文。交付单位也从一段代码扩展为文件或跨文件 Diff，但任务拆解、验证和最终交付仍主要由开发者控制。</p>
+<h3 id="Phase3：从协助写代码到执行工程任务"><a href="#Phase3：从协助写代码到执行工程任务" class="headerlink" title="Phase3：从协助写代码到执行工程任务"></a>Phase3：从协助写代码到执行工程任务</h3><p>Coding Agent 接收的是目标，而不是一段待补全代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">修复支付接口重复扣款问题，补充回归测试，运行相关测试，</span><br><span class="line">并把修改控制在最小范围内。</span><br></pre></td></tr></table></figure>
+<p>Agent 需要自己完成如下工作：</p>
+<p><img src="/images/llm/llm-ai-coding-01.png" alt="Coding Agent 围绕工程目标完成任务理解、仓库检索、代码修改、验证与交付"></p>
+<p>Claude Code 与 Codex 都已经覆盖代码读取、文件修改、测试运行、并行任务和受控工具调用。两者的差异不再是“终端工具”和“完整平台”：Claude Code 以终端原生和可组合工作流建立优势，并逐步扩展到 IDE、桌面与远程执行；Codex 则重点打通 CLI、IDE、Cloud 和桌面应用，并使用 Sandbox 与 Worktree 管理隔离任务。</p>
+<p>这一阶段的交付单位开始变成 Issue、Patch 和 Pull Request。开发者主要负责定义目标、约束和验收条件，Agent 则负责探索仓库、完成实现并提供验证证据。</p>
+<h3 id="产品与模型的共同演进"><a href="#产品与模型的共同演进" class="headerlink" title="产品与模型的共同演进"></a>产品与模型的共同演进</h3><p>产品体验的变化既来自模型能力提升，也来自上下文系统、工具调用、Sandbox 和交互方式的演进。下表中的模型是对应阶段的代表版本，不表示产品只支持该模型。</p>
+<blockquote>
+<p>注：以下信息截至 <strong>2026-07-12</strong>。模型更新速度较快，表中列出的是各阶段的代表版本，并不表示产品只支持该模型。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th><strong>时间</strong></th>
+<th><strong>代表产品</strong></th>
+<th><strong>代表模型</strong></th>
+<th><strong>产品核心亮点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2021.06</td>
+<td><a href="https://github.blog/news-insights/product-news/introducing-github-copilot-ai-pair-programmer/" target="_blank" rel="external">GitHub Copilot</a></td>
+<td>OpenAI Codex</td>
+<td>将行级、函数级代码生成嵌入 IDE 光标位置</td>
+</tr>
+<tr>
+<td>2024.06</td>
+<td><a href="https://cursor.com/changelog/page/15" target="_blank" rel="external">Cursor</a></td>
+<td>Claude 3.5 Sonnet、Cursor Tab</td>
+<td>AI-native IDE、代码库索引、Composer 多文件编辑和快速 Apply</td>
+</tr>
+<tr>
+<td>2025.02</td>
+<td><a href="https://www.anthropic.com/news/claude-3-7-sonnet" target="_blank" rel="external">Claude Code</a></td>
+<td>Claude 3.7 Sonnet</td>
+<td>终端原生，可读取仓库、修改文件、运行命令和根据测试结果持续修正</td>
+</tr>
+<tr>
+<td>2025.05</td>
+<td><a href="https://openai.com/index/introducing-codex/" target="_blank" rel="external">OpenAI Codex</a></td>
+<td>codex-1，基于 o3 优化的软件工程模型</td>
+<td>在独立云端 Sandbox 中完成 Bug 修复、功能开发和代码审查</td>
+</tr>
+<tr>
+<td>2025.09</td>
+<td>GitHub Copilot Coding Agent</td>
+<td>多模型</td>
+<td>接收 Issue，在独立环境中异步修改代码、创建 Pull Request 并请求人工审查</td>
+</tr>
+<tr>
+<td>2025.10</td>
+<td><a href="https://cursor.com/blog/2-0" target="_blank" rel="external">Cursor 2.0</a></td>
+<td>Composer</td>
+<td>自研低延迟编码模型、多 Agent 界面、代码搜索与终端工具协同</td>
+</tr>
+<tr>
+<td>2026.02</td>
+<td><a href="https://openai.com/index/introducing-the-codex-app/" target="_blank" rel="external">Codex App</a></td>
+<td>GPT-5.3-Codex、Codex-Spark</td>
+<td>打通 CLI、IDE、Cloud 和桌面端，使用 Worktree 隔离并行 Agent</td>
+</tr>
+<tr>
+<td>2026.05</td>
+<td><a href="https://cursor.com/blog/composer-2-5" target="_blank" rel="external">Cursor Composer 2.5</a></td>
+<td>Composer 2.5</td>
+<td>强化长任务能力，引入针对工具错误的局部反馈训练，并扩大合成任务规模</td>
+</tr>
+<tr>
+<td>2026.06</td>
+<td><a href="https://www.anthropic.com/news/claude-sonnet-5" target="_blank" rel="external">Claude Code</a></td>
+<td>Claude Sonnet 5</td>
+<td>更强的长程编码、工具调用、自主验证和复杂任务跟进能力</td>
+</tr>
+<tr>
+<td>2026.07</td>
+<td><a href="https://cursor.com/blog/grok-4-5" target="_blank" rel="external">Cursor</a></td>
+<td>Grok 4.5、Composer 2.5</td>
+<td>Grok 4.5 由 Cursor 与 SpaceXAI 联合训练，覆盖桌面、Web、iOS、CLI 和 SDK</td>
+</tr>
+<tr>
+<td>2026.07</td>
+<td><a href="https://openai.com/index/gpt-5-6/" target="_blank" rel="external">OpenAI Codex</a></td>
+<td>GPT-5.6 Sol、Terra、Luna</td>
+<td>提供不同能力与成本档位，支持程序化工具调用、并行子 Agent 和更长程的软件工程任务</td>
+</tr>
+</tbody>
+</table>
+<p>这些产品的变化背后，是 AI Coding 的交付粒度在不断扩大：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Token / 代码行</span><br><span class="line">-&gt; 函数与文件</span><br><span class="line">-&gt; 跨文件 Diff</span><br><span class="line">-&gt; Issue 与 Pull Request</span><br><span class="line">-&gt; 并行、长时间的工程任务</span><br></pre></td></tr></table></figure>
+<h3 id="竞争的分水岭：模型之外还有-Harness"><a href="#竞争的分水岭：模型之外还有-Harness" class="headerlink" title="竞争的分水岭：模型之外还有 Harness"></a>竞争的分水岭：模型之外还有 Harness</h3><p>产品时间线说明了“发生了什么”，但模型版本本身无法完全解释市场格局。真正决定 AI Coding 体验的，是模型、Context Engine、工具系统、执行环境和交互方式组成的 Agent Harness。</p>
+<ul>
+<li><strong>Cursor 为什么崛起？</strong>Cursor 更早将代码库索引、多文件编辑、Diff 审查和终端执行整合进高频 IDE 工作流，并快速接入当时表现最好的模型。它缩短了从提出需求到看到代码变更的反馈路径，也让 AI 从补全功能变成开发环境的核心交互方式。</li>
+<li><strong>Claude Code 为什么建立优势？</strong>Claude 模型在代码理解、长程推理和工具调用上的能力，与 Claude Code 的终端执行环境联合演进。模型不仅能够生成代码，还可以读取仓库、运行测试、分析错误并持续修正。其优势来自模型与 Harness 的协同，而不只是命令行入口。</li>
+<li><strong>Codex 为什么能够迅速形成竞争力？</strong>OpenAI 同时推进专用模型和工程平台，将 CLI、IDE、云端 Sandbox、桌面应用、代码审查、Worktree 和多 Agent 并行逐步打通。随着 GPT-5.6 进入 Codex，OpenAI 已经从模型能力、执行环境和多端产品三个层面进入全栈竞争。</li>
+<li><strong>Cursor 为什么开始自研模型？</strong>通用前沿模型能力很强，但延迟、价格和工具调用行为不一定适合高频编码。Composer 系列使用真实 Cursor Harness 中的代码搜索、文件编辑和终端轨迹进行训练，使模型能够直接适配产品中的任务分布。Grok 4.5 则进一步将训练范围扩展到软件工程之外的复杂知识工作。</li>
+</ul>
+<p><img src="/images/llm/llm-ai-coding-02.png" alt="AI Coding 的竞争从单一模型能力扩展到模型、Context Engine、工具系统与 Runtime 的协同"></p>
+<p>因此，AI Coding 产品之间并不是简单的前后替代关系，但更好的模型能力、更短的执行闭环和更稳定的工程体验，确实会持续改变开发者的使用习惯与产品市场份额。</p>
+<p>AI Coding 的竞争已经从“谁能生成更好的代码”，进入“谁能更稳定地理解任务、操作仓库、验证结果并完成交付”。接下来需要进一步拆解的，正是支撑这套能力的技术内核：Context Engine、Agent Loop、工具系统与验证机制。</p>
+<h2 id="AI-Coding-的技术内核：从上下文到执行闭环"><a href="#AI-Coding-的技术内核：从上下文到执行闭环" class="headerlink" title="AI Coding 的技术内核：从上下文到执行闭环"></a>AI Coding 的技术内核：从上下文到执行闭环</h2><p>AI Coding 的技术链路可以概括为两个连续问题：首先，系统如何从大型仓库中找到当前任务需要的代码和约束；其次，模型如何基于这些上下文调用工具、修改代码，并根据编译和测试结果继续修正。</p>
+<p>这两部分并不独立。Context Engine 为 Agent 每一轮决策提供代码事实，工具系统将决策转化为真实操作，验证系统再把执行结果变成下一轮上下文。三者共同构成 AI Coding 的技术内核。</p>
+<h3 id="Context-Engine：让-Agent-看懂仓库"><a href="#Context-Engine：让-Agent-看懂仓库" class="headerlink" title="Context Engine：让 Agent 看懂仓库"></a>Context Engine：让 Agent 看懂仓库</h3><p>真实代码库通常远大于模型的上下文窗口。Context Engine 的任务不是尽可能多地读取代码，而是围绕当前任务，组合能够支撑下一步决策的工程事实。</p>
+<table>
+<thead>
+<tr>
+<th>信息类型</th>
+<th>典型内容</th>
+<th>主要作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>当前工作区</td>
+<td>光标位置、Open Tabs、未提交 Diff、最近编辑</td>
+<td>判断开发者正在处理什么</td>
+</tr>
+<tr>
+<td>代码结构</td>
+<td>AST、符号表、Import、定义、引用和调用图</td>
+<td>理解类型、依赖和调用链</td>
+</tr>
+<tr>
+<td>检索索引</td>
+<td>关键词、路径、向量语义检索</td>
+<td>从大型仓库中找到候选代码</td>
+</tr>
+<tr>
+<td>项目知识</td>
+<td>Issue、设计文档、Git History、仓库规则和 CI 配置</td>
+<td>补充任务目标、历史原因和执行约束</td>
+</tr>
+<tr>
+<td>执行反馈</td>
+<td>编译错误、测试失败、Lint 和运行日志</td>
+<td>证明当前假设哪里不成立</td>
+</tr>
+</tbody>
+</table>
+<p>代码检索不能只依赖文档 RAG 常用的语义相似度。函数名、类名、错误码和文件路径等信息具有明确的词法特征，更适合通过关键词、符号表和定义引用关系进行精确检索；当查询与代码标识符缺少直接词法重合，或者需要跨越不同命名方式寻找功能相近的实现时，向量检索则更有价值。</p>
+<p>因此，生产级 Context Engine 通常采用混合检索：关键词检索负责精确命中，符号与调用图负责扩展结构关系，向量检索负责补充语义相关代码，再结合当前工作区、Git 历史和最近修改等信号完成融合排序。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">score(c, q) =</span><br><span class="line">    α × lexical_match</span><br><span class="line">  + β × semantic_similarity</span><br><span class="line">  + γ × structural_relation</span><br><span class="line">  + δ × workspace_relevance</span><br><span class="line">  + ε × recency</span><br><span class="line">  - ζ × noise_penalty</span><br></pre></td></tr></table></figure>
+<p>各项分数需要先归一化，再根据真实编码任务调整权重。检索的目标不是一次找全代码，而是构造一个精准、可继续扩展的候选集。</p>
+<h3 id="Context-构建：渐进检索与约束注入"><a href="#Context-构建：渐进检索与约束注入" class="headerlink" title="Context 构建：渐进检索与约束注入"></a>Context 构建：渐进检索与约束注入</h3><p><img src="/images/llm/llm-ai-coding-03.png" alt="代码上下文通过多路召回、融合排序、结构扩展与 Token 预算进入模型"></p>
+<p>Context Builder 不会简单拼接 Top-K 片段。它会对命中的函数向外扩展必要的类型、调用方和测试，去除重复信息，再按优先级分配 Token：当前任务、仓库规则、未提交 Diff 和最新错误通常高于普通背景代码。</p>
+<p>仓库规则不应是“请生成高质量代码”这类抽象提示，而应是可执行、有作用域的约束：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">修改 payment/ 后运行 ./gradlew payment:test。</span><br><span class="line">禁止直接修改 generated/ 目录。</span><br><span class="line">新增接口必须补充契约测试。</span><br><span class="line">单元测试不得访问真实外部服务。</span><br><span class="line">保持 Java 17 兼容。</span><br></pre></td></tr></table></figure>
+<p>整个构建过程需要平衡三个问题：代码片段太小会丢失调用关系，范围太大会引入噪声；磁盘文件、未提交 Diff 和检索索引必须对应同一工作区版本；上下文越长，Token 成本和关键信息被稀释的风险越高。</p>
+<p>因此，成熟的 Coding Agent 会先定位入口，再沿定义、引用和调用链逐步展开；每次编辑、编译或测试产生新证据后，重新构造 Query 并更新 Context。到这一步，Agent 才拥有执行任务所需的工程事实和约束。</p>
+<h3 id="Agent-Loop：从理解到执行"><a href="#Agent-Loop：从理解到执行" class="headerlink" title="Agent Loop：从理解到执行"></a>Agent Loop：从理解到执行</h3><p>Agent 的核心流程可以抽象为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Observe -&gt; Plan -&gt; Act -&gt; Verify -&gt; Update State</span><br></pre></td></tr></table></figure>
+<p><img src="/images/llm/llm-ai-coding-04.png" alt="Coding Agent 在观察、规划、执行、验证和状态更新之间形成持续反馈循环"></p>
+<p>每轮执行都可以表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">action_t = Model(state_t, available_tools)</span><br><span class="line">observation_t = Tool(action_t)</span><br><span class="line">state_(t+1) = Update(state_t, action_t, observation_t)</span><br></pre></td></tr></table></figure>
+<p>其中 <code>state</code> 不只是聊天记录，还包括当前计划、读取过的文件、工作区 Diff、执行过的命令、测试结果和剩余预算。</p>
+<h3 id="工具系统：让决策产生真实变更"><a href="#工具系统：让决策产生真实变更" class="headerlink" title="工具系统：让决策产生真实变更"></a>工具系统：让决策产生真实变更</h3><table>
+<thead>
+<tr>
+<th>工具</th>
+<th>主要能力</th>
+<th>典型风险</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read / Search</td>
+<td>阅读文件、搜索符号</td>
+<td>读取密钥和隐私文件</td>
+</tr>
+<tr>
+<td>Patch / Edit</td>
+<td>修改一个或多个文件</td>
+<td>修改范围失控</td>
+</tr>
+<tr>
+<td>Terminal</td>
+<td>编译、测试和运行脚本</td>
+<td>执行破坏性命令</td>
+</tr>
+<tr>
+<td>Git</td>
+<td>查看历史、Diff 和分支</td>
+<td>覆盖用户修改、错误推送</td>
+</tr>
+<tr>
+<td>Browser</td>
+<td>验证 UI 和查阅资料</td>
+<td>Prompt Injection、外部泄露</td>
+</tr>
+<tr>
+<td>MCP / API</td>
+<td>连接 Issue、文档和业务系统</td>
+<td>权限扩大、工具投毒</td>
+</tr>
+</tbody>
+</table>
+<p>文件修改通常优先采用 Patch，而不是重新生成完整文件。Patch 更容易控制修改范围、保留用户代码，也便于人类审查。</p>
+<p>终端工具则为模型提供了最重要的客观反馈。编译器和测试不会因为回答流畅就判定正确，它们会直接暴露类型、依赖、行为和环境问题。</p>
+<h3 id="验证系统：用可执行反馈约束生成"><a href="#验证系统：用可执行反馈约束生成" class="headerlink" title="验证系统：用可执行反馈约束生成"></a>验证系统：用可执行反馈约束生成</h3><p>Agent 完成修改后，应从便宜、快速的检查开始，再逐步进入更昂贵的验证：</p>
+<p><img src="/images/llm/llm-ai-coding-05.png" alt="代码验证从快速静态检查逐步扩展到编译、测试、安全扫描和人工审查"></p>
+<p>测试通过也不代表修改一定正确。Agent 可能只运行了错误的测试、修改测试去适配错误实现，或者忽略测试没有覆盖的边界。因此还需要检查：</p>
+<ol>
+<li>测试是否覆盖需求中的失败场景；</li>
+<li>是否修改了与任务无关的代码；</li>
+<li>是否删除或弱化了原有断言；</li>
+<li>是否引入新依赖或安全风险；</li>
+<li>Diff 是否与任务目标一致；</li>
+<li>用户未提交的修改是否被保留。</li>
+</ol>
+<h3 id="长任务的状态与上下文管理"><a href="#长任务的状态与上下文管理" class="headerlink" title="长任务的状态与上下文管理"></a>长任务的状态与上下文管理</h3><p>Coding Agent 的任务可能持续几十轮。不断把所有工具输出追加到上下文，会快速耗尽窗口并引入噪声。因此系统需要保留结构化状态，并对历史过程进行压缩：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">保留：任务目标、关键约束、当前计划、有效结论、未解决问题、最新 Diff</span><br><span class="line">压缩：已完成搜索、冗长日志、重复测试输出、无效尝试</span><br><span class="line">外部保存：完整命令、原始日志、工具结果和审计记录</span><br></pre></td></tr></table></figure>
+<p>上下文压缩不是简单摘要聊天，而是确保 Agent 在丢弃细节后仍然知道“为什么这样修改、当前还差什么、哪些路径已经失败”。</p>
+<h2 id="AI-Coding-如何进入软件开发流程"><a href="#AI-Coding-如何进入软件开发流程" class="headerlink" title="AI Coding 如何进入软件开发流程"></a>AI Coding 如何进入软件开发流程</h2><p>AI Coding 的价值并不局限于写业务代码，它正在进入需求理解、实现、测试、审查和维护等多个环节。</p>
+<h3 id="典型应用"><a href="#典型应用" class="headerlink" title="典型应用"></a>典型应用</h3><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>AI 可以完成什么</th>
+<th>仍需重点检查什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码补全</td>
+<td>样板代码、局部函数、API 使用</td>
+<td>逻辑和边界条件</td>
+</tr>
+<tr>
+<td>代码生成</td>
+<td>新模块、接口、脚本和配置</td>
+<td>架构一致性与维护成本</td>
+</tr>
+<tr>
+<td>仓库理解</td>
+<td>解释调用链、定位入口、总结模块</td>
+<td>检索是否遗漏关键路径</td>
+</tr>
+<tr>
+<td>自动测试</td>
+<td>生成单测、边界样例、回归测试</td>
+<td>测试是否真正验证需求</td>
+</tr>
+<tr>
+<td>Bug 修复</td>
+<td>复现问题、定位原因、生成 Patch</td>
+<td>根因是否正确、是否引入回归</td>
+</tr>
+<tr>
+<td>代码审查</td>
+<td>检查 Diff、风险和缺失测试</td>
+<td>误报、漏报和业务语义</td>
+</tr>
+<tr>
+<td>重构迁移</td>
+<td>API 升级、依赖替换、批量修改</td>
+<td>跨模块兼容性与灰度风险</td>
+</tr>
+<tr>
+<td>文档维护</td>
+<td>README、变更说明、接口文档</td>
+<td>文档与实现是否一致</td>
+</tr>
+</tbody>
+</table>
+<h3 id="实践：从-Issue-到经过测试的-Patch"><a href="#实践：从-Issue-到经过测试的-Patch" class="headerlink" title="实践：从 Issue 到经过测试的 Patch"></a>实践：从 Issue 到经过测试的 Patch</h3><p>假设 Issue 描述为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">支付请求在上游超时后会自动重试，部分订单发生重复扣款。</span><br><span class="line">请定位原因，增加幂等保护，并补充回归测试。</span><br></pre></td></tr></table></figure>
+<p>可靠的 Coding Agent 不应立即开始修改代码，而要先明确验收条件：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">相同 payment_intent_id 只能对应一笔支付；</span><br><span class="line">并发请求不能产生多次有效扣款；</span><br><span class="line">网关超时后不能直接重新扣款；</span><br><span class="line">系统能够查询网关并恢复本地支付状态。</span><br></pre></td></tr></table></figure>
+<p>随后，Agent 按照工程流程逐步执行。</p>
+<h4 id="Step-1：建立代码地图"><a href="#Step-1：建立代码地图" class="headerlink" title="Step 1：建立代码地图"></a>Step 1：建立代码地图</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">搜索 payment、charge、retry、idempotency</span><br><span class="line">-&gt; 定位 PaymentController 和 PaymentService</span><br><span class="line">-&gt; 找到 GatewayClient.charge</span><br><span class="line">-&gt; 检查支付表、状态字段和唯一索引</span><br><span class="line">-&gt; 阅读现有支付测试</span><br></pre></td></tr></table></figure>
+<p>Agent 最终发现，问题发生在支付网关与本地数据库之间：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">网关扣款成功</span><br><span class="line">-&gt; 本地保存结果前发生超时</span><br><span class="line">-&gt; 系统无法确认扣款状态</span><br><span class="line">-&gt; 上游重试并再次调用网关</span><br></pre></td></tr></table></figure>
+<h4 id="Step-2：构造失败测试"><a href="#Step-2：构造失败测试" class="headerlink" title="Step 2：构造失败测试"></a>Step 2：构造失败测试</h4><p>测试需要覆盖三个关键场景：</p>
+<ol>
+<li>相同请求连续提交两次，只产生一次有效扣款；</li>
+<li>多个并发请求使用相同 <code>payment_intent_id</code>，只创建一笔支付；</li>
+<li>网关扣款成功但客户端超时，重试时查询原交易，不再次扣款。</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">retryShouldNotChargeTwice</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    paymentService.pay(orderId, <span class="string">"intent-1024"</span>);</span><br><span class="line">    paymentService.pay(orderId, <span class="string">"intent-1024"</span>);</span><br><span class="line"></span><br><span class="line">    assertThat(fakeGateway.effectiveChargeCount()).isEqualTo(<span class="number">1</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>先让测试失败，可以证明问题被正确复现，也为后续修改提供明确的验证标准。</p>
+<h4 id="Step-3：实现幂等保护"><a href="#Step-3：实现幂等保护" class="headerlink" title="Step 3：实现幂等保护"></a>Step 3：实现幂等保护</h4><p>仅增加数据库唯一索引，只能避免重复记录，无法单独保证网关不重复扣款。因此，修复方案包含三层保护：</p>
+<ol>
+<li><strong>本地唯一约束</strong>：<code>payment_intent_id</code> 只能创建一条支付记录；</li>
+<li><strong>网关幂等键</strong>：调用网关时传递相同的 <code>payment_intent_id</code>；</li>
+<li><strong>支付状态机</strong>：使用 <code>PENDING、SUCCEEDED、FAILED、UNKNOWN</code> 记录支付状态。</li>
+</ol>
+<p>如果网关明确返回成功或失败，系统分别将本地状态更新为 <code>SUCCEEDED</code> 或 <code>FAILED</code>。如果请求超时，则标记为 <code>UNKNOWN</code>；如果服务在写入结果前崩溃，记录可能长期停留在 <code>PENDING</code>。</p>
+<p>因此，系统需要为 <code>PENDING</code> 设置执行租约或超时阈值。无论是 <code>UNKNOWN</code>，还是已经超时的 <code>PENDING</code>，后续请求都不能直接再次扣款，而应使用原幂等键查询网关，并由请求链路或后台对账任务恢复本地状态。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">首次请求</span><br><span class="line">-&gt; 创建 PENDING 记录</span><br><span class="line">-&gt; 携带幂等键调用网关</span><br><span class="line">-&gt; 明确成功或失败：更新为 SUCCEEDED / FAILED</span><br><span class="line">-&gt; 结果未知或进程中断：进入待确认状态</span><br><span class="line">-&gt; 按幂等键查询网关</span><br><span class="line">-&gt; 恢复本地状态</span><br></pre></td></tr></table></figure>
+<h4 id="Step-4：逐层验证"><a href="#Step-4：逐层验证" class="headerlink" title="Step 4：逐层验证"></a>Step 4：逐层验证</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">顺序重试测试</span><br><span class="line">-&gt; 并发请求测试</span><br><span class="line">-&gt; 网关超时恢复测试</span><br><span class="line">-&gt; 数据库迁移测试</span><br><span class="line">-&gt; 支付模块回归测试</span><br><span class="line">-&gt; 检查最终 Diff</span><br></pre></td></tr></table></figure>
+<p>如果测试失败，Agent 应根据日志重新检查实现，而不是删除断言或绕过失败分支。</p>
+<h4 id="Step-5：交付可审查结果"><a href="#Step-5：交付可审查结果" class="headerlink" title="Step 5：交付可审查结果"></a>Step 5：交付可审查结果</h4><p>最终输出可以总结为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">根因：</span><br><span class="line">本地支付记录与网关扣款之间缺少完整的幂等机制，</span><br><span class="line">超时和并发请求可能导致重复扣款。</span><br><span class="line"></span><br><span class="line">修改：</span><br><span class="line">增加 payment_intent_id 唯一约束、网关幂等键和支付状态机；</span><br><span class="line">遇到未知状态时先查询网关，不直接重新扣款。</span><br><span class="line"></span><br><span class="line">测试：</span><br><span class="line">新增顺序重试、并发请求和网关超时恢复测试，</span><br><span class="line">支付模块回归测试全部通过。</span><br><span class="line"></span><br><span class="line">风险：</span><br><span class="line">上线前需要检查存量重复数据，</span><br><span class="line">并确认支付网关支持幂等键和交易状态查询。</span><br></pre></td></tr></table></figure>
+<p><img src="/images/llm/llm-ai-coding-06.png" alt="Coding Agent 从 Issue 提取验收条件，构造测试、实现修复并交付可审查 Patch"></p>
+<p>这个案例说明，Coding Agent 的价值不只是生成代码，而是从 Issue 中提取验收条件、定位故障窗口、补充测试，并最终交付可以验证和审查的 Patch。</p>
+<h2 id="可靠性与工程化：AI-Coding-进入研发主流程"><a href="#可靠性与工程化：AI-Coding-进入研发主流程" class="headerlink" title="可靠性与工程化：AI Coding 进入研发主流程"></a>可靠性与工程化：AI Coding 进入研发主流程</h2><p>AI Coding 已经不再局限于代码补全。Coding Agent 正在进入需求分析、代码实现、测试、审查、CI 修复和故障排查等核心研发流程，交付对象也从“几行代码”扩展为一个经过验证的 Patch、Pull Request，甚至完整工程任务。</p>
+<p>当 Agent 可以读取私有代码、运行命令并连接外部系统后，关键问题不再是“代码生成得像不像”，而是整个任务是否正确完成、执行过程是否安全、结果是否具备可验证性。</p>
+<h3 id="从代码评测转向任务评测"><a href="#从代码评测转向任务评测" class="headerlink" title="从代码评测转向任务评测"></a>从代码评测转向任务评测</h3><p>HumanEval 主要评估独立函数生成，SWE-bench 则要求模型根据真实仓库中的 Issue 生成能够通过测试的 Patch。后者更接近 Coding Agent，但仍无法覆盖企业内部框架、复杂构建环境和业务约束。生产级 AI Coding 应围绕完整任务进行评测：</p>
+<table>
+<thead>
+<tr>
+<th><strong>评测维度</strong></th>
+<th><strong>核心问题</strong></th>
+<th><strong>关键指标</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>任务正确性</td>
+<td>是否真正满足验收条件</td>
+<td>任务成功率、功能测试通过率</td>
+</tr>
+<tr>
+<td>修改质量</td>
+<td>是否采用了合理且最小的实现</td>
+<td>Patch 正确率、无关修改率、回归率</td>
+</tr>
+<tr>
+<td>执行过程</td>
+<td>是否真的运行并验证了结果</td>
+<td>工具成功率、测试证据、轨迹完整性</td>
+</tr>
+<tr>
+<td>安全合规</td>
+<td>是否突破权限或引入风险</td>
+<td>越权率、敏感信息泄露、依赖风险</td>
+</tr>
+<tr>
+<td>工程效率</td>
+<td>是否减少了真实研发成本</td>
+<td>完成时间、人工干预次数、任务成本</td>
+</tr>
+</tbody>
+</table>
+<p>企业需要从历史 Bug、代码审查意见、迁移任务和真实 Issue 中构建内部 Eval，并在可复现的 Sandbox 中执行。最终评分不能只由另一个模型判断，还应结合编译器、测试、静态分析和安全扫描等确定性信号。</p>
+<h3 id="用工程边界控制-Agent"><a href="#用工程边界控制-Agent" class="headerlink" title="用工程边界控制 Agent"></a>用工程边界控制 Agent</h3><p>Coding Agent 的主要风险来自四个方面：</p>
+<ol>
+<li><strong>结果错误</strong>：代码能够编译，但误解了业务规则；</li>
+<li><strong>执行失控</strong>：修改范围过大，或者运行了高风险命令；</li>
+<li><strong>数据泄露</strong>：私有代码、密钥或配置被发送到外部；</li>
+<li><strong>供应链攻击</strong>：恶意 Issue、文档、依赖或工具结果劫持 Agent。</li>
+</ol>
+<p>这些风险不能只依赖模型自我约束，而要通过确定性的工程机制控制：</p>
+<p><img src="/images/llm/llm-ai-coding-07.png" alt="Sandbox、权限策略、人工审批、CI 门禁和审计共同约束 Coding Agent 的执行边界"></p>
+<p>其中，读取和搜索通常可以自动执行；构建与测试只有在文件系统隔离、网络受限且不注入生产密钥的 Sandbox 中才能自动运行。安装依赖、执行仓库脚本、访问外部网络、修改数据库和发布生产等操作，则需要额外授权或人工确认。完整的命令、文件变更、工具结果和审批记录都应进入审计日志。</p>
+<h3 id="从开发工具走向工程系统"><a href="#从开发工具走向工程系统" class="headerlink" title="从开发工具走向工程系统"></a>从开发工具走向工程系统</h3><p>AI Coding 参与核心研发流程已经不是未来假设。下一阶段的变化，是 Agent 从完成单个编码任务，进一步走向持续的软件工程协作：</p>
+<table>
+<thead>
+<tr>
+<th><strong>当前形态</strong></th>
+<th><strong>下一阶段</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>根据 Issue 生成 Patch</td>
+<td>持续跟踪需求、实现和反馈</td>
+</tr>
+<tr>
+<td>单 Agent 完成任务</td>
+<td>多 Agent 分工实现、测试与审查</td>
+</tr>
+<tr>
+<td>依赖当前仓库上下文</td>
+<td>理解组织规范、服务拓扑和历史决策</td>
+</tr>
+<tr>
+<td>人工发现问题后调用 Agent</td>
+<td>从监控、日志和告警中主动定位问题</td>
+</tr>
+<tr>
+<td>完成代码后结束任务</td>
+<td>持续处理升级、技术债和线上回归</td>
+</tr>
+<tr>
+<td>开发者逐步确认每个动作</td>
+<td>开发者定义目标、边界和交付门禁</td>
+</tr>
+</tbody>
+</table>
+<p>为了适应这种变化，代码仓库本身也需要变得更加“Agent 可操作”：构建环境可重复创建，测试能够快速运行，模块边界清晰，仓库规则可执行，CI 能够阻断错误 Patch，生产操作具备明确的权限和回滚机制。</p>
+<p>AI Coding 的长期价值不是替代开发者输入代码，而是把大量实现、搜索、测试和维护工作交给 Agent。开发者的核心职责将进一步集中到需求定义、架构设计、业务判断、风险控制和最终交付责任上。</p>
+<p>AI Coding 正在把大模型从“会写代码的补全工具”推进为“能够理解仓库、调用工具、运行测试并交付 Patch 的工程 Agent”；而开发者的核心价值，也将越来越集中在定义正确的问题、构建可靠的反馈环境，以及判断什么样的代码真正应该进入生产。</p>
+<hr>
+<p>参考资料：</p>
+<ul>
+<li><a href="https://github.blog/news-insights/product-news/introducing-github-copilot-ai-pair-programmer/" target="_blank" rel="external">Introducing GitHub Copilot</a></li>
+<li><a href="https://docs.github.com/en/copilot/how-tos/chat-with-copilot/chat-in-ide" target="_blank" rel="external">GitHub Copilot Agent Mode</a></li>
+<li><a href="https://github.blog/changelog/2025-07-30-copilot-coding-agent-keeps-pull-request-titles-and-bodies-up-to-date/" target="_blank" rel="external">GitHub Copilot Coding Agent</a></li>
+<li><a href="https://docs.cursor.com/en/get-started/quickstart" target="_blank" rel="external">Cursor Quickstart</a></li>
+<li><a href="https://docs.cursor.com/agent" target="_blank" rel="external">Cursor Agent</a></li>
+<li><a href="https://cursor.com/changelog/1-0" target="_blank" rel="external">Cursor 1.0: BugBot and Background Agent</a></li>
+<li><a href="https://cursor.com/blog/2-0" target="_blank" rel="external">Cursor 2.0 and Composer</a></li>
+<li><a href="https://cursor.com/blog/composer-2" target="_blank" rel="external">Composer 2</a></li>
+<li><a href="https://cursor.com/blog/composer-2-technical-report" target="_blank" rel="external">Composer 2 Technical Report</a></li>
+<li><a href="https://cursor.com/blog/cursor-3" target="_blank" rel="external">Cursor 3</a></li>
+<li><a href="https://www.anthropic.com/news/claude-3-7-sonnet" target="_blank" rel="external">Claude 3.7 Sonnet and Claude Code</a></li>
+<li><a href="https://www.anthropic.com/news/claude-4" target="_blank" rel="external">Introducing Claude 4</a></li>
+<li><a href="https://www.anthropic.com/news/claude-opus-4-6" target="_blank" rel="external">Introducing Claude Opus 4.6</a></li>
+<li><a href="https://www.anthropic.com/news/claude-sonnet-4-6" target="_blank" rel="external">Introducing Claude Sonnet 4.6</a></li>
+<li><a href="https://www.anthropic.com/engineering/claude-code-best-practices" target="_blank" rel="external">Claude Code: Best Practices for Agentic Coding</a></li>
+<li><a href="https://www.anthropic.com/engineering/claude-code-sandboxing" target="_blank" rel="external">Claude Code Sandboxing</a></li>
+<li><a href="https://openai.com/index/introducing-codex/" target="_blank" rel="external">Introducing Codex</a></li>
+<li><a href="https://openai.com/index/introducing-upgrades-to-codex/" target="_blank" rel="external">Introducing GPT-5-Codex</a></li>
+<li><a href="https://openai.com/index/introducing-gpt-5-3-codex/" target="_blank" rel="external">Introducing GPT-5.3-Codex</a></li>
+<li><a href="https://openai.com/index/introducing-gpt-5-4/" target="_blank" rel="external">Introducing GPT-5.4</a></li>
+<li><a href="https://openai.com/index/introducing-the-codex-app/" target="_blank" rel="external">Introducing the Codex App</a></li>
+<li><a href="https://openai.com/index/unrolling-the-codex-agent-loop/" target="_blank" rel="external">Unrolling the Codex Agent Loop</a></li>
+<li><a href="https://arxiv.org/abs/2107.03374" target="_blank" rel="external">Evaluating Large Language Models Trained on Code</a></li>
+<li><a href="https://arxiv.org/abs/2310.06770" target="_blank" rel="external">SWE-bench: Can Language Models Resolve Real-World GitHub Issues?</a></li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;软件开发是大语言模型最早展现规模化价值的领域之一。代码不仅具有语言的表达能力，还具备严格语法、明确依赖和可执行反馈。模型生成的结果可以通过编译器、静态检查和自动化测试进行验证，使 AI 能够形成“生成、执行、观察、修正”的完整反馈闭环。&lt;/p&gt;
+&lt;p&gt;AI Coding 的形态也由此不断演进：早期产品主要在编辑器中预测下一行代码；随后开始结合当前文件、仓库结构和开发者指令完成跨文件修改；如今，Coding Agent 已经能够调用文件系统、终端、Git 和测试工具，围绕一个工程目标持续探索、实现和验证，最终交付可审查的代码变更。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (二十四)：个性化与记忆，大模型如何理解每一个用户</title>
@@ -8096,434 +8549,6 @@
     
       &lt;p&gt;如果说 Transformer 解决的是“大模型如何理解序列”，Dense 与 MoE 解决的是“大模型如何扩展架构”，多模态解决的是“大模型如何接入更多世界信号”，那么预训练要回答的，就是一个更底层的问题：&lt;strong&gt;大模型的通用能力从哪里来？&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;前几篇我们已经铺垫了大模型的发展脉络、数学基础、算法原理、Transformer 架构和 Dense/MoE 架构。到这里，讨论进入 LLM 训练体系中最关键、最昂贵，也最决定能力上限的一环：&lt;strong&gt;预训练&lt;/strong&gt;。它不是附属步骤，而是基座模型形成语言、知识、代码、推理和迁移能力的主要来源。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (五)：Dense 与 MoE，大模型如何从全量计算走向稀疏激活</title>
-    <link href="http://matt33.com/2026/06/24/llm-dense-moe/"/>
-    <id>http://matt33.com/2026/06/24/llm-dense-moe/</id>
-    <published>2026-06-24T12:10:00.000Z</published>
-    <updated>2026-06-24T12:10:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>过去几年，LLM 能力的提升很大程度上来自 <strong>Scaling Law</strong>：当模型参数量、训练数据规模和计算量持续扩大时，模型的 loss 往往会呈现较稳定的下降趋势，模型能力也会随之提升。简单来说，规模化训练证明了一件事：<strong>更大的模型、更大的数据、更大的算力，通常可以带来更强的模型能力。</strong></p>
-<p>但 Scaling Law 也带来了一个现实问题：如果能力提升依赖规模扩展，那么训练成本、推理成本、显存占用和部署复杂度也会同步上升。模型越大，每个 token 需要经过的参数越多；上下文越长，Attention 和 KV Cache 的压力越大；多模态输入又会引入更多 token 和更复杂的计算路径。</p>
-<a id="more"></a>
-<p>因此，在 Transformer 成为现代 LLM 的基础架构之后，新的问题开始出现：<strong>能不能让模型拥有更大的参数容量，但每次推理时只激活其中一部分计算？</strong></p>
-<p>围绕这个问题，大模型架构逐渐形成了两条重要路线：一条是经典的 <strong>Dense Transformer</strong>，每个 token 都经过完整模型参数；另一条是越来越重要的 <strong>MoE（Mixture of Experts，混合专家）</strong>，模型拥有更大的总参数量，但每个 token 只路由到少数专家模块中计算。</p>
-<p><img src="/images/llm/llm-dense-moe-01.png" alt="Dense Transformer 与 MoE 架构热度趋势（图片来自 GPT 5.5）"></p>
-<p>这一篇，我们重点看清楚：Dense Transformer 和 MoE 到底差在哪里，MoE 解决了什么问题，以及为什么它正在成为很多头部基模的重要架构选择。</p>
-<h2 id="Scaling-Law-带来的挑战"><a href="#Scaling-Law-带来的挑战" class="headerlink" title="Scaling Law 带来的挑战"></a>Scaling Law 带来的挑战</h2><p>Scaling Law 给大模型发展指明了一条非常清晰的路径：继续扩大模型、数据和计算，通常可以换来更强的能力。但当这条路径进入工程落地阶段，问题就不再只是“模型能不能继续变大”，而是：<strong>模型变大之后，每一次训练和推理到底要付出多少计算成本？</strong></p>
-<p>对于传统 Transformer 路线来说，这个问题尤其关键：模型容量扩大时，单 token 的计算成本通常也会同步上升。换句话说，Scaling Law 推动模型继续变大，但 Dense 架构会把“更大容量”和“更高计算成本”绑定在一起。</p>
-<h3 id="参数扩展如何放大计算成本"><a href="#参数扩展如何放大计算成本" class="headerlink" title="参数扩展如何放大计算成本"></a>参数扩展如何放大计算成本</h3><p>在 LLM 中，我们常说的“参数”，主要指模型训练过程中学出来的权重，而不是人工配置项。以 Transformer 为例，参数主要分布在几个位置：</p>
-<table>
-<thead>
-<tr>
-<th><strong>参数位置</strong></th>
-<th><strong>主要内容</strong></th>
-<th><strong>作用</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Embedding</td>
-<td>token embedding</td>
-<td>把 token 转成向量表示</td>
-</tr>
-<tr>
-<td>Attention</td>
-<td>Q/K/V/O 投影矩阵</td>
-<td>建模 token 之间的上下文关系</td>
-</tr>
-<tr>
-<td>FFN</td>
-<td>Up / Gate / Down 等线性变换矩阵</td>
-<td>对每个 token 的表示做非线性特征变换</td>
-</tr>
-<tr>
-<td>LayerNorm/RMSNorm</td>
-<td>归一化缩放参数，用于稳定训练</td>
-<td>稳定训练过程中的数值分布</td>
-</tr>
-<tr>
-<td>Output Head</td>
-<td>输出词表投影矩阵</td>
-<td>把 hidden state 转成下一个 token 的概率分布</td>
-</tr>
-</tbody>
-</table>
-<p>一般来说模型变大，通常不是简单地“多存了一些数字”，而是意味着模型结构里的几个关键维度一起变大：</p>
-<table>
-<thead>
-<tr>
-<th><strong>扩展方式</strong></th>
-<th><strong>对计算量的影响</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>层数更多</td>
-<td>每个 token 要经过更多 Transformer Block</td>
-</tr>
-<tr>
-<td>FFN 中间维度更大</td>
-<td>FFN 参数量和计算量显著增加</td>
-</tr>
-<tr>
-<td>Attention head / hidden size 配套扩大</td>
-<td>投影矩阵和注意力计算都会增加</td>
-</tr>
-<tr>
-<td>上下文更长</td>
-<td>Attention 和 KV Cache 压力上升</td>
-</tr>
-</tbody>
-</table>
-<p>尤其是 hidden size 的扩大，会显著放大计算量。因为 Transformer 里的核心计算大多是矩阵乘法，矩阵规模变大时，计算量不是线性增加，而是接近按平方级增长。</p>
-<p>以 FFN 为例， hidden size 是 <code>d</code>，FFN 中间维度是 <code>4d</code>，其计算量如下所示：</p>
-<p><img src="/images/llm/llm-dense-moe-02.png" alt="FNN 计算量"></p>
-<p>这意味着，当 <code>d</code> 变成原来的 2 倍时，FFN 的参数量和矩阵计算量大约会变成原来的 4 倍。</p>
-<blockquote>
-<p>前馈网络（Feed-Forward Network, FFN）是在 Attention 完成上下文信息聚合之后，对每个 token 的 hidden state 进行进一步特征变换的模块。经典的 FFN 通常由两层线性变换和一个非线性激活函数组成：先把 hidden size 扩展到更高维度，再投影回原来的维度。由于这个“升维再降维”的过程会引入大规模矩阵计算，FFN 往往占据 Transformer Block 中很大一部分参数和计算量。在 Dense Transformer 中，每一层只有一个共享 FFN，所有 token 无论语义和任务类型如何，都会经过同一组 FFN 参数。</p>
-</blockquote>
-<h3 id="MoE-优化了哪里？"><a href="#MoE-优化了哪里？" class="headerlink" title="MoE 优化了哪里？"></a>MoE 优化了哪里？</h3><p>在 Transformer Block 中，Attention 和 FFN 都会消耗计算，但二者的角色不同。Attention 负责让 token 之间交换信息，而 FFN 更像是对每个 token 的表示做进一步加工。更重要的是，FFN 通常占据了大量参数和计算量，并且它是 <strong>逐 token 独立计算</strong> 的：一个 token 经过 FFN 时，不需要和其他 token 交互。</p>
-<p>这就给架构优化留下了空间：<strong>如果 FFN 主要是对每个 token 独立做特征变换，那么能不能不要让所有 token 都经过同一个巨大的 FFN，而是为不同 token 选择不同的 FFN 子网络？</strong> 这就是 MoE 的核心思路。</p>
-<p><img src="/images/llm/llm-dense-moe-03.png" alt="Dense Transformer  VS MOE"></p>
-<p>MoE 不是把 Transformer 推翻，而是把原来的 Dense FFN 拆成多个 expert。这样的话，模型可以拥有很多 expert，也就是更大的 <strong>Total Parameters</strong>；但每个 token 只激活少数 expert，也就是更小的 <strong>Active Parameters</strong>。</p>
-<table>
-<thead>
-<tr>
-<th><strong>架构</strong></th>
-<th><strong>参数关系</strong></th>
-<th><strong>含义</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Dense</td>
-<td>Total Parameters ≈ Active Parameters</td>
-<td>与模型参数强绑定（主要指 Transformer Block 主体计算路径）</td>
-</tr>
-<tr>
-<td>MoE</td>
-<td>Total Parameters &gt;&gt; Active Parameters</td>
-<td>模型容量很大，但每次只用一部分</td>
-</tr>
-</tbody>
-</table>
-<p>Scaling Law 继续推动模型变大，但 Dense 架构让成本同步上涨。MoE 则是在 Scaling Law 压力下，对“容量”和“计算成本”进行解耦的一种架构尝试。</p>
-<h2 id="Dense-Transformer：经典路线"><a href="#Dense-Transformer：经典路线" class="headerlink" title="Dense Transformer：经典路线"></a>Dense Transformer：经典路线</h2><p>Dense Transformer 是现代 LLM 最经典的架构路线。它延续了《Attention Is All You Need》提出的 Transformer 思想：用一个完整、连续的神经网络来处理每个 token，让所有参数共同参与表示学习和上下文建模。</p>
-<h3 id="稠密计算：每个-token-激活全部参数"><a href="#稠密计算：每个-token-激活全部参数" class="headerlink" title="稠密计算：每个 token 激活全部参数"></a>稠密计算：每个 token 激活全部参数</h3><p>Dense Transformer 中的 <strong>Dense</strong>，指的是一种“稠密计算”方式：每个 token 在经过模型时，都会依次通过所有 Transformer Block，并使用每一层里的完整参数。</p>
-<p>在这个范式中，Attention 负责让 token 与上下文交互，FFN 负责对每个 token 的 hidden state 做进一步非线性变换。对于 Dense Transformer 来说，无论输入的是哪个 token，它都会经过同样的 Attention、同样的 FFN、同样的层数。如下图所示：</p>
-<p><img src="/images/llm/llm-dense-moe-04.png" alt="Dense Transformer 流程"></p>
-<p>因此 Dense 模型里的一个重要特点是：<strong><code>Total Parameters ≈ Active Parameters</code></strong>（主要指 Transformer Block 主体计算路径）</p>
-<table>
-<thead>
-<tr>
-<th><strong>概念</strong></th>
-<th><strong>含义</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Total Parameters</td>
-<td>模型拥有的总参数量</td>
-</tr>
-<tr>
-<td>Active Parameters</td>
-<td>每个 token 实际参与计算的参数量</td>
-</tr>
-</tbody>
-</table>
-<p>在 Dense Transformer 中，模型有多少主体参数，每次前向计算基本就要使用多少主体参数。这种方式非常直接，也非常稳定：所有参数共同参与学习，模型内部没有路由选择，也没有专家分配，训练和推理路径都比较固定。</p>
-<p>这也是 Dense Transformer 长期成为主流架构的原因：结构清晰、训练稳定、工程实现成熟。</p>
-<h3 id="规模化困境：能力变强，成本同步上升"><a href="#规模化困境：能力变强，成本同步上升" class="headerlink" title="规模化困境：能力变强，成本同步上升"></a>规模化困境：能力变强，成本同步上升</h3><p>Dense Transformer 的核心问题是：<strong>模型容量和计算成本强绑定</strong>。模型越大，能力通常越强，但训练、推理和部署成本也会同步上升，主要体现在几个方面：</p>
-<ol>
-<li><strong>训练 FLOPs 增加</strong>：参数量越大，前向传播和反向传播的矩阵计算越重，完整训练一次模型需要更多 GPU 时间；</li>
-<li><strong>显存占用增加</strong>：模型参数、梯度、优化器状态都需要占用显存，使用 Adam 这类优化器时，显存压力会进一步放大；</li>
-<li><strong>分布式训练更复杂</strong>：超大模型通常需要数据并行、张量并行、流水线并行等组合，GPU 间通信成本和调度复杂度上升；</li>
-<li><strong>推理成本和延迟变高</strong>： LLM 是一个 token 一个 token 生成的。即使有 KV Cache 减少重复计算，每生成一个新 token，模型仍然要经过所有层的 Attention 和 FFN，因此模型越大，在线服务的成本和延迟压力越明显；</li>
-<li>服务成本上升：在线服务需要同时处理大量请求，大模型会带来更高 GPU 资源消耗和更低吞吐；</li>
-<li>长上下文压力更明显：上下文越长，KV Cache 占用越大，显存和带宽压力越高；</li>
-<li>多模态进一步放大成本：图像、音频、视频会引入更多 token 或特征表示，使计算路径更复杂。</li>
-</ol>
-<p>可以用一句话总结：Dense Transformer 的问题不是不能继续变大，而是<strong>每一次变大都会让训练和推理成本一起变大</strong>。</p>
-<h3 id="典型-Dense-模型"><a href="#典型-Dense-模型" class="headerlink" title="典型 Dense 模型"></a>典型 Dense 模型</h3><p>Dense Transformer 的代表模型非常多。早期最有影响力的路线，是 OpenAI 的 GPT 系列，尤其是 GPT-3。</p>
-<ul>
-<li><strong>OpenAI GPT-3</strong>：GPT-3 是 Dense Transformer 规模化路线中最具代表性的早期模型之一，采用 Decoder-only Transformer 架构，参数规模达到 175B。它的重要意义不只是“模型很大”，而是验证了大规模预训练带来的 few-shot learning 能力：模型不需要针对每个任务单独微调，只通过 prompt 中的少量示例，就能完成翻译、问答、文本生成等任务。GPT-3 让行业真正看到：Dense Transformer 在规模化之后，可以从“专用 NLP 模型”走向“通用语言模型”。</li>
-<li><strong>Meta Llama 2</strong>：Llama 2 是 Meta 推出的开放权重 Dense 模型家族，参数规模覆盖 7B、13B、70B。它遵循标准的自回归 Dense Transformer 架构，同时使用 RoPE、SwiGLU、RMSNorm 等现代 LLM 常见设计。Llama 2 对行业的影响在于，它把高质量基模能力带入开放生态，让开发者可以基于开放权重进行本地部署、指令微调、领域适配和二次训练，极大推动了开源 LLM 生态的发展。</li>
-<li><strong>Qwen Dense 系列</strong>：Qwen 系列中包含多种 Dense 基模，覆盖不同参数规模，并在中文、代码、数学、工具调用和多语言任务上持续增强。它的意义在于推动了中文和多语言 LLM 生态的发展，也让 Dense 基模在企业落地中有了更多选择：既可以选择较小模型做本地部署，也可以选择较大模型做复杂任务和行业应用。</li>
-</ul>
-<p>Dense Transformer 是大模型规模化的经典起点，也是今天很多高质量基模仍然依赖的稳定底座。MoE 的出现，并不是否定 Dense，而是在更大规模和更高成本压力下，对 Dense 路线的一种架构扩展。</p>
-<h2 id="MoE：稀疏激活路线"><a href="#MoE：稀疏激活路线" class="headerlink" title="MoE：稀疏激活路线"></a>MoE：稀疏激活路线</h2><p>如果说 Dense Transformer 的特点是“所有 token 都走同一条完整计算路径”，那么 MoE 的核心思路就是“让不同 token 走不同的专家路径”。MoE 在 Transformer Block 内部引入稀疏激活机制：模型可以拥有更多参数，但每个 token 只调用其中一部分。</p>
-<h3 id="核心架构：把一个-FFN-变成多个专家"><a href="#核心架构：把一个-FFN-变成多个专家" class="headerlink" title="核心架构：把一个 FFN 变成多个专家"></a>核心架构：把一个 FFN 变成多个专家</h3><p>MoE，全称是 <strong>Mixture of Experts</strong>，直译是“专家混合模型”。在 LLM 中，MoE 通常不是替换整个 Transformer，而是主要改造 Transformer Block 里的 <strong>FFN / MLP 层</strong>。Dense Transformer 中，每一层通常只有一个共享 FFN，所有 token 都经过同一组 FFN 参数。而 MoE 的做法是：把这个 FFN 替换成多个独立的 FFN 子网络，每个子网络就是一个 <strong>expert</strong>。如下图所示：</p>
-<p><img src="/images/llm/llm-dense-moe-05.png" alt="MoE 架构图"></p>
-<p>MoE 的核心架构设计可以概括为 5 点：</p>
-<ol>
-<li><strong>Expert 化</strong>： 把原来的单个 FFN 拆成多个独立 FFN，每个 FFN 是一个 expert；</li>
-<li><strong>Router 路由</strong>：为每个 token 计算 expert 分数，决定它应该交给哪些 expert；</li>
-<li><strong>Top-k 激活</strong>：每个 token 只选择分数最高的 k 个 expert，而不是使用全部 expert；</li>
-<li><strong>Gate 加权</strong>：被选中的 expert 输出会按 router 权重加权合并；</li>
-<li><strong>负载均衡</strong>：通过 aux loss、capacity factor 等机制，避免 token 都挤到少数 expert。</li>
-</ol>
-<h3 id="MoE-如何降低单-token-计算成本"><a href="#MoE-如何降低单-token-计算成本" class="headerlink" title="MoE 如何降低单 token 计算成本"></a>MoE 如何降低单 token 计算成本</h3><p>MoE 解决的核心问题是：<strong>解耦模型总容量和单 token 计算成本</strong>。</p>
-<ul>
-<li>在 Dense Transformer 中：<strong><code>Total Parameters ≈ Active Parameters</code></strong>（主要指 Transformer Block 主体计算路径）；</li>
-<li>在 MoE 中：<strong><code>Total Parameters &gt;&gt; Active Parameters</code></strong>。</li>
-</ul>
-<p>模型可以拥有大量 expert，形成很大的总参数量；但每个 token 只经过少数 expert，因此实际参与计算的参数量远小于总参数量。</p>
-<p>举个例子：以 400B 参数模型为例，在主体计算路径上，一个 400B Dense 模型的单 token 计算会接近总参数规模；而 400B MoE 模型通常只激活少量 expert 参数，再加上共享 Attention、共享层等模块。</p>
-<p>这样模型拥有更大的容量，但推理时的计算量接近一个小得多的 active model。所以 MoE 的低成本来自三个方面：</p>
-<ol>
-<li><strong>稀疏激活</strong>： 每个 token 只计算少数 expert，避免全量参数参与计算；</li>
-<li><strong>扩大容量</strong>：通过增加 expert 扩大总参数量，而不让单 token 计算同步增长；</li>
-<li><strong>专家分工</strong>：不同 expert 有机会学习不同模式，提高参数利用效率。</li>
-</ol>
-<p>但 MoE 的代价也很明显：</p>
-<ol>
-<li>显存仍然高：总参数仍然需要存储；</li>
-<li>通信更复杂：token 需要被路由到不同 expert，分布式场景会产生 all-to-all 通信；</li>
-<li>训练更难稳定：需要处理 expert collapse、负载不均、路由抖动等问题；</li>
-<li>部署更复杂：推理延迟可能受路由分布和 expert 热点影响。</li>
-</ol>
-<p>因此，MoE 的本质不是“免费变大”，而是：用更复杂的路由和系统调度，换取更高的模型容量与更好的性能成本比。</p>
-<h3 id="典型-MoE-模型"><a href="#典型-MoE-模型" class="headerlink" title="典型 MoE 模型"></a>典型 MoE 模型</h3><ul>
-<li><strong>Mixtral 8x7B</strong>：Mixtral 是 Mistral AI 推出的典型 Sparse MoE 模型。它在每一层设置 8 个 FFN experts，每个 token 选择其中 2 个 expert 参与计算。它的重要意义在于，把 MoE 从研究路线推进到高性能开放模型生态中，让业界直观看到：MoE 可以在较低 active parameters 下，获得接近甚至超过更大 Dense 模型的效果。</li>
-<li><strong>DeepSeek-V3</strong>：DeepSeek-V3 是近年来 MoE 路线中非常有代表性的模型之一，总参数达到 671B，但每个 token 只激活约 37B 参数。它采用 DeepSeekMoE 架构，并结合 MLA、负载均衡优化、多 token prediction 等设计。它对行业的影响在于证明：MoE 不只是“参数更多”，还可以通过系统级训练和推理优化，把大规模模型的性能成本比做到非常激进。</li>
-<li><strong>Qwen3 MoE</strong>：Qwen3 同时发布 Dense 与 MoE 模型，其中 MoE 模型包括 Qwen3-30B-A3B 和 Qwen3-235B-A22B。这里的 <code>A3B</code>、<code>A22B</code> 指 activated parameters，也就是每个 token 实际激活的参数量。Qwen3 的意义在于，它把 Dense 和 MoE 放在同一代模型体系中，让开发者可以根据成本、延迟和能力需求选择不同架构路线。</li>
-<li><strong>Llama 4</strong>：Llama 4 是 Meta Llama 系列首次明确转向 MoE 的重要节点。比如 Llama 4 Scout 是 17B active parameters、16 experts；Llama 4 Maverick 是 17B active parameters、128 experts、400B total parameters。它的行业意义在于，Meta 这样的头部开源生态也开始把 MoE 作为下一代基模的重要架构选择，尤其结合多模态和长上下文能力。</li>
-<li><strong>Gemini 1.5</strong>：Google 在 Gemini 1.5 中明确提到使用 MoE 架构，以提升训练和服务效率，并支持更长上下文能力。它说明 MoE 不只用于开源模型，也已经成为闭源头部模型在长上下文、多模态和高效推理方向上的重要架构选择。</li>
-</ul>
-<h2 id="MoE-的挑战：稀疏激活背后的训练与系统复杂度"><a href="#MoE-的挑战：稀疏激活背后的训练与系统复杂度" class="headerlink" title="MoE 的挑战：稀疏激活背后的训练与系统复杂度"></a>MoE 的挑战：稀疏激活背后的训练与系统复杂度</h2><p>MoE 的核心价值，是用稀疏激活降低单 token 的计算成本。但它并不是“免费变大”。相比 Dense Transformer，MoE 把问题从单纯的矩阵计算，转移到了 <strong>路由稳定性、专家负载、显存管理、跨卡通信和推理调度</strong> 上。</p>
-<h3 id="路由机制：token-应该交给哪个-expert？"><a href="#路由机制：token-应该交给哪个-expert？" class="headerlink" title="路由机制：token 应该交给哪个 expert？"></a>路由机制：token 应该交给哪个 expert？</h3><p>MoE 的关键是 Router。它会根据 token 的 hidden state 计算 expert 分数，并选择 Top-k 个 expert：<code>selected_experts = TopK(router(x))</code>。</p>
-<p>这带来的问题是：路由选择是动态的，不同 token 会走不同 expert。训练早期 Router 还不稳定，可能导致 token 分配剧烈波动，进而影响模型收敛。</p>
-<table>
-<thead>
-<tr>
-<th><strong>挑战</strong></th>
-<th><strong>说明</strong></th>
-<th><strong>常见方案</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>路由不稳定</td>
-<td>token 在不同 expert 之间频繁跳动</td>
-<td>router 正则、noisy routing</td>
-</tr>
-<tr>
-<td>专家选择过早固化</td>
-<td>Router 很早偏向少数 expert</td>
-<td>加噪声、温度控制、负载均衡约束</td>
-</tr>
-<tr>
-<td>梯度稀疏</td>
-<td>只有被选中的 expert 得到更新</td>
-<td>top-2 routing、shared expert</td>
-</tr>
-</tbody>
-</table>
-<h3 id="训练稳定性：专家塌缩与负载不均"><a href="#训练稳定性：专家塌缩与负载不均" class="headerlink" title="训练稳定性：专家塌缩与负载不均"></a>训练稳定性：专家塌缩与负载不均</h3><p>MoE 最典型的问题是 <strong>expert collapse</strong>：大量 token 被路由到少数 expert，其他 expert 几乎没有训练机会。这会造成两个后果：一是热门 expert 过载，训练效率下降；二是冷门 expert 学不到东西，模型容量被浪费。</p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>影响</strong></th>
-<th><strong>常见方案</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Expert Collapse</td>
-<td>少数 expert 被过度使用</td>
-<td>auxiliary load balancing loss</td>
-</tr>
-<tr>
-<td>负载不均</td>
-<td>GPU 利用率不均，训练吞吐下降</td>
-<td>capacity factor、expert bias</td>
-</tr>
-<tr>
-<td>Token Dropping</td>
-<td>expert 超载时部分 token 被丢弃</td>
-<td>dropless MoE、block-sparse kernel</td>
-</tr>
-<tr>
-<td>主任务受干扰</td>
-<td>负载均衡 loss 可能影响语言建模目标</td>
-<td>auxiliary-loss-free balancing</td>
-</tr>
-</tbody>
-</table>
-<p>MoE 为了解决专家负载不均，早期常见做法是在主训练目标之外加入 <strong>auxiliary load balancing loss</strong>，用一个额外的损失项鼓励 token 更均匀地分配到不同 expert。这样可以缓解 expert collapse，但也会带来一个副作用：辅助损失可能和语言建模主目标产生拉扯，影响模型最终效果。</p>
-<p>因此，后来一些 MoE 模型开始探索更弱侵入的负载均衡方法。例如 DeepSeek-V3 使用了 <strong>auxiliary-loss-free load balancing</strong>，不再简单依赖额外的辅助损失来约束路由，而是通过更细的路由调节机制，让 expert 使用保持均衡，同时尽量减少对主任务训练目标的干扰。</p>
-<h3 id="内存压力：Active-少，不代表-Total-小"><a href="#内存压力：Active-少，不代表-Total-小" class="headerlink" title="内存压力：Active 少，不代表 Total 小"></a>内存压力：Active 少，不代表 Total 小</h3><p>这是 MoE 很容易被误解的一点。MoE 的优势是：<code>每个 token 只激活少量 expert</code>。</p>
-<p>但它的问题是：<code>所有 expert 参数仍然需要存储</code>。</p>
-<p>也就是说，MoE 用稀疏激活降低了单 token 的计算 FLOPs，但它并没有消除大模型的存储成本。模型总参数、expert 权重、优化器状态、路由缓存和跨卡通信 buffer，都会带来额外的内存和系统复杂度。</p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>常见方案</strong></th>
-<th><strong>作用</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>总参数太大</td>
-<td>Expert Parallelism / Expert Sharding</td>
-<td>把不同 expert 分布到不同 GPU，避免单卡存完整模型</td>
-</tr>
-<tr>
-<td>训练显存高</td>
-<td>ZeRO / FSDP</td>
-<td>切分参数、梯度和优化器状态，降低单卡显存压力</td>
-</tr>
-<tr>
-<td>激活值占用大</td>
-<td>Activation Checkpointing</td>
-<td>反向传播时重新计算部分激活，换显存为计算</td>
-</tr>
-<tr>
-<td>参数和计算精度高</td>
-<td>BF16 / FP8 / Quantization</td>
-<td>降低权重、激活和计算的显存占用</td>
-</tr>
-<tr>
-<td>路由通信开销大</td>
-<td>All-to-All Overlap / Dispatch 优化</td>
-<td>将 token 分发通信和 expert 计算尽量重叠</td>
-</tr>
-<tr>
-<td>expert 热点</td>
-<td>Expert Replication / Load Balancing</td>
-<td>对热门 expert 做副本或调节路由，避免单点瓶颈</td>
-</tr>
-</tbody>
-</table>
-<h3 id="通信与推理：稀疏计算带来动态调度"><a href="#通信与推理：稀疏计算带来动态调度" class="headerlink" title="通信与推理：稀疏计算带来动态调度"></a>通信与推理：稀疏计算带来动态调度</h3><p>MoE 在分布式训练和推理时，需要把 token 分发到不同 expert 所在的 GPU 上：</p>
-<p><img src="/images/llm/llm-dense-moe-06.png" alt="MoE 中 token 计算"></p>
-<p>这会引入明显的通信和调度复杂度：</p>
-<table>
-<thead>
-<tr>
-<th><strong>挑战</strong></th>
-<th><strong>说明</strong></th>
-<th><strong>常见方案</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>All-to-All 通信</td>
-<td>token 需要跨 GPU 分发</td>
-<td>通信计算重叠</td>
-</tr>
-<tr>
-<td>动态 shape</td>
-<td>每个 expert 接收 token 数不同</td>
-<td>grouped GEMM、block-sparse kernel</td>
-</tr>
-<tr>
-<td>热点 expert</td>
-<td>某些 expert 被频繁调用</td>
-<td>expert replication、负载均衡</td>
-</tr>
-<tr>
-<td>延迟抖动</td>
-<td>不同请求路由不同，耗时不稳定</td>
-<td>router-aware batching</td>
-</tr>
-<tr>
-<td>小 batch 低效</td>
-<td>在线推理 batch 小，expert 利用率低</td>
-<td>continuous batching、缓存优化</td>
-</tr>
-</tbody>
-</table>
-<p>因此，MoE 的推理优化不是只看 active parameters，还要看系统能不能高效完成 token dispatch、expert 计算和结果聚合。</p>
-<h3 id="小结：MoE-是架构问题，也是系统问题"><a href="#小结：MoE-是架构问题，也是系统问题" class="headerlink" title="小结：MoE 是架构问题，也是系统问题"></a>小结：MoE 是架构问题，也是系统问题</h3><p>简单总结一下：MoE 用稀疏激活降低了单 token 计算成本，但代价是引入了更复杂的训练稳定性、内存管理和分布式调度问题。它不是简单的模型结构优化，而是模型架构和系统工程共同演进的结果。</p>
-<table>
-<thead>
-<tr>
-<th><strong>挑战</strong></th>
-<th><strong>本质</strong></th>
-<th><strong>技术方案</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>路由稳定性</td>
-<td>token 如何稳定选择 expert</td>
-<td>noisy routing、router z-loss、top-k</td>
-</tr>
-<tr>
-<td>训练稳定性</td>
-<td>expert 是否都能有效学习</td>
-<td>aux loss、expert bias、shared expert</td>
-</tr>
-<tr>
-<td>内存压力</td>
-<td>total parameters 很大</td>
-<td>expert parallel、参数切分、量化</td>
-</tr>
-<tr>
-<td>通信开销</td>
-<td>token 需要跨卡分发</td>
-<td>all-to-all overlap、grouped GEMM</td>
-</tr>
-<tr>
-<td>推理复杂度</td>
-<td>动态路径导致延迟不稳定</td>
-<td>expert placement、hot expert replication</td>
-</tr>
-</tbody>
-</table>
-<h2 id="未来趋势：从单一架构到混合架构"><a href="#未来趋势：从单一架构到混合架构" class="headerlink" title="未来趋势：从单一架构到混合架构"></a>未来趋势：从单一架构到混合架构</h2><p>Dense Transformer 和 MoE 并不是大模型架构演进的终点。Dense 更稳定，MoE 更适合扩展容量，但两者都有各自的成本和边界。未来的大模型架构，大概率会走向更灵活的混合形态。</p>
-<table>
-<thead>
-<tr>
-<th><strong>方向</strong></th>
-<th><strong>核心思路</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Dense + MoE 混合</td>
-<td>部分层保持 Dense，保证训练稳定和通用能力；部分层使用 MoE，提升容量和效率</td>
-</tr>
-<tr>
-<td>更细粒度专家</td>
-<td>expert 数量更多、粒度更小，让路由选择更灵活，专家分工更细</td>
-</tr>
-<tr>
-<td>动态计算路径</td>
-<td>根据 token 类型、任务难度或推理阶段，动态决定激活多少计算</td>
-</tr>
-<tr>
-<td>多模态 MoE</td>
-<td>文本、图像、语音、视频可能路由到不同 expert，提高多模态处理效率</td>
-</tr>
-<tr>
-<td>推理模型结合 MoE</td>
-<td>简单问题走轻量路径，复杂推理激活更多专家或更长计算过程</td>
-</tr>
-</tbody>
-</table>
-<p>从 Dense 到 MoE，本质上是大模型从“全量计算”走向“按需计算”的开始。Dense Transformer 代表最稳定、最成熟的规模化路线；MoE 则代表在成本压力下，通过稀疏激活扩展模型容量的方向。</p>
-<p>未来的大模型不会只有一种架构答案，而是在能力、成本、延迟、稳定性和部署复杂度之间不断做权衡。理解 Dense 与 MoE 的差异，也就理解了现代基模架构演进中最重要的一条主线。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;过去几年，LLM 能力的提升很大程度上来自 &lt;strong&gt;Scaling Law&lt;/strong&gt;：当模型参数量、训练数据规模和计算量持续扩大时，模型的 loss 往往会呈现较稳定的下降趋势，模型能力也会随之提升。简单来说，规模化训练证明了一件事：&lt;strong&gt;更大的模型、更大的数据、更大的算力，通常可以带来更强的模型能力。&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;但 Scaling Law 也带来了一个现实问题：如果能力提升依赖规模扩展，那么训练成本、推理成本、显存占用和部署复杂度也会同步上升。模型越大，每个 token 需要经过的参数越多；上下文越长，Attention 和 KV Cache 的压力越大；多模态输入又会引入更多 token 和更复杂的计算路径。&lt;/p&gt;
     
     </summary>
     
