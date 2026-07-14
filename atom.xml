@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-13T16:57:28.000Z</updated>
+  <updated>2026-07-14T16:18:04.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,440 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</title>
+    <link href="http://matt33.com/2026/07/15/llm-to-agi/"/>
+    <id>http://matt33.com/2026/07/15/llm-to-agi/</id>
+    <published>2026-07-14T16:18:04.000Z</published>
+    <updated>2026-07-14T16:18:04.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>过去十年，大模型沿着规模化路线快速演进：参数、数据与算力的扩展提升了语言能力，后训练与强化学习增强了指令遵循和复杂推理，多模态、RAG、Agent、工具调用与记忆系统，则进一步把 LLM 从对话模型扩展为能够获取知识、理解信息并执行任务的智能系统。</p>
+<p>随着能力边界不断外扩，一个更根本的问题随之出现：继续扩大模型规模、增加训练数据和推理计算，是否就能自然通向 AGI？AGI 全称 Artificial General Intelligence，即通用人工智能。虽然业界尚未形成统一定义，但它通常指能够跨领域理解和解决问题、将已有知识迁移到新任务，并在复杂环境中持续学习和行动的智能系统。相比之下，LLM 擅长从数据中学习语言与知识规律，却不天然具备可靠的因果理解、长期记忆、环境适应和行动能力。</p>
+<a id="more"></a>  
+<p>因此，从 LLM 到 AGI 更可能不是单一模型的线性扩展，而是基础模型、推理系统、世界模型、Agent、记忆机制、具身智能与安全治理的共同演进。作为本系列的最后一篇文章，本文将从 Scaling Law、深度推理、世界理解、行动能力和持续学习出发，讨论大模型正在走向哪里，以及 LLM 是否会成为通往通用智能的核心路径。</p>
+<h2 id="AGI-不是一个更大的聊天模型"><a href="#AGI-不是一个更大的聊天模型" class="headerlink" title="AGI 不是一个更大的聊天模型"></a>AGI 不是一个更大的聊天模型</h2><p>LLM 的基础训练目标仍然是预测下一个 Token：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(x_t | x_1, x_2, ..., x_(t-1))</span><br></pre></td></tr></table></figure>
+<p>这个目标看似简单，却迫使模型从海量文本中学习语言结构、事实关联、代码模式和部分推理规律。随着模型规模扩大，下一词预测逐渐产生了问答、翻译、代码生成、少样本学习和复杂推理等能力。</p>
+<p>但“能够完成很多任务”不等于已经实现 AGI。AGI 目前没有统一定义，<a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="external">Google DeepMind 提出的 AGI Levels</a> 尝试从能力深度和任务广度衡量通用性；从工程视角看，一个通用智能系统至少还需要满足几个维度：</p>
+<table>
+<thead>
+<tr>
+<th><strong>能力维度</strong></th>
+<th><strong>核心问题</strong></th>
+<th><strong>当前 LLM 的主要限制</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>广度</td>
+<td>能否覆盖大量不同任务</td>
+<td>任务迁移能力较强，但仍依赖训练分布</td>
+</tr>
+<tr>
+<td>深度</td>
+<td>能否达到或超过领域专家</td>
+<td>部分任务很强，能力分布并不均匀</td>
+</tr>
+<tr>
+<td>泛化</td>
+<td>能否处理真正陌生的问题</td>
+<td>分布外任务和反常识场景仍不稳定</td>
+</tr>
+<tr>
+<td>自主性</td>
+<td>能否长期完成复杂目标</td>
+<td>容易偏离目标、循环或错误累积</td>
+</tr>
+<tr>
+<td>适应性</td>
+<td>能否从新经验中持续学习</td>
+<td>推理过程通常不会自动更新参数</td>
+</tr>
+<tr>
+<td>世界理解</td>
+<td>能否理解空间、物理和因果关系</td>
+<td>语言知识与真实环境仍存在距离</td>
+</tr>
+<tr>
+<td>可靠性</td>
+<td>能否稳定复现正确行为</td>
+<td>幻觉、随机性和不可预测错误仍然存在</td>
+</tr>
+<tr>
+<td>安全性</td>
+<td>能力增强后是否仍然可控</td>
+<td>工具、权限和自主性会同步放大风险</td>
+</tr>
+</tbody>
+</table>
+<p>因此，AGI 更适合被理解为一组能力逐步达到更高水平，而不是某一天突然出现的单一模型。</p>
+<p><img src="/images/llm/llm-to-agi-01.png" alt="LLM 提供了通用认知底座，但通往 AGI 还需要推理、行动、学习和环境理解"></p>
+<h2 id="Scaling-Law：扩展仍会继续，但方式正在变化"><a href="#Scaling-Law：扩展仍会继续，但方式正在变化" class="headerlink" title="Scaling Law：扩展仍会继续，但方式正在变化"></a>Scaling Law：扩展仍会继续，但方式正在变化</h2><h3 id="预训练-Scaling-Law"><a href="#预训练-Scaling-Law" class="headerlink" title="预训练 Scaling Law"></a>预训练 Scaling Law</h3><p>大模型能力的快速提升，很大程度上建立在 Scaling Law 之上。经验研究发现，随着模型参数量和训练数据增加，语言模型的预训练 Loss 通常会按照幂律下降。一个常见的近似表达是：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">L(N, D) = E + A / N^α + B / D^β</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<ul>
+<li><code>N</code> 表示模型参数量；</li>
+<li><code>D</code> 表示训练 Token 数；</li>
+<li><code>E</code> 表示当前数据分布下难以继续降低的误差下界；</li>
+<li><code>A、B、α、β</code> 是通过实验拟合得到的系数。</li>
+</ul>
+<p>训练计算量 <code>C</code> 并不是第三个独立变量，而是由模型规模、数据量和训练过程共同决定。对于 Dense Decoder-only Transformer，可以粗略估算为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">C ≈ 6ND</span><br></pre></td></tr></table></figure>
+<p>这里的 <code>6</code> 是训练 FLOPs 的经验近似，并不适用于所有架构和训练配置。它表达的核心关系是：模型越大、训练 Token 越多，总计算量就越高。</p>
+<p>早期 Scaling Law 更强调扩大模型参数带来的收益，而 <a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="external">Chinchilla</a> 进一步指出：在固定计算预算下，参数量和训练数据需要合理配比。模型参数很多但训练 Token 不足，会导致模型没有被充分训练；反过来，数据很多但模型容量不足，也难以充分吸收数据中的规律。</p>
+<p>因此，预训练 Scaling 的核心问题不是单纯“把参数做大”，而是求解：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">在固定计算预算 C 下</span><br><span class="line">如何选择参数量 N 和训练数据量 D</span><br><span class="line">使最终 Loss 尽可能低</span><br></pre></td></tr></table></figure>
+<p>Scaling Law 为模型扩展提供了可预测的工程方向，但也逐渐遇到新的瓶颈：</p>
+<ol>
+<li>高质量训练数据并不是无限的；</li>
+<li>训练成本、能源消耗和芯片需求持续增长；</li>
+<li>参数扩展会同步推高推理与部署成本；</li>
+<li>Loss 下降不一定等比例转化为可靠性和推理能力；</li>
+<li>文本数据难以覆盖完整的物理交互与环境经验。</li>
+</ol>
+<p>因此，Scaling 并不会停止，但扩展对象正在从单纯的参数和预训练计算，逐步延伸到数据质量、后训练、推理计算以及真实环境反馈。</p>
+<h3 id="从训练计算到推理计算"><a href="#从训练计算到推理计算" class="headerlink" title="从训练计算到推理计算"></a>从训练计算到推理计算</h3><p>推理模型带来了另一条 Scaling 路线：不只在训练阶段投入更多计算，也让模型在回答复杂问题时使用更多推理预算。一个简化的推理过程可以表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">候选路径 = Generate(problem, budget)</span><br><span class="line">验证结果 = Verify(候选路径)</span><br><span class="line">最终答案 = Select(验证结果)</span><br></pre></td></tr></table></figure>
+<p>总计算成本大致变成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">C_total =</span><br><span class="line">    C_context</span><br><span class="line">  + K × C_reasoning</span><br><span class="line">  + C_verification</span><br></pre></td></tr></table></figure>
+<p>其中 <code>K</code> 可以表示候选推理路径数量，或者模型允许使用的搜索和反思轮数。</p>
+<p>OpenAI 在 <a href="https://openai.com/index/learning-to-reason-with-llms/" target="_blank" rel="external">o1</a> 中展示了训练计算与测试时计算带来的推理提升；<a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="external">DeepSeek-R1</a>则展示了通过强化学习激励推理行为，并将能力蒸馏到更小模型的路线。但“思考更久”并不必然得到更正确的答案。模型可能重复推理、错误自我修正，或者在错误路径上消耗更多 Token。真正有效的 Test-Time Scaling 依赖：</p>
+<ol>
+<li>更好的问题分解；</li>
+<li>多路径搜索而非单一路径拉长；</li>
+<li>可靠的结果验证器；</li>
+<li>根据任务难度动态分配预算；</li>
+<li>在准确率、延迟和成本之间做权衡。</li>
+</ol>
+<p>预训练 Scaling Law 描述了参数、数据和计算量与模型 Loss 之间的经验关系。但未来的大模型能力扩展不会局限于预训练，还会沿着数据工程、后训练、推理计算、工具系统和环境交互等方向推进：</p>
+<table>
+<thead>
+<tr>
+<th><strong>扩展方向</strong></th>
+<th><strong>核心方法</strong></th>
+<th><strong>主要目标</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>预训练 Scaling</td>
+<td>参数、数据、计算扩展</td>
+<td>提高基础能力上限</td>
+</tr>
+<tr>
+<td>数据 Scaling</td>
+<td>合成数据、难例和环境轨迹</td>
+<td>提高数据价值和覆盖范围</td>
+</tr>
+<tr>
+<td>后训练 Scaling</td>
+<td>SFT、RL、偏好与过程监督</td>
+<td>学会更可靠的任务行为</td>
+</tr>
+<tr>
+<td>推理 Scaling</td>
+<td>搜索、反思、验证和多路径采样</td>
+<td>提高复杂问题成功率</td>
+</tr>
+<tr>
+<td>系统 Scaling</td>
+<td>工具、RAG、Agent 和多 Agent</td>
+<td>扩展模型可完成的任务范围</td>
+</tr>
+<tr>
+<td>环境 Scaling</td>
+<td>模拟器、机器人和真实交互</td>
+<td>学习行动与结果之间的关系</td>
+</tr>
+</tbody>
+</table>
+<p>这些方向并不都属于严格意义上的 Scaling Law，而是大模型从单一模型扩展到完整智能系统的不同路径。大模型规模化演进的下一阶段，不只是把模型做得更大，而是让每一单位数据、计算和环境交互产生更多有效智能。</p>
+<h2 id="从语言理解到世界建模与具身行动"><a href="#从语言理解到世界建模与具身行动" class="headerlink" title="从语言理解到世界建模与具身行动"></a>从语言理解到世界建模与具身行动</h2><h3 id="语言知识不等于世界理解"><a href="#语言知识不等于世界理解" class="headerlink" title="语言知识不等于世界理解"></a>语言知识不等于世界理解</h3><p>语言包含了大量关于世界的压缩知识。模型可以从文本中学习“杯子掉落可能摔碎”“雨天道路容易湿滑”，但这些知识主要来自人类对世界的描述，而不是模型通过观察、行动和反馈获得的直接经验。只依赖语言信号，模型会面临几个上限：</p>
+<ol>
+<li>文本难以完整表达三维空间、连续运动和物体交互；</li>
+<li>语言中的统计相关性不等于真实的因果关系；</li>
+<li>大量日常物理常识不会被明确写进文本；</li>
+<li>模型缺少“执行动作后，环境如何变化”的经验；</li>
+<li>静态语料难以覆盖持续变化的开放环境。</li>
+</ol>
+<p>多模态模型补充了图像、语音和视频等感知信息，但“能够识别环境”仍不等于“能够理解环境”。从语言模型走向世界智能，还需要完成三个层次的跨越：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">多模态感知：当前环境里有什么</span><br><span class="line">        -&gt;</span><br><span class="line">世界模型：环境接下来会如何变化</span><br><span class="line">        -&gt;</span><br><span class="line">具身智能：应该采取什么动作，并根据结果继续调整</span><br></pre></td></tr></table></figure>
+<h3 id="世界模型：预测行动的后果"><a href="#世界模型：预测行动的后果" class="headerlink" title="世界模型：预测行动的后果"></a>世界模型：预测行动的后果</h3><p>世界模型的目标，是学习环境状态及其变化规律。一个简化的模型可以表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">z_t = Encoder(o_t)</span><br><span class="line"></span><br><span class="line">z_(t+1) = Dynamics(z_t, a_t)</span><br><span class="line"></span><br><span class="line">o_(t+1) = Decoder(z_(t+1))</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<ul>
+<li><code>o_t</code> 是当前观察，例如图像、视频或传感器信号；</li>
+<li><code>z_t</code> 是模型内部对环境状态的压缩表示；</li>
+<li><code>a_t</code> 是系统准备执行的动作；</li>
+<li><code>Dynamics</code> 预测执行动作后环境将如何变化；</li>
+<li><code>Decoder</code> 用于重建未来观察，在隐空间预测模型中并非必需。</li>
+</ul>
+<p>有了世界模型，系统就可以在真正行动之前进行内部模拟：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">生成候选动作</span><br><span class="line">-&gt; 预测每个动作的未来状态</span><br><span class="line">-&gt; 评估结果与目标的距离</span><br><span class="line">-&gt; 选择更优动作</span><br><span class="line">-&gt; 在真实环境中执行</span><br></pre></td></tr></table></figure>
+<p>这也是基于模型的强化学习和模型预测控制的基本思想。</p>
+<p><img src="/images/llm/llm-to-agi-02.png" alt="世界模型通过预测候选动作的后果，为规划和决策提供依据"></p>
+<p>从世界建模到具身行动，目前主要存在以下几类代表性技术方向：</p>
+<table>
+<thead>
+<tr>
+<th><strong>路线</strong></th>
+<th><strong>核心目标</strong></th>
+<th><strong>代表实践</strong></th>
+<th><strong>主要价值</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>交互式生成世界</td>
+<td>根据观察和动作生成可交互环境</td>
+<td>Genie、Genie 3</td>
+<td>为 Agent 提供可模拟、可探索的训练环境</td>
+</tr>
+<tr>
+<td>隐空间预测</td>
+<td>不重建全部像素，直接预测抽象状态变化</td>
+<td>V-JEPA 2</td>
+<td>降低预测复杂度，学习更稳定的环境表示</td>
+</tr>
+<tr>
+<td>空间智能</td>
+<td>建模三维结构、物体关系和空间变化</td>
+<td>World Labs</td>
+<td>支持三维生成、空间推理和环境交互</td>
+</tr>
+<tr>
+<td>视觉语言动作模型</td>
+<td>将视觉、语言和动作统一建模</td>
+<td>RT-2、Gemini Robotics</td>
+<td>把通用知识迁移到机器人控制任务</td>
+</tr>
+</tbody>
+</table>
+<p>这些路线并不互斥：生成模型关注未来环境如何呈现，隐空间模型关注状态如何变化，空间模型强调三维结构，而动作模型负责将理解转化为控制信号。</p>
+<h3 id="具身智能：把预测转化为行动"><a href="#具身智能：把预测转化为行动" class="headerlink" title="具身智能：把预测转化为行动"></a>具身智能：把预测转化为行动</h3><p>具身智能关注的是智能体如何通过机器人、车辆或其他物理载体感知环境、制定决策并执行动作。它需要形成一个持续运行的闭环：</p>
+<p><img src="/images/llm/llm-to-agi-03.png" alt="具身智能通过“感知、预测、规划、行动和反馈”形成真实环境中的闭环"></p>
+<p>以 RT-2 为代表的视觉语言动作模型，会把机器人动作表示成模型可以预测的 Token，使模型能够根据图像和语言指令生成控制动作。世界模型则可以进一步帮助系统预测动作结果，在执行前比较多种方案。需要注意，并非所有具身系统都必须包含显式世界模型，两者是相互补充的技术路线。具身智能比文本 Agent 面临更严格的约束：</p>
+<ol>
+<li>模拟环境与真实世界之间存在分布差异；</li>
+<li>机器人数据昂贵，难以达到互联网文本的规模；</li>
+<li>连续控制要求低延迟、高频率和高精度；</li>
+<li>感知误差会沿着规划和执行链路持续放大；</li>
+<li>物理世界中的错误可能造成真实损失，不能随意重试。</li>
+</ol>
+<p>因此，世界模型和具身智能并不是对 LLM 的简单替代。更可能出现的是一种融合架构：LLM 负责语言交互、抽象知识和高层规划，世界模型负责空间、时间与因果预测，具身控制模型负责将计划转化为动作，并通过真实环境反馈不断修正系统状态。</p>
+<h2 id="Agent、记忆与持续学习"><a href="#Agent、记忆与持续学习" class="headerlink" title="Agent、记忆与持续学习"></a>Agent、记忆与持续学习</h2><p>世界模型让系统能够预测环境，Agent 则让<strong>模型能够围绕目标持续行动</strong>。一个更完整的智能系统可以表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">智能系统 =</span><br><span class="line">    基础模型</span><br><span class="line">  + 推理与规划</span><br><span class="line">  + 世界模型</span><br><span class="line">  + 长短期记忆</span><br><span class="line">  + 工具与行动空间</span><br><span class="line">  + 环境反馈</span><br><span class="line">  + 学习与安全机制</span><br></pre></td></tr></table></figure>
+<h3 id="从一次推理到长期任务"><a href="#从一次推理到长期任务" class="headerlink" title="从一次推理到长期任务"></a>从一次推理到长期任务</h3><p>普通 LLM 应用通常在完成一次请求与回答后结束；Agent 则会在模型推理、工具执行和环境反馈之间持续循环：</p>
+<p><img src="/images/llm/llm-to-agi-04.png" alt="Agent 通过规划、行动、反馈和记忆形成长期任务闭环"></p>
+<p>Agent 的关键进步不是让模型“多回答几轮”，而是让系统具备显式状态、工具权限、终止条件和环境反馈，能够围绕目标持续执行任务。但任务链路越长，局部错误越容易在后续步骤中累积和放大。</p>
+<p>在假设各关键步骤相互独立、成功率均为 <code>p</code> 的简化条件下，连续 <code>n</code> 步全部成功的概率可以近似表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(success) ≈ p^n</span><br></pre></td></tr></table></figure>
+<p>例如，单步成功率为 99% 时，连续 100 个关键步骤全部成功的概率约为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">0.99^100 ≈ 36.6%</span><br></pre></td></tr></table></figure>
+<p>真实 Agent 的步骤通常存在依赖关系，因此这个公式只是用于说明长程任务的可靠性挑战。生产级 Agent 需要通过分阶段验证、失败重试、状态持久化、执行预算、人工检查点和回滚机制，将一次长链路拆成多个可验证、可恢复的执行阶段。</p>
+<h3 id="记忆让系统保持连续性"><a href="#记忆让系统保持连续性" class="headerlink" title="记忆让系统保持连续性"></a>记忆让系统保持连续性</h3><p>模型上下文本身不是长期记忆。一个面向长期任务的记忆系统通常包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>记忆类型</strong></th>
+<th><strong>保存内容</strong></th>
+<th><strong>主要作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作记忆</td>
+<td>当前计划、中间结果和工具状态</td>
+<td>保持当前任务连贯</td>
+</tr>
+<tr>
+<td>情景记忆</td>
+<td>过去发生的任务和事件</td>
+<td>回忆具体经历</td>
+</tr>
+<tr>
+<td>语义记忆</td>
+<td>稳定事实、用户画像和项目知识</td>
+<td>提供长期背景</td>
+</tr>
+<tr>
+<td>程序记忆</td>
+<td>可复用流程、策略和失败经验</td>
+<td>改进未来行动方式</td>
+</tr>
+</tbody>
+</table>
+<p>个性化记忆让系统理解“这个用户是谁”，Agent 经验记忆则让系统知道“这类任务以前怎样成功或失败”。但外部记忆主要改变当前上下文，并不会自动改变模型参数。要让系统真正获得新能力，还需要持续学习。</p>
+<h3 id="持续学习的三层闭环"><a href="#持续学习的三层闭环" class="headerlink" title="持续学习的三层闭环"></a>持续学习的三层闭环</h3><p>持续学习可以分成三个层次：</p>
+<ol>
+<li><strong>上下文学习</strong>：把新信息放入当前上下文，响应最快，但不会跨任务永久保留；</li>
+<li><strong>外部记忆学习</strong>：将事实、经验和策略写入数据库，下次按需检索；</li>
+<li><strong>参数学习</strong>：通过持续预训练、微调或强化学习更新模型行为。</li>
+</ol>
+<p>参数更新最容易遇到灾难性遗忘：模型适应新数据后，原有知识和能力反而下降。持续训练通常需要混合新数据、历史回放数据和安全数据：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">L_total =</span><br><span class="line">    L_new</span><br><span class="line">  + λ × L_replay</span><br><span class="line">  + μ × L_safety</span><br><span class="line">  + ν × L_consistency</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<ul>
+<li><code>L_new</code> 用于学习新任务；</li>
+<li><code>L_replay</code> 防止遗忘旧能力；</li>
+<li><code>L_safety</code> 维持安全边界；</li>
+<li><code>L_consistency</code> 限制模型行为发生不必要漂移。</li>
+</ul>
+<p><img src="/images/llm/llm-to-agi-05.png" alt="持续学习必须经过数据治理、训练、评测和灰度发布，不能让模型直接在线修改自身参数"></p>
+<p>真正可用的持续学习系统还需要解决：</p>
+<ul>
+<li>错误反馈可能把模型带向错误方向；</li>
+<li>Agent 轨迹可能包含 Prompt Injection 和恶意数据；</li>
+<li>用户偏好不能直接覆盖系统安全规则；</li>
+<li>新模型必须经过回归评测和版本管理；</li>
+<li>所有参数、记忆和策略更新都需要能够回滚。</li>
+</ul>
+<p>因此，未来的“自我进化”更可能是受控的数据飞轮，而不是模型在生产环境中任意修改自己。</p>
+<h2 id="LLM-是-AGI-的唯一路径吗"><a href="#LLM-是-AGI-的唯一路径吗" class="headerlink" title="LLM 是 AGI 的唯一路径吗"></a>LLM 是 AGI 的唯一路径吗</h2><p>更准确的答案是：LLM 很可能是通往 AGI 的核心技术之一，但它既不是完整答案，也未必是唯一路径。</p>
+<p>LLM 擅长理解语言、组织知识、抽象推理与任务规划，但通用智能还需要环境感知、因果预测、长期记忆、持续学习和可靠行动。这些能力可能无法仅靠扩大语言模型获得，而需要世界模型、记忆系统、Agent、工具与具身控制等模块共同协作。</p>
+<p><img src="/images/llm/llm-to-agi-06.png" alt="未来的 AGI 更可能是多种模型与系统能力的融合，而不是单一架构独立完成全部任务"></p>
+<h3 id="判断-AGI-进展的关键里程碑"><a href="#判断-AGI-进展的关键里程碑" class="headerlink" title="判断 AGI 进展的关键里程碑"></a>判断 AGI 进展的关键里程碑</h3><p>与其预测 AGI 会在哪一年到来，不如观察几个更具可验证性的技术里程碑：</p>
+<ol>
+<li><strong>分布外泛化</strong>：能够解决训练和评测中没有出现过的新问题；</li>
+<li><strong>长程可靠性</strong>：在数百甚至数千步任务中持续保持目标和约束；</li>
+<li><strong>因果世界建模</strong>：能够预测行动结果，而不只是生成合理表象；</li>
+<li><strong>持续学习</strong>：吸收新经验时不会明显破坏原有能力；</li>
+<li><strong>跨环境迁移</strong>：同一能力可以迁移到不同软件、设备和机器人；</li>
+<li><strong>可验证自主性</strong>：自主完成任务的同时提供证据、审计和回滚；</li>
+<li><strong>可控能力增长</strong>：模型能力提升时，安全机制能够同步扩展。</li>
+</ol>
+<p>这些指标说明，AGI 不只是“知道更多”，还需要具备<strong>泛化、规划、行动、适应和自我修正</strong>能力。</p>
+<h3 id="工业界正在探索的-AGI-路线"><a href="#工业界正在探索的-AGI-路线" class="headerlink" title="工业界正在探索的 AGI 路线"></a>工业界正在探索的 AGI 路线</h3><p>截至 2026 年 7 月，头部机构并没有形成统一的 AGI 技术路线。下面的分类也不是各家公司公布的完整“AGI 配方”，而是根据其公开使命、研究方向和产品实践所做的归纳。</p>
+<table>
+<thead>
+<tr>
+<th><strong>机构</strong></th>
+<th><strong>核心判断</strong></th>
+<th><strong>主要实施路径</strong></th>
+<th><strong>LLM 的定位</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI</td>
+<td>通用能力可以通过深度学习、规模扩展、强化学习和推理计算继续提升</td>
+<td>Frontier Model、推理模型、多模态、Agent、工具执行、评测与安全治理</td>
+<td>作为通用认知与 Agent 核心，逐步承担更多经济任务</td>
+</tr>
+<tr>
+<td>Google DeepMind</td>
+<td>通过能力深度与任务广度衡量 AGI 水平，并将自主性和风险作为独立的部署考量</td>
+<td>Gemini、多模态推理、强化学习、科学模型、Genie 世界模型与 Gemini Robotics</td>
+<td>语言模型是统一基础，但需要与世界模型、规划和机器人结合</td>
+</tr>
+<tr>
+<td>Anthropic</td>
+<td>强大能力可能随着规模化快速出现，但可解释、可控与安全必须同步解决</td>
+<td>Frontier LLM、Agent、Constitutional AI、机制可解释性、能力评测与 Responsible Scaling Policy</td>
+<td>继续扩展通用模型，同时重点研究如何理解和约束模型行为</td>
+</tr>
+<tr>
+<td>Meta</td>
+<td>仅靠生成语言和像素，可能难以形成稳定的世界理解</td>
+<td>JEPA、自监督视频学习、隐空间世界模型、分层规划与具身 Agent</td>
+<td>LLM 负责语言交互，世界模型负责环境理解、预测与规划</td>
+</tr>
+<tr>
+<td>李飞飞 / World Labs</td>
+<td>通用智能不能缺少空间智能，系统需要理解和操作三维世界</td>
+<td>Large World Models、三维生成、空间推理、持久化环境与交互系统</td>
+<td>LLM 是语言接口，空间世界模型补充三维结构和环境交互能力</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>OpenAI 将 AGI 定义为能够在大多数具有经济价值的工作中超越人类的高度自主系统。其公开路线以通用基础模型为核心，通过强化学习增强推理，再通过 Agent、工具和受控执行环境把模型能力转化为任务成果（<a href="https://openai.com/charter/" target="_blank" rel="external">OpenAI Charter</a>、<a href="https://openai.com/index/learning-to-reason-with-llms/" target="_blank" rel="external">Learning to reason with LLMs</a>）。</li>
+<li>Google DeepMind 的路线更加综合。Gemini 承担通用多模态与推理能力，Genie 探索可交互世界模型，Gemini Robotics 则将视觉、语言和动作连接起来。其“Levels of AGI”框架以能力深度和任务广度划分 AGI 水平，并将自主性和风险作为独立的部署考量（<a href="https://deepmind.google/research/publications/66938/" target="_blank" rel="external">Levels of AGI</a>、<a href="https://deepmind.google/models/" target="_blank" rel="external">Google DeepMind Models</a>）。</li>
+<li>Anthropic 并未公开提出一种独立于 LLM 的 AGI 架构，其重点是继续发展 Frontier Model 和 Agent 能力，同时把可解释性、可控性和风险治理视为扩展能力的前置条件。Responsible Scaling Policy 会根据模型达到的能力阈值逐级提高安全要求（<a href="https://www.anthropic.com/company" target="_blank" rel="external">Anthropic Company</a>、<a href="https://www.anthropic.com/responsible-scaling-policy" target="_blank" rel="external">Responsible Scaling Policy</a>）。</li>
+<li>Meta 的 JEPA 路线代表了另一种判断：智能系统不仅要预测语言或像素，还要在抽象表示空间中学习世界状态，预测环境变化并规划动作。V-JEPA 2 已经把这种思路扩展到视频理解和机器人规划（<a href="https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/" target="_blank" rel="external">V-JEPA 2</a>）。</li>
+<li>李飞飞创立的 World Labs 则把“空间智能”放在核心位置，尝试构建能够感知、生成、推理并操作三维世界的基础世界模型。这条路线认为，语言智能解决的是“如何描述世界”，空间智能还要解决“世界如何组织和变化”（<a href="https://www.worldlabs.ai/about" target="_blank" rel="external">World Labs</a>）。</li>
+</ul>
+<p>这些路线并不是简单的竞争关系，更可能在未来逐步融合：</p>
+<p><img src="/images/llm/llm-to-agi-07.png" alt="多种关键能力协同，才能让系统更接近通用人工智能"></p>
+<h3 id="AGI-同样是安全与治理问题"><a href="#AGI-同样是安全与治理问题" class="headerlink" title="AGI 同样是安全与治理问题"></a>AGI 同样是安全与治理问题</h3><p>随着模型获得更强的推理、工具调用和自主行动能力，安全问题也会从“回答是否合规”扩展为“模型是否具备危险能力、行为是否可解释、系统是否仍然可控”。因此，AGI 安全不能只依赖权限和沙箱，还需要覆盖模型训练、能力评测、部署决策与运行监控的完整生命周期。</p>
+<table>
+<thead>
+<tr>
+<th><strong>安全层次</strong></th>
+<th><strong>核心问题</strong></th>
+<th><strong>主要技术方案</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型能力</td>
+<td>是否出现高风险自主性、欺骗、网络攻击或生物安全能力</td>
+<td>危险能力评测、红队测试、对抗训练与能力阈值</td>
+</tr>
+<tr>
+<td>模型行为</td>
+<td>模型为何做出当前决策，是否会隐藏真实目标</td>
+<td>机制可解释性、过程监督、可扩展监督与行为审计</td>
+</tr>
+<tr>
+<td>部署决策</td>
+<td>当前证据是否足以支持模型上线</td>
+<td>Safety Case、分级访问、灰度发布与部署门禁</td>
+</tr>
+<tr>
+<td>运行系统</td>
+<td>模型能否越权操作工具和真实环境</td>
+<td>最小权限、环境隔离、过程监控、人工检查点与紧急中断</td>
+</tr>
+<tr>
+<td>持续演进</td>
+<td>模型升级后是否产生新的能力与风险</td>
+<td>回归评测、能力重新评估、版本治理与快速回滚</td>
+</tr>
+</tbody>
+</table>
+<p>危险能力评测应在上线前主动识别模型的自主性、欺骗、越权操作和高风险知识能力，并设置明确的部署阈值。模型一旦跨越能力边界，就需要提高安全等级、限制开放范围或暂停部署。Anthropic 的 <a href="https://www.anthropic.com/responsible-scaling-policy" target="_blank" rel="external">Responsible Scaling Policy</a> 就采用了类似的分级治理思路。</p>
+<p>评测只能观察模型“做了什么”，机制可解释性、过程监督和可扩展监督则进一步帮助判断模型“为什么这样做”。上线前还应形成安全论证，说明风险、缓解措施和应急方案。</p>
+<p>模型、训练数据、工具权限或运行环境发生变化后，都需要重新评估。AGI 安全不是一层输出过滤器，而是贯穿能力评测、部署门禁、运行监控和版本回滚的完整体系。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>回看整个 LLM 系列，大模型的发展经历了一条逐步扩展的路线：</p>
+<p><img src="/images/llm/llm-to-agi-08.png" alt="大模型从语言建模逐步走向世界建模与环境交互"></p>
+<p>LLM 已经证明，语言可以承载比过去预想更多的知识、推理和行动能力。但语言毕竟是人类经验的压缩表达。如果系统只能学习文字，而不能观察世界、采取行动、接受反馈并积累经验，它的通用性可能始终存在边界。</p>
+<p>因此，LLM 可能不是 AGI 的终点，却很可能成为未来智能系统的重要中枢：它连接语言、知识、推理、工具、记忆、世界模型和物理行动，让不同能力能够在统一目标下协作。</p>
+<p>未来真正值得关注的，不只是模型参数还会增长多少，而是机器能否形成一个完整闭环：</p>
+<p><img src="/images/llm/llm-to-agi-09.png" alt="智能系统通过行动、反馈、学习与更新形成持续迭代闭环"></p>
+<p>从 LLM 到 AGI，需要跨越的不是单纯的模型规模，而是从“学习人类留下的数据”，走向“理解世界、作用于世界，并从真实反馈中持续学习”。</p>
+<p>这既是 LLM 技术演进的下一阶段，也是人工智能最初那个问题的延续：机器究竟如何获得真正的智能？</p>
+<hr>
+<p>参考资料：</p>
+<ul>
+<li><a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="external">Scaling Laws for Neural Language Models</a></li>
+<li><a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="external">Training Compute-Optimal Large Language Models</a></li>
+<li><a href="https://openai.com/index/learning-to-reason-with-llms/" target="_blank" rel="external">Learning to Reason with LLMs</a></li>
+<li><a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="external">DeepSeek-R1</a></li>
+<li><a href="https://arxiv.org/abs/2311.02462" target="_blank" rel="external">Levels of AGI</a></li>
+<li><a href="https://deepmind.google/research/publications/60474/" target="_blank" rel="external">Genie: Generative Interactive Environments</a></li>
+<li><a href="https://deepmind.google/blog/genie-3-a-new-frontier-for-world-models/" target="_blank" rel="external">Genie 3</a></li>
+<li><a href="https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/" target="_blank" rel="external">V-JEPA 2</a></li>
+<li><a href="https://www.worldlabs.ai/about" target="_blank" rel="external">World Labs</a></li>
+<li><a href="https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/" target="_blank" rel="external">RT-2</a></li>
+<li><a href="https://arxiv.org/abs/2404.16789" target="_blank" rel="external">Continual Learning of Large Language Models</a></li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;过去十年，大模型沿着规模化路线快速演进：参数、数据与算力的扩展提升了语言能力，后训练与强化学习增强了指令遵循和复杂推理，多模态、RAG、Agent、工具调用与记忆系统，则进一步把 LLM 从对话模型扩展为能够获取知识、理解信息并执行任务的智能系统。&lt;/p&gt;
+&lt;p&gt;随着能力边界不断外扩，一个更根本的问题随之出现：继续扩大模型规模、增加训练数据和推理计算，是否就能自然通向 AGI？AGI 全称 Artificial General Intelligence，即通用人工智能。虽然业界尚未形成统一定义，但它通常指能够跨领域理解和解决问题、将已有知识迁移到新任务，并在复杂环境中持续学习和行动的智能系统。相比之下，LLM 擅长从数据中学习语言与知识规律，却不天然具备可靠的因果理解、长期记忆、环境适应和行动能力。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
+    
+  </entry>
   
   <entry>
     <title>LLM 系列 (二十五)：AI Coding，大模型如何改变软件开发</title>
@@ -8195,360 +8629,6 @@
     
       &lt;p&gt;如果说预训练回答的是“大模型的通用能力从哪里来”，那么后训练回答的就是另一个更关键的问题：这些能力如何被稳定、可靠、可控地组织成用户真正可用的行为。&lt;/p&gt;
 &lt;p&gt;预训练后的 Base Model 已经学到了大量语言、知识、代码、数学和推理模式，但它本质上仍然是一个基于上下文预测下一个 token 的生成模型。它可以续写论文、代码、对话和网页，也可能生成看似合理但不一定真实、安全或符合用户意图的内容。换句话说，Base Model 拥有能力，但还没有被塑造成一个“助手”：它不天然知道什么叫听指令，什么叫有帮助，什么时候应该拒绝，什么时候应该承认不确定，什么时候应该调用工具完成任务。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (六)：预训练的本质：从预测下一个 Token 到通用能力</title>
-    <link href="http://matt33.com/2026/06/26/llm-pretraining/"/>
-    <id>http://matt33.com/2026/06/26/llm-pretraining/</id>
-    <published>2026-06-26T02:10:00.000Z</published>
-    <updated>2026-06-26T02:10:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>如果说 Transformer 解决的是“大模型如何理解序列”，Dense 与 MoE 解决的是“大模型如何扩展架构”，多模态解决的是“大模型如何接入更多世界信号”，那么预训练要回答的，就是一个更底层的问题：<strong>大模型的通用能力从哪里来？</strong></p>
-<p>前几篇我们已经铺垫了大模型的发展脉络、数学基础、算法原理、Transformer 架构和 Dense/MoE 架构。到这里，讨论进入 LLM 训练体系中最关键、最昂贵，也最决定能力上限的一环：<strong>预训练</strong>。它不是附属步骤，而是基座模型形成语言、知识、代码、推理和迁移能力的主要来源。</p>
-<a id="more"></a>
-<p>很多人会把预训练理解成“大规模背书”：把互联网文本喂给模型，模型记住很多知识，于是变聪明。这个理解只说对了一小部分。真正的预训练不是简单记忆，而是在不依赖人工任务标注的情况下，让模型从海量文本、代码、数学、文档、多语言甚至多模态数据中学习数据分布背后的结构。对自回归语言模型来说，这通常被简化为一个目标：<strong>根据上下文预测下一个 token</strong>。目标看似简单，但为了预测得更准，模型会被迫学习语法、语义、事实关系、程序结构、推理模式、上下文依赖和任务先验。</p>
-<p><img src="/images/llm/llm-pretraining-01.png" alt="预训练在大模型中的位置"></p>
-<p>预训练不是孤立技术，而是大模型通用能力的生成过程，它是一套系统工程。数据提供经验，目标函数提供学习压力，算力提供规模，参数承载压缩后的结构，最后形成可以被后训练继续塑形的基座模型。</p>
-<p>在进入正文之前，关于预训练部分涉及到 LLM 相关概念如下表所示：</p>
-<table>
-<thead>
-<tr>
-<th>概念</th>
-<th>含义</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Base Model</td>
-<td>预训练后得到的基座模型，通常还没有充分对齐人类指令</td>
-</tr>
-<tr>
-<td>Pre-training</td>
-<td>预训练，在大规模未标注或弱标注数据上训练通用能力</td>
-</tr>
-<tr>
-<td>Post-training</td>
-<td>后训练，在基座模型上继续做 SFT、RLHF、DPO、RLAIF 等对齐和能力释放</td>
-</tr>
-<tr>
-<td>Self-supervised Learning</td>
-<td>自监督学习，数据本身构造监督信号，例如遮住一个词让模型预测，或让模型预测下一个 token</td>
-</tr>
-<tr>
-<td>Causal LM</td>
-<td>自回归语言模型，只看左侧上下文预测下一个 token</td>
-</tr>
-<tr>
-<td>Loss</td>
-<td>损失值，模型预测分布和真实 token 之间的差距</td>
-</tr>
-<tr>
-<td>Scaling Laws</td>
-<td>模型性能随参数、数据和算力变化的经验规律</td>
-</tr>
-<tr>
-<td>Compute-optimal</td>
-<td>在给定算力下，如何平衡模型参数量和训练 token 数</td>
-</tr>
-<tr>
-<td>MoE</td>
-<td>Mixture-of-Experts，混合专家模型，每个 token 只激活部分专家参数</td>
-</tr>
-</tbody>
-</table>
-<h2 id="什么是预训练：通用能力的来源"><a href="#什么是预训练：通用能力的来源" class="headerlink" title="什么是预训练：通用能力的来源"></a>什么是预训练：通用能力的来源</h2><p>预训练里的“<strong>预</strong>”，不是说它只是准备工作，而是说它发生在指令微调、偏好对齐和具体业务适配之前。它的目标不是训练一个会做某个单一任务的模型，而是先训练出一个具备通用语言、知识、代码、推理和迁移能力的基座模型。可以把大模型训练链路简化成这样：</p>
-<p><img src="/images/llm/llm-pretraining-03.png" alt="简化的大模型链路"></p>
-<p><strong>预训练决定模型的能力上限</strong>，后训练决定模型如何把这些能力以更符合人类意图的方式表达出来。一个预训练不足的模型，即使后训练做得再精细，也很难凭空补出强大的知识、代码和推理能力。</p>
-<h3 id="预训练到底训练什么？"><a href="#预训练到底训练什么？" class="headerlink" title="预训练到底训练什么？"></a>预训练到底训练什么？</h3><p>对现代自回归语言模型来说，预训练最核心的任务可以概括为一句话：<code>给定前面的上下文，预测下一个 token</code>。也就是学习这个条件概率：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(next token | context)</span><br></pre></td></tr></table></figure>
-<p>例如：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">输入：牛顿提出了万有引力</span><br><span class="line">目标：定律</span><br></pre></td></tr></table></figure>
-<p>模型并不是只输出“定律”这个答案，而是输出整个词表上的概率分布：</p>
-<table>
-<thead>
-<tr>
-<th><strong>候选 token</strong></th>
-<th><strong>概率</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>定律</td>
-<td>0.71</td>
-</tr>
-<tr>
-<td>理论</td>
-<td>0.13</td>
-</tr>
-<tr>
-<td>概念</td>
-<td>0.05</td>
-</tr>
-<tr>
-<td>方程</td>
-<td>0.03</td>
-</tr>
-<tr>
-<td>其他</td>
-<td>0.08</td>
-</tr>
-</tbody>
-</table>
-<p>如果真实 token 是“定律”，模型给它的概率越高，损失越低；给它的概率越低，损失越高。训练就是不断调整参数，让模型在海量上下文中越来越擅长预测真实的下一个 token。这个目标看起来简单，但并不浅。为了预测得更准，模型会被迫学习很多隐藏结构：</p>
-<table>
-<thead>
-<tr>
-<th><strong>表面任务</strong></th>
-<th><strong>被迫学到的能力</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>预测语法上合理的词</td>
-<td>词法、语法、句法结构</td>
-</tr>
-<tr>
-<td>预测事实性内容</td>
-<td>世界知识、实体关系、时间地点</td>
-</tr>
-<tr>
-<td>预测代码下一行</td>
-<td>变量作用域、API 模式、程序结构</td>
-</tr>
-<tr>
-<td>预测数学推导</td>
-<td>公式变换、约束关系、证明套路</td>
-</tr>
-<tr>
-<td>预测对话回复</td>
-<td>语境、意图、语气、社会常识</td>
-</tr>
-<tr>
-<td>预测长文后续</td>
-<td>篇章结构、主题一致性、长期依赖</td>
-</tr>
-</tbody>
-</table>
-<p>所以，next token prediction 表面上是在预测语言，实际上是在用语言预测任务逼迫模型学习数据背后的结构。</p>
-<h3 id="预训练为什么是自监督学习？"><a href="#预训练为什么是自监督学习？" class="headerlink" title="预训练为什么是自监督学习？"></a>预训练为什么是自监督学习？</h3><p>传统有监督学习依赖人工标签：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">输入：这家餐厅很好吃</span><br><span class="line">标签：正面评价</span><br></pre></td></tr></table></figure>
-<p>模型的任务很明确：<code>学会分类</code>。预训练则不同，它通常不需要人工为每条数据打标签，而是直接从数据本身构造训练信号。例如一段文本：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">深度学习改变了自然语言处理的发展路径。</span><br></pre></td></tr></table></figure>
-<p>可以自动变成很多训练样本：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">输入：深度</span><br><span class="line">目标：学习</span><br><span class="line"></span><br><span class="line">输入：深度 学习</span><br><span class="line">目标：改变</span><br><span class="line"></span><br><span class="line">输入：深度 学习 改变</span><br><span class="line">目标：了</span><br></pre></td></tr></table></figure>
-<p>这就是自监督学习：监督信号不是人工标出来的，而是从原始数据内部生成的。正因为如此，预训练可以利用远超人工标注规模的文本、代码、数学、网页、文档和多语言数据。</p>
-<h3 id="为什么预训练会带来通用能力？"><a href="#为什么预训练会带来通用能力？" class="headerlink" title="为什么预训练会带来通用能力？"></a>为什么预训练会带来通用能力？</h3><p>预训练之所以重要，是因为不同任务共享大量底层结构。翻译、摘要、问答、代码生成、数学推理、工具调用，看起来是不同任务，但它们都依赖语言理解、语义表示、上下文建模、结构识别和模式迁移。预训练在大规模数据上学习到的，正是这些<strong>通用结构</strong>。</p>
-<p>所以，基座模型的能力不是来自一个个任务专用模块，而是来自大规模分布学习之后形成的通用表征：</p>
-<p><img src="/images/llm/llm-pretraining-04.png" alt="预训练如何形成基座能力"></p>
-<p>这也是为什么预训练决定模型上限。后训练可以让模型更会听指令、更安全、更像助手，但模型能不能写代码、懂数学、理解长上下文、迁移到新任务，根子上主要取决于预训练阶段学到了多少可复用结构。</p>
-<h2 id="预训练的基本流程"><a href="#预训练的基本流程" class="headerlink" title="预训练的基本流程"></a>预训练的基本流程</h2><p>工业级预训练不是简单地把数据喂进模型跑一遍，而是一套完整的系统工程。它要同时解决三个问题：<strong>模型学什么、怎么稳定学、学完之后如何判断是否真的变强</strong>。</p>
-<h3 id="经典的预训练流程"><a href="#经典的预训练流程" class="headerlink" title="经典的预训练流程"></a>经典的预训练流程</h3><p>一个经典的预训练流程如下图所示：</p>
-<p><img src="/images/llm/llm-pretraining-05.png" alt="大模型训练主流程"></p>
-<p>下面分别来看一下各个环节的主要内容：</p>
-<ol>
-<li><strong>目标设定</strong>：明确模型规模、训练预算、能力方向和上下文长度，它决定了这次预训练的工作目标；</li>
-<li><strong>数据收集</strong>：收集网页、书籍、论文、代码、数学、多语言、多模态等数据，为模型提供足够广的知识、语言和任务分布（crawl、合成数据等方案）；</li>
-<li><strong>数据清洗</strong>：去重、过滤低质文本、处理隐私、安全和污染问题，避免模型学习垃圾内容、重复模式和评估集泄漏（MinHash 去重、质量分类器等方案）；</li>
-<li><strong>数据配比</strong>：这里的第 2 到第 4 步可以合称为预训练数据工程，数据配比是设计通用文本、代码、数学、多语言、长上下文数据的比例，来控制模型的能力结构（数据混合策略、采样权重、curriculum learning、annealing data mix 等方案）；</li>
-<li><strong>Tokenizer 设计</strong>：把文本切成模型可处理的 token，决定模型看语言、代码和多语言内容的颗粒度（BPE、SentencePiece、Unigram、词表设计、多语言压缩率优化）；</li>
-<li><strong>架构设计</strong>：确定模型主体结构、参数规模、Attention 和 MLP/MoE 形式，它决定了模型容量、训练效率和推理成本（Decoder-only Transformer、RoPE、GQA/MLA、SwiGLU、Dense/MoE）；</li>
-<li><strong>训练目标</strong>：定义模型要优化的预测任务，决定模型从数据中接收什么样的学习信号（Causal LM、Masked LM、Denoising、Multi-token Prediction、Contrastive Learning）；</li>
-<li><strong>分布式训练</strong>：在大规模 GPU 集群上稳定训练模型，需要解决单卡放不下、单机跑不动、训练周期过长等问题（Data/Tensor/Pipeline/Sequence Parallelism、ZeRO/FSDP、混合精度、FP8/BF16）；</li>
-<li><strong>训练监控与评估</strong>：持续观察 loss、benchmark、稳定性和安全指标（validation loss、perplexity、MMLU/GSM8K/HumanEval、安全评估、污染检测）；</li>
-<li><strong>Checkpoint</strong>：Checkpoint 主要是解决训练故障恢复问题，同时为后续模型选择和继续训练保留可回退版本；</li>
-<li><strong>继续预训练</strong>：模型已经完成了一轮大规模通用预训练，但还没有进入正式指令微调之前，再用特定数据继续训练一段，让基座模型在某些能力上进一步增强，比如 Llama 4 官方博客把 continued training 称为 mid-training，并提到用专门数据做长上下文扩展。DeepSeek-V3 也公开描述了先预训练，再分两阶段把上下文扩到 32K 和 128K（mid-training、continued pre-training、context extension、final data mix）；</li>
-<li><strong>得到 Base Model</strong>：完成预训练部分，为后续 SFT、RLHF、DPO、Agent 训练提供能力底座。</li>
-</ol>
-<p>从这里可以看到，预训练不是单点算法，而是一条从<strong>数据构建 → 模型设计 → 大规模优化 → 评估筛选 → 基座模型产出</strong>的完整链路。数据决定模型能学到什么，架构决定模型能装下多少能力，训练系统决定模型能不能稳定学完，评估体系决定我们是否知道它真的学会了。</p>
-<h3 id="业内基模预训练路线总结"><a href="#业内基模预训练路线总结" class="headerlink" title="业内基模预训练路线总结"></a>业内基模预训练路线总结</h3><p>为了理解预训练在工业界如何落地，我们可以从几类代表性模型和论文入手。它们分别推动了预训练范式的不同阶段：BERT 证明了“预训练 + 微调”的有效性，GPT-3 展示了规模化自回归预训练的潜力，Scaling Laws 和 Chinchilla 让训练预算变得可估算，Llama、DeepSeek 等模型则进一步把重点推进到数据课程、MoE、多模态、长上下文和训练效率上。</p>
-<ol>
-<li><strong>BERT：证明“预训练 + 微调”范式有效</strong>，BERT 虽然不是生成式模型的主流形态，但它证明了一件非常重要的事情，先在海量数据上学习通用表征，再针对具体任务微调，可以显著提升 NLP 系统的效果；</li>
-<li><strong>GPT-3：把自回归预训练推向规模化，</strong>GPT-3 的关键贡献，不是发明 next token prediction，而是证明当模型参数、训练数据和计算规模足够大时，同一个自回归预测目标可以诱导出 few-shot 和 in-context learning 能力；</li>
-<li><strong>Scaling Laws 与 Chinchilla 理论：让预训练从经验扩张走向预算优化，</strong>Scaling Laws 研究的是模型 loss 如何随参数量、数据量和训练算力变化，它给大模型训练提供了可预测的经验规律。Chinchilla 进一步指出，在固定算力下，不能只盲目增大模型参数，也要匹配足够多的训练 token。它修正了早期“参数越大越好”的直觉，让行业开始重视 compute-optimal：在给定预算下，如何平衡模型容量和训练数据量。这也是后来很多模型强调训练了多少 trillion tokens 的原因。</li>
-<li><strong>Llama 系列：把强基座模型训练经验带到开源社区，</strong>Llama 系列的价值，不只是模型本身效果强，而是把现代基座模型的很多关键实践公开化：decoder-only Transformer、RoPE、GQA、SwiGLU、RMSNorm、更大规模的数据、更系统的评估，以及 base model 和 instruct model 的区分。Llama 3 进一步展示了开源 dense 模型在大规模数据和系统化训练下可以达到很强能力。Llama 4 则把路线推向 MoE、原生多模态、FP8、mid-training 和超长上下文，说明开源基模也在从“强语言模型”走向“稀疏激活 + 多模态 + 长上下文”的综合系统；</li>
-<li><strong>DeepSeek-V3：把训练效率和系统工程变成核心竞争力，</strong>DeepSeek-V3 的重点不是单纯堆参数，而是在 MoE、MLA、FP8、Multi-token Prediction 和分布式训练系统上做了大量设计。它通过较大的总参数和较低的激活参数，在模型容量和每 token 计算成本之间取得平衡；通过 MLA 降低注意力开销；通过 FP8 和通信计算重叠提升训练效率。它代表了一个很重要的趋势：前沿预训练不再只是模型结构创新，而是架构、数据、精度、并行策略和训练系统的端到端协同优化。</li>
-</ol>
-<h2 id="预训练的核心挑战"><a href="#预训练的核心挑战" class="headerlink" title="预训练的核心挑战"></a>预训练的核心挑战</h2><p>预训练真正难的地方，不只是“把模型训大”，而是要在<strong>数据质量、训练规模、优化稳定性、架构效率、长上下文、事实可靠性和评估可信度</strong>之间取得平衡。任何一环处理不好，都会直接影响基座模型的能力上限。</p>
-<p><img src="/images/llm/llm-pretraining-06.png" alt="预训练核心技术难点"></p>
-<p>上面提到的这几个问题并不是孤立的。例如，数据质量会影响训练稳定性，长上下文会放大系统成本，MoE 会带来通信和路由问题，评估污染会让模型能力判断失真。所以工业级预训练本质上是一套综合优化工程。</p>
-<h3 id="数据层面的挑战"><a href="#数据层面的挑战" class="headerlink" title="数据层面的挑战"></a>数据层面的挑战</h3><ol>
-<li><p>数据质量</p>
-<ol>
-<li>挑战：训练数据里有重复、低质、错误、毒性、隐私、版权和评估集泄漏问题；</li>
-<li>难点：模型会稳定学习数据中的模式，垃圾数据不会自动消失，反而会被参数吸收；</li>
-<li>解决方案：文档级/URL 级/近重复去重，MinHash，质量分类器，安全过滤，隐私过滤，benchmark decontamination；</li>
-</ol>
-</li>
-<li><p>数据配比</p>
-<ol>
-<li>挑战：通用文本、代码、数学、多语言、长上下文、合成数据比例如何分配；</li>
-<li>难点：不同数据会塑造不同能力，比例失衡会导致模型偏科，比如代码强但自然语言变硬；</li>
-<li>解决方案：数据混合策略，采样权重，能力导向数据配比，小模型 ablation，curriculum learning，final data mix；</li>
-</ol>
-</li>
-<li><p>高质量数据稀缺</p>
-<ol>
-<li>挑战：数学、代码、科学、长文档、多语言低资源数据不足；</li>
-<li>难点：互联网数据量大但质量不均，高知识密度数据有限，很多领域数据难获取；</li>
-<li>解决方案：专家数据、教材化数据、合成数据、模型生成数据筛选、领域数据继续预训练。</li>
-</ol>
-</li>
-</ol>
-<h3 id="技术和工程化层面挑战"><a href="#技术和工程化层面挑战" class="headerlink" title="技术和工程化层面挑战"></a>技术和工程化层面挑战</h3><ol>
-<li><p>训练稳定性</p>
-<ol>
-<li>挑战：大规模训练中可能出现 loss spike、梯度爆炸、数值异常；</li>
-<li>难点：训练周期长、GPU 数量多、数据复杂，任何局部异常都可能放大成全局训练问题；</li>
-<li>解决方案：learning rate warmup，cosine decay，gradient clipping，loss scaling，异常 batch 检测，checkpoint 回滚；</li>
-</ol>
-</li>
-<li><p>分布式训练</p>
-<ol>
-<li>挑战：单卡放不下模型，单机跑不动数据，训练需要跨大量 GPU；</li>
-<li>难点：并行方式复杂，通信开销高，节点故障、网络抖动都会影响训练；</li>
-<li>解决方案：Data Parallel、Tensor Parallel、Pipeline Parallel、Sequence Parallel、ZeRO/FSDP、通信计算重叠；</li>
-</ol>
-</li>
-<li><p>Checkpoint 管理</p>
-<ol>
-<li>挑战：训练中断后如何恢复，异常模型如何回滚；</li>
-<li>难点：大模型训练成本极高，一次故障可能损失大量 GPU 小时；</li>
-<li>解决方案：高频 checkpoint，异步保存，参数/优化器/学习率状态保存，断点恢复，版本管理；</li>
-</ol>
-</li>
-<li><p>长上下文</p>
-<ol>
-<li>挑战：模型能接收长输入，不代表能真正用好长输入；</li>
-<li>难点：attention 成本高，位置编码外推有限，长文本训练数据不足，模型容易忽略中间信息；</li>
-<li>解决方法：RoPE scaling、YaRN、ALiBi，长上下文继续预训练，长文档/代码库数据，稀疏 attention，KV cache 优化；</li>
-</ol>
-</li>
-<li><p>训练成本</p>
-<ol>
-<li>挑战：预训练需要巨大算力、存储、网络和工程投入；</li>
-<li>难点：成本不仅来自 GPU，还来自数据处理、失败重训、评估、部署和推理；</li>
-<li>解决方案：高效架构，MoE，FlashAttention，FP8，训练系统优化，数据质量提升，训练-推理协同设计；</li>
-</ol>
-</li>
-</ol>
-<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>本质上，预训练的核心挑战，是在有限算力下，用足够干净、足够多样、足够高密度的数据，稳定训练一个容量足够大、成本可接受、评估可信、后训练潜力强的基座模型。其中几个关键权衡如下：</p>
-<table>
-<thead>
-<tr>
-<th><strong>矛盾</strong></th>
-<th><strong>本质</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>数据规模 vs 数据质量</td>
-<td>不是 token 越多越好，而是模型是否值得学习这些 token</td>
-</tr>
-<tr>
-<td>模型容量 vs 训练成本</td>
-<td>参数越多能力潜力越大，但训练和推理成本也越高</td>
-</tr>
-<tr>
-<td>稳定性 vs 效率</td>
-<td>更激进的精度、并行和学习率策略能提速，也更容易不稳定</td>
-</tr>
-<tr>
-<td>长上下文能力 vs 系统成本</td>
-<td>上下文越长，attention、KV cache 和数据构建成本越高</td>
-</tr>
-<tr>
-<td>benchmark 分数 vs 真实能力</td>
-<td>榜单高分不一定代表真实任务表现强</td>
-</tr>
-<tr>
-<td>会生成 vs 说真话</td>
-<td>预训练让模型更会生成文本，但事实可靠性需要额外机制保证</td>
-</tr>
-</tbody>
-</table>
-<h2 id="预训练的本质：从分布拟合到能力涌现"><a href="#预训练的本质：从分布拟合到能力涌现" class="headerlink" title="预训练的本质：从分布拟合到能力涌现"></a>预训练的本质：从分布拟合到能力涌现</h2><p>预训练表面上是在做一件很简单的事：<strong>根据上下文预测下一个 token</strong>。</p>
-<h3 id="数学本质"><a href="#数学本质" class="headerlink" title="数学本质"></a>数学本质</h3><p>预训练表面上是在做 <strong>next token prediction</strong>，但数学上是在学习一个概率分布：让模型分布 <code>Pθ</code> 尽可能逼近真实数据分布 <code>P_data</code>。设一段 token 序列为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">x = (x1, x2, ..., xT)</span><br></pre></td></tr></table></figure>
-<p>自回归语言模型会把整段文本的概率拆成一连串条件概率：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Pθ(x) = Π_t Pθ(x_t | x_&lt;t)</span><br></pre></td></tr></table></figure>
-<p>也就是：每一步都根据前文 <code>x_&lt;t</code>，预测当前位置的真实 token <code>x_t</code>。因此，预训练的目标是最大化真实文本出现的概率：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">max θ Σ_t log Pθ(x_t | x_&lt;t)</span><br></pre></td></tr></table></figure>
-<p>实际训练时，通常写成最小化负对数似然：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">L(θ) = - Σ_t log Pθ(x_t | x_&lt;t)</span><br></pre></td></tr></table></figure>
-<p>这就是交叉熵损失的核心形式。直觉上：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">真实 token 概率越高，loss 越低；</span><br><span class="line">真实 token 概率越低，loss 越高。</span><br></pre></td></tr></table></figure>
-<p>进一步看，交叉熵可以分解为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">H(P_data, Pθ) = H(P_data) + KL(P_data || Pθ)</span><br></pre></td></tr></table></figure>
-<p>其中 <code>H(P_data)</code> 是真实数据自身的熵，模型无法改变；模型真正能优化的是 <code>KL(P_data || Pθ)</code>，也就是模型分布和真实数据分布之间的差距。</p>
-<p>所以，预训练的数学本质可以概括为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">预测下一个 token</span><br><span class="line">  -&gt; 最大化真实 token 的概率</span><br><span class="line">  -&gt; 最小化交叉熵 loss</span><br><span class="line">  -&gt; 让模型分布逼近真实数据分布</span><br></pre></td></tr></table></figure>
-<p><img src="/images/llm/llm-pretraining-07.png" alt="预训练的数学本质"></p>
-<p>这也解释了为什么 loss 是预训练最核心的指标：loss 下降，通常意味着模型更好地拟合了数据分布。但它也有边界：数据分布不等于事实真理，模型学到的是“什么文本更可能出现”，不等于“什么内容一定正确”。</p>
-<h3 id="智能涌现"><a href="#智能涌现" class="headerlink" title="智能涌现"></a>智能涌现</h3><p>为什么预测下一个 token 会产生看似更高级的能力？因为真实语料中的 token 并不是随机出现的。语言背后包含语法、语义、事实、代码结构、数学规则、社会常识和任务模式。要持续预测得更准，模型不能只学表层词频，它必须学习更深的隐藏结构。例如：</p>
-<table>
-<thead>
-<tr>
-<th><strong>表面预测任务</strong></th>
-<th><strong>背后必须学习的结构</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>预测一句话的下一个词</td>
-<td>语法、语义、上下文依赖</td>
-</tr>
-<tr>
-<td>预测事实性内容</td>
-<td>实体关系、时间地点、常识结构</td>
-</tr>
-<tr>
-<td>预测代码下一行</td>
-<td>变量作用域、控制流、API 模式</td>
-</tr>
-<tr>
-<td>预测数学推导</td>
-<td>符号规则、约束关系、证明路径</td>
-</tr>
-<tr>
-<td>预测对话回复</td>
-<td>用户意图、语气、社会语境</td>
-</tr>
-<tr>
-<td>预测长文后续</td>
-<td>篇章结构、主题一致性、长期依赖</td>
-</tr>
-</tbody>
-</table>
-<p>所以，<code>next token prediction</code> 表面上是语言任务，本质上是一个高压缩率的结构学习任务。模型为了降低 loss，会把一切有助于预测的规律压缩进参数中。可以把这个过程理解成：</p>
-<p><img src="/images/llm/llm-pretraining-08.png" alt="智能涌现"></p>
-<p>从信息论角度看，预训练也是一种压缩。模型参数远远小于训练数据本身，它不可能把所有样本逐字存下来。为了在有限参数中解释海量数据，模型必须抽取更抽象、更可复用的结构：</p>
-<p><img src="/images/llm/llm-pretraining-09.png" alt="预训练的泛化"></p>
-<p>好的模型不是记住每个样本，而是找到一套更短、更抽象的结构来解释大量样本。所谓“<strong>智能涌现</strong>”，它不是某个显式模块突然觉醒，而是当数据足够广、模型容量足够大、训练目标足够统一、优化足够充分时，模型内部形成了<strong>可组合的表征空间</strong>。这个表征空间让模型能够把旧结构迁移到新问题中。更准确地说，是一种<strong>可泛化的预测与组合能力</strong>。它来自模型对数据中可预测结构的深度压缩，而不是来自显式规则库，也不是来自人工标注任务的堆叠。</p>
-<p>但也要看到边界。预训练优化的是文本分布，不是真理本身。模型学会的是“什么输出在这个上下文中更像真实数据”，而不是“这个输出是否一定符合现实”。因此，预训练可以提供强大的语言、知识、代码和推理底座，但事实可靠性、价值对齐、工具使用、长期规划和安全边界，还需要后训练、检索、工具调用和外部验证来补足。</p>
-<h2 id="预训练的未来趋势"><a href="#预训练的未来趋势" class="headerlink" title="预训练的未来趋势"></a>预训练的未来趋势</h2><p>从公开论文和技术报告看，预训练正在从“单纯扩大规模”走向更精细的系统优化。未来的核心不只是训练更大的模型，而是用更高质量的数据、更高效的架构和更贴近真实任务的训练方式，提升基座模型的通用能力。</p>
-<p><img src="/images/llm/llm-pretraining-10.png" alt="预训练未来趋势"></p>
-<ol>
-<li><strong>从堆规模走向数据质量与课程设计：</strong>早期预训练更强调参数量和 token 数，但现在行业越来越重视数据质量、数据配比和训练阶段设计。现代基模通常不会把所有数据简单混在一起训练，而是会分阶段加入通用文本、代码、数学、长上下文、多语言和合成数据，让模型能力按目标逐步形成。</li>
-<li><strong>MoE 与稀疏激活成为扩容主线：</strong>Dense 模型继续扩大参数会带来很高的训练和推理成本，因此 MoE 成为重要方向。它的核心思路是：模型拥有更大的总参数容量，但每个 token 只激活其中一部分专家。这样可以在提升模型容量的同时，控制每次推理的计算成本。</li>
-<li><strong>预训练从纯文本走向原生多模态：</strong>多模态能力不再只是“语言模型外接视觉模块”，而是越来越多地进入预训练阶段。文本、图像、音频、视频、代码、屏幕操作轨迹，都可能被 token 化后进入统一训练流程。未来基座模型会更像一个统一的信息处理系统，而不是单纯的文本生成器。</li>
-<li><strong>长上下文成为基座能力的一部分：</strong>长上下文不再只是推理阶段的补丁，而会在预训练或继续预训练阶段被系统性增强。真正有价值的长上下文能力，不只是“能塞更多 token”，而是能处理整份代码仓库、多篇论文、长会议记录、多文档任务和长期交互历史。</li>
-<li><strong>训练和推理开始协同设计：</strong>未来模型不会等训练完成后才考虑部署成本，而是在预训练阶段就考虑推理效率、KV cache、MoE 调度、精度格式、并行策略和服务吞吐。强模型不只要能力强，还要能以可控成本稳定服务真实用户。</li>
-</ol>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;如果说 Transformer 解决的是“大模型如何理解序列”，Dense 与 MoE 解决的是“大模型如何扩展架构”，多模态解决的是“大模型如何接入更多世界信号”，那么预训练要回答的，就是一个更底层的问题：&lt;strong&gt;大模型的通用能力从哪里来？&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;前几篇我们已经铺垫了大模型的发展脉络、数学基础、算法原理、Transformer 架构和 Dense/MoE 架构。到这里，讨论进入 LLM 训练体系中最关键、最昂贵，也最决定能力上限的一环：&lt;strong&gt;预训练&lt;/strong&gt;。它不是附属步骤，而是基座模型形成语言、知识、代码、推理和迁移能力的主要来源。&lt;/p&gt;
     
     </summary>
     
