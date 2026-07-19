@@ -1,0 +1,537 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>数据湖架构演进（一）：Hudi 的增量数据内核 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">数据湖架构演进（一）：Hudi 的增量数据内核</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">数据湖架构演进（一）：Hudi 的增量数据内核</h1><div class="post-meta">Jul 19, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">7,377</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/19/ai-data-lake-hudi/" href="/2026/07/19/ai-data-lake-hudi/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#从-Hive-数仓到-Lakehouse：数据湖为什么需要数据库内核"><span class="toc-number">1.</span> <span class="toc-text">从 Hive 数仓到 Lakehouse：数据湖为什么需要数据库内核</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#从传统数据仓库到-Hadoop-Hive-数仓"><span class="toc-number">1.1.</span> <span class="toc-text">从传统数据仓库到 Hadoop/Hive 数仓</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#数据湖：共享存储上的多类型数据"><span class="toc-number">1.2.</span> <span class="toc-text">数据湖：共享存储上的多类型数据</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#数据湖与数据仓库的两层架构为何仍然存在问题"><span class="toc-number">1.3.</span> <span class="toc-text">数据湖与数据仓库的两层架构为何仍然存在问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lakehouse-的存储基础：事务湖表"><span class="toc-number">1.4.</span> <span class="toc-text">Lakehouse 的存储基础：事务湖表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hudi-与-Iceberg：两种事务湖表内核"><span class="toc-number">1.5.</span> <span class="toc-text">Hudi 与 Iceberg：两种事务湖表内核</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hudi-整体架构：从写入到读取"><span class="toc-number">2.</span> <span class="toc-text">Hudi 整体架构：从写入到读取</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Hudi-的核心组件"><span class="toc-number">2.1.</span> <span class="toc-text">Hudi 的核心组件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#一条-Upsert-如何写入-Hudi"><span class="toc-number">2.2.</span> <span class="toc-text">一条 Upsert 如何写入 Hudi</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reader-如何重建表状态"><span class="toc-number">2.3.</span> <span class="toc-text">Reader 如何重建表状态</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hudi-内核：表状态、版本与并发如何实现"><span class="toc-number">3.</span> <span class="toc-text">Hudi 内核：表状态、版本与并发如何实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Timeline：表状态的操作日志"><span class="toc-number">3.1.</span> <span class="toc-text">Timeline：表状态的操作日志</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Timeline-与-Instant"><span class="toc-number">3.1.1.</span> <span class="toc-text">Timeline 与 Instant</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Instant-状态流转"><span class="toc-number">3.1.2.</span> <span class="toc-text">Instant 状态流转</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Timeline-记录哪些-Action"><span class="toc-number">3.1.3.</span> <span class="toc-text">Timeline 记录哪些 Action</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#文件存在不等于文件可见"><span class="toc-number">3.1.4.</span> <span class="toc-text">文件存在不等于文件可见</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#File-Group-与-File-Slice：如何组织文件版本"><span class="toc-number">3.2.</span> <span class="toc-text">File Group 与 File Slice：如何组织文件版本</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#File-Group：稳定的文件版本分组"><span class="toc-number">3.2.1.</span> <span class="toc-text">File Group：稳定的文件版本分组</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#File-Slice：File-Group-在某个时间点的物理版本"><span class="toc-number">3.2.2.</span> <span class="toc-text">File Slice：File Group 在某个时间点的物理版本</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#COW：写入时创建新版本"><span class="toc-number">3.2.3.</span> <span class="toc-text">COW：写入时创建新版本</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#MOR：在当前-Slice-中累积变化"><span class="toc-number">3.2.4.</span> <span class="toc-text">MOR：在当前 Slice 中累积变化</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#COW-与-MOR-的权衡"><span class="toc-number">3.2.5.</span> <span class="toc-text">COW 与 MOR 的权衡</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Block-与-Record-Merger：MOR-如何恢复最新状态"><span class="toc-number">3.3.</span> <span class="toc-text">Log Block 与 Record Merger：MOR 如何恢复最新状态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Index-与-Metadata-Table：如何定位记录和文件"><span class="toc-number">3.4.</span> <span class="toc-text">Index 与 Metadata Table：如何定位记录和文件</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Index-介绍"><span class="toc-number">3.4.1.</span> <span class="toc-text">Index 介绍</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Metadata-Table：Hudi-的内部元数据存储"><span class="toc-number">3.4.2.</span> <span class="toc-text">Metadata Table：Hudi 的内部元数据存储</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#并发控制与-Table-Services：如何安全地重写文件"><span class="toc-number">3.5.</span> <span class="toc-text">并发控制与 Table Services：如何安全地重写文件</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#生产实践：用-Hudi-构建订单实时湖表"><span class="toc-number">4.</span> <span class="toc-text">生产实践：用 Hudi 构建订单实时湖表</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#从数据库-CDC-到-Hudi"><span class="toc-number">4.1.</span> <span class="toc-text">从数据库 CDC 到 Hudi</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hudi-如何处理更新、乱序与失败"><span class="toc-number">4.2.</span> <span class="toc-text">Hudi 如何处理更新、乱序与失败</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hudi-的核心价值"><span class="toc-number">4.3.</span> <span class="toc-text">Hudi 的核心价值</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><p>Hive 通过 Schema、分区、Metastore 和 SQL，将 HDFS 上的文件组织成可管理、可查询的数仓表，奠定了大数据离线数仓的基础。但随着原始日志、事件流和机器学习数据快速增长，企业开始需要更低成本的共享存储，并让多个计算引擎访问同一份数据，数据湖架构由此逐渐形成。</p>
+<p>早期数据湖解决了开放存储、弹性扩展和多引擎访问问题，却没有完整解决事务提交、更新删除、并发写入和版本管理。特别是面对数据库 CDC 和高频 Upsert，传统的分区覆盖与批量重写成本越来越高。Hudi 由此在文件之上补回增量存储内核：通过 Timeline 管理提交与可见性，通过 Index 和 File Group 定位记录，并利用 COW、MOR 与 Table Services 平衡读写成本。</p>
+<a id="more"></a>
+<p>本文将从数据湖的演进背景出发，分析 Hudi 的整体架构和完整读写流程，再深入 Timeline、File Group、File Slice、Index、MOR、并发控制与后台维护等核心机制，最后结合 CDC 场景讨论这些设计如何在生产系统中协同工作。Iceberg、Paimon 与 Lance 将在后续文章中分别展开。</p>
+<blockquote>
+<p>本文以 Apache Hudi 1.2.0、Table Version 9 为主要分析对象。旧版本在 Timeline 布局、Record-Level Index 和并发控制能力上可能存在差异。</p>
+</blockquote>
+<h2 id="从-Hive-数仓到-Lakehouse：数据湖为什么需要数据库内核"><a href="#从-Hive-数仓到-Lakehouse：数据湖为什么需要数据库内核" class="headerlink" title="从 Hive 数仓到 Lakehouse：数据湖为什么需要数据库内核"></a>从 Hive 数仓到 Lakehouse：数据湖为什么需要数据库内核</h2><h3 id="从传统数据仓库到-Hadoop-Hive-数仓"><a href="#从传统数据仓库到-Hadoop-Hive-数仓" class="headerlink" title="从传统数据仓库到 Hadoop/Hive 数仓"></a>从传统数据仓库到 Hadoop/Hive 数仓</h3><p>在 Hadoop 出现之前，企业通常使用关系型数据库或专用 MPP 数据库建设数据仓库。业务数据经过 ETL 清洗和建模后写入数据库，由数据库统一负责存储、事务、索引、查询优化和 SQL 分析。这种架构适合结构化数据与 BI 报表，但面对快速增长的日志、点击流和多媒体数据时，存储成本与横向扩展压力逐渐增大。</p>
+<p>Hadoop 将数据从数据库管理的存储中释放出来：HDFS 使用普通服务器提供分布式存储，MapReduce 提供并行计算，Hive 则在文件之上增加 Schema、分区、Metastore 和 SQL，形成面向大规模离线分析的 Hive 数仓。</p>
+<p><img src="/images/ai-data/data-lake-hudi-01.png" alt="从传统数据库数仓到 Hadoop、HDFS 与 Hive 数仓的架构演进"></p>
+<p>Hive 数仓降低了海量数据的存储和计算成本，但仍以批处理、目录和分区为核心。随着数据类型、处理时效和计算引擎进一步增加，数据架构开始继续向数据湖演进。</p>
+<h3 id="数据湖：共享存储上的多类型数据"><a href="#数据湖：共享存储上的多类型数据" class="headerlink" title="数据湖：共享存储上的多类型数据"></a>数据湖：共享存储上的多类型数据</h3><p>随着日志、事件流、文档、图片和机器学习样本不断增长，企业开始先保存原始数据，再由不同团队按需加工和消费。数据湖由此形成了“低成本存储、开放格式、按需计算”的基本架构。</p>
+<p>数据湖最初可以建立在 HDFS 上，云对象存储则进一步实现了存算分离，使 Spark、Flink、Trino 和 Ray 能够共享同一份底层数据。</p>
+<p><img src="/images/ai-data/data-lake-hudi-02.png" alt="共享存储让多种计算引擎围绕同一份开放数据运行"></p>
+<p>开放存储降低了成本和平台绑定，却没有提供完整的表级语义：对象存储知道文件是否存在，Parquet 知道单个文件如何编码，但它们都不知道哪些文件共同构成当前表。</p>
+<p>因此，数据湖解决了“数据如何存储和共享”，却没有天然解决“某一时刻哪一份数据才是一张正确的表”。</p>
+<h3 id="数据湖与数据仓库的两层架构为何仍然存在问题"><a href="#数据湖与数据仓库的两层架构为何仍然存在问题" class="headerlink" title="数据湖与数据仓库的两层架构为何仍然存在问题"></a>数据湖与数据仓库的两层架构为何仍然存在问题</h3><p>数据湖适合低成本保存原始数据，并支持数据工程和机器学习；数据仓库则擅长结构化建模、SQL 分析和 BI。为了同时获得两者的能力，很多企业采用了“<strong>数据湖 + 数据仓库</strong>”的两层架构：数据先进入湖中，再经过 ETL 复制到数据仓库。</p>
+<p><img src="/images/ai-data/data-lake-hudi-03.png" alt="数据湖与数据仓库两层架构中的数据复制与管理边界"></p>
+<p>两层架构的问题不在于数据湖或数据仓库本身，而在于表状态和数据管理被拆分到了两个系统：</p>
+<ul>
+<li>数据需要多次复制，增加存储成本和数据延迟；</li>
+<li>多级 ETL 引入更多失败点，湖与仓可能出现 Schema 和版本不一致；</li>
+<li>权限、血缘、质量和成本需要跨系统重复管理。</li>
+</ul>
+<p>Databricks 与学术界合作者在 CIDR 2021 论文中系统化提出了 Lakehouse 架构：在低成本、可直接访问的开放存储之上，提供 ACID 事务、数据版本、审计、索引、缓存和查询优化等数据库能力，并同时支持 BI、数据工程和机器学习（<a href="https://www.databricks.com/sites/default/files/2020/12/cidr_lakehouse.pdf" target="_blank" rel="external">Lakehouse: A New Generation of Open Platforms</a>）。</p>
+<p><img src="/images/ai-data/data-lake-hudi-04.png" alt="Lakehouse 将事务、治理和查询能力建立在开放存储之上"></p>
+<p>Lakehouse 不是简单地把数据湖和数据仓库部署在一起，而是让数仓能力直接建立在数据湖存储之上，使不同工作负载尽可能围绕同一份受管理的数据运行。实现这一目标的关键，是在开放文件之上增加事务元数据层——这正是 Hudi、Iceberg 和 Delta Lake 等事务湖表所解决的问题。</p>
+<h3 id="Lakehouse-的存储基础：事务湖表"><a href="#Lakehouse-的存储基础：事务湖表" class="headerlink" title="Lakehouse 的存储基础：事务湖表"></a>Lakehouse 的存储基础：事务湖表</h3><p>Lakehouse 是一种完整的数据架构，不是某种文件格式，也不等同于某一个产品。它的核心思想，是在低成本、开放的数据湖存储之上，重新建立事务、版本、治理和查询优化等数据库能力。</p>
+<p><img src="/images/ai-data/data-lake-hudi-05.png" alt="完整的 Lakehouse 由工作负载、计算优化、治理、事务湖表与共享存储共同构成"></p>
+<p>其中，事务湖表层是数据湖走向 Lakehouse 的关键，因为它需要回答一个基本问题：</p>
+<ul>
+<li>在某一个时刻，哪些文件共同构成一张合法的数据表？</li>
+</ul>
+<p>假设一个分布式任务需要生成 500 个 Parquet 文件，但在写完第 420 个文件后失败。虽然对象存储中已经出现了大量新文件，但这些文件不能构成一次完整提交，Reader 也不应该看到这批半成品。当 CDC、Backfill 和 Compaction 并发运行时，系统还需要提供四类表级语义：</p>
+<ol>
+<li>原子提交：一批文件要么全部可见，要么全部不可见；</li>
+<li>版本管理：Reader 能够读取一致的当前状态或历史状态；</li>
+<li>并发控制：Writer 与维护任务发生冲突时能够检测、重试或回滚；</li>
+<li>数据演进：正确处理 Update、Delete、Schema 和分区变化。</li>
+</ol>
+<p>事务湖表通常采用“先写不可变文件，后原子发布表状态”的提交方式：</p>
+<p><img src="/images/ai-data/data-lake-hudi-06.png" alt="事务湖表通过元数据层把多个文件原子发布为一致的表版本"></p>
+<p>现代对象存储即使提供强一致的单文件读写和 Listing，也不会自动提供跨多个 Data File、Delete File 和 Metadata File 的表级事务。Hudi、Iceberg 和 Delta Lake 的核心价值，就是通过事务元数据定义表状态与提交边界。</p>
+<p>不过，事务湖表只是 Lakehouse 的存储基础。完整的 Lakehouse 还需要查询优化、缓存、统一 Catalog、权限治理以及对 BI、流处理和 AI 工作负载的支持。</p>
+<h3 id="Hudi-与-Iceberg：两种事务湖表内核"><a href="#Hudi-与-Iceberg：两种事务湖表内核" class="headerlink" title="Hudi 与 Iceberg：两种事务湖表内核"></a>Hudi 与 Iceberg：两种事务湖表内核</h3><p>Databricks 以 Delta Lake 作为 Lakehouse 的事务存储基础（<a href="https://www.databricks.com/wp-content/uploads/2020/08/p975-armbrust.pdf" target="_blank" rel="external">Delta Lake 论文</a>），通过事务日志为 Parquet 文件增加 ACID、Schema Enforcement、Time Travel 和批流统一能力。但 Delta Lake 只是事务湖表的一种实现，Hudi 与 Iceberg 也在开放存储之上构建了各自的表状态与提交协议。</p>
+<p>这里先简单介绍下 Hudi 与 Iceberg，是因为它们代表了两种不同的内核设计思路：</p>
+<p><img src="/images/ai-data/data-lake-hudi-07.png" alt="Hudi 与 Iceberg 分别从记录变化和表快照出发构建湖表内核"></p>
+<p>Hudi 最初关注的是如何将数据库中的持续变化低延迟写入数据湖。它通过 Record Key 和 Index 定位记录所在的 File Group，再由 Timeline 管理写入、Compaction、Clustering 和 Cleaning。它首先回答的是：</p>
+<ul>
+<li>同一条记录发生多次变化时，如何定位、合并并增量传播这些变化？</li>
+</ul>
+<p>Iceberg 最初关注的是超大规模分析表的可靠性与查询规划。它通过 Snapshot 定义表版本，使用 Manifest Tree 组织 Data File 和 Delete File，再由 Catalog 原子发布新的表状态。它首先回答的是：</p>
+<ul>
+<li>当一张表包含海量文件时，如何快速、准确地确定某个时刻的完整文件集合？</li>
+</ul>
+<p>Hudi、Iceberg 与 Delta Lake 都来自真实生产系统中的一致性、更新效率和元数据扩展问题，并不是 Lakehouse 概念出现之后才产生的。Lakehouse 在更高层次上总结了它们共同推动的架构方向，而这些事务湖表则提供了 Lakehouse 所需的存储基础。</p>
+<p>本文接下来将深入 Hudi 的 Timeline、File Group 与 File Slice 等核心机制，分析它如何定义一致的表状态，并处理数据更新、并发写入、故障恢复与历史版本管理。</p>
+<h2 id="Hudi-整体架构：从写入到读取"><a href="#Hudi-整体架构：从写入到读取" class="headerlink" title="Hudi 整体架构：从写入到读取"></a>Hudi 整体架构：从写入到读取</h2><p>理解 Hudi，不能只把它看成一种新的文件格式。Parquet、ORC 解决的是单个文件内部如何编码数据，而 Hudi 解决的是另一组问题：</p>
+<ul>
+<li>一条记录更新后，Writer 如何找到旧记录所在的文件？</li>
+<li>分布式任务生成多个文件后，如何原子发布？</li>
+<li>Reader 如何识别已经提交、尚未完成和已经失效的文件？</li>
+<li>高频更新产生的 Log、小文件和历史版本如何持续维护？</li>
+<li>下游如何只消费某段时间内发生变化的数据？</li>
+</ul>
+<p>从整体上看，Hudi 是构建在对象存储或 HDFS 之上的增量存储引擎。它通常不原地改写已经发布的 Base File。COW 生成新的 Base File，MOR 则将变化追加或写入 Log File，最后通过 Timeline 发布新的表状态。</p>
+<h3 id="Hudi-的核心组件"><a href="#Hudi-的核心组件" class="headerlink" title="Hudi 的核心组件"></a>Hudi 的核心组件</h3><p>Hudi 的整体架构可以分为访问层、表内核、元数据层、存储层和后台维护层：</p>
+<p><img src="/images/ai-data/data-lake-hudi-08.png" alt="Hudi 的写入、表内核、元数据、存储、读取与后台服务"></p>
+<p>其中几个核心组件分别解决不同问题：</p>
+<table>
+<thead>
+<tr>
+<th><strong>组件</strong></th>
+<th><strong>核心作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Timeline</td>
+<td>记录写入和表维护操作，决定一次变化是否可见</td>
+</tr>
+<tr>
+<td>Index</td>
+<td>将 Record Key 定位到已有 File Group</td>
+</tr>
+<tr>
+<td>File Group / File Slice</td>
+<td>组织一组记录在不同时间点的物理版本</td>
+</tr>
+<tr>
+<td>File-System View</td>
+<td>根据 Timeline 构造 Reader 应该看到的文件集合</td>
+</tr>
+<tr>
+<td>Metadata Table</td>
+<td>保存文件列表、Record Index 和统计信息</td>
+</tr>
+<tr>
+<td>Record Merger</td>
+<td>合并同一 Record Key 的多个版本</td>
+</tr>
+<tr>
+<td>Table Services</td>
+<td>持续处理 Log、小文件、旧版本和数据布局</td>
+</tr>
+</tbody>
+</table>
+<p>这些组件共同构成了 Hudi 的基本工作方式：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">写入时：Index 定位记录 → 写 Base 或 Log → Timeline 发布</span><br><span class="line"></span><br><span class="line">读取时：Timeline 选择版本 → 构造 File-System View → 读取并合并数据</span><br></pre></td></tr></table></figure>
+<h3 id="一条-Upsert-如何写入-Hudi"><a href="#一条-Upsert-如何写入-Hudi" class="headerlink" title="一条 Upsert 如何写入 Hudi"></a>一条 Upsert 如何写入 Hudi</h3><p>假设数据库中的一条商品记录发生更新：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">product_id = 42</span><br><span class="line">operation  = UPDATE</span><br><span class="line">source_lsn = 187234</span><br><span class="line">region     = cn</span><br><span class="line">price      = 99.0</span><br></pre></td></tr></table></figure>
+<p>对应到 Hudi 中，上述一次数据的 Upsert 的主路径如下：</p>
+<p><img src="/images/ai-data/data-lake-hudi-09.png" alt="一条 Upsert 从 Record Key 定位到 Timeline 发布的完整时序"></p>
+<p>这条路径可以概括为四个阶段。</p>
+<ol>
+<li>Writer 从输入数据中生成 Record Key 和 Partition Path，并按照配置处理同一 Key 的重复版本。</li>
+<li>Index 查询这条记录是否已经存在。如果找到已有位置，记录被路由到对应 File Group；如果没有找到，则作为 Insert 分配到已有小文件或新的 File Group。</li>
+<li><p>Writer 根据表类型执行物理写入：</p>
+<p><img src="/images/ai-data/data-lake-hudi-10.png" alt="COW 与 MOR 在写入路径上采用不同的物化策略"></p>
+<ul>
+<li>COW 在写入时完成记录合并并生成新的 Base File；MOR 则可以先把更新写入 Log，将部分物化成本延后到读取或 Compaction 阶段。</li>
+</ul>
+</li>
+<li>数据文件写完后，Writer 更新相关元数据，并将 Timeline 上的 Instant 发布为 <code>COMPLETED</code>。只有完成这一步，新文件才会对 Reader 可见。</li>
+</ol>
+<p>因此，Hudi 的原子性并不依赖同时修改多个数据文件，而是先生成文件，最后通过 Timeline 原子发布新的表状态。没有进入 <code>COMPLETED</code> 的写入，即使已经在对象存储中生成了文件，也不会成为合法表版本（<a href="https://hudi.apache.org/docs/write_operations/" target="_blank" rel="external">Hudi Write Operations</a>）。</p>
+<h3 id="Reader-如何重建表状态"><a href="#Reader-如何重建表状态" class="headerlink" title="Reader 如何重建表状态"></a>Reader 如何重建表状态</h3><p>Hudi Reader 不会通过文件修改时间寻找“最新文件”，也不能直接读取目录中的全部文件。Reader 首先根据 Timeline 确定目标时间点的有效 Action，再通过 Metadata Table 或存储目录 Listing 获取文件信息，构造 File-System View，最后选择对应的读取方式：</p>
+<p><img src="/images/ai-data/data-lake-hudi-11.png" alt="Reader 根据 Timeline 和 File-System View 重建可见表状态"></p>
+<p>不同查询类型对应不同的物理读取路径：</p>
+<table>
+<thead>
+<tr>
+<th><strong>查询类型</strong></th>
+<th><strong>读取方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Snapshot</td>
+<td>读取最新已提交状态；MOR 需要合并 Base 与 Logs</td>
+</tr>
+<tr>
+<td>Read Optimized</td>
+<td>只读取最新完成物化的 Base File</td>
+</tr>
+<tr>
+<td>Time Travel</td>
+<td>读取指定历史时间点的 File Slice</td>
+</tr>
+<tr>
+<td>Incremental Query</td>
+<td>读取一段 Timeline 范围内发生变化的记录</td>
+</tr>
+<tr>
+<td>CDC Query</td>
+<td>读取具体的 Insert、Update 和 Delete 事件</td>
+</tr>
+</tbody>
+</table>
+<p>由此可以建立对 Hudi 的整体理解：</p>
+<p><img src="/images/ai-data/data-lake-hudi-12.png" alt="Hudi 围绕记录定位、文件组织、提交可见性和增量读取构建完整链路"></p>
+<p>Hudi 的核心并不是简单地让 Parquet 支持 Update，而是围绕持续变化的数据，建立一套从记录定位、物理写入、原子发布到一致读取的完整路径。</p>
+<h2 id="Hudi-内核：表状态、版本与并发如何实现"><a href="#Hudi-内核：表状态、版本与并发如何实现" class="headerlink" title="Hudi 内核：表状态、版本与并发如何实现"></a>Hudi 内核：表状态、版本与并发如何实现</h2><p>上一节从整体上介绍了 Hudi 的读写路径，本节继续下钻 Hudi 内核，重点分析表状态、文件版本、记录合并与并发控制的实现。Hudi 内核的核心概念如下图所示：</p>
+<p><img src="/images/ai-data/data-lake-hudi-13.png" alt="Hudi 内核围绕 Timeline、File Group、Index 与 Table Services 协同工作"></p>
+<p>这些机制共同维护着 Hudi 表的五个核心不变量：</p>
+<ol>
+<li>只有进入 <code>COMPLETED</code> 状态的 Action 才能被 Reader 看见；</li>
+<li>在索引定义的唯一性范围内，一条逻辑记录在任意时刻只有一个有效位置；</li>
+<li>对于任意查询时间点，每个有效 File Group 只能暴露一个对应的 File Slice；</li>
+<li>同一 Record Key 的多个版本必须由一致的 Merge 规则得到确定结果；</li>
+<li>Compaction、Clustering 等后台操作可以改变物理布局，但不能意外改变表的逻辑状态。</li>
+</ol>
+<h3 id="Timeline：表状态的操作日志"><a href="#Timeline：表状态的操作日志" class="headerlink" title="Timeline：表状态的操作日志"></a>Timeline：表状态的操作日志</h3><p>对象存储即使能够保证单个对象的原子写入和强一致读取，也不会自动为一批 Base File、Log File 和 Metadata File 提供跨对象事务。Hudi 因此不原地重写已经发布的 Base File，而是先创建 Timeline Instant，再写出新的文件版本，最后通过 Timeline 原子发布新的表状态。</p>
+<h4 id="Timeline-与-Instant"><a href="#Timeline-与-Instant" class="headerlink" title="Timeline 与 Instant"></a>Timeline 与 Instant</h4><p>Timeline 是一张 Hudi 表上所有操作的有序历史，Instant 则是其中的一条记录：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Timeline</span><br><span class="line">    = Ordered Collection of Instants</span><br><span class="line"></span><br><span class="line">Instant</span><br><span class="line">    = Time + Action + State</span><br></pre></td></tr></table></figure>
+<p>三者分别表示：</p>
+<ul>
+<li>Time：操作何时开始和完成；</li>
+<li>Action：执行了什么操作；</li>
+<li>State：操作执行到什么阶段。</li>
+</ul>
+<p>例如，一张表的 Timeline 可能包含：</p>
+<p><img src="/images/ai-data/data-lake-hudi-14.png" alt="Timeline 中不同 Action、Instant 与状态的关系"></p>
+<p>这里，<code>T1</code>、<code>T2</code> 是 Instant 的 Begin Time；<code>COMMIT</code>、<code>COMPACTION</code> 是 Action 类型；<code>COMPLETED</code>、<code>INFLIGHT</code> 则是执行状态。</p>
+<p>因此，Timeline 不是一次提交，Instant 也不只是一个时间戳：Timeline 是完整的操作历史，Instant 是其中一条由时间、Action 和 State 共同定义的记录。</p>
+<h4 id="Instant-状态流转"><a href="#Instant-状态流转" class="headerlink" title="Instant 状态流转"></a>Instant 状态流转</h4><p>一次典型写入可以概括为：</p>
+<ol>
+<li>创建 <code>REQUESTED</code> Instant，并保存可选的执行计划；</li>
+<li>将 Instant 转为 <code>INFLIGHT</code>，开始生成 Base File、Log File 及相关元数据；</li>
+<li>完成文件校验、并发冲突检测，并生成 Commit Metadata；</li>
+<li>原子发布 <code>COMPLETED</code> Instant，使新状态对 Reader 可见。</li>
+</ol>
+<p>一个典型 Instant 会经历三个状态：</p>
+<p><img src="/images/ai-data/data-lake-hudi-15.png" alt="Instant 从 REQUESTED、INFLIGHT 到 COMPLETED 的状态流转"></p>
+<ul>
+<li><code>REQUESTED</code>：Action 已经被计划，但尚未执行；</li>
+<li><code>INFLIGHT</code>：Writer 或 Table Service 正在生成文件；</li>
+<li><code>COMPLETED</code>：Action 已经成功发布，可以参与表状态构建。</li>
+</ul>
+<p>如果 Writer 在 <code>INFLIGHT</code> 阶段失败，原 Instant 不会进入名为 <code>ROLLBACK</code> 的状态，而是保持未完成。后续系统可以创建一个独立的 Rollback Action，或者由 Failed-Write Cleaner 清理残留文件。</p>
+<h4 id="Timeline-记录哪些-Action"><a href="#Timeline-记录哪些-Action" class="headerlink" title="Timeline 记录哪些 Action"></a>Timeline 记录哪些 Action</h4><p>Timeline 不只记录数据写入，也记录表的物理维护和故障恢复：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Action</strong></th>
+<th><strong>主要语义</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>COMMIT</td>
+<td>通常对应 COW 写入，生成新的 Base File</td>
+</tr>
+<tr>
+<td>DELTA_COMMIT</td>
+<td>通常对应 MOR 写入，生成 Base File 或 Log File</td>
+</tr>
+<tr>
+<td>REPLACE_COMMIT</td>
+<td>用新 File Group 原子替换旧 File Group</td>
+</tr>
+<tr>
+<td>COMPACTION</td>
+<td>将 Base 与 Logs 合并为新的 Base File</td>
+</tr>
+<tr>
+<td>LOG_COMPACTION</td>
+<td>合并多个 Log File，降低读取成本</td>
+</tr>
+<tr>
+<td>CLEAN</td>
+<td>删除超过保留策略的旧文件版本</td>
+</tr>
+<tr>
+<td>ROLLBACK</td>
+<td>撤销失败或未完成的写入</td>
+</tr>
+<tr>
+<td>INDEXING</td>
+<td>构建或更新 Metadata Index</td>
+</tr>
+</tbody>
+</table>
+<h4 id="文件存在不等于文件可见"><a href="#文件存在不等于文件可见" class="headerlink" title="文件存在不等于文件可见"></a>文件存在不等于文件可见</h4><p>假设一个分布式任务计划生成 500 个文件，但 Driver 在写完第 420 个文件后失败：</p>
+<p><img src="/images/ai-data/data-lake-hudi-16.png" alt="Writer 失败后，未完成 Instant 产生的文件不会对 Reader 可见"></p>
+<p>Reader 判断文件是否可见，主要依据对应 Action 是否进入 <code>COMPLETED</code>，而不是文件是否已经存在：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">VisibleActions(T)</span><br><span class="line">    = Completed Actions whose completionTime &lt;= T</span><br><span class="line"></span><br><span class="line">TableState(T)</span><br><span class="line">    = VisibleActions(T) 对应的有效 File Groups 和 File Slices</span><br></pre></td></tr></table></figure>
+<p>Begin Time 表示 Action 的开始时间，Completion Time 才表示它进入可见序列的时间。并发场景下，两者顺序可能不同，因此 Reader 和增量消费必须以完成状态及 Completion Time 为准。</p>
+<p>Hudi 将近期 Action 保存在 Active Timeline 中，较早的 Completed Action 则逐步写入基于 Parquet 和 Manifest 的 LSM Timeline History，以控制长期扫描成本（<a href="https://hudi.apache.org/learn/tech-specs/" target="_blank" rel="external">Hudi Technical Specification</a>）。</p>
+<h3 id="File-Group-与-File-Slice：如何组织文件版本"><a href="#File-Group-与-File-Slice：如何组织文件版本" class="headerlink" title="File Group 与 File Slice：如何组织文件版本"></a>File Group 与 File Slice：如何组织文件版本</h3><p>Timeline 定义哪些操作已经完成，File Group 与 File Slice 则把这些操作产生的文件组织成可读取的版本。</p>
+<h4 id="File-Group：稳定的文件版本分组"><a href="#File-Group：稳定的文件版本分组" class="headerlink" title="File Group：稳定的文件版本分组"></a>File Group：稳定的文件版本分组</h4><p>File Group 是 Hudi 组织数据文件的基本单元，由 <code>Partition Path + file_id</code> 唯一标识。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">FileGroupId = Partition Path + file_id</span><br></pre></td></tr></table></figure>
+<p><code>file_id</code> 是 Hudi 为一组记录分配的物理标识。同一个 File Group 在不同时间生成的 Base File 和 Log File 都会沿用这个 <code>file_id</code>。在索引定义的唯一性范围内，一条记录在任意时刻只应映射到一个有效 File Group：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Record Key</span><br><span class="line">    → Partition Path</span><br><span class="line">    → file_id</span><br></pre></td></tr></table></figure>
+<p><code>file_id</code> 在 File Group 的生命周期内保持稳定，但 Clustering、Insert Overwrite 等 <code>REPLACE_COMMIT</code> 操作可能淘汰旧 File Group，并创建具有新 <code>file_id</code> 的 File Group。</p>
+<h4 id="File-Slice：File-Group-在某个时间点的物理版本"><a href="#File-Slice：File-Group-在某个时间点的物理版本" class="headerlink" title="File Slice：File Group 在某个时间点的物理版本"></a>File Slice：File Group 在某个时间点的物理版本</h4><p>一个 File Group 由多个 File Slice 组成：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">FileGroup(partitionPath, file_id)</span><br><span class="line">    = &#123;</span><br><span class="line">        FileSlice(T1),</span><br><span class="line">        FileSlice(T2),</span><br><span class="line">        ...</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">FileSlice(baseInstant)</span><br><span class="line">    = Optional Base File</span><br><span class="line">      + Zero or More Log Files</span><br></pre></td></tr></table></figure>
+<p>File Slice 表示该 File Group 在某个 Base Instant 上的物理状态：</p>
+<ul>
+<li>Base File 保存已经完成列式物化的数据；</li>
+<li>Log File 保存尚未物化的更新、删除或 CDC 变化；</li>
+<li>Base File 是可选的，因此 MOR 也可能存在 Log-only File Slice。</li>
+</ul>
+<p>COW 与 MOR 的核心差异，就是它们创建和更新 File Slice 的方式不同：</p>
+<p><img src="/images/ai-data/data-lake-hudi-17.png" alt="COW 创建新 Base File，MOR 在 File Slice 中累积 Log 并通过 Compaction 物化"></p>
+<h4 id="COW：写入时创建新版本"><a href="#COW：写入时创建新版本" class="headerlink" title="COW：写入时创建新版本"></a>COW：写入时创建新版本</h4><p>在 COW 表中，更新一个 File Group 时，Writer 读取旧 Base File、合并变更记录，再写出新的 Base File。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Slice T1：Base T1</span><br><span class="line">    + Update</span><br><span class="line">    → Slice T2：Base T2</span><br></pre></td></tr></table></figure>
+<p>旧 Base File 不会被原地修改。只有 T2 对应的 Action 进入 <code>COMPLETED</code> 后，Reader 才会选择 T2 作为最新 File Slice；旧 Slice 在 Cleaner 回收前仍可用于历史读取。</p>
+<p>COW 将合并成本放在写入路径，Reader 通常只需要读取最新 Base File。代价是即使只更新少量记录，也可能需要重写整个受影响的 Base File。</p>
+<h4 id="MOR：在当前-Slice-中累积变化"><a href="#MOR：在当前-Slice-中累积变化" class="headerlink" title="MOR：在当前 Slice 中累积变化"></a>MOR：在当前 Slice 中累积变化</h4><p>在 MOR 表中，对已有 File Group 的更新通常先写入 Log File：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Base Instant T1</span><br><span class="line">    ├── Base T1</span><br><span class="line">    ├── Log T2</span><br><span class="line">    └── Log T3</span><br></pre></td></tr></table></figure>
+<p>T2、T3 是 Delta Commit 的 Instant，但这些 Log 仍属于以 T1 为 Base Instant 的 File Slice，并不会各自创建新的 Slice。读取时有两条路径：</p>
+<ul>
+<li>Snapshot Query 合并 Base 与有效 Logs，返回最新状态；</li>
+<li>Read Optimized Query 只读取最近物化的 Base File，可能看不到尚未 Compaction 的更新。</li>
+</ul>
+<p>当 T4 执行 Compaction 时，Hudi 将 Base T1 与 Logs T2/T3 合并为 Base T4，并在同一个 File Group 中创建新的 File Slice：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Slice T1：Base T1 + Logs T2/T3</span><br><span class="line">    → Compaction T4</span><br><span class="line">    → Slice T4：Base T4</span><br></pre></td></tr></table></figure>
+<p>Compaction 改变的是物理布局，不应改变前后的逻辑记录状态。</p>
+<h4 id="COW-与-MOR-的权衡"><a href="#COW-与-MOR-的权衡" class="headerlink" title="COW 与 MOR 的权衡"></a>COW 与 MOR 的权衡</h4><table>
+<thead>
+<tr>
+<th><strong>维度</strong></th>
+<th><strong>COW</strong></th>
+<th><strong>MOR</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>更新方式</td>
+<td>重写受影响的 Base File</td>
+<td>通常先写入 Log</td>
+</tr>
+<tr>
+<td>新 File Slice</td>
+<td>写出新 Base File 时产生</td>
+<td>通常由 Compaction 或新 Base File 产生</td>
+</tr>
+<tr>
+<td>Snapshot 读取</td>
+<td>最新 Base File</td>
+<td>Base 与 Logs 合并</td>
+</tr>
+<tr>
+<td>写放大</td>
+<td>较高</td>
+<td>较低</td>
+</tr>
+<tr>
+<td>读放大</td>
+<td>较低</td>
+<td>取决于 Log 数量</td>
+</tr>
+<tr>
+<td>后台维护</td>
+<td>不需要 MOR Compaction</td>
+<td>需要控制 Compaction 周期</td>
+</tr>
+</tbody>
+</table>
+<p>File Group 越大，文件数量越少，但 COW 重写成本和并发冲突范围可能越大；File Group 越小，更新粒度更细，却容易产生小文件和更多元数据。MOR 还需要控制 Log 的累积速度，避免把写入成本全部转移到查询和 Compaction。</p>
+<h3 id="Log-Block-与-Record-Merger：MOR-如何恢复最新状态"><a href="#Log-Block-与-Record-Merger：MOR-如何恢复最新状态" class="headerlink" title="Log Block 与 Record Merger：MOR 如何恢复最新状态"></a>Log Block 与 Record Merger：MOR 如何恢复最新状态</h3><p>Hudi Log File 不是普通的 Avro 文件，而是由多个 Log Block 组成的原生容器。Block 的内容可以使用 Avro、HFile 或 Parquet 编码。一个 Log Block 的结构可以简化为：</p>
+<p><img src="/images/ai-data/data-lake-hudi-18.png" alt="Hudi Log File 由带边界、元数据和内容编码的 Log Block 组成"></p>
+<p>Magic 和长度字段用于识别 Block 边界及损坏数据；Header 可以携带 Instant、Schema、Record Positions、Block Identifier 和 Partial Update 等信息。常见 Block 类型包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Block</strong></th>
+<th><strong>作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data Block</td>
+<td>保存完整或部分的 Insert、Update 记录</td>
+</tr>
+<tr>
+<td>Delete Block</td>
+<td>保存带有 Ordering Value 的删除 Tombstone</td>
+</tr>
+<tr>
+<td>Command Block</td>
+<td>ROLLBACK_BLOCK 可撤销前一个失败写入产生的 Block</td>
+</tr>
+<tr>
+<td>CDC Block</td>
+<td>按 CDC 配置保存操作类型及 Before/After Image</td>
+</tr>
+</tbody>
+</table>
+<p><code>Corrupted Block</code> 不会由 Writer 持久化，而是 Reader 对损坏或未完整写入 Block 的内部表示。MOR Snapshot Reader 会把 Base File、Data Block 和 Delete Tombstone 共同交给 Record Merger：</p>
+<p><img src="/images/ai-data/data-lake-hudi-19.png" alt="Record Merger 合并 Base、Data Block 与 Delete Tombstone，恢复最新记录状态"></p>
+<p>Record Merger 并不总是由 Ordering Field 决定。Hudi 主要提供三种 Merge Mode：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Merge Mode</strong></th>
+<th><strong>冲突解决方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>COMMIT_TIME_ORDERING</td>
+<td>更晚提交的记录胜出</td>
+</tr>
+<tr>
+<td>EVENT_TIME_ORDERING</td>
+<td>Ordering Field 更大的记录胜出</td>
+</tr>
+<tr>
+<td>CUSTOM</td>
+<td>使用自定义 HoodieRecordMerger</td>
+</tr>
+</tbody>
+</table>
+<p>例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(key=42, source_lsn=101, price=80)</span><br><span class="line">(key=42, source_lsn=103, price=99)</span><br><span class="line">(key=42, source_lsn=102, price=90)</span><br></pre></td></tr></table></figure>
+<p>使用 <code>EVENT_TIME_ORDERING</code> 时，即使 <code>source_lsn=102</code> 最晚到达，最终仍保留 <code>source_lsn=103</code> 的版本。</p>
+<p>对于需要处理乱序、重试和重复事件的 Event-time 或自定义 Merge，合并逻辑应保持确定性，并尽可能满足交换性、结合性和幂等性，避免写入、查询与 Compaction 得到不同结果（<a href="https://hudi.apache.org/learn/tech-specs/" target="_blank" rel="external">Hudi Technical Specification</a>、<a href="https://hudi.apache.org/blog/2025/03/03/record-mergers-in-hudi/" target="_blank" rel="external">Hudi Record Mergers</a>）。</p>
+<h3 id="Index-与-Metadata-Table：如何定位记录和文件"><a href="#Index-与-Metadata-Table：如何定位记录和文件" class="headerlink" title="Index 与 Metadata Table：如何定位记录和文件"></a>Index 与 Metadata Table：如何定位记录和文件</h3><h4 id="Index-介绍"><a href="#Index-介绍" class="headerlink" title="Index 介绍"></a>Index 介绍</h4><p>Hudi 的 Upsert 需要先判断输入记录是 Insert 还是 Update。Index 负责将输入从：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;Record Key, New Record&gt;</span><br></pre></td></tr></table></figure>
+<p>转换为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;Record Key, Partition Path, File Group ID&gt;</span><br></pre></td></tr></table></figure>
+<p>这个过程通常称为 <code>tagLocation</code>：</p>
+<p><img src="/images/ai-data/data-lake-hudi-20.png" alt="Index 将 Record Key 定位到 Partition Path 与 File Group"></p>
+<p>常见的定位方式包括：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Index</strong></th>
+<th><strong>定位方式</strong></th>
+<th><strong>主要权衡</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bloom Index</td>
+<td>使用 Key Range 与 Bloom Filter 筛选候选文件</td>
+<td>灵活，但随机更新可能扫描较多文件</td>
+</tr>
+<tr>
+<td>Bucket Index</td>
+<td>通过 Record Key 的 Hash 映射 Bucket</td>
+<td>定位稳定，但需要处理 Bucket 数量与数据倾斜</td>
+</tr>
+<tr>
+<td>Record-Level Index</td>
+<td>直接保存 Record Key 到 File Group 的映射</td>
+<td>定位快，但需要维护索引状态</td>
+</tr>
+</tbody>
+</table>
+<p>Record-Level Index 近似保存：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Record Key → Partition Path + File Group ID</span><br></pre></td></tr></table></figure>
+<p>它可以具有两种唯一性范围：</p>
+<ul>
+<li>Global RLI：Record Key 在全表范围唯一；</li>
+<li>Partitioned RLI：<code>Partition Path + Record Key</code> 在分区内唯一。</li>
+</ul>
+<p>如果分区字段可能变化，例如 <code>product_id=42</code> 从 <code>region=cn</code> 移动到 <code>region=us</code>，分区内索引需要显式删除旧分区版本，否则两个分区可能同时保留该 Key。</p>
+<h4 id="Metadata-Table：Hudi-的内部元数据存储"><a href="#Metadata-Table：Hudi-的内部元数据存储" class="headerlink" title="Metadata Table：Hudi 的内部元数据存储"></a>Metadata Table：Hudi 的内部元数据存储</h4><p>Metadata Table 位于 <code>.hoodie/metadata</code>，它本身是一张内部 MOR 表，用不同 Partition 保存文件与索引信息：</p>
+<p><img src="/images/ai-data/data-lake-hudi-21.png" alt="Metadata Table 保存文件列表、记录索引与列统计等表内元数据"></p>
+<p>它主要解决两个扩展性问题：</p>
+<ol>
+<li>避免 Reader 和 Writer 对对象存储执行大规模目录 Listing；</li>
+<li>避免查询规划阶段读取大量 Data File Footer 才能获得统计信息。</li>
+</ol>
+<p>Data Table 与 Metadata Table 的 Timeline 具有父子关联，使数据文件、文件列表和索引随写入共同演进。这里应与 Catalog 区分：Catalog 负责表发现、Schema 和权限入口，Metadata Table 则保存 Hudi 表内部的文件与索引状态（<a href="https://hudi.apache.org/docs/metadata/" target="_blank" rel="external">Hudi Table Metadata</a>、<a href="https://hudi.apache.org/docs/metadata_indexing/" target="_blank" rel="external">Hudi Indexing</a>）。</p>
+<h3 id="并发控制与-Table-Services：如何安全地重写文件"><a href="#并发控制与-Table-Services：如何安全地重写文件" class="headerlink" title="并发控制与 Table Services：如何安全地重写文件"></a>并发控制与 Table Services：如何安全地重写文件</h3><p>Hudi 默认采用 Single Writer。启用多 Writer 后，OCC 允许多个 Writer 先在锁外生成文件，只在校验和提交阶段进行短暂协调：</p>
+<p><img src="/images/ai-data/data-lake-hudi-22.png" alt="OCC 在提交阶段检测并发 Writer 的写集合冲突"></p>
+<p>OCC 的冲突判断可以概念化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Current Write Set</span><br><span class="line">    ∩ Concurrent Completed Write Set</span><br><span class="line">    ≠ ∅</span><br></pre></td></tr></table></figure>
+<p>两个 Writer 修改不重叠的 File Group 时可以分别提交；写入范围重叠时，通常只有一个能够成功。实际冲突范围还取决于 Action 类型和配置的 Conflict Resolution Strategy。</p>
+<p>Hudi 还使用 MVCC 协调 Writer 与 Table Services。NBCC 则允许受支持的 MOR 与 Bucket Index 组合并发写入同一 File Group，再由 Reader 和 Compactor 解决记录冲突，但它不适用于任意表类型、索引和后台操作（<a href="https://hudi.apache.org/docs/concurrency_control/" target="_blank" rel="external">Hudi Concurrency Control</a>）。持续 Upsert 会产生 Log、小文件、旧 File Slice 和 Timeline 历史，Table Services 负责处理这些存储债务：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Table Service</strong></th>
+<th><strong>核心作用</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compaction</td>
+<td>合并同一 File Group 的 Base 与 Logs，生成新 Base File</td>
+</tr>
+<tr>
+<td>Log Compaction</td>
+<td>合并多个 Log File，降低 Log 扫描成本</td>
+</tr>
+<tr>
+<td>Clustering</td>
+<td>调整文件大小、排序和数据局部性</td>
+</tr>
+<tr>
+<td>Cleaning</td>
+<td>按保留策略回收旧 File Slice</td>
+</tr>
+<tr>
+<td>Timeline Maintenance</td>
+<td>控制 Active Timeline 的长期规模</td>
+</tr>
+</tbody>
+</table>
+<p>Compaction 与 Clustering 的区别最重要：</p>
+<p><img src="/images/ai-data/data-lake-hudi-23.png" alt="Compaction 在 File Group 内物化 Log，Clustering 则重组 File Group"></p>
+<ul>
+<li>Compaction 在同一个 File Group 内物化 Log，保持记录的逻辑状态；</li>
+<li>Clustering 通常通过 <code>REPLACE_COMMIT</code> 用新的 File Groups 替换旧 File Groups；</li>
+<li>Cleaning 只回收超过保留策略的历史文件，不参与 Record Merge；</li>
+<li>这些操作主要改变物理布局，不应被下游解释为新的业务 CDC 事件。</li>
+</ul>
+<h2 id="生产实践：用-Hudi-构建订单实时湖表"><a href="#生产实践：用-Hudi-构建订单实时湖表" class="headerlink" title="生产实践：用 Hudi 构建订单实时湖表"></a>生产实践：用 Hudi 构建订单实时湖表</h2><p>订单表是典型的持续更新数据：订单会依次经历创建、支付、发货、完成或退款，数据库还可能产生重复、乱序和删除事件。</p>
+<p>如果将每次变化直接追加为 Parquet 文件，数据湖中会同时存在同一订单的多个版本。Reader 必须扫描并合并全部历史记录，才能恢复最新状态；如果每天全量重写，又会带来较大的计算和写放大。</p>
+<p>Hudi 的核心价值，就是在对象存储上持续维护一张可更新、可增量消费的订单表。</p>
+<h3 id="从数据库-CDC-到-Hudi"><a href="#从数据库-CDC-到-Hudi" class="headerlink" title="从数据库 CDC 到 Hudi"></a>从数据库 CDC 到 Hudi</h3><p>一条典型的生产链路如下：</p>
+<p><img src="/images/ai-data/data-lake-hudi-24.png" alt="MySQL CDC 写入 Hudi MOR 后，同时服务快照查询与增量消费"></p>
+<p>表中可以保留以下关键字段：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">order_id</span><br><span class="line">    → Record Key，标识同一条订单</span><br><span class="line"></span><br><span class="line">source_lsn</span><br><span class="line">    → Ordering Field，判断 CDC 事件的新旧</span><br><span class="line"></span><br><span class="line">create_date</span><br><span class="line">    → 稳定的分区字段</span><br><span class="line"></span><br><span class="line">status、amount 等</span><br><span class="line">    → 订单的业务状态</span><br></pre></td></tr></table></figure>
+<p>Writer 收到更新后，先通过 Index 找到订单所在的 File Group。MOR 表通常将变化追加到当前 File Slice 的 Log File，随后把本次写入发布为一个 Completed Instant。</p>
+<p>Reader 不直接根据文件是否存在判断数据是否有效，而是根据 Timeline 选择已经完成的 Action，再读取对应的 Base File 和 Log File。</p>
+<h3 id="Hudi-如何处理更新、乱序与失败"><a href="#Hudi-如何处理更新、乱序与失败" class="headerlink" title="Hudi 如何处理更新、乱序与失败"></a>Hudi 如何处理更新、乱序与失败</h3><p>假设同一订单依次到达以下事件：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">T1：order_id=42，source_lsn=101，status=CREATED</span><br><span class="line">T2：order_id=42，source_lsn=103，status=PAID</span><br><span class="line">T3：order_id=42，source_lsn=102，status=CREATED</span><br></pre></td></tr></table></figure>
+<p><code>T3</code> 虽然最后到达，但它的 <code>source_lsn</code> 小于 <code>103</code>。使用 Event-time Ordering 时，Record Merger 仍会保留 <code>PAID</code>，避免乱序事件覆盖新状态。</p>
+<p>整个过程可以概括为：</p>
+<p><img src="/images/ai-data/data-lake-hudi-25.png" alt="订单更新经 Index、Log File 与 Timeline 发布后成为 Reader 可见状态"></p>
+<p>如果 Writer 在文件写出后、Instant 完成前失败，这些文件虽然已经存在，但不会被 Reader 看见。后续 Writer 可以根据未完成 Instant 和 Heartbeat 判断写入是否失效，并通过 Rollback 清理残留文件；Cleaner 则主要负责回收超过保留策略的已提交历史版本。</p>
+<p>随着 Log 不断累积，Compaction 会将 Base File 与 Logs 合并成新的 Base File。Compaction 改变的是物理布局，不应改变订单的最终业务状态。</p>
+<h3 id="Hudi-的核心价值"><a href="#Hudi-的核心价值" class="headerlink" title="Hudi 的核心价值"></a>Hudi 的核心价值</h3><p>这个案例体现了 Hudi 的三个核心能力：</p>
+<ul>
+<li>通过 Record Key、Index 和 File Group，将数据库的持续更新映射到对象存储；</li>
+<li>通过 Timeline 隔离未完成写入，原子发布一批文件组成的新表状态；</li>
+<li>同时提供 Snapshot Query 和 Incremental Query，让分析系统读取最新状态，让实时系统消费增量变化。</li>
+</ul>
+<p>因此，Hudi 最具代表性的场景不是单纯保存离线文件，而是数据库 CDC、订单状态、用户画像和实时特征等持续更新的数据集。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>Hudi 并不是简单地在 Parquet 文件之上增加事务日志，而是围绕持续变化的数据构建了一套完整的湖表内核：Timeline 定义操作的提交与可见性，Index 将记录定位到 File Group，File Slice 组织记录的物理版本，Record Merger 与 Table Services 则负责合并变化并持续优化存储布局。它最核心的价值，是让 CDC、Upsert 和增量处理能够可靠地运行在开放存储之上。</p>
+<p>但 Hudi 只是事务湖表的一种设计路线。面对“如何定义表状态、如何发布原子提交、如何组织更新以及如何控制读写放大”这些共同问题，不同系统给出了不同答案。</p>
+<p>后续文章将继续分析三种代表性架构：Iceberg 如何通过 Snapshot、Manifest 与 Catalog Commit 管理超大规模分析表；Paimon 如何在 Snapshot 之下引入 Bucket 与 LSM Tree，构建面向流式主键更新的实时湖存储；以及 Lance 如何针对 AI 数据重新设计列式存储、随机访问与多模态索引。通过这些系统的对比，我们将进一步理解数据湖架构如何从通用分析，逐步演进到实时处理与 AI 数据基础设施。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/19/ai-data-lake-hudi/" data-id="cmrrz7m2z000065lwblmnqkuh" class="article-share-link">分享到</a><div class="tags"><a href="/tags/数据湖/">数据湖</a></div><div class="post-nav"><a href="/2026/07/15/llm-to-agi/" class="next">LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/19/ai-data-lake-hudi/';
+var disqus_title = '数据湖架构演进（一）：Hudi 的增量数据内核';
+var disqus_url = 'http://matt33.com/2026/07/19/ai-data-lake-hudi/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/bigdata/" style="font-size: 15px;">bigdata</a> <a href="/tags/数据湖/" style="font-size: 15px;">数据湖</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/07/19/ai-data-lake-hudi/">数据湖架构演进（一）：Hudi 的增量数据内核</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/15/llm-to-agi/">LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/14/llm-ai-coding/">LLM 系列 (二十五)：AI Coding，大模型如何改变软件开发</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/11/llm-personalization-memory/">LLM 系列 (二十四)：个性化与记忆，大模型如何理解每一个用户</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/11/llm-data-flywheel/">LLM 系列 (二十三)：数据飞轮，大模型能力如何持续进化</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/10/llm-on-device/">LLM 系列 (二十二)：端侧大模型，大模型如何在本地设备上运行</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/09/llm-model-compression/">LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/09/llm-function-calling/">LLM 系列 (二十)：Function Calling，大模型如何稳定调用工具</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/08/llm-mcp/">LLM 系列 (十九)：MCP，大模型如何连接外部工具生态</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/07/llm-prompt-context-engineering/">LLM 系列 (十八)：提示词与上下文工程，如何更好地调用大模型能力</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
