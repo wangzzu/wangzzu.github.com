@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-19T15:46:07.000Z</updated>
+  <updated>2026-07-21T13:10:13.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,302 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>具身智能（一）：物理世界中的智能闭环</title>
+    <link href="http://matt33.com/2026/07/21/embodied-intelligence-overview/"/>
+    <id>http://matt33.com/2026/07/21/embodied-intelligence-overview/</id>
+    <published>2026-07-21T13:10:13.000Z</published>
+    <updated>2026-07-21T13:10:13.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>大语言模型已经能够处理文本、代码和数字工具，但当任务变成“把桌上的红色杯子放进左边托盘”时，智能面对的便不再只是信息。机器人还需要感知环境、估计状态、规划并执行动作，再根据物理反馈持续纠错。这正是具身智能的核心：让智能依托具体身体，在环境中形成观察、决策、行动和反馈的闭环。</p>
+<a id="more"></a>
+<p>作为具身智能系列第一篇文章，本文暂不深入运动学、控制算法和 VLA 的模型细节，而是先建立整体认知：具身智能是什么、技术路线如何演进、现代系统怎样连接 Observation、State 与 Action，以及执行闭环和学习闭环如何协同工作。最后，本文还将结合截至 2026 年的行业进展，讨论下一阶段的竞争重点与技术趋势。</p>
+<h2 id="从数字智能到具身智能"><a href="#从数字智能到具身智能" class="headerlink" title="从数字智能到具身智能"></a>从数字智能到具身智能</h2><p>理解具身智能的起点，是看清智能进入物理世界后，如何从标准接口中的信息处理，转变为受到感知噪声、物理规律和安全约束的连续决策问题。</p>
+<h3 id="从数字世界进入物理世界，难点在哪里"><a href="#从数字世界进入物理世界，难点在哪里" class="headerlink" title="从数字世界进入物理世界，难点在哪里"></a>从数字世界进入物理世界，难点在哪里</h3><p>数字智能与物理智能的区别，不在于是否能够“行动”，而在于行动发生在怎样的环境中。数字 Agent 可以点击网页、执行代码或调用 API，但这些动作通常通过预先定义的接口完成，输入输出和失败状态相对明确。</p>
+<p>物理环境却没有统一接口，杯子也不会返回“抓偏了 3 厘米”的错误码。机器人只能根据视觉、本体感知、触觉和力反馈推断发生了什么，并且每次动作都会改变环境，影响后续观察与决策。</p>
+<table>
+<thead>
+<tr>
+<th><strong>对比维度</strong></th>
+<th><strong>数字智能</strong></th>
+<th><strong>物理智能</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入</td>
+<td>经过编码的信息和标准接口</td>
+<td>带有噪声、延迟与遮挡的传感器信号</td>
+</tr>
+<tr>
+<td>状态</td>
+<td>上下文通常可以显式提供</td>
+<td>环境只能被部分观察，需要持续估计</td>
+</tr>
+<tr>
+<td>输出</td>
+<td>文本、图片或工具调用</td>
+<td>技能、轨迹、位置、速度或力矩</td>
+</tr>
+<tr>
+<td>反馈</td>
+<td>API 结果、用户评价和离线指标</td>
+<td>位移、接触、碰撞、滑落和任务结果</td>
+</tr>
+<tr>
+<td>约束</td>
+<td>计算资源、权限和接口规则</td>
+<td>还要满足可达性、动力学、实时性和安全要求</td>
+</tr>
+<tr>
+<td>失败成本</td>
+<td>通常可以重试或回滚</td>
+<td>可能损坏物体、设备，甚至伤害人</td>
+</tr>
+</tbody>
+</table>
+<p>这些差异带来了四个核心难点：</p>
+<ol>
+<li><strong>语义落地（Grounding）</strong>：将语言概念对应到真实物体、空间位置、可执行动作和成功条件。</li>
+<li><strong>部分可观测</strong>：根据有限且带有噪声的传感器信号，持续估计环境与机器人的状态。</li>
+<li><strong>物理可执行性</strong>：让动作同时满足可达性、碰撞、接触、摩擦和动力学约束。</li>
+<li><strong>实时反馈与安全</strong>：在环境变化或执行偏差出现时及时纠错，并控制动作风险。</li>
+</ol>
+<p>以“拿起杯子”为例，一条简单指令需要经过完整的物理链路：</p>
+<p><img src="/images/embodied-ai/embodied-ai-overview-01.png" alt="从语言指令到抓取结果，机器人需要完成连续的物理链路。"></p>
+<p>这条链路不是一次性执行的。机械臂移动会改变摄像头视角，夹爪接触会改变杯子的位置，外部干扰也可能让原有计划失效。机器人必须在行动过程中不断观察结果、更新判断并调整动作。</p>
+<p>因此，从数字智能走向物理智能，不只是把模型输出从文本换成动作，而是把一次性的 <code>input -&gt; output</code> 推理，转变为持续运行的“感知、决策、行动、反馈”闭环。一个动作不仅要合理，还必须能够执行、可以验证，并在失败后得到纠正。</p>
+<h3 id="什么是具身智能"><a href="#什么是具身智能" class="headerlink" title="什么是具身智能"></a>什么是具身智能</h3><p>“具身智能”没有统一定义。在认知科学中，它强调认知由大脑、身体与环境共同产生；在机器人和 AI 领域，它通常指智能体依托具体身体感知环境、执行动作，并根据反馈调整行为。</p>
+<ul>
+<li>具身智能是在物理或模拟环境中，通过“<strong>感知、决策、行动、反馈</strong>”闭环完成任务，并具备一定适应与泛化能力的智能系统。</li>
+</ul>
+<p>它的核心不在于机器人采用何种外形，而在于身体、环境与任务是否通过反馈形成闭环：身体决定能感知什么、执行什么，环境提供物理约束与反馈，任务则组织行为并推动持续纠错。</p>
+<h3 id="机器人、人形机器人与-VLA-是什么关系"><a href="#机器人、人形机器人与-VLA-是什么关系" class="headerlink" title="机器人、人形机器人与 VLA 是什么关系"></a>机器人、人形机器人与 VLA 是什么关系</h3><p>这几个概念经常同时出现，但分别描述了机器人系统的不同层面：</p>
+<ul>
+<li><strong>机器人（Robot）</strong>：它是一类具有感知、计算和执行能力的物理系统。工业机械臂、移动机器人、四足机器人和无人车都属于机器人，其行为既可以由固定程序控制，也可以具有较强自主性。</li>
+<li><strong>人形机器人（Humanoid Robot）</strong>：它是一种本体形态，其身体结构和运动方式参考人类。人形设计有利于使用人类工具、适应已有环境，但外形像人并不意味着具备更高智能。</li>
+<li><strong>具身智能（Embodied AI）</strong>：描述的是一种智能能力，智能体依托身体感知环境、执行动作，并根据反馈不断调整行为。它既可以运行在人形机器人上，也可以应用于机械臂、移动机器人或四足机器人。</li>
+<li><strong>VLA（Vision-Language-Action）</strong>：它是一类连接视觉、语言和动作的模型。它可以根据图像与任务指令生成机器人动作或动作片段，但只是具身系统中的一个核心组件。</li>
+</ul>
+<p>因此，具身智能不等于人形机器人，VLA 也不等于完整的机器人系统。传统工业机械臂同样具有身体和反馈控制，现代具身 AI 则进一步强调开放环境感知、任务理解、学习、泛化和自主纠错。完整系统还需要传感器、状态估计、运动规划、实时控制、安全机制与部署基础设施共同配合。</p>
+<h2 id="具身智能的技术演进"><a href="#具身智能的技术演进" class="headerlink" title="具身智能的技术演进"></a>具身智能的技术演进</h2><p>具身智能并不是大模型出现后突然诞生的新方向，而是<strong>机器人学与控制、人工智能、机器学习</strong>三条技术路线长期汇合的结果：机器人学解决身体如何稳定运动，人工智能研究表示、推理与规划，机器学习则让感知和策略逐渐从数据中获得泛化能力。</p>
+<p>这段历史也不是新技术依次替代旧技术。符号规划、模块化系统、反馈控制和学习策略至今仍然并存。真正发生变化的是系统边界：哪些能力由人显式编写，哪些交给模型学习，哪些模块可以融合，哪些环节仍然需要确定性约束。</p>
+<p><img src="/images/embodied-ai/embodied-ai-overview-02.png" alt="具身智能由符号规划、模块化机器人、机器人学习走向具身基础模型。"></p>
+<h3 id="经典机器人：从符号规划到模块化系统"><a href="#经典机器人：从符号规划到模块化系统" class="headerlink" title="经典机器人：从符号规划到模块化系统"></a>经典机器人：从符号规划到模块化系统</h3><p>早期人工智能倾向于把智能理解为“表示加推理”：系统先将环境转换成符号世界，再通过逻辑、搜索和规划生成行动步骤。</p>
+<p>SRI 在 1966 至 1972 年研发的 <a href="https://www.sri.com/publication/artificial-intelligence-pubs/shakey-the-robot-pub/" target="_blank" rel="external">Shakey</a> 是这一时期的代表。它将摄像头、距离感知、世界表示、任务规划和移动执行连接起来，建立了一个影响深远的机器人框架：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">感知环境 -&gt; 建立世界模型 -&gt; 任务规划 -&gt; 执行动作</span><br></pre></td></tr></table></figure>
+<p>这条路线具有明确的状态和决策过程，但也依赖准确的环境模型。真实世界很难被完整地转换成符号，感知误差会进入世界模型，环境一旦发生变化，原有计划也可能迅速失效。</p>
+<p>20 世纪 80 年代，Rodney Brooks 提出了另一种思路。<a href="https://jmvidal.cse.sc.edu/lib/brooks86a.html" target="_blank" rel="external">Subsumption Architecture</a> 将避障、移动和探索等行为组织成不同层次，让低层行为能够直接响应环境。他在 <a href="https://www.sciencedirect.com/science/article/pii/000437029190053M" target="_blank" rel="external">Intelligence without Representation</a> 中进一步强调，智能也可以从身体与环境的实时交互中产生，不必总以完整的中央世界模型为前提。</p>
+<p>与此同时，运动学、动力学、SLAM、运动规划和反馈控制逐渐成熟，形成了经典的模块化技术栈：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">感知 -&gt; 状态估计 -&gt; 任务规划 -&gt; 运动规划 -&gt; 反馈控制</span><br></pre></td></tr></table></figure>
+<p>这种架构可解释、可调试，也容易加入碰撞约束和安全规则，今天仍然是大量机器人产品的基础。它的局限在于，系统依赖人工定义模块、规则和接口，面对开放环境时往往缺乏泛化能力。</p>
+<h3 id="机器人学习：从人工设计到数据驱动"><a href="#机器人学习：从人工设计到数据驱动" class="headerlink" title="机器人学习：从人工设计到数据驱动"></a>机器人学习：从人工设计到数据驱动</h3><p>进入 2010 年代，深度学习显著提升了图像识别、目标检测和视觉表示能力，机器人系统中的部分链路开始由“人工设计规则”转向“从数据中学习”。</p>
+<p>其中，模仿学习让机器人从人类示范中学习动作，强化学习通过环境反馈优化策略，物理仿真则提供了成本更低的训练和测试环境，并推动 Sim2Real 技术的发展。</p>
+<p>机器人控制由此出现了一条新的路线：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">观察与任务目标 -&gt; 学习策略 -&gt; 动作或轨迹</span><br></pre></td></tr></table></figure>
+<p>相比手工规则，学习策略更适合处理像素输入、柔性物体和复杂接触等难以明确建模的问题，但也带来了两个根本限制：</p>
+<ol>
+<li><strong>数据成本高</strong>：机器人轨迹需要真实设备、场景和运行时间，失败还可能损坏物体或硬件。</li>
+<li><strong>分布偏移明显</strong>：策略依赖训练数据，物体、光照、相机位置或机器人本体发生变化，都可能导致性能下降。</li>
+</ol>
+<p>因此，数据驱动并没有让经典机器人技术消失。现实系统通常采用混合架构：模型负责高维感知和复杂动作生成，运动规划、反馈控制与安全机制负责保证动作能够稳定执行。</p>
+<h3 id="具身基础模型：从单任务策略到跨本体泛化"><a href="#具身基础模型：从单任务策略到跨本体泛化" class="headerlink" title="具身基础模型：从单任务策略到跨本体泛化"></a>具身基础模型：从单任务策略到跨本体泛化</h3><p>2021 年以后，视觉语言模型和大语言模型开始将互联网规模的知识引入机器人，研究重点也从“学习一个技能”逐渐转向“训练能够处理多任务的通用策略”。这一阶段的代表性工作包括：</p>
+<ul>
+<li><a href="https://say-can.github.io/" target="_blank" rel="external">SayCan</a> 使用语言模型提出高层技能，再通过 Affordance（可供性）判断技能在当前状态下是否可执行；</li>
+<li><a href="https://arxiv.org/abs/2212.06817" target="_blank" rel="external">RT-1</a> 根据图像和任务指令预测离散化的动作 token，展示了单个模型控制真实机器人完成多种任务的能力；</li>
+<li><a href="https://palm-e.github.io/" target="_blank" rel="external">PaLM-E</a> 将视觉和连续传感信息接入语言模型，重点增强具身推理与任务理解，而不是直接替代底层控制器；</li>
+<li><a href="https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/" target="_blank" rel="external">RT-2</a> 将机器人动作表示为视觉语言模型可以预测的 token，推动了 Vision-Language-Action（VLA）路线的发展；</li>
+<li><a href="https://arxiv.org/abs/2310.08864" target="_blank" rel="external">Open X-Embodiment</a> 汇集不同机构、任务和机器人本体的数据，推动策略从单一本体训练走向跨本体预训练。</li>
+</ul>
+<p>2024 年以后，研究进一步转向通用机器人策略。<a href="https://octo-models.github.io/" target="_blank" rel="external">Octo</a> 使用 Transformer Diffusion Policy 生成连续动作片段，<a href="https://proceedings.mlr.press/v270/kim25c.html" target="_blank" rel="external">OpenVLA</a> 将动作离散化为 token 并进行自回归预测，<a href="https://www.physicalintelligence.company/download/pi0.pdf" target="_blank" rel="external">π0</a> 则通过 Flow Matching 生成连续、高频动作。三者都希望利用多任务、多机器人数据提升泛化能力，但代表了不同的动作建模路线：离散 token 便于复用视觉语言模型的序列生成能力，Diffusion 和 Flow Matching 则直接建模连续动作分布，更自然地表达平滑轨迹和多种可行行为。整个演进过程可以概括为：</p>
+<p><img src="/images/embodied-ai/embodied-ai-overview-03.png" alt="通用机器人策略从单任务技能走向跨本体预训练与场景后训练。"></p>
+<p>这条路线扩大了机器人的知识范围和任务边界，但并没有消除物理世界的约束。基础模型主要增强了机器人的任务理解、知识迁移和动作生成能力，但并没有消除物理世界的约束。接下来真正的难题，是让这些动作可执行、可验证、可恢复，并能够长时间稳定运行。</p>
+<h2 id="现代具身系统如何工作"><a href="#现代具身系统如何工作" class="headerlink" title="现代具身系统如何工作"></a>现代具身系统如何工作</h2><p>现代具身系统通常不是由单个模型独立完成所有工作，而是让不同模块在不同时间尺度上协作：高层理解目标并拆解任务，中层根据观察生成动作，底层负责将动作稳定、安全地执行到机器人本体。</p>
+<h3 id="分层协作：从任务理解到安全执行"><a href="#分层协作：从任务理解到安全执行" class="headerlink" title="分层协作：从任务理解到安全执行"></a>分层协作：从任务理解到安全执行</h3><p><img src="/images/embodied-ai/embodied-ai-overview-04.png" alt="现代具身系统通过感知、推理、策略、控制与环境反馈分层协作。"></p>
+<p>一个具身系统通常可以分为四个层次：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>常见方法</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>感知与状态表示</td>
+<td>环境中有什么，机器人处于什么状态</td>
+<td>视觉模型、位姿估计、跟踪、滤波、多模态表示</td>
+</tr>
+<tr>
+<td>推理与任务规划</td>
+<td>任务目标是什么，接下来应该做什么</td>
+<td>规则、搜索、任务规划、VLM/LLM、记忆与工具调用</td>
+</tr>
+<tr>
+<td>策略与动作生成</td>
+<td>根据当前状态，下一段动作如何产生</td>
+<td>行为克隆、强化学习、VLA、Diffusion/Flow Policy</td>
+</tr>
+<tr>
+<td>执行与安全</td>
+<td>动作如何准确、及时且安全地落到硬件</td>
+<td>运动规划、轨迹优化、反馈控制、碰撞约束和急停</td>
+</tr>
+</tbody>
+</table>
+<p>这种分层不是固定模板。经典系统会显式划分感知、规划与控制模块，VLA 则可能将感知、任务理解和动作生成融合进同一个模型。有的 VLA 直接输出末端动作片段，有的系统只让大模型选择已有技能，再交给传统规划器和控制器执行。</p>
+<p>因此，“端到端”并不意味着一个大模型直接控制所有电机，而是减少部分人工定义的中间接口。实际系统仍要处理不同时间尺度、硬件约束和安全边界。</p>
+<h3 id="Observation、State-与-Action"><a href="#Observation、State-与-Action" class="headerlink" title="Observation、State 与 Action"></a>Observation、State 与 Action</h3><p>为了理解机器人的执行闭环，可以先抓住 Observation、State 和 Action 三个核心对象。它们分别描述机器人观察到了什么、环境处于什么状态，以及机器人接下来执行什么动作。</p>
+<ul>
+<li><strong>Observation（观察）</strong>：机器人实际获得的传感器信号，例如 RGB-D 图像、触觉、关节角度、夹爪状态和历史动作。这些信息通常存在噪声、延迟、遮挡和不同步。</li>
+<li><strong>State（状态）</strong>：机器人与环境在当前时刻的任务相关状态，例如物体位姿、机器人姿态、接触关系和抓取是否稳定。真实状态通常无法被完整观察，只能根据传感器信号进行估计，或编码在模型的隐表示中。</li>
+<li><strong>Action（动作）</strong>：机器人对环境施加的决策，可以是 <code>pick(red_cup)</code> 这样的高层技能，也可以是末端位姿增量、关节目标、力矩或一段连续动作。</li>
+</ul>
+<p>如果用 $g$ 表示任务目标，$o_{\leq t}$ 表示截至时刻 $t$ 的观察历史，那么策略可以简化为：</p>
+<ul>
+<li>$a<em>t = \pi</em>{\theta}(o_{\leq t}, g)$</li>
+</ul>
+<p>其中，$\pi_\theta$ 表示机器人策略。它根据任务目标和观察历史生成动作 $a_t$；动作改变环境状态，机器人获得新的观察，再继续下一步决策。</p>
+<p>由于机器人通常无法直接获得完整状态，只能在有限信息下边行动、边观察、边修正，这类问题通常被建模为<strong>部分可观测决策过程</strong>。以“把红色杯子放进左边托盘”为例：</p>
+<table>
+<thead>
+<tr>
+<th><strong>对象</strong></th>
+<th><strong>任务中的具体内容</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goal</td>
+<td>红色杯子最终稳定留在左边托盘</td>
+</tr>
+<tr>
+<td>Observation</td>
+<td>相机画面、关节位置、夹爪状态和力传感器读数</td>
+</tr>
+<tr>
+<td>State</td>
+<td>杯子与托盘位姿、机械臂状态、抓取是否稳定</td>
+</tr>
+<tr>
+<td>Action</td>
+<td>末端位姿增量、夹爪开合或一段连续动作</td>
+</tr>
+<tr>
+<td>Feedback</td>
+<td>动作后的新观察、任务是否成功、奖励信号或人工干预</td>
+</tr>
+</tbody>
+</table>
+<p>这里的 Feedback 描述的是动作执行后返回系统的信息。它既可以是新的视觉、触觉和力传感器观察，也可以包含任务结果、奖励或人工评价。机器人利用这些反馈判断是否继续执行、调整动作或重新规划。</p>
+<p>无论系统内部采用显式状态、隐表示还是端到端模型，Observation、State、Action 以及它们之间的反馈关系都不会消失，变化的只是这些信息由哪些模块表示和处理。</p>
+<h2 id="执行与学习：具身智能的两个闭环"><a href="#执行与学习：具身智能的两个闭环" class="headerlink" title="执行与学习：具身智能的两个闭环"></a>执行与学习：具身智能的两个闭环</h2><p>机器人偶尔成功一次，并不意味着系统已经可用。它既要在执行过程中根据环境反馈修正动作，也要从多次真实运行中总结经验、更新策略。这分别对应两个不同时间尺度的闭环：<strong>执行闭环负责完成当前任务，学习闭环负责提升下一版能力。</strong></p>
+<p><img src="/images/embodied-ai/embodied-ai-overview-05.png" alt="执行闭环完成当前任务，学习闭环利用真实经验更新策略。"></p>
+<h3 id="执行闭环：根据反馈完成当前任务"><a href="#执行闭环：根据反馈完成当前任务" class="headerlink" title="执行闭环：根据反馈完成当前任务"></a>执行闭环：根据反馈完成当前任务</h3><p>执行闭环发生在一次任务内部，通常以毫秒到秒级持续运行：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">观察环境 -&gt; 估计状态 -&gt; 生成动作 -&gt; 控制执行 -&gt; 获取新观察</span><br></pre></td></tr></table></figure>
+<p>例如，机器人抓取杯子时，如果视觉或力传感器发现杯子正在滑落，就需要降低速度、调整夹爪或者重新抓取。动作改变环境，新的环境状态又会产生新的观察，机器人据此继续决策。</p>
+<p>没有反馈修正，机器人只能按照预设轨迹开环执行。一旦物体位置、接触状态或外部环境发生变化，后续动作就可能连续出错。</p>
+<h3 id="学习闭环：从真实经验更新策略"><a href="#学习闭环：从真实经验更新策略" class="headerlink" title="学习闭环：从真实经验更新策略"></a>学习闭环：从真实经验更新策略</h3><p>学习闭环发生在多次任务之间。一次完整交互会形成一条 Episode，其中包含任务目标、观察序列、执行动作、最终结果、失败位置、人工干预和恢复过程。</p>
+<p>这些数据经过清洗、标注和质量评估后，用于训练或后训练新的策略。候选策略还需要通过离线指标、仿真任务和真机 Rollout 评测，确认能力确实提升且没有引入明显回退，才能重新部署。</p>
+<table>
+<thead>
+<tr>
+<th><strong>闭环</strong></th>
+<th><strong>时间尺度</strong></th>
+<th><strong>解决的问题</strong></th>
+<th><strong>核心输出</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>执行闭环</td>
+<td>毫秒到秒</td>
+<td>当前动作出现偏差时如何及时纠正</td>
+<td>下一步动作或恢复行为</td>
+</tr>
+<tr>
+<td>学习闭环</td>
+<td>Episode、小时或版本周期</td>
+<td>如何从历史经验中提升整体能力</td>
+<td>经过评测的新策略版本</td>
+</tr>
+</tbody>
+</table>
+<p>学习闭环也不等于简单地收集更多数据。大量重复的成功轨迹只能覆盖模型已经掌握的能力，真正有价值的往往是失败、人工接管和恢复数据，因为它们能够暴露策略边界，说明机器人“在哪里不会、为什么失败、应该怎样修正”。</p>
+<p>因此，两个闭环解决的是不同问题：执行闭环根据当前反馈持续纠偏，学习闭环则跨越多次任务更新策略能力。</p>
+<h2 id="从演示到可靠工作"><a href="#从演示到可靠工作" class="headerlink" title="从演示到可靠工作"></a>从演示到可靠工作</h2><p>前面四章分别介绍了具身智能的背景、技术演进、系统结构以及执行与学习两个闭环。沿着这条主线，判断具身智能是否真正可用，不能只看机器人能否完成一次演示，还要看它能否适应环境变化、处理执行失败，并从真实经验中持续提升能力。</p>
+<h3 id="当前进展：通用能力开始形成"><a href="#当前进展：通用能力开始形成" class="headerlink" title="当前进展：通用能力开始形成"></a>当前进展：通用能力开始形成</h3><p>截至 2026 年，具身智能正在从单任务策略走向多任务、跨场景和跨本体的通用策略。这些前沿系统通常在各自的任务范围和评测设置中表现较好，但面对陌生物体、复杂接触、长程任务或意外干扰时，成功率仍可能明显下降。</p>
+<p>与此同时，系统也开始采用分层架构。<a href="https://deepmind.google/blog/gemini-robotics-15-brings-ai-agents-into-the-physical-world/" target="_blank" rel="external">Gemini Robotics 1.5</a> 与 <a href="https://deepmind.google/blog/gemini-robotics-er-1-6/" target="_blank" rel="external">Robotics-ER 1.6</a> 分别探索动作生成与高层具身推理；<a href="https://www.physicalintelligence.company/download/pistar06.pdf" target="_blank" rel="external">π*0.6</a> 开始利用真机 Rollout、人工纠正和强化学习改进策略；<a href="https://developer.nvidia.com/blog/develop-humanoid-robot-policies-end-to-end-with-nvidia-isaac-gr00t/" target="_blank" rel="external">NVIDIA Isaac GR00T 1.7</a> 则将数据采集、仿真、训练、评测和部署连接成更完整的工具链。</p>
+<p>但这些进展并不意味着通用机器人已经实现。当前系统在熟悉任务和受控场景中表现较好，一旦面对陌生物体、复杂接触、长程任务或意外干扰，成功率仍可能明显下降。</p>
+<h3 id="未来的技术趋势"><a href="#未来的技术趋势" class="headerlink" title="未来的技术趋势"></a>未来的技术趋势</h3><p>根据当前公开进展，具身智能正在从“能够完成一次任务”，走向“能够跨场景适配、处理执行失败并持续学习”。下一阶段的竞争重点将不再局限于模型规模，而会扩展到数据、泛化、长程任务、评测和系统工程：</p>
+<table>
+<thead>
+<tr>
+<th><strong>技术趋势</strong></th>
+<th><strong>核心变化</strong></th>
+<th><strong>关键方向</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>从离线示范走向数据闭环</td>
+<td>不再只收集成功示范，而是利用失败、干预和恢复数据改进策略</td>
+<td>多源数据配比、遥操作、仿真数据、人在回路和后训练</td>
+</tr>
+<tr>
+<td>从单任务走向跨场景泛化</td>
+<td>同一策略适应不同任务、环境和机器人本体</td>
+<td>跨本体预训练、统一动作表示、少样本适配和场景后训练</td>
+</tr>
+<tr>
+<td>从单个模型走向分层系统</td>
+<td>高层模型负责推理与规划，VLA 生成动作，控制器保证实时执行与安全</td>
+<td>分层规划、记忆、成功检测、重新规划和失败恢复</td>
+</tr>
+<tr>
+<td>从动作预测走向世界建模</td>
+<td>不仅生成动作，还要预测动作可能带来的环境变化</td>
+<td>世界模型、规模化仿真、Sim2Real 和真机闭环评测</td>
+</tr>
+<tr>
+<td>从单次成功走向长期可靠</td>
+<td>评价重点从演示效果转向持续工作能力</td>
+<td>任务成功率、人工干预率、恢复能力、连续运行时间和安全约束</td>
+</tr>
+</tbody>
+</table>
+<p>整体技术路线可以概括为：</p>
+<p><img src="/images/embodied-ai/embodied-ai-overview-06.png" alt="具身智能从多源数据、预训练和后训练走向真机部署与持续回流。"></p>
+<p>基于这些趋势可以判断，短期竞争重点将更多集中在高质量数据闭环、目标场景后训练和真机可靠性；进一步的突破则可能来自跨本体泛化、长程自主、世界模型，以及从部署经验中安全地持续学习。</p>
+<p>因此，具身智能下一阶段的竞争，不只是让机器人能够生成动作，而是让它在真实世界中稳定完成任务，并把执行过程中产生的经验持续转化为新的能力。回到全文，身体决定感知和行动边界，环境提供物理反馈，执行闭环完成当前任务，学习闭环提升未来能力。最终的判断标准仍然是，机器人能否长期、稳定、安全地把事情做成。</p>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><ul>
+<li><a href="https://www.sri.com/publication/artificial-intelligence-pubs/shakey-the-robot-pub/" target="_blank" rel="external">Shakey the Robot, SRI</a></li>
+<li><a href="https://jmvidal.cse.sc.edu/lib/brooks86a.html" target="_blank" rel="external">A Robust Layered Control System for a Mobile Robot</a>、<a href="https://www.sciencedirect.com/science/article/pii/000437029190053M" target="_blank" rel="external">Intelligence without Representation</a></li>
+<li><a href="https://say-can.github.io/" target="_blank" rel="external">SayCan</a>、<a href="https://arxiv.org/abs/2212.06817" target="_blank" rel="external">RT-1</a>、<a href="https://palm-e.github.io/" target="_blank" rel="external">PaLM-E</a>、<a href="https://deepmind.google/blog/rt-2-new-model-translates-vision-and-language-into-action/" target="_blank" rel="external">RT-2</a></li>
+<li><a href="https://arxiv.org/abs/2310.08864" target="_blank" rel="external">Open X-Embodiment</a></li>
+<li><a href="https://octo-models.github.io/" target="_blank" rel="external">Octo</a>、<a href="https://proceedings.mlr.press/v270/kim25c.html" target="_blank" rel="external">OpenVLA</a>、<a href="https://www.physicalintelligence.company/download/pi0.pdf" target="_blank" rel="external">π0</a></li>
+<li><a href="https://deepmind.google/blog/gemini-robotics-15-brings-ai-agents-into-the-physical-world/" target="_blank" rel="external">Gemini Robotics 1.5</a>、<a href="https://deepmind.google/blog/gemini-robotics-er-1-6/" target="_blank" rel="external">Gemini Robotics-ER 1.6</a></li>
+<li><a href="https://developer.nvidia.com/blog/develop-humanoid-robot-policies-end-to-end-with-nvidia-isaac-gr00t/" target="_blank" rel="external">NVIDIA Isaac GR00T N1.7</a></li>
+<li><a href="https://www.physicalintelligence.company/download/pistar06.pdf" target="_blank" rel="external">π*0.6: a VLA That Learns From Experience</a></li>
+<li><a href="https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/" target="_blank" rel="external">V-JEPA 2</a></li>
+<li><a href="https://developer.nvidia.com/blog/simplify-generalist-robot-policy-evaluation-in-simulation-with-nvidia-isaac-lab-arena/" target="_blank" rel="external">Isaac Lab-Arena</a></li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;大语言模型已经能够处理文本、代码和数字工具，但当任务变成“把桌上的红色杯子放进左边托盘”时，智能面对的便不再只是信息。机器人还需要感知环境、估计状态、规划并执行动作，再根据物理反馈持续纠错。这正是具身智能的核心：让智能依托具体身体，在环境中形成观察、决策、行动和反馈的闭环。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="具身智能" scheme="http://matt33.com/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/"/>
+    
+  </entry>
   
   <entry>
     <title>数据湖架构演进（一）：Hudi 的增量数据内核</title>
@@ -8302,404 +8598,6 @@
     
       &lt;p&gt;如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。&lt;/p&gt;
 &lt;p&gt;这里的“推理”需要先做一个区分。它既可以指 &lt;strong&gt;Inference Serving&lt;/strong&gt;，也可以指 &lt;strong&gt;Reasoning Model&lt;/strong&gt;。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (八)：分布式训练：千卡集群如何训大模型</title>
-    <link href="http://matt33.com/2026/06/28/llm-distributed-training/"/>
-    <id>http://matt33.com/2026/06/28/llm-distributed-training/</id>
-    <published>2026-06-28T02:30:00.000Z</published>
-    <updated>2026-06-28T02:30:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>如果说预训练回答的是“大模型的能力如何形成”，后训练回答的是“这些能力如何被塑造成可用行为”，那么分布式训练回答的就是一个更底层的工程问题：如此庞大的模型，如何真的在成百上千张 GPU 上稳定训练完成？</p>
-<p>大模型训练从来不是把一个 PyTorch 脚本复制到很多张卡上那么简单。真正的挑战在于：模型参数放不下，激活值放不下，优化器状态放不下；单卡算力不够，跨卡通信会拖慢训练；训练中还可能遇到 loss spike、节点故障、checkpoint 写入过慢、MoE 负载不均和长上下文显存爆炸。规模越大，问题越不再是单点优化，而是计算、显存、通信、存储、调度和容错的系统协同。</p>
-<a id="more"></a>
-<p>所以，分布式训练的本质不是“多用几张卡”，而是把一个单卡无法承载、单机无法高效完成的大模型，拆解成可以在大规模 GPU 集群上协同优化的计算图、参数状态和数据流。它解决的不是某一个算子怎么更快，而是如何让数百上千张 GPU 在数周甚至数月训练中，持续、稳定、有效地朝同一个目标更新参数。</p>
-<h2 id="为什么分布式训练"><a href="#为什么分布式训练" class="headerlink" title="为什么分布式训练"></a>为什么分布式训练</h2><p>在小模型时代，训练慢一点通常还能接受：模型可以放进单卡显存，数据规模也不至于让训练周期失控。但到了百亿、千亿参数模型，问题会发生质变。模型参数本身放不下，训练过程中的梯度、优化器状态和激活值更放不下；即使勉强放下，单卡算力也无法在可接受时间内处理数万亿 token；而一旦扩展到多卡，又会引入通信、同步、故障恢复和系统稳定性问题。</p>
-<p>所以，分布式训练不是“为了更快”，而是因为大模型训练在单卡上已经不可行。</p>
-<p><img src="/images/llm/llm-distributed-training-01.png" alt="大模型训练瓶颈"></p>
-<p>以一个 70B 参数模型为例，BF16 权重本身就需要：<code>70B × 2 bytes ≈ 140GB</code>。</p>
-<p>但训练时不只有权重，还包括梯度、优化器状态、master weights、激活值等。使用 Adam 类优化器时，常见训练状态可能达到：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">每个参数约 12-16 bytes，不含激活</span><br><span class="line">70B × 16 bytes ≈ 1.12TB</span><br></pre></td></tr></table></figure>
-<p>这还没有计算 batch size、sequence length 和 activation 带来的额外开销。也就是说，显存问题不是“省一点就够”，而是必须通过参数切分、优化器状态切分、激活重计算和多维并行才能解决。</p>
-<p>除了显存，训练算力也会迅速失控。对 dense decoder-only Transformer，语言模型训练 FLOPs（FLOPs 是 <strong>Floating Point Operations</strong> 的缩写，中文一般叫 <strong>浮点运算次数</strong>）可以粗略估算为（这个公式主要用于量级判断，不包含长上下文 attention、MoE 路由、激活重算等额外开销）：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">训练 FLOPs ≈ 6 × 参数量 N × 训练 token 数 D</span><br></pre></td></tr></table></figure>
-<p>如果模型参数量和训练 token 数同时扩大，计算量会以极高速度增长。单卡不仅慢，而且会让训练周期长到没有工程意义。</p>
-<p>因此，大模型训练至少面临五类问题：</p>
-<table>
-<thead>
-<tr>
-<th><strong>资源</strong></th>
-<th><strong>大模型训练面临的瓶颈</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>显存</td>
-<td>参数、梯度、Adam 状态、激活远超单卡容量</td>
-</tr>
-<tr>
-<td>算力</td>
-<td>训练 FLOPs 近似随 参数量 × token 数 增长</td>
-</tr>
-<tr>
-<td>时间</td>
-<td>单卡训练可能需要数年甚至更久</td>
-</tr>
-<tr>
-<td>通信</td>
-<td>多卡扩展后，梯度、参数、激活和 MoE token 需要跨设备同步，通信会成为新的系统瓶颈。</td>
-</tr>
-<tr>
-<td>稳定性</td>
-<td>千卡训练中任何一张卡、一个节点、一个 batch 异常都可能影响全局</td>
-</tr>
-</tbody>
-</table>
-<p>所以，分布式训练要解决的不是一个简单问题，而是一组耦合问题：</p>
-<ul>
-<li>如何放得下模型？</li>
-<li>如何喂得满 GPU？</li>
-<li>如何同步得足够快？</li>
-<li>如何在故障后恢复？</li>
-<li>如何让训练长期稳定下降？</li>
-</ul>
-<p>这也是为什么大模型训练不是“写一个 PyTorch 脚本”的问题，而是计算图切分、显存管理、通信调度、容错恢复和训练稳定性共同组成的大规模系统工程</p>
-<h2 id="核心并行策略：大模型训练如何拆分"><a href="#核心并行策略：大模型训练如何拆分" class="headerlink" title="核心并行策略：大模型训练如何拆分"></a>核心并行策略：大模型训练如何拆分</h2><p>分布式训练的核心不是简单把同一份代码跑到多张卡上，而是把训练过程中的不同对象拆开：数据可以拆，模型参数可以拆，模型层可以拆，优化器状态可以拆，长序列可以拆，MoE 专家也可以拆。不同并行策略，本质上是在回答不同问题：</p>
-<ul>
-<li>数据太多，如何让多张卡同时处理不同样本？</li>
-<li>单层矩阵太大，如何拆到多张卡共同计算？</li>
-<li>模型层数太深，如何把不同层放到不同设备？</li>
-<li>参数、梯度、优化器状态太大，如何减少每张卡的冗余存储？</li>
-<li>上下文太长，如何拆分序列维度？</li>
-<li>MoE 专家太多，如何把不同专家分布到不同 GPU？</li>
-</ul>
-<p>所以，理解分布式训练，最重要的不是先记住一堆术语，而是看清楚：<strong>每一种并行策略到底在拆什么，又用什么通信代价换来了什么资源收益</strong>。</p>
-<table>
-<thead>
-<tr>
-<th><strong>并行方式</strong></th>
-<th><strong>拆什么</strong></th>
-<th><strong>解决什么问题</strong></th>
-<th><strong>主要代价</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>数据并行 DP</td>
-<td>batch</td>
-<td>提升吞吐</td>
-<td>梯度同步通信</td>
-</tr>
-<tr>
-<td>张量并行 TP</td>
-<td>单层矩阵计算</td>
-<td>单层太大、计算太重</td>
-<td>层内通信频繁</td>
-</tr>
-<tr>
-<td>流水线并行 PP</td>
-<td>模型层</td>
-<td>模型太深、整模放不下</td>
-<td>pipeline bubble</td>
-</tr>
-<tr>
-<td>ZeRO / FSDP</td>
-<td>参数、梯度、优化器状态</td>
-<td>训练状态太占显存</td>
-<td>all-gather / reduce-scatter</td>
-</tr>
-<tr>
-<td>专家并行 EP</td>
-<td>MoE experts</td>
-<td>MoE 专家参数巨大</td>
-<td>all-to-all 路由通信</td>
-</tr>
-<tr>
-<td>序列 / 上下文并行 SP/CP</td>
-<td>sequence length</td>
-<td>长上下文激活和 attention 太大</td>
-<td>序列维通信</td>
-</tr>
-</tbody>
-</table>
-<p><img src="/images/llm/llm-distributed-training-02.png" alt="大模型训练的并行策略"></p>
-<h3 id="数据并行（Data-Parallel）"><a href="#数据并行（Data-Parallel）" class="headerlink" title="数据并行（Data Parallel）"></a>数据并行（Data Parallel）</h3><p>数据并行最容易理解：模型不拆，数据拆。每张 GPU 拿到同一模型的完整副本，处理不同的数据分片；反向传播后，各卡通过 AllReduce 同步梯度，再执行相同的参数更新。这样可以提升吞吐，但不能解决“模型本身放不下”的问题。</p>
-<p><img src="/images/llm/llm-distributed-training-03.png" alt="数据并行流程"></p>
-<h3 id="张量并行（Tensor-Parallel）"><a href="#张量并行（Tensor-Parallel）" class="headerlink" title="张量并行（Tensor Parallel）"></a>张量并行（Tensor Parallel）</h3><p>张量并行的核心是：模型层不再完整放在一张 GPU 上，而是把同一层里的大矩阵拆开。以线性层 <code>Y = XW</code> 为例，可以把权重矩阵 <code>W</code> 按列或按行切成多块，不同 GPU 分别计算部分输出，再通过 <code>Concat / AllGather</code> 或 <code>AllReduce</code> 得到完整结果。</p>
-<p><img src="/images/llm/llm-distributed-training-04.png" alt="张量并行流程"></p>
-<p>它解决的是“单层矩阵太大、单卡算不动”的问题，但代价是层内通信非常频繁，所以通常更适合放在 NVLink / NVSwitch 这种高速互联的节点内部。</p>
-<h3 id="流水线并行（Pipeline-Parallel）"><a href="#流水线并行（Pipeline-Parallel）" class="headerlink" title="流水线并行（Pipeline Parallel）"></a>流水线并行（Pipeline Parallel）</h3><p>流水线并行拆的是“模型层”。它把不同 Transformer layers 放到不同 GPU 上，例如 GPU0 放 Layer 1-8，GPU1 放 Layer 9-16，依次组成一条计算流水线。</p>
-<p><img src="/images/llm/llm-distributed-training-05.png" alt="流水线并行流程"></p>
-<p>但如果一次只喂一个 batch，GPU 会大量空等：前面的 GPU 算完后面的 GPU 才开始，反向传播时又要反过来等待。为提高利用率，训练系统会把 batch 切成多个 micro-batch，让不同 GPU 在同一时刻处理不同 micro-batch 的不同层。</p>
-<p>它解决的是“模型太深、整模放不下”的问题，代价是 pipeline bubble：流水线启动和收尾阶段总会有设备空闲，流水线越深，调度越复杂。</p>
-<h3 id="ZeRO-FSDP"><a href="#ZeRO-FSDP" class="headerlink" title="ZeRO / FSDP"></a>ZeRO / FSDP</h3><p>ZeRO（Zero Redundancy Optimizer，零冗余优化器）和 FSDP（Fully Sharded Data Parallel，完全分片数据并行）拆的不是 batch，也不是某一层的矩阵，而是<strong>训练状态</strong>。</p>
-<blockquote>
-<p>ZeRO 和 FSDP 的核心思路是：不要让每张卡都保存完整参数、梯度和优化器状态。</p>
-</blockquote>
-<p>普通数据并行中，每张 GPU 都保存完整参数、完整梯度和完整优化器状态。这样实现简单，但显存冗余巨大。ZeRO / FSDP 的核心思想是：这些状态没有必要在每张卡上完整复制，可以按 shard 分摊到多张 GPU 上。</p>
-<table>
-<thead>
-<tr>
-<th><strong>阶段</strong></th>
-<th><strong>拆分对象</strong></th>
-<th><strong>节省什么</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>ZeRO-1</td>
-<td>optimizer states</td>
-<td>减少 Adam 状态冗余</td>
-</tr>
-<tr>
-<td>ZeRO-2</td>
-<td>optimizer states + gradients</td>
-<td>再减少梯度冗余</td>
-</tr>
-<tr>
-<td>ZeRO-3</td>
-<td>optimizer states + gradients + parameters</td>
-<td>参数也分片，显存节省最大</td>
-</tr>
-</tbody>
-</table>
-<p><img src="/images/llm/llm-distributed-training-06.png" alt="ZeRO / FSDP 流程"></p>
-<p>FSDP 和 ZeRO-3 思路接近：平时每张卡只保存参数 shard；计算某一层时，通过 <code>AllGather</code> 临时拿到当前层完整参数；反向传播后，通过 <code>ReduceScatter</code> 把梯度重新切分回各卡。<br>它解决的是“训练状态太占显存”的问题，代价是通信更复杂，尤其是频繁的参数聚合和梯度切分。</p>
-<h3 id="专家并行（Expert-Parallel）"><a href="#专家并行（Expert-Parallel）" class="headerlink" title="专家并行（Expert Parallel）"></a>专家并行（Expert Parallel）</h3><p>专家并行（Expert Parallel，EP）主要用于 MoE（Mixture of Experts，混合专家）模型。</p>
-<p>MoE 的特点是：模型总参数很大，但每个 token 只激活其中少数几个专家。例如一个模型可能有几十个或上百个 expert，但每个 token 只路由到 Top-1 或 Top-2 expert。这样可以用较低的每 token 计算量，换取更大的总模型容量。</p>
-<p>专家并行拆的就是这些 expert：不同 GPU 负责不同专家，token 经过 router 后，被发送到对应专家所在的 GPU 上计算，再把结果聚合回来。</p>
-<p><img src="/images/llm/llm-distributed-training-07.png" alt="专家并行流程"></p>
-<p>MoE 的难点不只是“专家很多”，而是 token 会在设备之间大规模移动。一个 batch 里的 token 可能被路由到不同专家，而这些专家分布在不同 GPU 或不同节点上，因此训练时会产生大量 <code>all-to-all</code> 通信。专家并行主要解决的是：</p>
-<ol>
-<li><strong>总参数太大</strong>： expert 参数分布在不同 GPU 上，不必每张卡保存所有专家；</li>
-<li><strong>每 token 计算可控</strong>：每个 token 只激活少数专家；</li>
-<li><strong>专家 specialization</strong>： 不同专家可以学习不同数据模式或能力方向。</li>
-</ol>
-<p>但它也带来新的工程难点：</p>
-<ol>
-<li>all-to-all 通信： token 需要跨 GPU / 跨节点发送到目标专家；</li>
-<li>负载不均： router 可能把大量 token 分到少数热门专家；</li>
-<li>expert capacity： 每个专家能处理的 token 数有限，溢出会影响训练；</li>
-<li>路由稳定性：router 训练不稳定会导致专家退化或利用率低；</li>
-<li>推理部署复杂：总参数大，专家调度和显存放置更难。</li>
-</ol>
-<p>所以，MoE 的训练效率不只取决于模型结构，也取决于 router、负载均衡、专家放置、all-to-all 通信和集群拓扑。</p>
-<h3 id="序列-上下文并行（Sequence-Context-Parallel）"><a href="#序列-上下文并行（Sequence-Context-Parallel）" class="headerlink" title="序列 / 上下文并行（Sequence / Context Parallel）"></a>序列 / 上下文并行（Sequence / Context Parallel）</h3><p>序列并行和上下文并行拆的是 <strong>sequence length</strong>，主要用于长上下文训练。</p>
-<p>普通训练中，一个样本的整段上下文通常会放在同一组 GPU 上完成 attention 计算。但当上下文长度从 4K、32K 扩展到 128K 甚至更长时，attention 和 activation 的显存压力会快速上升。尤其是长序列训练中，单卡不仅要保存更多 token 的 hidden states，还要处理更大的 attention 计算和中间激活。</p>
-<p>序列 / 上下文并行的核心思想是：不只拆 batch 或模型参数，也把同一个长序列沿 sequence 维度切开，让多张 GPU 共同处理一段上下文。</p>
-<p><img src="/images/llm/llm-distributed-training-08.png" alt="序列 / 上下文并行 流程"></p>
-<p>它的代价也很明显：attention 本来就依赖 token 之间的关系，把序列切开后，不同 GPU 之间必须交换上下文信息，否则模型只能看到局部片段。上下文越长，通信和调度越复杂。</p>
-<h2 id="训练系统如何协同工作？"><a href="#训练系统如何协同工作？" class="headerlink" title="训练系统如何协同工作？"></a>训练系统如何协同工作？</h2><p>前面讲的是“训练任务怎么拆”：数据并行拆 batch，张量并行拆矩阵，流水线并行拆层，ZeRO/FSDP 拆训练状态，专家并行拆 MoE expert。</p>
-<p>但真实训练时，这些并行策略不是孤立运行的。一次训练 step 里，数据加载、前向计算、反向传播、梯度同步、参数更新、checkpoint 和故障监控会同时发生。分布式训练系统的任务，就是把这些环节组织成一条尽可能高效、稳定、可恢复的流水线。</p>
-<p><img src="/images/llm/llm-distributed-training-09.png" alt="训练中的一次 step 核心流程"></p>
-<h3 id="一次训练-step-里发生了什么？"><a href="#一次训练-step-里发生了什么？" class="headerlink" title="一次训练 step 里发生了什么？"></a>一次训练 step 里发生了什么？</h3><p>一次大模型训练 step，表面上是一次 forward + backward，实际上包含数据、计算、通信、优化器、存储和调度多个环节的协同。核心流程如下：</p>
-<ol>
-<li><strong>DataLoader</strong>：读取、清洗、打包并分发训练样本。关键是数据吞吐必须跟上 GPU，否则 GPU 会空等；</li>
-<li><strong>Forward</strong>：执行前向计算，得到模型输出和 loss。这个阶段会产生大量激活值，是训练显存的重要来源；</li>
-<li><strong>Backward</strong>：执行反向传播，计算各层梯度。为了节省显存，很多系统会结合 activation checkpointing，在反向时重算部分激活；</li>
-<li><strong>Communication</strong>：在不同 GPU 之间同步梯度、参数、激活或 MoE token。常见通信包括 <code>AllReduce</code>、<code>AllGather</code>、<code>ReduceScatter</code> 和 <code>AllToAll</code>；</li>
-<li><strong>Optimizer Step</strong>：根据梯度更新参数。Adam 类优化器会维护额外状态，ZeRO / FSDP 则需要对参数、梯度和 optimizer state 做分片更新；</li>
-<li><strong>Checkpoint</strong>：周期性保存模型参数、优化器状态、数据进度和随机数状态。模型越大，checkpoint 越大，写入和恢复都更复杂；</li>
-<li><strong>Scheduler / Monitor</strong>：负责资源调度、健康检查、异常检测和任务重启。在千卡训练中，硬件故障、慢节点和网络异常都不是小概率事件。</li>
-</ol>
-<p>可以把它理解成一句话：训练 step 不是单个算子，而是一条由数据流、计算流、通信流和状态流共同组成的分布式流水线。</p>
-<h3 id="为什么需要-3D-Parallel-Hybrid-Parallel？"><a href="#为什么需要-3D-Parallel-Hybrid-Parallel？" class="headerlink" title="为什么需要 3D Parallel / Hybrid Parallel？"></a>为什么需要 3D Parallel / Hybrid Parallel？</h3><p>单一并行策略通常只能解决一类问题：</p>
-<table>
-<thead>
-<tr>
-<th><strong>单一策略</strong></th>
-<th><strong>能解决</strong></th>
-<th><strong>解决不了</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>数据并行</td>
-<td>提升吞吐</td>
-<td>模型和 optimizer state 放不下</td>
-</tr>
-<tr>
-<td>张量并行</td>
-<td>单层矩阵太大</td>
-<td>层数太深、pipeline 调度</td>
-</tr>
-<tr>
-<td>流水线并行</td>
-<td>模型层太多</td>
-<td>层内矩阵和训练状态仍可能太大</td>
-</tr>
-<tr>
-<td>ZeRO/FSDP</td>
-<td>训练状态太大</td>
-<td>计算本身和 MoE 路由问题</td>
-</tr>
-<tr>
-<td>专家并行</td>
-<td>MoE expert 太多</td>
-<td>dense 层、梯度同步、长上下文问题</td>
-</tr>
-</tbody>
-</table>
-<p>所以工业训练通常不会只用一种并行方式，而是组合使用。这就是 <strong>Hybrid Parallel（混合并行）</strong>。其中最经典的组合是 <strong>3D Parallel（三维并行）</strong>：<code>Data Parallel × Tensor Parallel × Pipeline Parallel</code>。</p>
-<p>它之所以叫 3D，是因为它同时从三个维度拆训练：</p>
-<ol>
-<li>Data Parallel，拆 batch；</li>
-<li>Tensor Parallel，拆单层矩阵；</li>
-<li>Pipeline Parallel，拆模型层。</li>
-</ol>
-<p>可以这样理解：</p>
-<p><img src="/images/llm/llm-distributed-training-10.png" alt="3D Parallel"></p>
-<p>如果再加上 ZeRO/FSDP、Expert Parallel、Sequence Parallel，就变成更广义的 Hybrid Parallel：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">DP × TP × PP × ZeRO/FSDP × EP × SP/CP</span><br></pre></td></tr></table></figure>
-<p>一个例子：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Tensor Parallel = 8</span><br><span class="line">Pipeline Parallel = 8</span><br><span class="line">Data Parallel = 32</span><br><span class="line"></span><br><span class="line">总 GPU = 8 × 8 × 32 = 2048</span><br></pre></td></tr></table></figure>
-<p>这表示：</p>
-<ul>
-<li>每个 pipeline stage 内，用 8 张 GPU 做 tensor parallel；</li>
-<li>整个模型被切成 8 个 pipeline stage；</li>
-<li>这样的模型副本有 32 组，用 data parallel 处理不同 batch shard；</li>
-<li>如果再配 ZeRO/FSDP，可以继续切分 optimizer state；</li>
-<li>如果是 MoE 模型，还可能叠加 expert parallel。</li>
-</ul>
-<p>所以，3D parallel / hybrid parallel 不是新算法，而是一种系统组织方式：<strong>当模型、数据、训练状态和通信压力都太大时，用多种并行策略在不同维度上同时拆分训练任务</strong>。</p>
-<h2 id="工程难点与解决方案"><a href="#工程难点与解决方案" class="headerlink" title="工程难点与解决方案"></a>工程难点与解决方案</h2><p>分布式训练最难的地方，不是“能不能把模型拆开”，而是“拆开之后能不能稳定、高效地长期跑下去”。在千卡规模下，很多小问题都会被放大：一次跨节点通信变慢，会拖住整个 step；一个异常 batch 可能触发 loss spike；一张 GPU 或一块网卡故障，可能导致整组训练任务重启；一次 checkpoint 写入过慢，可能让大量 GPU 空等。规模越大，系统越接近“木桶效应”：最慢、最不稳定的环节决定整体训练效率。</p>
-<p><img src="/images/llm/llm-distributed-training-11.png" alt="千卡训练的难点"></p>
-<table>
-<thead>
-<tr>
-<th><strong>难点</strong></th>
-<th><strong>本质问题</strong></th>
-<th><strong>主流解决方案</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>通信瓶颈</td>
-<td>GPU 等通信，算力利用率下降</td>
-<td>拓扑感知并行组、通信计算重叠、NCCL 调优</td>
-</tr>
-<tr>
-<td>显存不足</td>
-<td>参数、激活、optimizer states 占用巨大</td>
-<td>ZeRO/FSDP、activation checkpointing、混合精度</td>
-</tr>
-<tr>
-<td>Pipeline bubble</td>
-<td>流水线阶段空等</td>
-<td>micro-batch、1F1B、interleaved pipeline</td>
-</tr>
-<tr>
-<td>Loss spike</td>
-<td>数值不稳或异常 batch 破坏训练</td>
-<td>warmup、gradient clipping、BF16/FP8 策略、异常 batch 检测</td>
-</tr>
-<tr>
-<td>Straggler</td>
-<td>慢节点拖慢全局 step</td>
-<td>健康检查、节点隔离、负载均衡、弹性训练</td>
-</tr>
-<tr>
-<td>Checkpoint 慢</td>
-<td>模型和 optimizer state 文件巨大</td>
-<td>分片 checkpoint、异步写入、增量保存</td>
-</tr>
-<tr>
-<td>MoE 负载不均</td>
-<td>token 路由集中到少数专家</td>
-<td>load balancing、capacity factor、aux-loss-free balancing</td>
-</tr>
-<tr>
-<td>长上下文训练</td>
-<td>attention 和 activation 随长度暴涨</td>
-<td>sequence parallel、context parallel、FlashAttention</td>
-</tr>
-<tr>
-<td>故障恢复</td>
-<td>千卡训练中故障是常态</td>
-<td>高频 checkpoint、自动重启、数据进度恢复</td>
-</tr>
-</tbody>
-</table>
-<p>这里有一个重要判断：<strong>分布式训练不是追求单个 step 最快，而是追求长期稳定的有效吞吐</strong>。有效吞吐可以理解为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">有效吞吐 = 有效训练 token 数 / 总墙钟时间</span><br></pre></td></tr></table></figure>
-<p>所以，一个训练系统真正关心的不是“理论 peak FLOPs 有多高”，而是：</p>
-<ul>
-<li>GPU 有多少时间真的在算；</li>
-<li>通信有没有被计算隐藏；</li>
-<li>checkpoint 会不会频繁阻塞；</li>
-<li>loss spike 后是否需要回滚；</li>
-<li>节点故障后能不能快速恢复；</li>
-<li>MoE 负载是否均衡；</li>
-<li>长时间训练中吞吐是否稳定。</li>
-</ul>
-<p>如果一个系统单步很快，但频繁中断、回滚、空等、OOM 或 checkpoint 卡住，那么真实训练效率并不高。工业级分布式训练追求的是：<strong>在可接受成本下，持续、稳定地把最多有效 token 送进模型完成优化</strong>。</p>
-<h2 id="行业实践与未来趋势"><a href="#行业实践与未来趋势" class="headerlink" title="行业实践与未来趋势"></a>行业实践与未来趋势</h2><p>分布式训练的发展，本质上是一条不断降低“大模型训练不可行性”的工程演进路线：先解决模型放不下，再解决训练太慢，再解决通信太重，最后走向低精度、MoE、长上下文和训练-推理协同优化。</p>
-<table>
-<thead>
-<tr>
-<th><strong>系统 / 实践</strong></th>
-<th><strong>核心贡献</strong></th>
-<th><strong>解决的问题</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Megatron-LM</td>
-<td>组合 tensor parallel、pipeline parallel、data parallel</td>
-<td>证明多维并行可以把训练扩展到千卡级集群</td>
-</tr>
-<tr>
-<td>DeepSpeed ZeRO</td>
-<td>分片 optimizer states、gradients、parameters</td>
-<td>减少数据并行中的训练状态冗余</td>
-</tr>
-<tr>
-<td>PyTorch FSDP</td>
-<td>原生 fully sharded data parallel</td>
-<td>把大模型分片训练能力带入主流框架</td>
-</tr>
-<tr>
-<td>Megatron-DeepSpeed</td>
-<td>Megatron 并行 + ZeRO 分片</td>
-<td>工业训练通常需要混合并行，而不是单一策略</td>
-</tr>
-<tr>
-<td>DeepSeek-V3</td>
-<td>MoE、FP8、DualPipe、通信计算重叠、负载均衡</td>
-<td>训练效率和稳定性成为模型竞争力</td>
-</tr>
-<tr>
-<td>Llama / Qwen</td>
-<td>大规模 dense / MoE 基模训练与公开技术报告</td>
-<td>基模竞争越来越依赖完整训练系统栈</td>
-</tr>
-</tbody>
-</table>
-<p>这里最典型的是 DeepSeek-V3。公开报告中，DeepSeek-V3 采用 671B total、37B activated 的 MoE 架构，并结合 FP8 mixed precision、DualPipe、MoE 负载均衡和通信计算重叠；同时报告强调训练过程中没有不可恢复 loss spike，也没有回滚。这说明前沿训练已经不只是“模型结构创新”，而是架构、并行策略、数值精度、通信调度、checkpoint 和稳定性控制一起优化。</p>
-<p>未来趋势可以概括为五条：</p>
-<p><img src="/images/llm/llm-distributed-training-12.png" alt="分布式训练演进"></p>
-<p>所以，未来的大模型训练系统不会只比较“用了多少 GPU”，而会比较：</p>
-<ol>
-<li>同样预算下，谁能训练更多有效 token；</li>
-<li>同样模型规模下，谁能用更低成本稳定收敛；</li>
-<li>同样能力目标下，谁能更好兼顾训练效率和推理效率。</li>
-</ol>
-<p>最终，大模型分布式训练的本质不是简单“多卡并行”，而是把模型、数据、激活、梯度、优化器状态、通信和存储全部重新组织，让一个原本无法训练的模型，在千卡集群上以可控成本、可恢复方式，长期稳定地完成优化。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;如果说预训练回答的是“大模型的能力如何形成”，后训练回答的是“这些能力如何被塑造成可用行为”，那么分布式训练回答的就是一个更底层的工程问题：如此庞大的模型，如何真的在成百上千张 GPU 上稳定训练完成？&lt;/p&gt;
-&lt;p&gt;大模型训练从来不是把一个 PyTorch 脚本复制到很多张卡上那么简单。真正的挑战在于：模型参数放不下，激活值放不下，优化器状态放不下；单卡算力不够，跨卡通信会拖慢训练；训练中还可能遇到 loss spike、节点故障、checkpoint 写入过慢、MoE 负载不均和长上下文显存爆炸。规模越大，问题越不再是单点优化，而是计算、显存、通信、存储、调度和容错的系统协同。&lt;/p&gt;
     
     </summary>
     
