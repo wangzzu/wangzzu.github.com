@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-21T13:10:13.000Z</updated>
+  <updated>2026-07-28T17:10:08.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -16,6 +16,177 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
+    <title>具身智能（二）：机器人如何描述身体与世界</title>
+    <link href="http://matt33.com/2026/07/29/embodied-intelligence-body-spatial-math/"/>
+    <id>http://matt33.com/2026/07/29/embodied-intelligence-body-spatial-math/</id>
+    <published>2026-07-28T17:10:08.000Z</published>
+    <updated>2026-07-28T17:10:08.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>上一篇文章从 Observation、State 与 Action 出发，建立了具身智能的整体框架：机器人通过执行闭环完成当前任务，再通过学习闭环将交互经验转化为新的能力。但当这些抽象概念落到真实机器人上，首先要解决一个更基础的问题：如何把机器人的身体、周围物体以及二者之间的空间关系，表示成可以计算和执行的数据。</p>
+<p>仍以“把桌上的杯子放进托盘”为例。视觉系统可以识别杯子，并估计它在相机坐标系中的位置；机械臂规划和执行动作时，却需要知道杯子相对机器人基座在哪里、末端执行器当前是什么姿态，以及各个关节应该如何运动。机器人必须结合关节状态、相机外参和坐标变换，才能将“图像中的杯子”转换为“身体能够到达的抓取位姿”。坐标方向、旋转顺序、时间同步或标定参数的任何偏差，都可能让语义正确的决策变成物理世界中的错误动作。</p>
+<a id="more"></a>
+<p>因此，自由度、执行器、传感器、坐标系、旋转矩阵、四元数和 <code>SE(3)</code> 并不是具身智能之外的数学准备，而是连接感知、状态、决策与行动的空间语言。本文将从机器人的身体结构出发，介绍机器人如何描述自身状态，如何统一不同坐标系中的观察，如何表示三维旋转与刚体位姿，并通过一条完整的抓取链路，理解这些数学工具怎样支撑具身智能在物理世界中形成闭环。</p>
+<h2 id="为什么具身智能需要空间表示"><a href="#为什么具身智能需要空间表示" class="headerlink" title="为什么具身智能需要空间表示"></a>为什么具身智能需要空间表示</h2><p>具身智能面对的不是抽象符号，而是具有位置、方向、尺寸和物理约束的身体与环境。第一篇中的三个核心对象，在机器人系统中都依赖空间表示：</p>
+<ul>
+<li><strong>Observation</strong>：相机、深度、力与触觉等空间观察通常表达在各自的传感器坐标系中；编码器则提供关节空间中的位置或位移。系统需要通过标定、运动学和时间同步，将这些异构观察关联起来；</li>
+<li><strong>State</strong>：机器人需要估计关节状态、末端位姿、物体位姿和接触关系；</li>
+<li><strong>Action</strong>：策略可能输出关节位置、速度、力矩，也可能输出末端执行器的位姿变化；</li>
+</ul>
+<p>从语言指令到机器人动作，中间需要经过一条几何落地链路：</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-01.png" alt="语言指令需要经过感知、空间定位、运动规划与控制，才能转化为物理动作。"></p>
+<p>这也是空间数学与具身智能最直接的关系：感知回答“看到了什么”，空间表示回答“它在哪里、朝向哪里”，运动策略才进一步决定“身体应该怎样到达那里”，如下图所示：</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-02.png" alt="空间表示连接感知结果、物体位姿与机器人运动策略。"></p>
+<p>空间表示由此成为具身闭环的几何基础：它将不同传感器、身体部件和任务目标对齐到一致的空间关系中，使状态估计、规划与控制能够协同工作。接下来，我们将从身体结构出发，逐步理解机器人如何描述自身、环境及二者之间的关系。</p>
+<h2 id="机器人如何描述自己的身体"><a href="#机器人如何描述自己的身体" class="headerlink" title="机器人如何描述自己的身体"></a>机器人如何描述自己的身体</h2><p>要控制机器人，计算机首先要回答两个问题：机器人的身体由哪些部件组成，这些部件此刻处于什么状态。前者由连杆和关节描述，后者则由关节位置、速度以及传感器信号表示。</p>
+<p>可以把连杆理解为机器人的“骨骼”，关节决定相邻连杆之间能够怎样运动，执行器负责产生运动，传感器则告诉系统身体实际发生了什么。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-03.png" alt="连杆、关节、执行器和传感器共同构成机器人的身体。"></p>
+<h3 id="用连杆、关节和自由度描述身体"><a href="#用连杆、关节和自由度描述身体" class="headerlink" title="用连杆、关节和自由度描述身体"></a>用连杆、关节和自由度描述身体</h3><p>以一台平面双关节机械臂为例。它有两段连杆和两个旋转关节：第一个关节控制“大臂”的方向，第二个关节控制“小臂”相对大臂的方向。只要知道两个关节的角度，就能确定整条机械臂的形态：</p>
+<span>$$\displaystyle
+\mathbf{q}=[q_1,q_2]^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>这里的 $\mathbf q$ 称为机器人的<strong>配置（Configuration）</strong>。对于具有 $n$ 个独立单自由度关节的固定基座机械臂，可以进一步写成：</p>
+<span>$$\displaystyle
+\mathbf{q}=[q_1,q_2,\ldots,q_n]^{\mathrm{T}}$$</span><!-- Has MathJax -->
+<p>所有可能的 $\mathbf q$ 共同构成机器人的<strong>配置空间（Configuration Space，C-space）</strong>。如果需要两个独立变量才能确定机器人的配置，就称机器人具有两个自由度；需要 $n$ 个独立变量，就具有 $n$ 个自由度。因此，自由度可以理解为“描述机器人身体形态至少需要多少个独立数值”。</p>
+<p>配置只说明机器人当前“摆成什么样子”。如果还要描述它怎样运动，最基本的身体状态通常还需要包含关节速度，对固定基座刚性机械臂，最基本的运动学状态可以写成：</p>
+<span>$$\displaystyle
+\mathbf{x}_{\mathrm{body}}=(\mathbf{q},\dot{\mathbf{q}})$$</span><!-- Has MathJax -->
+<p>需要注意的是，自由度不一定等于活动部件或电机的数量。例如，平行夹爪虽然有两个手指，但两个手指可能由一个电机联动，因此只有一个独立的开合自由度。人形机器人除了各个关节外，还需要描述身体基座在空间中的位置和方向。</p>
+<h3 id="执行器和传感器如何形成身体闭环"><a href="#执行器和传感器如何形成身体闭环" class="headerlink" title="执行器和传感器如何形成身体闭环"></a>执行器和传感器如何形成身体闭环</h3><p>配置和状态只是对机器人身体的数学描述。要在真实世界中行动，机器人还需要通过执行器改变身体，并通过传感器观察动作产生的结果。</p>
+<p>执行器类似机器人的“肌肉”。控制器向电机或其他驱动装置发送目标位置、速度或力矩，执行器再驱动关节和连杆运动。传感器则构成机器人的“感觉系统”：编码器测量关节角度或位移；IMU 中的陀螺仪和加速度计分别测量角速度与比力；力与触觉传感器检测接触；相机和深度传感器观察外部环境。</p>
+<p>这些传感器读数只是带有噪声和延迟的观察，并不等同于机器人的真实状态。状态估计器需要结合 IMU、编码器、视觉及其他传感器，估计关节状态、基座姿态与速度、末端位姿和接触状态，再将结果提供给策略和控制器。整个身体闭环可以概括为：</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-04.png" alt="执行器改变身体，传感器提供观察，状态估计连接二者形成闭环"></p>
+<p>在这个闭环中，控制指令对应 <strong>Action</strong>，传感器读数对应 <strong>Observation</strong>，经过融合得到的身体状态对应 <strong>State</strong>。机器人正是通过不断执行动作、读取观察和更新状态，将模型生成的决策转化为真实世界中的运动。</p>
+<h2 id="从坐标系到位姿：机器人如何描述空间"><a href="#从坐标系到位姿：机器人如何描述空间" class="headerlink" title="从坐标系到位姿：机器人如何描述空间"></a>从坐标系到位姿：机器人如何描述空间</h2><p>机器人不仅需要知道物体是什么，还要知道物体在哪里、朝向哪里，以及它与机器人身体之间是什么关系。位置和方向只有相对于某个参照系才有意义，因此机器人会为身体、传感器和环境中的重要对象分别建立坐标系，再通过坐标变换将它们连接起来。</p>
+<h3 id="坐标系：位置必须有参照物"><a href="#坐标系：位置必须有参照物" class="headerlink" title="坐标系：位置必须有参照物"></a>坐标系：位置必须有参照物</h3><p>三维笛卡尔坐标系由一个原点和三个相互垂直的单位轴组成，机器人系统通常采用右手坐标系：</p>
+<ul>
+<li>世界坐标系 ${W}$：描述整个场景的全局参考；</li>
+<li>基座坐标系 ${B}$：固定在机器人底座上；</li>
+<li>末端坐标系 ${E}$：固定在机械臂末端或夹爪上；</li>
+<li>相机坐标系 ${C}$：原点位于相机光心，$x$ 轴指向图像右侧，$y$ 轴指向图像下方，$z$ 轴沿光轴指向相机前方。本文采用这一约定描述视觉观测；</li>
+<li>物体坐标系 ${O}$：固定在杯子、托盘等任务对象上。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-05.png" alt="世界、基座、末端、相机与物体坐标系共同描述抓取场景"></p>
+<p>一个坐标值只有和坐标系放在一起才有完整含义。例如：</p>
+<span>$$\displaystyle
+{}^{C}\mathbf{p}=\begin{bmatrix}0.2\\0.1\\0.8\end{bmatrix}$$</span><!-- Has MathJax -->
+<p>若长度单位为米，该向量表示某个点在相机坐标系 ${C}$ 中的位置。这个点在机器人基座坐标系 ${B}$ 中通常具有不同的坐标值。</p>
+<p>可以用 ${}^{A}\mathbf T_B$ 表示坐标系 ${B}$ 相对于坐标系 ${A}$ 的位姿，它也可以将坐标从 ${B}$ 转换到 ${A}$。对于坐标系 ${B}$ 中的点 ${}^{B}\mathbf p$，计算其 ${}^{A}\mathbf p$ 的方式如下：</p>
+<span>$$\displaystyle
+{}^{A}\mathbf{p}={}^{A}\mathbf{R}_{B}\,{}^{B}\mathbf{p}+{}^{A}\mathbf{t}_{B}$$</span><!-- Has MathJax -->
+<p>其中，${}^{A}\mathbf R_B$ 描述坐标系 ${B}$ 相对 ${A}$ 的方向，${}^{A}\mathbf t_B$ 表示 ${B}$ 的原点在 ${A}$ 中的位置。整个过程可以理解为：先调整方向，再补上两个坐标原点之间的位移。</p>
+<p>坐标系由此为身体与环境提供了统一参照。视觉系统检测到的物体只有从相机坐标系转换到机器人使用的坐标系后，才能成为规划和控制模块可以执行的空间目标。</p>
+<h3 id="旋转：物体在哪里还不够"><a href="#旋转：物体在哪里还不够" class="headerlink" title="旋转：物体在哪里还不够"></a>旋转：物体在哪里还不够</h3><p>三维位置可以用三个数表示，但位置只能说明物体“在哪里”，不能说明它“朝向哪里”。例如，夹爪即使到达杯子上方，如果开口方向与杯子不匹配，仍然无法完成抓取。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-06.png" alt="机器人需要同时描述物体的位置与朝向"></p>
+<p><strong>旋转矩阵 $\mathbf R$ 使用一个 $3\times3$ 矩阵表示朝向</strong>。矩阵的三列可以理解为物体局部坐标系的 $x$、$y$、$z$ 轴在参考坐标系中的方向。旋转矩阵不是任意九个数，而必须满足：</p>
+<span>$$\displaystyle
+\mathbf{R}^{\mathsf{T}}\mathbf{R}=\mathbf{I},\qquad\det(\mathbf{R})=1$$</span><!-- Has MathJax -->
+<p>所有满足这些条件的三维旋转矩阵共同构成 $SO(3)$。旋转矩阵虽然包含九个元素，但三维旋转实际只有三个自由度，其余元素受到单位长度和相互正交等约束。旋转矩阵可以直接作用于向量，其逆矩阵等于转置：</p>
+<span>$$\displaystyle
+\mathbf{R}^{-1}=\mathbf{R}^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>多个旋转可以通过矩阵乘法组合，但旋转顺序不能随意交换。先绕 $x$ 轴旋转再绕 $y$ 轴旋转，通常与相反顺序得到不同结果。机器人系统常用三种方式表示旋转：</p>
+<table>
+<thead>
+<tr>
+<th><strong>表示方法</strong></th>
+<th><strong>主要特点</strong></th>
+<th><strong>使用时需要注意</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>欧拉角</td>
+<td>使用三个角度，容易理解和展示</td>
+<td>必须明确旋转轴与顺序，并且存在奇异位置</td>
+</tr>
+<tr>
+<td>旋转矩阵</td>
+<td>便于变换、组合和几何计算</td>
+<td>使用九个数，计算后需要保持正交</td>
+</tr>
+<tr>
+<td>四元数</td>
+<td>表示紧凑，适合插值和连续旋转</td>
+<td>必须归一化，并统一元素顺序</td>
+</tr>
+</tbody>
+</table>
+<p>若采用标量在前的 $(w,x,y,z)$ 顺序，绕单位轴 $\mathbf u$ 旋转 $\theta$ 可以表示为单位四元数：</p>
+<span>$$\displaystyle
+\mathbf{q}_{R}=\begin{bmatrix}\cos\left(\frac{\theta}{2}\right)\\\mathbf{u}\sin\left(\frac{\theta}{2}\right)\end{bmatrix},\qquad\left\|\mathbf{q}_{R}\right\|_{2}=1$$</span><!-- Has MathJax -->
+<p>这里使用 $\mathbf q_R$ 表示旋转四元数，以区别前文表示机器人关节配置的 $\mathbf q$。四元数具有双重表示，即 $\mathbf q_R$ 与 $-\mathbf q_R$ 表示同一个三维旋转。不同软件库还可能采用不同的元素顺序，例如 ROS 消息使用 <code>(x,y,z,w)</code>，部分数学库则使用 <code>(w,x,y,z)</code>，在模型训练和系统接口中必须统一约定。</p>
+<p>旋转表示也会影响具身模型的动作输出。VLA 或机器人策略经常预测末端执行器的位姿变化，如果没有正确处理角度边界、四元数归一化和旋转顺序，模型输出即使数值接近，也可能在真实执行时产生不连续或方向错误的动作。</p>
+<h3 id="位姿变换：把位置与方向统一起来"><a href="#位姿变换：把位置与方向统一起来" class="headerlink" title="位姿变换：把位置与方向统一起来"></a>位姿变换：把位置与方向统一起来</h3><p>物体在空间中的位置和方向合称为<strong>位姿（Pose）</strong>。为了统一表示旋转和平移，可以将二者组合成齐次变换矩阵：</p>
+<span>$$\displaystyle
+{}^{A}\mathbf{T}_{B}=\begin{bmatrix}{}^{A}\mathbf{R}_{B} &amp; {}^{A}\mathbf{t}_{B}\\\mathbf{0}^{\mathsf{T}} &amp; 1\end{bmatrix}$$</span><!-- Has MathJax -->
+<p>其中，${}^{A}\mathbf T_B$ 同时描述坐标系 ${B}$ 相对于 ${A}$ 的位置和方向。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-07.png" alt="齐次变换将旋转和平移统一为完整的刚体位姿"></p>
+<p>使用齐次坐标后，点的位置变换可以统一写成矩阵乘法：</p>
+<span>$$\displaystyle
+\begin{bmatrix}{}^{A}\mathbf{p}\\1\end{bmatrix}={}^{A}\mathbf{T}_{B}\begin{bmatrix}{}^{B}\mathbf{p}\\1\end{bmatrix}$$</span><!-- Has MathJax -->
+<p>多个坐标变换可以沿坐标系链路依次组合。例如，要将相机观察到的杯子位姿转换到机器人基座坐标系，可以写成：</p>
+<span>$$\displaystyle
+{}^{B}\mathbf{T}_{O}={}^{B}\mathbf{T}_{E}\,{}^{E}\mathbf{T}_{C}\,{}^{C}\mathbf{T}_{O}$$</span><!-- Has MathJax -->
+<p>这条式子依次连接了基座、末端、相机和杯子坐标系。相邻矩阵的下标需要首尾对应，矩阵相乘的顺序也不能改变。反方向的变换则通过求逆得到：</p>
+<span>$$\displaystyle
+{}^{B}\mathbf{T}_{A}=\left({}^{A}\mathbf{T}_{B}\right)^{-1}$$</span><!-- Has MathJax -->
+<p>真实机器人通常会把这些关系维护为带时间戳的坐标变换树。相机相对末端的安装关系通常是静态变换，基座到末端的关系会随关节运动不断变化，物体位姿则由视觉系统持续更新。如果坐标方向、变换顺序或时间戳不一致，即使物体识别正确，最终计算出的抓取位置仍可能出现明显偏差。</p>
+<p>坐标系、旋转和位姿共同构成具身系统的空间语言：感知模块用它描述物体，状态估计用它描述身体，规划模块用它表达目标，控制器再将目标转换为可以执行的动作。</p>
+<h2 id="SE-3-如何连接感知与行动"><a href="#SE-3-如何连接感知与行动" class="headerlink" title="SE(3) 如何连接感知与行动"></a>SE(3) 如何连接感知与行动</h2><p>上面介绍了如何用齐次变换矩阵统一表示位置和方向。机器人系统中所有合法的三维刚体变换共同构成 <code>SE(3)</code>。本章不再重复矩阵定义，而是重点说明 <code>SE(3)</code> 为什么出现，以及它如何将视觉观察转换为机器人能够执行的空间目标。</p>
+<h3 id="什么是-SE-3"><a href="#什么是-SE-3" class="headerlink" title="什么是 SE(3)"></a>什么是 SE(3)</h3><p><code>SE(3)</code> 的全称是 <strong>Special Euclidean Group in 3D</strong>，中文通常译为<strong>三维特殊欧氏群</strong>。它描述物体在三维空间中的刚体运动，包括三个平移自由度和三个旋转自由度。</p>
+<ul>
+<li>这里的“刚体运动”意味着物体可以移动和旋转，但不会缩放、变形或发生镜像反射。平面移动机器人常使用 <code>SE(2)</code> 描述位姿，机械臂、无人机和人形机器人则主要使用 <code>SE(3)</code>。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-08.png" alt="SE(3) 统一表示三维刚体的平移、旋转与位姿组合"></p>
+<p>从工程角度看，<code>SE(3)</code> 的重要性在于：不同坐标系之间的位姿可以通过矩阵乘法组合，也可以通过求逆改变变换方向。例如：</p>
+<span>$$\displaystyle
+{}^{A}\mathbf{T}_{C}={}^{A}\mathbf{T}_{B}\,{}^{B}\mathbf{T}_{C}$$</span><!-- Has MathJax -->
+<p>机器人因此不需要直接计算任意两个坐标系之间的关系，只需要维护世界、基座、末端、相机和物体之间的局部变换，再沿着变换链进行组合。</p>
+<p>需要注意，位姿组合通常不能交换顺序。先旋转再平移，与先平移再旋转，得到的结果可能不同。这也是机器人系统必须严格约定坐标系方向和矩阵顺序的原因。</p>
+<h3 id="从相机观察到抓取位姿"><a href="#从相机观察到抓取位姿" class="headerlink" title="从相机观察到抓取位姿"></a>从相机观察到抓取位姿</h3><p>以腕部相机抓取杯子为例。视觉系统首先得到杯子相对于相机的位姿 ${}^{C}\mathbf T_O$，但机械臂规划动作时，需要知道杯子在世界坐标系中的位姿：</p>
+<span>$$\displaystyle
+{}^{W}\mathbf{T}_{O}={}^{W}\mathbf{T}_{B}\,{}^{B}\mathbf{T}_{E}(\mathbf{q})\,{}^{E}\mathbf{T}_{C}\,{}^{C}\mathbf{T}_{O}$$</span><!-- Has MathJax -->
+<p>其中，${}^{W}\mathbf T_B$ 描述机器人基座相对于世界坐标系的位姿，${}^{B}\mathbf T_E(\mathbf q)$ 由关节状态和正向运动学得到，${}^{E}\mathbf T_C$ 来自手眼标定，${}^{C}\mathbf T_O$ 则由视觉系统估计。</p>
+<p>机器人还需要确定夹爪应该从什么位置和方向接近杯子。设 ${}^{O}\mathbf T_G$ 表示相对于杯子的目标抓取位姿，则末端执行器需要到达：</p>
+<span>$$\displaystyle
+{}^{W}\mathbf{T}_{G}={}^{W}\mathbf{T}_{O}\,{}^{O}\mathbf{T}_{G}$$</span><!-- Has MathJax -->
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-09.png" alt="杯子位姿从相机坐标系转换到世界坐标系，并生成目标抓取位姿"></p>
+<p>经过这两步，“相机中的杯子”就被转换成了“机械臂需要到达的抓取位姿”。实际系统还需要保证视觉数据、关节状态和坐标变换具有一致的时间戳，否则机器人运动过程中产生的时间偏差也会导致抓取位置不准。</p>
+<h3 id="从目标位姿到运动误差"><a href="#从目标位姿到运动误差" class="headerlink" title="从目标位姿到运动误差"></a>从目标位姿到运动误差</h3><p>得到目标位姿后，机器人还需要判断当前末端与目标之间相差多少。设 ${}^{W}\mathbf T_E$ 是当前末端位姿，${}^{W}\mathbf T_G$ 是期望的抓取位姿。两者都以世界坐标系为参考，则目标相对于当前末端的变换为：</p>
+<span>$$\displaystyle
+{}^{E}\mathbf{T}_{G}=\left({}^{W}\mathbf{T}_{E}\right)^{-1}{}^{W}\mathbf{T}_{G}$$</span><!-- Has MathJax -->
+<p>当机器人准确到达目标时，${}^{E}\mathbf T_G$ 应当等于单位变换。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-10.png" alt="相对位姿经过 SE(3) 对数映射，得到当前末端坐标系中的局部六维位姿误差"></p>
+<p>由于位姿同时包含旋转和平移，不能像普通向量一样直接相减。通常可以通过对数映射，将相对位姿转换为局部六维运动量：</p>
+<span>$$\displaystyle
+\boldsymbol{\xi}_{b}=\left[\operatorname{Log}\left({}^{E}\mathbf{T}_{G}\right)\right]^{\vee}\in \mathbb{R}^{6}$$</span><!-- Has MathJax -->
+<p>这个六维量同时描述末端还需要完成的旋转和平移，并且是在当前末端坐标系中表达的。它不是位置差与欧拉角差的简单拼接，而是对完整刚体运动的局部表示。随后，逆运动学和控制器可以利用这个误差计算关节应该怎样运动。</p>
+<p>至此，<code>SE(3)</code> 完成了从视觉观察到机器人动作的连接：感知系统估计物体位姿，坐标变换生成抓取目标，相对变换描述当前末端与目标之间的差异，运动学与控制系统再将其转换为关节动作。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>具身智能要在物理世界中行动，首先需要把身体、传感器和环境之间的关系转换为统一的数学表示。连杆与关节定义机器人的身体结构，配置 $\mathbf q$ 描述当前身体形态，自由度表示配置空间的维数，执行器与传感器则将这些数学状态连接到真实运动和反馈。理解这一过程，可以抓住四条主线：</p>
+<ol>
+<li><strong>配置描述身体</strong>：配置空间表示机器人所有可能的身体形态，自由度决定描述配置所需的独立变量数量。</li>
+<li><strong>坐标系建立参照</strong>：位置和方向只有相对于某个坐标系才有意义，不同传感器和身体部件需要通过坐标变换对齐。</li>
+<li><strong>旋转描述朝向</strong>：旋转矩阵、欧拉角和四元数描述的是同一类三维旋转，但具有不同的参数形式、约束和使用特点。</li>
+<li><strong>SE(3) 连接完整链路</strong>：齐次变换将位置与旋转统一起来，使视觉感知、状态估计、运动学、规划与控制可以沿同一条位姿链协同工作。</li>
+</ol>
+<p>空间表示本身并不负责决定机器人应该执行什么任务，但它为具身系统提供了一套一致的物理语言。没有这层语言，视觉模型识别出的物体无法变成可执行的目标，策略输出的动作也无法准确落到具体身体上。</p>
+<p>到这里，我们已经知道机器人如何描述自己的身体，以及如何计算身体与环境之间的空间关系。下一篇将进一步进入运动学与控制，理解机器人如何从目标末端位姿求解关节运动，并让真实身体准确、稳定地到达目标。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;上一篇文章从 Observation、State 与 Action 出发，建立了具身智能的整体框架：机器人通过执行闭环完成当前任务，再通过学习闭环将交互经验转化为新的能力。但当这些抽象概念落到真实机器人上，首先要解决一个更基础的问题：如何把机器人的身体、周围物体以及二者之间的空间关系，表示成可以计算和执行的数据。&lt;/p&gt;
+&lt;p&gt;仍以“把桌上的杯子放进托盘”为例。视觉系统可以识别杯子，并估计它在相机坐标系中的位置；机械臂规划和执行动作时，却需要知道杯子相对机器人基座在哪里、末端执行器当前是什么姿态，以及各个关节应该如何运动。机器人必须结合关节状态、相机外参和坐标变换，才能将“图像中的杯子”转换为“身体能够到达的抓取位姿”。坐标方向、旋转顺序、时间同步或标定参数的任何偏差，都可能让语义正确的决策变成物理世界中的错误动作。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="具身智能" scheme="http://matt33.com/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/"/>
+    
+  </entry>
+  
+  <entry>
     <title>具身智能（一）：物理世界中的智能闭环</title>
     <link href="http://matt33.com/2026/07/21/embodied-intelligence-overview/"/>
     <id>http://matt33.com/2026/07/21/embodied-intelligence-overview/</id>
@@ -23,8 +194,8 @@
     <updated>2026-07-21T13:10:13.000Z</updated>
     
     <content type="html"><![CDATA[<p>大语言模型已经能够处理文本、代码和数字工具，但当任务变成“把桌上的红色杯子放进左边托盘”时，智能面对的便不再只是信息。机器人还需要感知环境、估计状态、规划并执行动作，再根据物理反馈持续纠错。这正是具身智能的核心：让智能依托具体身体，在环境中形成观察、决策、行动和反馈的闭环。</p>
-<a id="more"></a>
 <p>作为具身智能系列第一篇文章，本文暂不深入运动学、控制算法和 VLA 的模型细节，而是先建立整体认知：具身智能是什么、技术路线如何演进、现代系统怎样连接 Observation、State 与 Action，以及执行闭环和学习闭环如何协同工作。最后，本文还将结合截至 2026 年的行业进展，讨论下一阶段的竞争重点与技术趋势。</p>
+<a id="more"></a>
 <h2 id="从数字智能到具身智能"><a href="#从数字智能到具身智能" class="headerlink" title="从数字智能到具身智能"></a>从数字智能到具身智能</h2><p>理解具身智能的起点，是看清智能进入物理世界后，如何从标准接口中的信息处理，转变为受到感知噪声、物理规律和安全约束的连续决策问题。</p>
 <h3 id="从数字世界进入物理世界，难点在哪里"><a href="#从数字世界进入物理世界，难点在哪里" class="headerlink" title="从数字世界进入物理世界，难点在哪里"></a>从数字世界进入物理世界，难点在哪里</h3><p>数字智能与物理智能的区别，不在于是否能够“行动”，而在于行动发生在怎样的环境中。数字 Agent 可以点击网页、执行代码或调用 API，但这些动作通常通过预先定义的接口完成，输入输出和失败状态相对明确。</p>
 <p>物理环境却没有统一接口，杯子也不会返回“抓偏了 3 厘米”的错误码。机器人只能根据视觉、本体感知、触觉和力反馈推断发生了什么，并且每次动作都会改变环境，影响后续观察与决策。</p>
@@ -301,6 +472,7 @@
     <summary type="html">
     
       &lt;p&gt;大语言模型已经能够处理文本、代码和数字工具，但当任务变成“把桌上的红色杯子放进左边托盘”时，智能面对的便不再只是信息。机器人还需要感知环境、估计状态、规划并执行动作，再根据物理反馈持续纠错。这正是具身智能的核心：让智能依托具体身体，在环境中形成观察、决策、行动和反馈的闭环。&lt;/p&gt;
+&lt;p&gt;作为具身智能系列第一篇文章，本文暂不深入运动学、控制算法和 VLA 的模型细节，而是先建立整体认知：具身智能是什么、技术路线如何演进、现代系统怎样连接 Observation、State 与 Action，以及执行闭环和学习闭环如何协同工作。最后，本文还将结合截至 2026 年的行业进展，讨论下一阶段的竞争重点与技术趋势。&lt;/p&gt;
     
     </summary>
     
@@ -8223,381 +8395,6 @@
     
       &lt;p&gt;如果说推理服务回答的是“模型如何更快、更便宜地生成 token”，那么推理模型回答的就是另一个更接近能力本质的问题：模型如何在复杂任务中不急着给出结论，而是先分解问题、展开推导、检查约束、验证结果，再输出更可靠的答案。&lt;/p&gt;
 &lt;p&gt;这里的“推理”不再是 &lt;strong&gt;Inference Serving&lt;/strong&gt;，而是 &lt;strong&gt;Reasoning&lt;/strong&gt;。前者关注系统效率：吞吐、延迟、KV Cache、batch 调度和单位 token 成本；后者关注能力机制：模型为什么愿意多想几步，为什么数学、代码、逻辑和规划任务需要更多 test-time compute，为什么 DeepSeek-R1、OpenAI o 系列、Qwen3 thinking mode 都把“思考过程”和“推理预算”变成核心能力。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (九)：推理服务：大模型如何高效生成 Token</title>
-    <link href="http://matt33.com/2026/06/29/llm-inference-serving/"/>
-    <id>http://matt33.com/2026/06/29/llm-inference-serving/</id>
-    <published>2026-06-29T12:10:00.000Z</published>
-    <updated>2026-06-29T12:10:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。</p>
-<p>这里的“推理”需要先做一个区分。它既可以指 <strong>Inference Serving</strong>，也可以指 <strong>Reasoning Model</strong>。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。</p>
-<a id="more"></a>
-<p>本文讨论的是第一种：<strong>推理服务</strong>。它不关心模型参数如何继续学习，而关心一个已经训练好的模型，如何在固定参数下被高效调用。换句话说，预训练和后训练决定模型“会什么”，分布式训练决定模型“怎么训出来”，而推理服务决定这些能力能不能以可承受的成本、稳定地交付给真实用户。</p>
-<p>简单来说，推理服务的本质，<strong>是在模型参数固定的情况下，把自回归 token 生成过程组织成高吞吐、低延迟、低成本、可扩展的在线系统</strong>。</p>
-<h2 id="从训练到推理"><a href="#从训练到推理" class="headerlink" title="从训练到推理"></a>从训练到推理</h2><p>训练和推理最大的区别是：<strong>训练会更新参数，推理不会更新参数</strong>。训练阶段，模型通过前向传播计算 loss，再通过反向传播更新参数；推理阶段，模型参数已经固定，系统只是在给定 prompt 的情况下调用模型，让它生成下一个 token。如下图所示：</p>
-<p><img src="/images/llm/llm-inference-serving-01.png" alt="训练 vs 推理"></p>
-<p>从函数角度看，训练完成后的大模型可以理解为一个固定函数：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fθ(context) -&gt; P(next token | context)</span><br></pre></td></tr></table></figure>
-<p>其中，<code>θ</code> 是训练好的模型参数，<code>context</code> 是当前上下文。模型每次读取上下文，输出下一个 token 在整个词表上的概率分布；解码策略再从这个分布中选出具体 token。一次生成过程大致如下：</p>
-<p><img src="/images/llm/llm-inference-serving-02.png" alt="自回归生成流程"></p>
-<p>因此，推理服务不是一次性生成完整答案，而是一个不断循环的过程：<strong><code>上下文 -&gt; 概率分布 -&gt; 选择 token -&gt; 更新上下文 -&gt; 继续生成</code>。</strong>这正是大模型推理服务的工程难点来源：每生成一个 token，都要调度一次模型前向计算；每多一个用户请求，系统就多一份上下文和缓存压力；每拉长一次上下文，首 token 延迟和显存占用都会上升。</p>
-<p>线上推理服务通常关注以下指标：</p>
-<table>
-<thead>
-<tr>
-<th><strong>指标</strong></th>
-<th><strong>含义</strong></th>
-<th><strong>影响体验</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>TTFT</td>
-<td>Time To First Token，首 token 延迟</td>
-<td>用户多久能看到第一个输出</td>
-</tr>
-<tr>
-<td>TPOT / ITL</td>
-<td>每个输出 token 的生成间隔</td>
-<td>流式输出是否顺滑</td>
-</tr>
-<tr>
-<td>Latency</td>
-<td>请求从开始到结束的总耗时</td>
-<td>端到端体验</td>
-</tr>
-<tr>
-<td>Throughput</td>
-<td>单位时间生成 token 数</td>
-<td>系统吞吐和服务成本</td>
-</tr>
-<tr>
-<td>Concurrency</td>
-<td>同时服务的请求数量</td>
-<td>高峰期承载能力</td>
-</tr>
-</tbody>
-</table>
-<p>这些指标之间存在天然权衡：</p>
-<ul>
-<li>吞吐 vs 延迟： batch 越大，GPU 利用率可能越高，但单个请求等待时间可能变长；</li>
-<li>长上下文 vs 成本： 上下文越长，能力可能越强，但 prefill 计算和 KV cache 显存都会增加；</li>
-<li>输出长度 vs 响应速度：输出越长，decode 步数越多，总耗时越高；</li>
-<li>并发能力 vs 显存占用：并发越高，每个请求的 KV cache 会叠加，占用更多显存。</li>
-</ul>
-<p>所以，推理服务真正要解决的问题，不只是“模型能不能生成答案”，而是：<strong>如何在固定模型参数下，把自回归生成过程调度成一个低延迟、高吞吐、低成本的在线系统</strong>。</p>
-<h2 id="推理成本：Prefill、Decode-与-KV-Cache"><a href="#推理成本：Prefill、Decode-与-KV-Cache" class="headerlink" title="推理成本：Prefill、Decode 与 KV Cache"></a>推理成本：Prefill、Decode 与 KV Cache</h2><p>理解推理服务，最关键的是先把一次请求拆开看。大模型生成答案不是一次性完成的，而是分成两个阶段：<strong>Prefill</strong> 和 <strong>Decode</strong>。前者负责“读懂输入”，后者负责“逐字生成”。这两个阶段的计算形态完全不同，也决定了推理服务的主要成本来源。</p>
-<p><img src="/images/llm/llm-inference-serving-03.png" alt="推理服务中的 Prefill 和 Decode"></p>
-<h3 id="Prefill-阶段：先读完上下文"><a href="#Prefill-阶段：先读完上下文" class="headerlink" title="Prefill 阶段：先读完上下文"></a>Prefill 阶段：先读完上下文</h3><p>Prefill 阶段负责处理用户输入的完整 prompt。由于输入 token 都是已知的，模型可以一次性并行计算它们的 attention、MLP 和 hidden states，并生成后续 Decode 阶段要复用的 KV Cache。可以把 Prefill 理解为 <strong><code>读题</code></strong>：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">prompt 越长 -&gt; 输入 token 越多 -&gt; prefill 计算越多 -&gt; TTFT 越高</span><br></pre></td></tr></table></figure>
-<p>这就是为什么长文档问答、代码仓库分析、多轮长对话的首 token 往往更慢。模型不是“不想回答”，而是必须先把上下文完整读进去。</p>
-<p>从计算特征看，Prefill 更接近一次大规模矩阵-矩阵乘法，GPU 并行度高，通常属于 <strong>计算密集型（Compute-Bound）</strong> 阶段。它的速度主要受 GPU 算力影响，能够比较充分地利用硬件。Prefill 的最终产出主要有两个：</p>
-<ul>
-<li>完整 prompt 对应的 <strong>KV Cache</strong>；</li>
-<li>第一个生成 token 的概率分布。</li>
-</ul>
-<h3 id="Decode：逐-token-生成答案"><a href="#Decode：逐-token-生成答案" class="headerlink" title="Decode：逐 token 生成答案"></a>Decode：逐 token 生成答案</h3><p>Decode 阶段负责真正生成回答。它是<strong>自回归</strong>的：第 <code>t+1</code> 个 token 必须等第 <code>t</code> 个 token 生成之后才能继续。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">token_1 -&gt; token_2 -&gt; token_3 -&gt; ... -&gt; token_n</span><br></pre></td></tr></table></figure>
-<p>这带来一个天然限制：输出越长，decode step 越多，总耗时越高。即使每一步都很快，长答案也必须一步一步生成。可以把 Decode 理解为 <strong><code>写答案</code></strong>：Prefill 决定用户多久看到第一个 token，Decode 决定后续流式输出是否顺滑。</p>
-<table>
-<thead>
-<tr>
-<th><strong>指标</strong></th>
-<th><strong>主要受什么影响</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>TTFT</td>
-<td>Prefill 成本、排队时间、prompt 长度</td>
-</tr>
-<tr>
-<td>TPOT / ITL</td>
-<td>Decode 速度、batch 调度、KV Cache 访问效率</td>
-</tr>
-</tbody>
-</table>
-<p>从计算特征看，Decode 每一步只处理最新生成的一个 token，并读取所有历史上下文的 KV Cache。这更接近矩阵-向量计算，batch 较小时并行度不高。因此，Decode 通常是 <strong>内存带宽密集型（Memory-Bandwidth Bound）</strong> 阶段。它的瓶颈往往不是 GPU 算力不够，而是需要不断从 HBM（High Bandwidth Memory，高带宽显存）读取模型权重和不断增长的 KV Cache，再送入片上 SRAM（Static Random Access Memory，静态随机存取存储器）参与计算。</p>
-<p>这也是为什么 Decode 阶段经常出现一种现象：GPU 计算单元并没有完全吃满，但生成速度仍然上不去。瓶颈不在“算得慢”，而在“数据搬得慢”。</p>
-<h3 id="KV-Cache：用显存换计算"><a href="#KV-Cache：用显存换计算" class="headerlink" title="KV Cache：用显存换计算"></a>KV Cache：用显存换计算</h3><p>Transformer 在生成新 token 时，需要关注前面所有历史 token。如果每一步都重新计算历史上下文的 Key 和 Value，计算成本会非常高。因此，推理系统会引入 <strong>KV Cache</strong>：把历史 token 在各层 attention 中的 Key / Value 缓存下来，后续 Decode 时直接复用。</p>
-<p><img src="/images/llm/llm-inference-serving-04.png" alt="KV Cache 作用"></p>
-<p>KV Cache 的核心价值是：<strong>用显存换计算</strong>。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">没有 KV Cache：每一步都重新计算历史上下文的 K/V</span><br><span class="line">有 KV Cache：只计算新 token 的 K/V，并复用历史 K/V</span><br></pre></td></tr></table></figure>
-<p>这样可以避免大量重复计算，让 Decode 阶段从“反复处理整个历史上下文”，变成“处理新 token + 读取历史缓存”。但 KV Cache 也带来了新的瓶颈：<strong>显存占用</strong>。它的大小可以粗略估算为（实际单卡显存还会受 Tensor Parallel、Pipeline Parallel、GQA/MQA、beam search、多采样等因素影响）：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KV Cache ≈ 2 × layers × tokens × kv_heads × head_dim × bytes × batch_size</span><br></pre></td></tr></table></figure>
-<p>其中：</p>
-<ul>
-<li><code>2</code> 表示 Key 和 Value；</li>
-<li><code>layers</code> 是模型层数；</li>
-<li><code>tokens</code> 是上下文长度，包括 prompt 和已生成 token；</li>
-<li><code>kv_heads</code> 是 KV head 数量；</li>
-<li><code>head_dim</code> 是每个 head 的维度；</li>
-<li><code>bytes</code> 是每个数值占用的字节数；</li>
-<li><code>batch_size</code> 表示并发 batch 中的请求规模。</li>
-</ul>
-<p>这个公式说明：上下文越长、输出越长、并发越高，KV Cache 越大。对于长上下文任务，KV Cache 的显存占用甚至可能接近或超过模型权重本身。</p>
-<table>
-<thead>
-<tr>
-<th><strong>场景</strong></th>
-<th><strong>为什么 KV Cache 压力大</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>长 prompt</td>
-<td>Prefill 后初始 KV Cache 就很长</td>
-</tr>
-<tr>
-<td>长输出</td>
-<td>每生成一个 token，都要追加新的 K/V</td>
-</tr>
-<tr>
-<td>高并发</td>
-<td>每个请求都要维护自己的 KV Cache</td>
-</tr>
-<tr>
-<td>多轮对话</td>
-<td>历史消息越长，缓存越大</td>
-</tr>
-<tr>
-<td>多采样 / beam search</td>
-<td>多条候选路径会增加缓存管理压力</td>
-</tr>
-</tbody>
-</table>
-<p>所以，KV Cache 既是优化，也是新的瓶颈。它解决了重复计算问题，却把压力转移到了显存容量、显存带宽和缓存调度上。现代推理优化，很大一部分都围绕 KV Cache 展开：</p>
-<ol>
-<li><strong>PagedAttention</strong>： 像操作系统分页一样管理 KV Cache，减少显存碎片；</li>
-<li><strong>KV Cache 量化</strong>：用 INT8 / INT4 等低精度存储 K/V，降低显存占用；</li>
-<li><strong>KV Cache 压缩</strong>：通过低秩、稀疏化或聚合方法减少缓存规模；</li>
-<li><strong>选择性保留</strong>：只保留更重要的历史 token 或注意力信息；</li>
-<li><strong>Prefix Cache</strong>：复用相同系统提示词、长文档前缀或多轮对话前缀；</li>
-<li><strong>Chunked Prefill</strong>：把长 prompt 分块处理，降低首 token 阻塞和调度压力。</li>
-</ol>
-<p>因此，推理服务的关键问题不是“模型能不能跑起来”，而是：<strong>如何在长上下文、高并发、长输出的情况下，高效管理 KV Cache，并把 Prefill 和 Decode 调度好</strong>。</p>
-<h2 id="服务系统：如何把-GPU-用满？"><a href="#服务系统：如何把-GPU-用满？" class="headerlink" title="服务系统：如何把 GPU 用满？"></a>服务系统：如何把 GPU 用满？</h2><p>前面讲的是单个请求的成本结构：Prefill 负责读上下文，Decode 负责逐 token 生成，KV Cache 决定长上下文和高并发的显存压力。但线上推理服务真正难的是：请求不是一个一个安静排队来的，而是同时到达、长度不同、输出不同、优先级不同。系统既要让单个用户感觉快，又要让整体 GPU 利用率足够高。推理服务要解决的核心矛盾是：</p>
-<ul>
-<li>单个请求希望低延迟；</li>
-<li>整体系统希望高吞吐；</li>
-<li>GPU 希望持续满载；</li>
-<li>显存希望尽量不碎片化。</li>
-</ul>
-<p>所以，推理服务系统的关键能力，不只是“跑模型”，而是 <strong>batching、调度、缓存管理和解码优化</strong>。</p>
-<p><img src="/images/llm/llm-inference-serving-05.png" alt="在线推理系统优化方向"></p>
-<h3 id="Batching：把请求合起来算"><a href="#Batching：把请求合起来算" class="headerlink" title="Batching：把请求合起来算"></a>Batching：把请求合起来算</h3><p>GPU 擅长大规模并行计算。如果一个请求一个请求跑，矩阵规模小，GPU 利用率会很低。Batching 的核心思想是：把多个请求合并成一个 batch，一起送进模型计算。</p>
-<table>
-<thead>
-<tr>
-<th><strong>方式</strong></th>
-<th><strong>核心思路</strong></th>
-<th><strong>适用性</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>静态 batching</td>
-<td>等一批请求凑齐后一起计算</td>
-<td>离线任务更适合，在线延迟较差</td>
-</tr>
-<tr>
-<td>动态 batching</td>
-<td>在短时间窗口内合并请求</td>
-<td>在线服务常用，需要调度策略</td>
-</tr>
-<tr>
-<td>Continuous batching</td>
-<td>Decode 过程中持续加入新请求</td>
-<td>适合 LLM 流式生成</td>
-</tr>
-<tr>
-<td>In-flight batching</td>
-<td>正在生成的 batch 中动态增删请求</td>
-<td>更适合高并发在线推理</td>
-</tr>
-</tbody>
-</table>
-<p>静态 batching 和早期动态 batching 最大的问题是：batch 一旦形成，内部请求长度不一致就会造成浪费。短请求先结束，但长请求还在生成，GPU slot 不能被及时复用。Continuous batching 这里的思想是：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">请求结束 -&gt; 释放 slot</span><br><span class="line">新请求到来 -&gt; 立即补进 batch</span><br></pre></td></tr></table></figure>
-<p>这样可以让 Decode 阶段的 batch 始终保持较高利用率，显著提升吞吐。</p>
-<blockquote>
-<p>在很多语境下，Continuous Batching 和 In-flight Batching 都是在描述“生成过程中动态加入/移除请求”的迭代级调度思想，不同框架叫法和实现细节略有差异。</p>
-</blockquote>
-<h3 id="PagedAttention：管理-KV-Cache-的碎片"><a href="#PagedAttention：管理-KV-Cache-的碎片" class="headerlink" title="PagedAttention：管理 KV Cache 的碎片"></a>PagedAttention：管理 KV Cache 的碎片</h3><p>Batching 提高了 GPU 计算利用率，但也放大了 KV Cache 的管理问题。不同请求的 prompt 长度、输出长度都不一样，KV Cache 会在生成过程中动态增长；有的请求已经结束并释放缓存，有的请求还在继续生成。如果要求 KV Cache 在显存中连续存放，就很容易产生碎片：表面上还有剩余显存，但找不到足够大的连续空间容纳新请求。</p>
-<p>PagedAttention 的思路来自操作系统的虚拟内存管理：不再把每个请求的 KV Cache 当作一整段连续显存，而是切分成许多固定大小的 block。逻辑上，一个序列的 KV Cache 仍然是连续的；物理上，这些 block 可以分散存放在 GPU 显存的不同位置，并通过 block table 完成逻辑块到物理块的映射。这样做的价值很直接：</p>
-<ul>
-<li>减少 KV Cache 显存碎片；</li>
-<li>支持不同长度请求混合调度；</li>
-<li>方便请求结束后回收 block；</li>
-<li>支持更大的 batch 和更高并发；</li>
-<li>在 beam search / parallel sampling 中更容易共享前缀缓存。</li>
-</ul>
-<p>vLLM 的核心贡献就在这里：通过 PagedAttention，把 KV Cache 管理从“连续显存分配”变成“分页式块管理”。在论文实验中，这种方式显著降低了显存浪费，并带来了数倍级吞吐提升。</p>
-<p><img src="/images/llm/llm-inference-serving-06.png" alt="PagedAttention"></p>
-<h3 id="Speculative-Decoding：减少大模型解码步数"><a href="#Speculative-Decoding：减少大模型解码步数" class="headerlink" title="Speculative Decoding：减少大模型解码步数"></a>Speculative Decoding：减少大模型解码步数</h3><p>Decode 慢的根本原因是自回归串行生成：大模型每一步通常只确认一个 token。Speculative Decoding，也叫投机解码，试图减少大模型的串行 decode 轮次。它的基本流程是：</p>
-<ol>
-<li>用一个较小的 Draft Model 先快速生成多个候选 token；</li>
-<li>用目标大模型 Target Model 一次性并行验证这些 token；</li>
-<li>被接受的 token 直接输出；</li>
-<li>如果某个 token 被拒绝，就从该位置回退并重新采样。</li>
-</ol>
-<p><img src="/images/llm/llm-inference-serving-07.png" alt="Speculative Decoding"></p>
-<p>它的优势是：如果 Draft Model 质量足够好，目标模型一次可以接受多个 token，生成速度会明显提升。但它也有代价：</p>
-<ul>
-<li>Draft Model 质量：质量越好，接受率越高；</li>
-<li>Draft Model 成本：草稿模型本身也要消耗算力；</li>
-<li>验证实现：需要额外调度和并行验证逻辑；</li>
-<li>任务类型：创造性强或分布不稳定的任务接受率可能下降。</li>
-</ul>
-<p>所以，投机解码不是“免费加速”，而是用一个便宜模型和更复杂的系统，换取目标大模型更少的 decode 轮次。</p>
-<h3 id="量化与低精度推理：降低单位-token-成本"><a href="#量化与低精度推理：降低单位-token-成本" class="headerlink" title="量化与低精度推理：降低单位 token 成本"></a>量化与低精度推理：降低单位 token 成本</h3><p>量化的目标很直接：用更低的数值精度存储或计算模型权重、激活和 KV Cache，从而降低显存占用、提升吞吐、降低成本。</p>
-<table>
-<thead>
-<tr>
-<th><strong>方案</strong></th>
-<th><strong>特点</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>FP16 / BF16</td>
-<td>常见推理精度，稳定性好</td>
-</tr>
-<tr>
-<td>FP8</td>
-<td>显存和吞吐更优，对硬件、校准和算子支持要求更高</td>
-</tr>
-<tr>
-<td>INT8</td>
-<td>常见部署量化方案，质量损失通常可控</td>
-</tr>
-<tr>
-<td>INT4 / GPTQ / AWQ</td>
-<td>显存节省明显，适合成本敏感场景，但质量风险更高</td>
-</tr>
-<tr>
-<td>KV Cache INT8 / INT4</td>
-<td>直接降低长上下文和高并发的缓存压力</td>
-</tr>
-</tbody>
-</table>
-<p>量化的本质是权衡：<code>更低显存 + 更高吞吐 + 更低成本</code> VS <code>校准复杂度 + 数值误差 + 可能的质量损失</code>。对推理服务来说，量化不仅是“模型变小”，更重要的是降低单位 token 成本。尤其在长上下文和高并发场景下，KV Cache 量化往往和权重量化一样关键。</p>
-<h3 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h3><p>这一节的核心可以压缩成一句话：Batching 解决 GPU 利用率，PagedAttention 解决 KV Cache 管理，Speculative Decoding 解决 Decode 串行瓶颈，量化解决单位 token 成本。</p>
-<h2 id="主流推理框架"><a href="#主流推理框架" class="headerlink" title="主流推理框架"></a>主流推理框架</h2><p>一个成熟的推理系统，本质上是在做四件事：</p>
-<ol>
-<li><strong>让 GPU 尽量满</strong>：通过 batching、调度和并行执行提高硬件利用率；</li>
-<li><strong>让 KV Cache 尽量省</strong>：通过分页管理、压缩、量化和复用降低显存压力；</li>
-<li><strong>让请求调度尽量稳</strong>：在不同长度、不同优先级、不同 SLA 的请求之间做资源分配；</li>
-<li><strong>让单位 token 成本尽量低</strong>：通过量化、低精度、多机并行和模型路由降低服务成本。</li>
-</ol>
-<p>因此，推理框架不是简单的 HTTP server，而是把模型执行、KV Cache 管理、batch 调度、解码策略、量化、多卡并行和资源隔离组织成一个在线系统。不同框架的设计哲学不同，适合的场景也不同。</p>
-<table>
-<thead>
-<tr>
-<th><strong>框架</strong></th>
-<th><strong>核心取向</strong></th>
-<th><strong>关键技术</strong></th>
-<th><strong>优势</strong></th>
-<th><strong>适合场景</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>vLLM</td>
-<td>用高效 KV Cache 管理换高吞吐</td>
-<td>PagedAttention、Continuous Batching</td>
-<td>吞吐高，社区活跃，易用性好，支持 NVIDIA / AMD 等多种硬件</td>
-<td>高并发、吞吐敏感的在线服务</td>
-</tr>
-<tr>
-<td>TensorRT-LLM</td>
-<td>榨干 NVIDIA GPU 性能</td>
-<td>TensorRT 编译、kernel fusion、FP8 / INT4、in-flight batching</td>
-<td>NVIDIA 硬件上性能极强，和 Triton / CUDA 生态结合紧密</td>
-<td>NVIDIA 技术栈下的极致性能部署</td>
-</tr>
-<tr>
-<td>Hugging Face TGI</td>
-<td>Hugging Face 生态早期重要 serving 框架</td>
-<td>Continuous Batching、Tensor Parallel、Rust 服务核心</td>
-<td>和 HF Hub / Transformers 生态集成好，但当前已进入维护模式</td>
-<td>快速上线、标准模型服务、HF 生态用户</td>
-</tr>
-<tr>
-<td>SGLang</td>
-<td>面向复杂生成工作流的 runtime</td>
-<td>RadixAttention、结构化生成、并发调度</td>
-<td>适合多轮、多分支、工具调用和复杂 prompt workflow</td>
-<td>Agent、结构化输出、复杂 serving workflow</td>
-</tr>
-<tr>
-<td>llama.cpp</td>
-<td>本地/边缘/低成本推理</td>
-<td>GGUF、CPU/GPU 混合、INT4/INT8 量化</td>
-<td>轻量、可本地运行，硬件门槛低</td>
-<td>本地部署、边缘设备、个人推理服务</td>
-</tr>
-</tbody>
-</table>
-<p>这些框架体现的是工程里的典型权衡：<strong>性能（Performance）、生产力（Productivity）和可移植性（Portability）</strong> 很难同时拉满。更准确地说，推理框架没有绝对最优，只有场景最优：如果目标是高并发在线吞吐，优先看 vLLM；如果目标是在 NVIDIA GPU 上追求极致性能，TensorRT-LLM 更合适；如果模型和部署链路都在 Hugging Face 生态里，TGI 上手最快；如果要做复杂 Agent runtime 或结构化生成，SGLang 更有优势；如果是本地、边缘或低成本部署，llama.cpp 是最轻量的选择。</p>
-<h2 id="行业演进：推理服务往哪里走？"><a href="#行业演进：推理服务往哪里走？" class="headerlink" title="行业演进：推理服务往哪里走？"></a>行业演进：推理服务往哪里走？</h2><p>推理服务正在从“把模型跑起来”，走向“把每个 token 的成本、延迟和稳定性做到极致”。早期部署一个模型，重点是能不能加载权重、能不能返回结果。现在的推理服务要面对更复杂的场景：长上下文、多轮对话、多工具调用、多模态输入、Agent 任务流，以及不断增长的并发和成本压力。</p>
-<p><img src="/images/llm/llm-inference-serving-08.png" alt="推理服务演进"></p>
-<table>
-<thead>
-<tr>
-<th><strong>趋势</strong></th>
-<th><strong>核心变化</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>KV Cache 成为一等公民</td>
-<td>长上下文和高并发让缓存管理成为系统核心</td>
-</tr>
-<tr>
-<td>Prefill / Decode 分离</td>
-<td>两个阶段资源特征不同，可能采用不同调度和硬件策略</td>
-</tr>
-<tr>
-<td>投机解码常态化</td>
-<td>用 draft model 或 draft head 换更低 decode 延迟</td>
-</tr>
-<tr>
-<td>低精度深入部署</td>
-<td>FP8、INT8、INT4、KV 量化会按场景分层使用</td>
-</tr>
-<tr>
-<td>Agent Runtime 融合</td>
-<td>模型不只生成文本，还要调用工具、维护状态、执行任务</td>
-</tr>
-</tbody>
-</table>
-<p>未来推理服务比拼的，不再是单个模型“能不能跑起来”或“单次生成有多快”，而是整体系统效率：</p>
-<ol>
-<li>同样 GPU，谁能服务更多 token；</li>
-<li>同样延迟，谁能支持更长上下文；</li>
-<li>同样成本，谁能提供更稳定的体验；</li>
-<li>同样模型，谁能把调度、缓存和解码优化得更好。</li>
-</ol>
-<p>所以，推理服务的本质不是部署一个模型 API，而是把模型权重、KV Cache、batch 调度、解码策略、量化、多机并行和线上 SLA 组织成一个稳定、可扩展、可控成本的在线系统。</p>
-<p>放回整个 LLM 训练与服务链路中看：<strong>预训练和后训练决定模型能力，分布式训练决定模型如何被训练出来，而推理服务决定这些能力能否以可承受的成本、稳定地交付给真实用户</strong>。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;如果说分布式训练回答的是“大模型如何在千卡集群上训练出来”，那么推理服务回答的就是另一个更贴近线上系统的问题：模型训练完成之后，如何在真实业务流量下稳定、快速、低成本地生成答案。&lt;/p&gt;
-&lt;p&gt;这里的“推理”需要先做一个区分。它既可以指 &lt;strong&gt;Inference Serving&lt;/strong&gt;，也可以指 &lt;strong&gt;Reasoning Model&lt;/strong&gt;。前者关注模型服务系统：请求如何进入模型、token 如何生成、KV Cache 如何管理、延迟和吞吐如何平衡；后者关注模型能力机制：如何通过长链思考、验证器、强化学习和 test-time compute，让模型更擅长数学、代码和复杂推理。&lt;/p&gt;
     
     </summary>
     

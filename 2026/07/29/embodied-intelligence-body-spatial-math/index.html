@@ -1,0 +1,190 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>具身智能（二）：机器人如何描述身体与世界 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">具身智能（二）：机器人如何描述身体与世界</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">具身智能（二）：机器人如何描述身体与世界</h1><div class="post-meta">Jul 29, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">5,113</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/29/embodied-intelligence-body-spatial-math/" href="/2026/07/29/embodied-intelligence-body-spatial-math/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#为什么具身智能需要空间表示"><span class="toc-number">1.</span> <span class="toc-text">为什么具身智能需要空间表示</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#机器人如何描述自己的身体"><span class="toc-number">2.</span> <span class="toc-text">机器人如何描述自己的身体</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#用连杆、关节和自由度描述身体"><span class="toc-number">2.1.</span> <span class="toc-text">用连杆、关节和自由度描述身体</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#执行器和传感器如何形成身体闭环"><span class="toc-number">2.2.</span> <span class="toc-text">执行器和传感器如何形成身体闭环</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#从坐标系到位姿：机器人如何描述空间"><span class="toc-number">3.</span> <span class="toc-text">从坐标系到位姿：机器人如何描述空间</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#坐标系：位置必须有参照物"><span class="toc-number">3.1.</span> <span class="toc-text">坐标系：位置必须有参照物</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#旋转：物体在哪里还不够"><span class="toc-number">3.2.</span> <span class="toc-text">旋转：物体在哪里还不够</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#位姿变换：把位置与方向统一起来"><span class="toc-number">3.3.</span> <span class="toc-text">位姿变换：把位置与方向统一起来</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SE-3-如何连接感知与行动"><span class="toc-number">4.</span> <span class="toc-text">SE(3) 如何连接感知与行动</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#什么是-SE-3"><span class="toc-number">4.1.</span> <span class="toc-text">什么是 SE(3)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#从相机观察到抓取位姿"><span class="toc-number">4.2.</span> <span class="toc-text">从相机观察到抓取位姿</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#从目标位姿到运动误差"><span class="toc-number">4.3.</span> <span class="toc-text">从目标位姿到运动误差</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><p>上一篇文章从 Observation、State 与 Action 出发，建立了具身智能的整体框架：机器人通过执行闭环完成当前任务，再通过学习闭环将交互经验转化为新的能力。但当这些抽象概念落到真实机器人上，首先要解决一个更基础的问题：如何把机器人的身体、周围物体以及二者之间的空间关系，表示成可以计算和执行的数据。</p>
+<p>仍以“把桌上的杯子放进托盘”为例。视觉系统可以识别杯子，并估计它在相机坐标系中的位置；机械臂规划和执行动作时，却需要知道杯子相对机器人基座在哪里、末端执行器当前是什么姿态，以及各个关节应该如何运动。机器人必须结合关节状态、相机外参和坐标变换，才能将“图像中的杯子”转换为“身体能够到达的抓取位姿”。坐标方向、旋转顺序、时间同步或标定参数的任何偏差，都可能让语义正确的决策变成物理世界中的错误动作。</p>
+<a id="more"></a>
+<p>因此，自由度、执行器、传感器、坐标系、旋转矩阵、四元数和 <code>SE(3)</code> 并不是具身智能之外的数学准备，而是连接感知、状态、决策与行动的空间语言。本文将从机器人的身体结构出发，介绍机器人如何描述自身状态，如何统一不同坐标系中的观察，如何表示三维旋转与刚体位姿，并通过一条完整的抓取链路，理解这些数学工具怎样支撑具身智能在物理世界中形成闭环。</p>
+<h2 id="为什么具身智能需要空间表示"><a href="#为什么具身智能需要空间表示" class="headerlink" title="为什么具身智能需要空间表示"></a>为什么具身智能需要空间表示</h2><p>具身智能面对的不是抽象符号，而是具有位置、方向、尺寸和物理约束的身体与环境。第一篇中的三个核心对象，在机器人系统中都依赖空间表示：</p>
+<ul>
+<li><strong>Observation</strong>：相机、深度、力与触觉等空间观察通常表达在各自的传感器坐标系中；编码器则提供关节空间中的位置或位移。系统需要通过标定、运动学和时间同步，将这些异构观察关联起来；</li>
+<li><strong>State</strong>：机器人需要估计关节状态、末端位姿、物体位姿和接触关系；</li>
+<li><strong>Action</strong>：策略可能输出关节位置、速度、力矩，也可能输出末端执行器的位姿变化；</li>
+</ul>
+<p>从语言指令到机器人动作，中间需要经过一条几何落地链路：</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-01.png" alt="语言指令需要经过感知、空间定位、运动规划与控制，才能转化为物理动作。"></p>
+<p>这也是空间数学与具身智能最直接的关系：感知回答“看到了什么”，空间表示回答“它在哪里、朝向哪里”，运动策略才进一步决定“身体应该怎样到达那里”，如下图所示：</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-02.png" alt="空间表示连接感知结果、物体位姿与机器人运动策略。"></p>
+<p>空间表示由此成为具身闭环的几何基础：它将不同传感器、身体部件和任务目标对齐到一致的空间关系中，使状态估计、规划与控制能够协同工作。接下来，我们将从身体结构出发，逐步理解机器人如何描述自身、环境及二者之间的关系。</p>
+<h2 id="机器人如何描述自己的身体"><a href="#机器人如何描述自己的身体" class="headerlink" title="机器人如何描述自己的身体"></a>机器人如何描述自己的身体</h2><p>要控制机器人，计算机首先要回答两个问题：机器人的身体由哪些部件组成，这些部件此刻处于什么状态。前者由连杆和关节描述，后者则由关节位置、速度以及传感器信号表示。</p>
+<p>可以把连杆理解为机器人的“骨骼”，关节决定相邻连杆之间能够怎样运动，执行器负责产生运动，传感器则告诉系统身体实际发生了什么。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-03.png" alt="连杆、关节、执行器和传感器共同构成机器人的身体。"></p>
+<h3 id="用连杆、关节和自由度描述身体"><a href="#用连杆、关节和自由度描述身体" class="headerlink" title="用连杆、关节和自由度描述身体"></a>用连杆、关节和自由度描述身体</h3><p>以一台平面双关节机械臂为例。它有两段连杆和两个旋转关节：第一个关节控制“大臂”的方向，第二个关节控制“小臂”相对大臂的方向。只要知道两个关节的角度，就能确定整条机械臂的形态：</p>
+<span>$$\displaystyle
+\mathbf{q}=[q_1,q_2]^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>这里的 $\mathbf q$ 称为机器人的<strong>配置（Configuration）</strong>。对于具有 $n$ 个独立单自由度关节的固定基座机械臂，可以进一步写成：</p>
+<span>$$\displaystyle
+\mathbf{q}=[q_1,q_2,\ldots,q_n]^{\mathrm{T}}$$</span><!-- Has MathJax -->
+<p>所有可能的 $\mathbf q$ 共同构成机器人的<strong>配置空间（Configuration Space，C-space）</strong>。如果需要两个独立变量才能确定机器人的配置，就称机器人具有两个自由度；需要 $n$ 个独立变量，就具有 $n$ 个自由度。因此，自由度可以理解为“描述机器人身体形态至少需要多少个独立数值”。</p>
+<p>配置只说明机器人当前“摆成什么样子”。如果还要描述它怎样运动，最基本的身体状态通常还需要包含关节速度，对固定基座刚性机械臂，最基本的运动学状态可以写成：</p>
+<span>$$\displaystyle
+\mathbf{x}_{\mathrm{body}}=(\mathbf{q},\dot{\mathbf{q}})$$</span><!-- Has MathJax -->
+<p>需要注意的是，自由度不一定等于活动部件或电机的数量。例如，平行夹爪虽然有两个手指，但两个手指可能由一个电机联动，因此只有一个独立的开合自由度。人形机器人除了各个关节外，还需要描述身体基座在空间中的位置和方向。</p>
+<h3 id="执行器和传感器如何形成身体闭环"><a href="#执行器和传感器如何形成身体闭环" class="headerlink" title="执行器和传感器如何形成身体闭环"></a>执行器和传感器如何形成身体闭环</h3><p>配置和状态只是对机器人身体的数学描述。要在真实世界中行动，机器人还需要通过执行器改变身体，并通过传感器观察动作产生的结果。</p>
+<p>执行器类似机器人的“肌肉”。控制器向电机或其他驱动装置发送目标位置、速度或力矩，执行器再驱动关节和连杆运动。传感器则构成机器人的“感觉系统”：编码器测量关节角度或位移；IMU 中的陀螺仪和加速度计分别测量角速度与比力；力与触觉传感器检测接触；相机和深度传感器观察外部环境。</p>
+<p>这些传感器读数只是带有噪声和延迟的观察，并不等同于机器人的真实状态。状态估计器需要结合 IMU、编码器、视觉及其他传感器，估计关节状态、基座姿态与速度、末端位姿和接触状态，再将结果提供给策略和控制器。整个身体闭环可以概括为：</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-04.png" alt="执行器改变身体，传感器提供观察，状态估计连接二者形成闭环"></p>
+<p>在这个闭环中，控制指令对应 <strong>Action</strong>，传感器读数对应 <strong>Observation</strong>，经过融合得到的身体状态对应 <strong>State</strong>。机器人正是通过不断执行动作、读取观察和更新状态，将模型生成的决策转化为真实世界中的运动。</p>
+<h2 id="从坐标系到位姿：机器人如何描述空间"><a href="#从坐标系到位姿：机器人如何描述空间" class="headerlink" title="从坐标系到位姿：机器人如何描述空间"></a>从坐标系到位姿：机器人如何描述空间</h2><p>机器人不仅需要知道物体是什么，还要知道物体在哪里、朝向哪里，以及它与机器人身体之间是什么关系。位置和方向只有相对于某个参照系才有意义，因此机器人会为身体、传感器和环境中的重要对象分别建立坐标系，再通过坐标变换将它们连接起来。</p>
+<h3 id="坐标系：位置必须有参照物"><a href="#坐标系：位置必须有参照物" class="headerlink" title="坐标系：位置必须有参照物"></a>坐标系：位置必须有参照物</h3><p>三维笛卡尔坐标系由一个原点和三个相互垂直的单位轴组成，机器人系统通常采用右手坐标系：</p>
+<ul>
+<li>世界坐标系 ${W}$：描述整个场景的全局参考；</li>
+<li>基座坐标系 ${B}$：固定在机器人底座上；</li>
+<li>末端坐标系 ${E}$：固定在机械臂末端或夹爪上；</li>
+<li>相机坐标系 ${C}$：原点位于相机光心，$x$ 轴指向图像右侧，$y$ 轴指向图像下方，$z$ 轴沿光轴指向相机前方。本文采用这一约定描述视觉观测；</li>
+<li>物体坐标系 ${O}$：固定在杯子、托盘等任务对象上。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-05.png" alt="世界、基座、末端、相机与物体坐标系共同描述抓取场景"></p>
+<p>一个坐标值只有和坐标系放在一起才有完整含义。例如：</p>
+<span>$$\displaystyle
+{}^{C}\mathbf{p}=\begin{bmatrix}0.2\\0.1\\0.8\end{bmatrix}$$</span><!-- Has MathJax -->
+<p>若长度单位为米，该向量表示某个点在相机坐标系 ${C}$ 中的位置。这个点在机器人基座坐标系 ${B}$ 中通常具有不同的坐标值。</p>
+<p>可以用 ${}^{A}\mathbf T_B$ 表示坐标系 ${B}$ 相对于坐标系 ${A}$ 的位姿，它也可以将坐标从 ${B}$ 转换到 ${A}$。对于坐标系 ${B}$ 中的点 ${}^{B}\mathbf p$，计算其 ${}^{A}\mathbf p$ 的方式如下：</p>
+<span>$$\displaystyle
+{}^{A}\mathbf{p}={}^{A}\mathbf{R}_{B}\,{}^{B}\mathbf{p}+{}^{A}\mathbf{t}_{B}$$</span><!-- Has MathJax -->
+<p>其中，${}^{A}\mathbf R_B$ 描述坐标系 ${B}$ 相对 ${A}$ 的方向，${}^{A}\mathbf t_B$ 表示 ${B}$ 的原点在 ${A}$ 中的位置。整个过程可以理解为：先调整方向，再补上两个坐标原点之间的位移。</p>
+<p>坐标系由此为身体与环境提供了统一参照。视觉系统检测到的物体只有从相机坐标系转换到机器人使用的坐标系后，才能成为规划和控制模块可以执行的空间目标。</p>
+<h3 id="旋转：物体在哪里还不够"><a href="#旋转：物体在哪里还不够" class="headerlink" title="旋转：物体在哪里还不够"></a>旋转：物体在哪里还不够</h3><p>三维位置可以用三个数表示，但位置只能说明物体“在哪里”，不能说明它“朝向哪里”。例如，夹爪即使到达杯子上方，如果开口方向与杯子不匹配，仍然无法完成抓取。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-06.png" alt="机器人需要同时描述物体的位置与朝向"></p>
+<p><strong>旋转矩阵 $\mathbf R$ 使用一个 $3\times3$ 矩阵表示朝向</strong>。矩阵的三列可以理解为物体局部坐标系的 $x$、$y$、$z$ 轴在参考坐标系中的方向。旋转矩阵不是任意九个数，而必须满足：</p>
+<span>$$\displaystyle
+\mathbf{R}^{\mathsf{T}}\mathbf{R}=\mathbf{I},\qquad\det(\mathbf{R})=1$$</span><!-- Has MathJax -->
+<p>所有满足这些条件的三维旋转矩阵共同构成 $SO(3)$。旋转矩阵虽然包含九个元素，但三维旋转实际只有三个自由度，其余元素受到单位长度和相互正交等约束。旋转矩阵可以直接作用于向量，其逆矩阵等于转置：</p>
+<span>$$\displaystyle
+\mathbf{R}^{-1}=\mathbf{R}^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>多个旋转可以通过矩阵乘法组合，但旋转顺序不能随意交换。先绕 $x$ 轴旋转再绕 $y$ 轴旋转，通常与相反顺序得到不同结果。机器人系统常用三种方式表示旋转：</p>
+<table>
+<thead>
+<tr>
+<th><strong>表示方法</strong></th>
+<th><strong>主要特点</strong></th>
+<th><strong>使用时需要注意</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>欧拉角</td>
+<td>使用三个角度，容易理解和展示</td>
+<td>必须明确旋转轴与顺序，并且存在奇异位置</td>
+</tr>
+<tr>
+<td>旋转矩阵</td>
+<td>便于变换、组合和几何计算</td>
+<td>使用九个数，计算后需要保持正交</td>
+</tr>
+<tr>
+<td>四元数</td>
+<td>表示紧凑，适合插值和连续旋转</td>
+<td>必须归一化，并统一元素顺序</td>
+</tr>
+</tbody>
+</table>
+<p>若采用标量在前的 $(w,x,y,z)$ 顺序，绕单位轴 $\mathbf u$ 旋转 $\theta$ 可以表示为单位四元数：</p>
+<span>$$\displaystyle
+\mathbf{q}_{R}=\begin{bmatrix}\cos\left(\frac{\theta}{2}\right)\\\mathbf{u}\sin\left(\frac{\theta}{2}\right)\end{bmatrix},\qquad\left\|\mathbf{q}_{R}\right\|_{2}=1$$</span><!-- Has MathJax -->
+<p>这里使用 $\mathbf q_R$ 表示旋转四元数，以区别前文表示机器人关节配置的 $\mathbf q$。四元数具有双重表示，即 $\mathbf q_R$ 与 $-\mathbf q_R$ 表示同一个三维旋转。不同软件库还可能采用不同的元素顺序，例如 ROS 消息使用 <code>(x,y,z,w)</code>，部分数学库则使用 <code>(w,x,y,z)</code>，在模型训练和系统接口中必须统一约定。</p>
+<p>旋转表示也会影响具身模型的动作输出。VLA 或机器人策略经常预测末端执行器的位姿变化，如果没有正确处理角度边界、四元数归一化和旋转顺序，模型输出即使数值接近，也可能在真实执行时产生不连续或方向错误的动作。</p>
+<h3 id="位姿变换：把位置与方向统一起来"><a href="#位姿变换：把位置与方向统一起来" class="headerlink" title="位姿变换：把位置与方向统一起来"></a>位姿变换：把位置与方向统一起来</h3><p>物体在空间中的位置和方向合称为<strong>位姿（Pose）</strong>。为了统一表示旋转和平移，可以将二者组合成齐次变换矩阵：</p>
+<span>$$\displaystyle
+{}^{A}\mathbf{T}_{B}=\begin{bmatrix}{}^{A}\mathbf{R}_{B} &amp; {}^{A}\mathbf{t}_{B}\\\mathbf{0}^{\mathsf{T}} &amp; 1\end{bmatrix}$$</span><!-- Has MathJax -->
+<p>其中，${}^{A}\mathbf T_B$ 同时描述坐标系 ${B}$ 相对于 ${A}$ 的位置和方向。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-07.png" alt="齐次变换将旋转和平移统一为完整的刚体位姿"></p>
+<p>使用齐次坐标后，点的位置变换可以统一写成矩阵乘法：</p>
+<span>$$\displaystyle
+\begin{bmatrix}{}^{A}\mathbf{p}\\1\end{bmatrix}={}^{A}\mathbf{T}_{B}\begin{bmatrix}{}^{B}\mathbf{p}\\1\end{bmatrix}$$</span><!-- Has MathJax -->
+<p>多个坐标变换可以沿坐标系链路依次组合。例如，要将相机观察到的杯子位姿转换到机器人基座坐标系，可以写成：</p>
+<span>$$\displaystyle
+{}^{B}\mathbf{T}_{O}={}^{B}\mathbf{T}_{E}\,{}^{E}\mathbf{T}_{C}\,{}^{C}\mathbf{T}_{O}$$</span><!-- Has MathJax -->
+<p>这条式子依次连接了基座、末端、相机和杯子坐标系。相邻矩阵的下标需要首尾对应，矩阵相乘的顺序也不能改变。反方向的变换则通过求逆得到：</p>
+<span>$$\displaystyle
+{}^{B}\mathbf{T}_{A}=\left({}^{A}\mathbf{T}_{B}\right)^{-1}$$</span><!-- Has MathJax -->
+<p>真实机器人通常会把这些关系维护为带时间戳的坐标变换树。相机相对末端的安装关系通常是静态变换，基座到末端的关系会随关节运动不断变化，物体位姿则由视觉系统持续更新。如果坐标方向、变换顺序或时间戳不一致，即使物体识别正确，最终计算出的抓取位置仍可能出现明显偏差。</p>
+<p>坐标系、旋转和位姿共同构成具身系统的空间语言：感知模块用它描述物体，状态估计用它描述身体，规划模块用它表达目标，控制器再将目标转换为可以执行的动作。</p>
+<h2 id="SE-3-如何连接感知与行动"><a href="#SE-3-如何连接感知与行动" class="headerlink" title="SE(3) 如何连接感知与行动"></a>SE(3) 如何连接感知与行动</h2><p>上面介绍了如何用齐次变换矩阵统一表示位置和方向。机器人系统中所有合法的三维刚体变换共同构成 <code>SE(3)</code>。本章不再重复矩阵定义，而是重点说明 <code>SE(3)</code> 为什么出现，以及它如何将视觉观察转换为机器人能够执行的空间目标。</p>
+<h3 id="什么是-SE-3"><a href="#什么是-SE-3" class="headerlink" title="什么是 SE(3)"></a>什么是 SE(3)</h3><p><code>SE(3)</code> 的全称是 <strong>Special Euclidean Group in 3D</strong>，中文通常译为<strong>三维特殊欧氏群</strong>。它描述物体在三维空间中的刚体运动，包括三个平移自由度和三个旋转自由度。</p>
+<ul>
+<li>这里的“刚体运动”意味着物体可以移动和旋转，但不会缩放、变形或发生镜像反射。平面移动机器人常使用 <code>SE(2)</code> 描述位姿，机械臂、无人机和人形机器人则主要使用 <code>SE(3)</code>。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-08.png" alt="SE(3) 统一表示三维刚体的平移、旋转与位姿组合"></p>
+<p>从工程角度看，<code>SE(3)</code> 的重要性在于：不同坐标系之间的位姿可以通过矩阵乘法组合，也可以通过求逆改变变换方向。例如：</p>
+<span>$$\displaystyle
+{}^{A}\mathbf{T}_{C}={}^{A}\mathbf{T}_{B}\,{}^{B}\mathbf{T}_{C}$$</span><!-- Has MathJax -->
+<p>机器人因此不需要直接计算任意两个坐标系之间的关系，只需要维护世界、基座、末端、相机和物体之间的局部变换，再沿着变换链进行组合。</p>
+<p>需要注意，位姿组合通常不能交换顺序。先旋转再平移，与先平移再旋转，得到的结果可能不同。这也是机器人系统必须严格约定坐标系方向和矩阵顺序的原因。</p>
+<h3 id="从相机观察到抓取位姿"><a href="#从相机观察到抓取位姿" class="headerlink" title="从相机观察到抓取位姿"></a>从相机观察到抓取位姿</h3><p>以腕部相机抓取杯子为例。视觉系统首先得到杯子相对于相机的位姿 ${}^{C}\mathbf T_O$，但机械臂规划动作时，需要知道杯子在世界坐标系中的位姿：</p>
+<span>$$\displaystyle
+{}^{W}\mathbf{T}_{O}={}^{W}\mathbf{T}_{B}\,{}^{B}\mathbf{T}_{E}(\mathbf{q})\,{}^{E}\mathbf{T}_{C}\,{}^{C}\mathbf{T}_{O}$$</span><!-- Has MathJax -->
+<p>其中，${}^{W}\mathbf T_B$ 描述机器人基座相对于世界坐标系的位姿，${}^{B}\mathbf T_E(\mathbf q)$ 由关节状态和正向运动学得到，${}^{E}\mathbf T_C$ 来自手眼标定，${}^{C}\mathbf T_O$ 则由视觉系统估计。</p>
+<p>机器人还需要确定夹爪应该从什么位置和方向接近杯子。设 ${}^{O}\mathbf T_G$ 表示相对于杯子的目标抓取位姿，则末端执行器需要到达：</p>
+<span>$$\displaystyle
+{}^{W}\mathbf{T}_{G}={}^{W}\mathbf{T}_{O}\,{}^{O}\mathbf{T}_{G}$$</span><!-- Has MathJax -->
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-09.png" alt="杯子位姿从相机坐标系转换到世界坐标系，并生成目标抓取位姿"></p>
+<p>经过这两步，“相机中的杯子”就被转换成了“机械臂需要到达的抓取位姿”。实际系统还需要保证视觉数据、关节状态和坐标变换具有一致的时间戳，否则机器人运动过程中产生的时间偏差也会导致抓取位置不准。</p>
+<h3 id="从目标位姿到运动误差"><a href="#从目标位姿到运动误差" class="headerlink" title="从目标位姿到运动误差"></a>从目标位姿到运动误差</h3><p>得到目标位姿后，机器人还需要判断当前末端与目标之间相差多少。设 ${}^{W}\mathbf T_E$ 是当前末端位姿，${}^{W}\mathbf T_G$ 是期望的抓取位姿。两者都以世界坐标系为参考，则目标相对于当前末端的变换为：</p>
+<span>$$\displaystyle
+{}^{E}\mathbf{T}_{G}=\left({}^{W}\mathbf{T}_{E}\right)^{-1}{}^{W}\mathbf{T}_{G}$$</span><!-- Has MathJax -->
+<p>当机器人准确到达目标时，${}^{E}\mathbf T_G$ 应当等于单位变换。</p>
+<p><img src="/images/embodied-ai/embodied-ai-body-spatial-math-10.png" alt="相对位姿经过 SE(3) 对数映射，得到当前末端坐标系中的局部六维位姿误差"></p>
+<p>由于位姿同时包含旋转和平移，不能像普通向量一样直接相减。通常可以通过对数映射，将相对位姿转换为局部六维运动量：</p>
+<span>$$\displaystyle
+\boldsymbol{\xi}_{b}=\left[\operatorname{Log}\left({}^{E}\mathbf{T}_{G}\right)\right]^{\vee}\in \mathbb{R}^{6}$$</span><!-- Has MathJax -->
+<p>这个六维量同时描述末端还需要完成的旋转和平移，并且是在当前末端坐标系中表达的。它不是位置差与欧拉角差的简单拼接，而是对完整刚体运动的局部表示。随后，逆运动学和控制器可以利用这个误差计算关节应该怎样运动。</p>
+<p>至此，<code>SE(3)</code> 完成了从视觉观察到机器人动作的连接：感知系统估计物体位姿，坐标变换生成抓取目标，相对变换描述当前末端与目标之间的差异，运动学与控制系统再将其转换为关节动作。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>具身智能要在物理世界中行动，首先需要把身体、传感器和环境之间的关系转换为统一的数学表示。连杆与关节定义机器人的身体结构，配置 $\mathbf q$ 描述当前身体形态，自由度表示配置空间的维数，执行器与传感器则将这些数学状态连接到真实运动和反馈。理解这一过程，可以抓住四条主线：</p>
+<ol>
+<li><strong>配置描述身体</strong>：配置空间表示机器人所有可能的身体形态，自由度决定描述配置所需的独立变量数量。</li>
+<li><strong>坐标系建立参照</strong>：位置和方向只有相对于某个坐标系才有意义，不同传感器和身体部件需要通过坐标变换对齐。</li>
+<li><strong>旋转描述朝向</strong>：旋转矩阵、欧拉角和四元数描述的是同一类三维旋转，但具有不同的参数形式、约束和使用特点。</li>
+<li><strong>SE(3) 连接完整链路</strong>：齐次变换将位置与旋转统一起来，使视觉感知、状态估计、运动学、规划与控制可以沿同一条位姿链协同工作。</li>
+</ol>
+<p>空间表示本身并不负责决定机器人应该执行什么任务，但它为具身系统提供了一套一致的物理语言。没有这层语言，视觉模型识别出的物体无法变成可执行的目标，策略输出的动作也无法准确落到具体身体上。</p>
+<p>到这里，我们已经知道机器人如何描述自己的身体，以及如何计算身体与环境之间的空间关系。下一篇将进一步进入运动学与控制，理解机器人如何从目标末端位姿求解关节运动，并让真实身体准确、稳定地到达目标。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/29/embodied-intelligence-body-spatial-math/" data-id="cms4wzue7000090lwjmr0oah5" class="article-share-link">分享到</a><div class="tags"><a href="/tags/具身智能/">具身智能</a></div><div class="post-nav"><a href="/2026/07/21/embodied-intelligence-overview/" class="next">具身智能（一）：物理世界中的智能闭环</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/29/embodied-intelligence-body-spatial-math/';
+var disqus_title = '具身智能（二）：机器人如何描述身体与世界';
+var disqus_url = 'http://matt33.com/2026/07/29/embodied-intelligence-body-spatial-math/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/bigdata/" style="font-size: 15px;">bigdata</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/数据湖/" style="font-size: 15px;">数据湖</a> <a href="/tags/具身智能/" style="font-size: 15px;">具身智能</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/07/29/embodied-intelligence-body-spatial-math/">具身智能（二）：机器人如何描述身体与世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/21/embodied-intelligence-overview/">具身智能（一）：物理世界中的智能闭环</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/19/ai-data-lake-hudi/">数据湖架构演进（一）：Hudi 的增量数据内核</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/15/llm-to-agi/">LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/14/llm-ai-coding/">LLM 系列 (二十五)：AI Coding，大模型如何改变软件开发</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/11/llm-personalization-memory/">LLM 系列 (二十四)：个性化与记忆，大模型如何理解每一个用户</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/11/llm-data-flywheel/">LLM 系列 (二十三)：数据飞轮，大模型能力如何持续进化</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/10/llm-on-device/">LLM 系列 (二十二)：端侧大模型，大模型如何在本地设备上运行</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/09/llm-model-compression/">LLM 系列 (二十一)：模型压缩，如何降低大模型推理成本</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/09/llm-function-calling/">LLM 系列 (二十)：Function Calling，大模型如何稳定调用工具</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/x-mathjax-config">MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+  });
+</script><script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML" async></script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
