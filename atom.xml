@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-28T17:10:08.000Z</updated>
+  <updated>2026-07-30T16:28:45.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,185 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>具身智能（三）：从目标位姿到关节力矩</title>
+    <link href="http://matt33.com/2026/07/31/embodied-intelligence-kinematics-dynamics-control/"/>
+    <id>http://matt33.com/2026/07/31/embodied-intelligence-kinematics-dynamics-control/</id>
+    <published>2026-07-30T16:28:45.000Z</published>
+    <updated>2026-07-30T16:28:45.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>上一篇文章解决了机器人如何描述身体与世界：通过自由度、坐标系、旋转和 <code>SE(3)</code>，视觉系统能够将“图像中的目标”转换为机械臂可以理解的抓取位姿。但位姿只说明夹爪应该到达哪里、保持什么朝向，并没有告诉机器人身体应当怎样运动。</p>
+<p>要将几何目标变成真实动作，系统还需要求解关节配置，规划关节的速度与加速度，计算克服惯性、重力和接触所需的力矩，并根据执行误差持续纠偏。这条链路分别对应运动学、动力学与控制。</p>
+<a id="more"></a>
+<p>本文将沿着“目标位姿到关节力矩”的主线，介绍 FK、IK、Jacobian、机器人动力学方程，以及 PID、阻抗控制和 MPC 的基本原理。我们暂不展开完整数学推导，而是重点理解这些技术各自解决什么问题，以及它们如何共同将具身模型生成的动作目标转化为稳定、可执行的身体运动。</p>
+<h2 id="从目标位姿到机器人执行"><a href="#从目标位姿到机器人执行" class="headerlink" title="从目标位姿到机器人执行"></a>从目标位姿到机器人执行</h2><p>设目标末端位姿为：$\mathbf{T}_{d}\in\mathrm{SE}(3)$。它描述夹爪最终应该到达的位置与方向，但只是一个<strong>静态的几何目标</strong>。机器人还不知道哪些关节配置能够到达目标、运动过程应该多快，以及每个关节需要施加多大力矩。</p>
+<p>从目标位姿到真实动作，还需要解决四类问题：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>需要回答的问题</strong></th>
+<th><strong>典型输出</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>运动学</td>
+<td>哪些关节配置能够到达目标</td>
+<td>目标关节配置 $\mathbf{q}_{d}$</td>
+</tr>
+<tr>
+<td>轨迹生成</td>
+<td>关节如何连续、平滑地运动</td>
+<td>$\mathbf{q}<em>{d}(t)$、$\dot{\mathbf{q}}</em>{d}(t)$、$\ddot{\mathbf{q}}_{d}(t)$</td>
+</tr>
+<tr>
+<td>动力学</td>
+<td>克服惯性、重力和接触需要多大力</td>
+<td>前馈关节力矩</td>
+</tr>
+<tr>
+<td>反馈控制</td>
+<td>出现误差和扰动时如何修正</td>
+<td>实时更新的控制指令</td>
+</tr>
+</tbody>
+</table>
+<p>实际系统通常存在两条主要执行路线。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-01.png" alt="关节空间中的目标位姿到关节力矩"></p>
+<p>关节空间路线先通过 IK 求出目标关节配置，再生成满足速度、加速度、关节限位和连续性要求的轨迹，最后由控制器跟踪轨迹。这条路线结构清晰，适合自由空间运动和精确轨迹跟踪。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-02.png" alt="任务空间中的位姿误差到关节力矩"></p>
+<p>任务空间路线直接在末端空间中处理位置、方向和接触误差。在常见的任务空间力矩控制中，控制器根据误差计算期望的末端 Wrench，也就是期望由机器人产生的末端力与力矩，再通过 $\mathbf J^\mathsf T$ 转换为关节力矩。这条路线可以不先求出一组完整的静态 IK 解，常用于阻抗控制、接触操作和人机协作。</p>
+<p>两条路线并不互斥。真实系统通常先用 IK 求解关节目标，再由轨迹规划或 MPC 生成参考运动，接触时通过阻抗控制调整动作，最后交给底层伺服器执行。</p>
+<p>机器人对外可能只提供位置或速度接口，但内部仍需将跟踪误差转换为电机电流和关节力矩，最终驱动身体运动。</p>
+<h2 id="运动学：连接关节与末端"><a href="#运动学：连接关节与末端" class="headerlink" title="运动学：连接关节与末端"></a>运动学：连接关节与末端</h2><p>运动学研究关节运动与机器人姿态之间的关系，不考虑质量、惯性和力。其中，FK 用关节配置计算末端位姿，IK 根据目标位姿反求关节配置，Jacobian 则描述两者在当前位置附近的运动关系。</p>
+<h3 id="FK-与-IK"><a href="#FK-与-IK" class="headerlink" title="FK 与 IK"></a>FK 与 IK</h3><p><strong>正向运动学（Forward Kinematics，FK）</strong>回答的问题是：已知各个关节的角度或位移，末端执行器在哪里？</p>
+<p>对于具有 $n$ 个关节的机械臂：</p>
+<span>$$\displaystyle
+\mathbf{T}=f(\mathbf{q}),\qquad\mathbf{q}=[q_1,\ldots,q_n]^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>其中，$\mathbf q$ 是关节配置，$\mathbf T$ 是末端位姿。机器人结构确定后，每组关节配置都对应一个确定的末端位姿。以平面二连杆机械臂为例：</p>
+<span>$$\displaystyle
+\begin{aligned}x &amp;= l_{1}\cos q_{1}+l_{2}\cos(q_{1}+q_{2})\\y &amp;= l_{1}\sin q_{1}+l_{2}\sin(q_{1}+q_{2})\end{aligned}$$</span><!-- Has MathJax -->
+<p>它的本质是沿机械臂从基座到末端，依次计算并组合每段连杆的位姿变换。</p>
+<p><strong>逆向运动学（Inverse Kinematics，IK）</strong>解决相反的问题：已知目标位姿 $\mathbf T_d$，寻找能够到达目标的关节配置。</p>
+<span>$$\displaystyle
+f(\mathbf{q}^{\ast})=\mathbf{T}_{d}$$</span><!-- Has MathJax -->
+<p>IK 不一定只有一个答案。同一个末端目标可能对应多组关节配置或身体姿态，也可能超出机器人的工作空间而无解。对于冗余机械臂，还需要根据关节限位、避障和运动距离，从多组解中选择更合适的一组。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-03.png" alt="正向运动学与逆向运动学"></p>
+<p>复杂机械臂通常使用数值方法求解 IK。它从一个初始姿态出发，反复执行三个步骤：</p>
+<ol>
+<li>使用 FK 计算当前末端位姿；</li>
+<li>计算当前位姿与目标位姿之间的误差；</li>
+<li>将末端误差转换为关节调整量并更新关节。</li>
+</ol>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-04.png" alt="数值逆向运动学的迭代过程"></p>
+<p>这个过程可以简化表示为：</p>
+<span>$$\displaystyle
+\begin{aligned}\Delta\mathbf{q} &amp;= \mathbf{J}^{\dagger}\mathbf{e}\\\mathbf{q}_{k+1} &amp;= \mathbf{q}_{k}+\alpha\Delta\mathbf{q}\end{aligned}$$</span><!-- Has MathJax -->
+<p>其中，$\mathbf e$ 是末端的局部六维位姿误差，$\mathbf J^\dagger$ 是 Jacobian 的伪逆，$\alpha$ 控制每次调整的步长。位姿误差与 Jacobian 必须采用一致的坐标表达：误差在末端坐标系中表示时使用 Body Jacobian，在基座或空间坐标系中表示时使用 Space Jacobian。算法不断迭代，直到末端足够接近目标。</p>
+<p>数值 IK 最终得到的是目标关节配置，它只描述运动的终点，并没有规定机器人怎样从当前配置运动过去。系统还需要先确定经过哪些关节配置，再为这条路径分配时间，生成 $\mathbf q_d(t)$、$\dot{\mathbf q}_d(t)$ 和 $\ddot{\mathbf q}_d(t)$，同时满足关节位置、速度和加速度限制。这就是轨迹生成，它产生的参考运动将进一步交给动力学模型和控制器执行。</p>
+<h3 id="Jacobian：描述瞬时运动"><a href="#Jacobian：描述瞬时运动" class="headerlink" title="Jacobian：描述瞬时运动"></a>Jacobian：描述瞬时运动</h3><p>FK 描述关节配置与末端位姿的整体关系，Jacobian 则描述当前位置附近的瞬时运动：</p>
+<span>$$\displaystyle
+\mathbf{V}=\mathbf{J}(\mathbf{q})\dot{\mathbf{q}}$$</span><!-- Has MathJax -->
+<p>其中，$\dot{\mathbf q}$ 是关节速度，$\mathbf V$ 是末端的线速度和角速度。Jacobian 的每一列表示一个关节运动对末端速度的影响。Jacobian 的转置还可以把末端受到的力和力矩转换为等效的关节力矩：</p>
+<span>$$\displaystyle
+\boldsymbol{\tau}_{\mathrm{ext}}=\mathbf{J}(\mathbf{q})^{\mathsf{T}}\mathbf{F}_{\mathrm{ext}}$$</span><!-- Has MathJax -->
+<p>因此，Jacobian 不仅连接关节运动与末端运动，也连接末端受力与关节受力。末端 Wrench 必须与对应的 Jacobian 在同一坐标系中表达，才能通过 $\mathbf J^\mathsf T$ 正确映射为关节力矩。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-05.png" alt="Jacobian 连接关节速度末端速度末端外力与关节力矩"></p>
+<p>当 Jacobian 丢失某些运动方向时，机器人进入<strong>奇异位形</strong>。例如，二连杆机械臂完全伸直后，末端可以沿切线方向移动，却难以在伸展方向继续运动。此时，微小的末端运动可能需要很大的关节速度，数值 IK 也容易变得不稳定。</p>
+<p>简单来说，FK 回答“当前关节配置让末端在哪里”，IK 回答“到达目标需要怎样调整关节”，Jacobian 则回答“关节的微小运动会怎样传递到末端”。三者共同完成从目标位姿到关节运动的几何转换。</p>
+<h2 id="动力学：运动需要多大力矩"><a href="#动力学：运动需要多大力矩" class="headerlink" title="动力学：运动需要多大力矩"></a>动力学：运动需要多大力矩</h2><p>运动学描述机器人应该怎样运动，动力学进一步解释：要产生这样的运动，执行器需要提供多大的力或力矩。</p>
+<h3 id="动力学方程"><a href="#动力学方程" class="headerlink" title="动力学方程"></a>动力学方程</h3><p>刚性机械臂通常使用下面的关节空间动力学方程描述。这里约定 $\mathbf F_{\mathrm{ext}}$ 表示环境施加在机器人末端的 Wrench；如果将其定义为机器人施加给环境的 Wrench，方程中的外力项应取反。</p>
+<span>$$\displaystyle
+\mathbf{M}(\mathbf{q})\ddot{\mathbf{q}}+\mathbf{C}(\mathbf{q},\dot{\mathbf{q}})\dot{\mathbf{q}}+\mathbf{g}(\mathbf{q})+\boldsymbol{\tau}_{f}=\boldsymbol{\tau}+\mathbf{J}(\mathbf{q})^{\mathsf{T}}\mathbf{F}_{\mathrm{ext}}$$</span><!-- Has MathJax -->
+<p>其中：</p>
+<ul>
+<li>$\mathbf M(\mathbf q)\ddot{\mathbf q}$：改变机器人运动速度所需的惯性力矩；</li>
+<li>$\mathbf C(\mathbf q,\dot{\mathbf q})\dot{\mathbf q}$：运动过程中产生的科里奥利和离心效应；</li>
+<li>$\mathbf g(\mathbf q)$：抵抗重力所需的关节力矩；</li>
+<li>$\boldsymbol\tau_f$：关节摩擦；</li>
+<li>$\boldsymbol\tau$：执行器产生的关节力矩；</li>
+<li>$\mathbf J^\mathsf T\mathbf F_{\text{ext}}$：末端接触力在关节上的等效力矩。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-06.png" alt="机械臂动力学中的惯性重力摩擦与接触"></p>
+<p>这条方程可以理解为一个“力矩账本”：执行器力矩与外部接触力共同作用，用于改变机器人的运动，并克服重力、摩擦和速度相关效应。</p>
+<p>这些动力学量会随机器人姿态和运动方向变化。当负载相对某个关节的力臂增大时，该关节承受的重力力矩通常也会增大；配置变化还会改变质量矩阵，因此相同的关节加速度在不同姿态下可能需要不同的驱动力矩。</p>
+<h3 id="正向与逆向动力学"><a href="#正向与逆向动力学" class="headerlink" title="正向与逆向动力学"></a>正向与逆向动力学</h3><p>同一套动力学模型可以沿两个方向使用：</p>
+<ul>
+<li><strong>正向动力学</strong>：已知当前状态和执行器力矩，预测机器人接下来产生的关节加速度。继续对加速度积分，就能得到速度和位置，常用于仿真、预测和 MPC；</li>
+<li><strong>逆向动力学</strong>：已知当前状态和期望加速度，计算完成这段运动需要的关节力矩。它常用于轨迹跟踪中的前馈补偿。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-07.png" alt="正向动力学与逆向动力学"></p>
+<p>可以简单理解为：</p>
+<ol>
+<li>施加力矩 -&gt; 正向动力学 -&gt; 实际运动；</li>
+<li>期望运动 -&gt; 逆向动力学 -&gt; 所需力矩。</li>
+</ol>
+<p>真实机器人的质量、摩擦、负载和接触状态很难被精确建模。因此，动力学模型可以提前计算大部分所需力矩，但不能完全依赖开环预测，仍然需要反馈控制持续修正误差。</p>
+<h2 id="控制器：让机器人稳定执行"><a href="#控制器：让机器人稳定执行" class="headerlink" title="控制器：让机器人稳定执行"></a>控制器：让机器人稳定执行</h2><p>动力学模型可以估算所需力矩，但真实机器人的质量、摩擦和外部负载始终存在误差。控制器需要不断读取状态、比较目标与实际结果，并根据误差调整控制指令。</p>
+<h3 id="PID：根据误差持续纠偏"><a href="#PID：根据误差持续纠偏" class="headerlink" title="PID：根据误差持续纠偏"></a>PID：根据误差持续纠偏</h3><p>PID 是 <strong>Proportional-Integral-Derivative</strong> 的缩写，即比例、积分、微分控制。它是一种经典反馈控制方法：控制器不断比较目标状态与实际状态，再根据误差的当前大小、历史累积和变化趋势修正控制输入。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-08.png" alt="PID 反馈控制闭环"></p>
+<p>PID 不要求动力学模型完全准确，因此结构简单、计算速度快。在机器人中，它常用于每个关节的位置或速度控制。以关节力矩控制为例，设目标关节配置为 $\mathbf q_d$，当前配置为 $\mathbf q$，误差为：</p>
+<span>$$\displaystyle
+\mathbf{e}=\mathbf{q}_{d}-\mathbf{q}$$</span><!-- Has MathJax -->
+<p>纯 PID 反馈由三部分组成。实际系统还可以加入动力学前馈：</p>
+<span>$$\displaystyle
+\boldsymbol{\tau}_{\mathrm{cmd}}=\boldsymbol{\tau}_{\mathrm{ff}}+\mathbf{K}_{p}\mathbf{e}+\mathbf{K}_{i}\int\mathbf{e}\,\mathrm{d}t+\mathbf{K}_{d}\dot{\mathbf{e}}$$</span><!-- Has MathJax -->
+<p>其中：</p>
+<ul>
+<li><strong>P 项</strong>根据当前误差纠偏，误差越大，修正作用越强；</li>
+<li><strong>I 项</strong>累积历史误差，用于消除长期存在的稳定偏差；</li>
+<li><strong>D 项</strong>根据误差变化趋势抑制过冲和振荡；</li>
+<li><strong>前馈项</strong>不属于 PID 本身，用于提前补偿重力、惯性等已知影响。</li>
+</ul>
+<p>机器人中常见的是“重力或动力学前馈 + PD 反馈”。积分项使用不当会在执行器饱和时持续累积，因此通常需要控制积分范围，并加入积分抗饱和机制（Anti-windup）。</p>
+<h3 id="阻抗控制：让机器人柔顺接触"><a href="#阻抗控制：让机器人柔顺接触" class="headerlink" title="阻抗控制：让机器人柔顺接触"></a>阻抗控制：让机器人柔顺接触</h3><p>位置控制强调末端必须到达哪里，但在抓取、装配和擦拭等接触任务中，位置稍有偏差就可能产生很大的碰撞力。阻抗控制不要求机器人严格停在某个位置，而是规定末端受到外力后应该怎样移动。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-09.png" alt="阻抗控制中的虚拟惯性阻尼与刚度"></p>
+<p>对于简化的平移任务，可以将末端设计成一个虚拟的质量、弹簧和阻尼系统：</p>
+<span>$$\displaystyle
+\mathbf{M}_{x}\Delta\ddot{\mathbf{x}}+\mathbf{D}_{x}\Delta\dot{\mathbf{x}}+\mathbf{K}_{x}\Delta\mathbf{x}=\mathbf{F}_{\mathrm{ext}}$$</span><!-- Has MathJax -->
+<p>其中，$\Delta\mathbf x=\mathbf x-\mathbf x_d$，$\mathbf M_x$、$\mathbf D_x$ 和 $\mathbf K_x$ 分别表示期望惯性、阻尼和刚度：</p>
+<ul>
+<li>刚度越高，机器人越接近精确位置控制；</li>
+<li>刚度越低，机器人越容易顺应外部环境；</li>
+<li>阻尼用于减少接触后的振荡；</li>
+<li>期望质量决定机器人对外力的加速响应。</li>
+</ul>
+<p>控制器计算出期望的末端 Wrench 后，可以通过 Jacobian 转换为关节力矩：</p>
+<span>$$\displaystyle
+\boldsymbol{\tau}_{\mathrm{cmd}}\approx\mathbf{J}^{\mathsf{T}}\mathbf{F}_{\mathrm{cmd}}+\boldsymbol{\tau}_{\mathrm{comp}}$$</span><!-- Has MathJax -->
+<p>完整的六维末端位姿实现需要使用 SE(3) 位姿误差，不能直接对欧拉角做减法。</p>
+<h3 id="MPC：预测未来再选择动作"><a href="#MPC：预测未来再选择动作" class="headerlink" title="MPC：预测未来再选择动作"></a>MPC：预测未来再选择动作</h3><p>MPC 是 <strong>Model Predictive Control</strong> 的缩写，即模型预测控制。它在每个控制周期利用动力学模型预测未来 $N$ 步，并通过在线优化选择一组控制输入。与 PID 主要根据误差直接纠偏不同，MPC 会同时考虑未来运动、控制代价和系统约束。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-10.png" alt="MPC 的预测优化执行与滚动更新"></p>
+<p>其工作过程可以概括如下（也如上图所示）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">读取当前状态</span><br><span class="line">    -&gt; 预测未来运动</span><br><span class="line">    -&gt; 优化控制序列</span><br><span class="line">    -&gt; 执行第一个动作</span><br><span class="line">    -&gt; 读取新状态并重新优化</span><br></pre></td></tr></table></figure>
+<p>机器人不会一次执行完整的控制序列，而是只执行第一步，再根据最新状态重新预测。这种不断向前移动预测窗口的方式称为<strong>滚动时域控制（Receding Horizon Control）</strong>，也使 MPC 成为一种反馈控制方法，而不是一次性的轨迹规划。</p>
+<p>优化过程中可以同时考虑目标误差、能耗、关节限位、速度与力矩限制以及避障要求。MPC 的优势是能够预测未来并显式处理约束，代价是需要频繁求解优化问题，对模型精度和计算速度要求较高。</p>
+<h2 id="总结：从目标到真实动作"><a href="#总结：从目标到真实动作" class="headerlink" title="总结：从目标到真实动作"></a>总结：从目标到真实动作</h2><p>从目标位姿到机器人执行，可以归纳为三个层次：</p>
+<ol>
+<li><strong>运动学</strong>解决几何关系：FK 从关节配置计算末端位姿，IK 根据目标位姿反求关节配置，Jacobian 描述关节与末端之间的局部运动关系。</li>
+<li><strong>动力学</strong>解决力的关系：根据期望运动、机器人惯性、重力和外部接触，计算执行器需要提供的力矩。</li>
+<li><strong>控制</strong>形成反馈闭环：PID 根据误差纠偏，阻抗控制调节接触行为，MPC 通过预测和优化处理约束。</li>
+</ol>
+<p>整体链路可以概括如下图所示：</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-11.png" alt="从目标位姿到身体运动的反馈闭环"></p>
+<p>VLA 或策略模型可以决定机器人应该抓哪里、怎样移动，但这些动作仍要满足身体结构、动力学、执行器和安全约束。只有经过运动学、动力学与控制闭环，模型生成的动作才能稳定地转化为真实世界中的行为。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;上一篇文章解决了机器人如何描述身体与世界：通过自由度、坐标系、旋转和 &lt;code&gt;SE(3)&lt;/code&gt;，视觉系统能够将“图像中的目标”转换为机械臂可以理解的抓取位姿。但位姿只说明夹爪应该到达哪里、保持什么朝向，并没有告诉机器人身体应当怎样运动。&lt;/p&gt;
+&lt;p&gt;要将几何目标变成真实动作，系统还需要求解关节配置，规划关节的速度与加速度，计算克服惯性、重力和接触所需的力矩，并根据执行误差持续纠偏。这条链路分别对应运动学、动力学与控制。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="具身智能" scheme="http://matt33.com/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/"/>
+    
+  </entry>
   
   <entry>
     <title>具身智能（二）：机器人如何描述身体与世界</title>
@@ -8173,228 +8352,6 @@
     
       &lt;p&gt;过去我们使用大模型时，常常会遇到一个很直观的限制：输入太长，模型放不下。一篇几十页的论文、一份完整的技术文档、一个代码仓库、一次持续很久的多轮对话，都可能超过模型能够处理的上下文窗口。&lt;/p&gt;
 &lt;p&gt;随着模型上下文长度从早期常见的 4K token，扩展到今天的 1M token 级别（例如 Gemini 1.5 Pro，以及后续部分 Claude / GPT / Gemini 系列模型），LLM 的使用方式也开始发生变化。它不再只是回答一个短问题，而是可以阅读完整资料、分析复杂代码、理解长期对话，甚至支撑 Agent 执行长程任务。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (十)：推理模型：大模型如何从回答走向思考</title>
-    <link href="http://matt33.com/2026/06/30/llm-reasoning-model/"/>
-    <id>http://matt33.com/2026/06/30/llm-reasoning-model/</id>
-    <published>2026-06-30T15:30:00.000Z</published>
-    <updated>2026-06-30T15:30:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>如果说推理服务回答的是“模型如何更快、更便宜地生成 token”，那么推理模型回答的就是另一个更接近能力本质的问题：模型如何在复杂任务中不急着给出结论，而是先分解问题、展开推导、检查约束、验证结果，再输出更可靠的答案。</p>
-<p>这里的“推理”不再是 <strong>Inference Serving</strong>，而是 <strong>Reasoning</strong>。前者关注系统效率：吞吐、延迟、KV Cache、batch 调度和单位 token 成本；后者关注能力机制：模型为什么愿意多想几步，为什么数学、代码、逻辑和规划任务需要更多 test-time compute，为什么 DeepSeek-R1、OpenAI o 系列、Qwen3 thinking mode 都把“思考过程”和“推理预算”变成核心能力。</p>
-<a id="more"></a>
-<p>简单来说，推理模型的本质，是把一部分能力提升从训练阶段转移到推理阶段，让模型用更多生成、搜索、验证和反思，换取更高的问题求解质量。</p>
-<h2 id="为什么需要推理模型？"><a href="#为什么需要推理模型？" class="headerlink" title="为什么需要推理模型？"></a>为什么需要推理模型？</h2><p>普通 Chat Model 解决的是“如何快速给出一个符合用户意图的回答”，但很多复杂任务并不是看到问题就能直接输出结论。数学证明、代码修复、复杂规划、科研分析、长链工具调用，本质上都需要一个过程：</p>
-<ul>
-<li><strong>理解问题 -&gt; 分解目标 -&gt; 推导中间步骤 -&gt; 检查约束 -&gt; 验证结果 -&gt; 修正答案</strong></li>
-</ul>
-<p>传统 Chat Model 的问题在于：它往往会直接把最终回答生成出来。这个回答可能很流畅、很像正确答案，但中间推导并不稳定。一旦某个中间步骤出错，后续生成仍然可能沿着错误方向继续补全，最后得到一个“表达完整但逻辑错误”的结果。这就是推理模型出现的背景：<strong>大模型已经具备了很多知识和模式，但在复杂任务上，缺少稳定展开、验证和修正的机制。</strong></p>
-<p><img src="/images/llm/llm-reasoning-model-01.png" alt="普通 Chat Model vs Reasoning Model"></p>
-<p>从任务类型看，推理模型更适合处理那些 <strong>不能一步到位、必须保持约束、需要验证结果</strong> 的任务：</p>
-<ol>
-<li><strong>数学推导</strong>：不能只猜最终答案，中间步骤必须成立，需要公式变换、多步推导和答案校验；</li>
-<li><strong>代码生成</strong>：不能只生成“看起来像代码”的文本，还要满足需求约束、边界条件和可运行性；</li>
-<li><strong>逻辑推理</strong>：前提、结论和中间状态必须一致，不能在多步推导中自相矛盾；</li>
-<li><strong>Agent 任务</strong>：需要计划、执行、观察反馈，并根据环境结果调整下一步动作；</li>
-<li><strong>科研分析</strong>：需要提出假设、整合证据、检查反例，并明确不确定性。</li>
-</ol>
-<h2 id="推理模型的本质：从答案生成到计算展开"><a href="#推理模型的本质：从答案生成到计算展开" class="headerlink" title="推理模型的本质：从答案生成到计算展开"></a>推理模型的本质：从答案生成到计算展开</h2><p>大模型的底层形式仍然是自回归生成器：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">P(next token | context)</span><br></pre></td></tr></table></figure>
-<p>也就是说，模型每一步做的事情，仍然是根据当前上下文预测下一个 token。推理模型并没有脱离这个基本机制，它改变的是 <strong>生成过程的组织方式</strong>。普通回答模式更像：</p>
-<ul>
-<li>问题 -&gt; 直接生成答案</li>
-</ul>
-<p>推理模型则把一次回答展开成更长的计算过程：</p>
-<ul>
-<li>问题 -&gt; 问题分解 -&gt; 中间推导 -&gt; 检查 / 验证 -&gt; 最终答案</li>
-</ul>
-<p>可以把它理解成一种 <strong>test-time compute scaling</strong>：模型在推理阶段投入更多 token、更多时间和更多计算，用更高的推理成本换取复杂任务上更高的成功率。</p>
-<p><img src="/images/llm/llm-reasoning-model-02.png" alt="推理模型计算过程"></p>
-<p><em>推理模型计算过程</em></p>
-<p>推理模型本质上仍然是在生成 token。只是经过特定的后训练、强化学习和推理策略之后，模型学会在困难任务中先生成有助于求解的中间状态，再输出最终答案。推理模型的能力提升通常来自三个机制：</p>
-<ol>
-<li>中间步骤展开： 把复杂问题拆成更小、更容易求解的子问题；</li>
-<li>自我检查 / 外部验证：判断推导是否满足约束，结果是否正确；</li>
-<li>推理预算扩展：对困难任务投入更多 token、时间和计算。</li>
-</ol>
-<p>这也解释了为什么推理模型通常更慢。它不是直接从问题跳到答案，而是在输出前后做了更多中间计算。简单问题上，这种额外计算可能显得多余；复杂问题上，它往往能显著提高稳定性和正确率。</p>
-<p>所以，推理模型的本质不是“神秘地拥有思考”，而是：<strong>把原本一次性的答案生成，改造成一个可展开、可检查、可修正的计算过程</strong>。</p>
-<h2 id="主流技术路线：CoT、Verifier-与-RLVR"><a href="#主流技术路线：CoT、Verifier-与-RLVR" class="headerlink" title="主流技术路线：CoT、Verifier 与 RLVR"></a>主流技术路线：CoT、Verifier 与 RLVR</h2><p>Prompt 可以诱发模型展开步骤，但真正稳定的推理模型，通常依赖后训练、可验证反馈、强化学习和推理时计算共同塑形。它背后通常是一整套后训练机制：</p>
-<ul>
-<li>先让模型学会展开中间步骤；</li>
-<li>再让模型知道哪些结果是对的；</li>
-<li>最后用可验证奖励强化更有效的推理策略。</li>
-</ul>
-<p>可以把主流路线概括成五个环节：</p>
-<p><img src="/images/llm/llm-reasoning-model-03.png" alt="推理增强路径"></p>
-<h3 id="CoT：让模型学会展开步骤"><a href="#CoT：让模型学会展开步骤" class="headerlink" title="CoT：让模型学会展开步骤"></a>CoT：让模型学会展开步骤</h3><p>CoT（Chain-of-Thought，思维链）让模型在回答前生成中间推理步骤：</p>
-<ul>
-<li>问题 -&gt; 分析步骤 -&gt; 中间结论 -&gt; 最终答案</li>
-</ul>
-<p>它的价值是降低复杂任务“一步到位”的难度。模型不必直接从问题跳到答案，而是可以把问题拆成多个中间状态，逐步逼近结果。但 CoT 不是万能的：</p>
-<ul>
-<li>会写步骤，不代表步骤一定正确；</li>
-<li>中间过程可能自洽，但事实或计算是错的；</li>
-<li>推理链越长，越可能引入新错误；</li>
-<li>完整暴露思维链还会带来安全、隐私和可控性问题。</li>
-</ul>
-<p>所以，现代推理模型通常不会只依赖 CoT，而会进一步引入验证器和强化学习。</p>
-<h3 id="Verifier：从“像对”走向“真的对”"><a href="#Verifier：从“像对”走向“真的对”" class="headerlink" title="Verifier：从“像对”走向“真的对”"></a>Verifier：从“像对”走向“真的对”</h3><p>Verifier 的作用是<strong>验证结果</strong>，而不是判断回答风格。对于数学、代码、逻辑和工具任务，很多结果可以被自动检查：</p>
-<ul>
-<li>数学： 最终答案是否匹配，推导是否满足约束；</li>
-<li>代码：单元测试、编译检查、静态分析；</li>
-<li>逻辑题：是否违反规则或前提；</li>
-<li>工具调用：API 参数是否正确，执行结果是否符合目标；</li>
-<li>检索问答：答案是否被证据支持。</li>
-</ul>
-<p><img src="/images/llm/llm-reasoning-model-04.png" alt="Verifier 流程"></p>
-<p>这一步非常关键，因为语言模型天然擅长生成“看起来像正确答案”的文本，但推理任务真正需要的是结果满足约束。</p>
-<h3 id="RLVR：用可验证奖励强化推理策略"><a href="#RLVR：用可验证奖励强化推理策略" class="headerlink" title="RLVR：用可验证奖励强化推理策略"></a>RLVR：用可验证奖励强化推理策略</h3><p>RLVR，即 <strong>Reinforcement Learning with Verifiable Rewards</strong>，可以翻译为“可验证奖励强化学习”。它的核心思想是：如果一个任务的结果可以自动判断对错，就可以把验证结果转成 reward，让模型通过强化学习学会更有效的推理策略。</p>
-<p><img src="/images/llm/llm-reasoning-model-05.png" alt="RLVR 用可验证反馈训练模型"></p>
-<p>DeepSeek-R1 的关键启发就在这里。公开报告中，R1-Zero 在没有 SFT 冷启动的情况下，直接通过大规模 RL 激发出推理行为，出现了反思、回溯和自我修正等现象；但它也存在可读性差、语言混杂等问题。DeepSeek-R1 再引入 cold-start 数据和多阶段训练，改善了可读性和综合表现。</p>
-<p>这说明一个重要趋势：当 reward 足够明确时，强化学习不只是对齐话术，也可以放大数学、代码和复杂推理能力（不过，RLVR 适合结果可自动验证的任务，比如数学、代码等；但是像开放写作、价值判断和复杂产品体验仍然需要偏好模型、人类评估或多维 reward）。</p>
-<h3 id="Distillation：把强推理能力迁移给小模型"><a href="#Distillation：把强推理能力迁移给小模型" class="headerlink" title="Distillation：把强推理能力迁移给小模型"></a>Distillation：把强推理能力迁移给小模型</h3><p>强推理模型通常推理成本高、延迟高、部署贵。因此，行业常用蒸馏把强模型的推理能力迁移给更小模型。典型流程是：</p>
-<ol>
-<li>强推理模型生成高质量推理轨迹；</li>
-<li>用 verifier / 测试器过滤正确样本；</li>
-<li>用这些样本微调小模型；</li>
-<li>小模型获得部分推理能力。</li>
-</ol>
-<p>这也是 DeepSeek-R1 Distill 系列和很多开源推理模型的重要路线。<strong>蒸馏的价值是降低部署成本</strong>，但它也有边界：小模型可以模仿强模型的推理轨迹，却不一定完整继承强模型的搜索能力、纠错能力和复杂任务泛化能力。</p>
-<h3 id="Thinking-Budget：按任务分配思考成本"><a href="#Thinking-Budget：按任务分配思考成本" class="headerlink" title="Thinking Budget：按任务分配思考成本"></a>Thinking Budget：按任务分配思考成本</h3><p>不是所有问题都需要深度思考，比如：</p>
-<ul>
-<li>“北京今天几点？” -&gt; 快速回答；</li>
-<li>“证明这个算法复杂度” -&gt; 多步推理；</li>
-<li>“修复这个代码仓库 bug” -&gt; 计划 + 工具 + 验证。</li>
-</ul>
-<p>因此，推理模型还需要学会控制“思考成本”。简单问题快速回答，复杂问题分配更多 token、更多时间和更多验证步骤。</p>
-<p>Qwen3 的 thinking / non-thinking 统一框架和 thinking budget 就体现了这个方向：模型不应该所有问题都慢慢想，而应该根据任务复杂度动态分配推理预算。</p>
-<p>简单总结一下：CoT 解决“怎么展开”，Verifier 解决“怎么判断对错”，RLVR 解决“怎么把正确反馈变成能力”，Distillation 解决“怎么降低成本”，Thinking Budget 解决“什么时候该想多久”。</p>
-<h2 id="业内实践与核心挑战"><a href="#业内实践与核心挑战" class="headerlink" title="业内实践与核心挑战"></a>业内实践与核心挑战</h2><p>推理模型的发展，不是单个模型突然“变聪明”的故事，而是一条技术路线逐渐清晰的过程：从让模型写出推理步骤，到用验证器判断结果，再到用强化学习把“可验证正确”变成训练信号，最后进一步控制推理成本。</p>
-<table>
-<thead>
-<tr>
-<th><strong>模型 / 工作</strong></th>
-<th><strong>关键设计</strong></th>
-<th><strong>解决的问题</strong></th>
-<th><strong>行业启发</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>OpenAI o 系列</td>
-<td>强调 reasoning、test-time compute 和更高推理预算</td>
-<td>复杂数学、代码、科学问题不能只靠快速生成</td>
-<td>推理时计算成为能力扩展的新维度</td>
-</tr>
-<tr>
-<td>DeepSeek-R1-Zero</td>
-<td>不经过 SFT 冷启动，直接用大规模 RL 激发推理</td>
-<td>证明 RL 可以诱导反思、回溯、自我修正等行为</td>
-<td>可验证 reward 能显著放大推理能力</td>
-</tr>
-<tr>
-<td>DeepSeek-R1</td>
-<td>cold-start 数据 + 多阶段 RL + 蒸馏</td>
-<td>解决 R1-Zero 可读性差、语言混杂等问题</td>
-<td>纯 RL 有潜力，但工业可用仍需要工程化训练流程</td>
-</tr>
-<tr>
-<td>Qwen3</td>
-<td>thinking / non-thinking 统一，支持 thinking budget</td>
-<td>不是所有问题都需要深度思考</td>
-<td>推理能力开始和推理成本控制绑定</td>
-</tr>
-<tr>
-<td>R1 Distill / 开源推理模型</td>
-<td>用强模型生成推理轨迹，再蒸馏到小模型</td>
-<td>强推理模型成本高、部署贵</td>
-<td>推理能力可以部分迁移，但小模型不一定继承完整搜索能力</td>
-</tr>
-</tbody>
-</table>
-<p>这些实践说明，推理模型已经形成三条主线：</p>
-<ol>
-<li><strong>能力增强</strong>：通过 CoT、RLVR、Verifier，让模型在数学、代码、逻辑任务上更可靠；</li>
-<li><strong>成本控制</strong>：通过 thinking budget、蒸馏、小模型，把深度推理变得可部署；</li>
-<li><strong>任务扩展</strong>：从文本推理走向工具调用、代码执行、多模态理解和 Agent 任务。</li>
-</ol>
-<p>但推理模型并不是免费午餐。它带来的能力提升，本质上是用更多训练成本和推理成本换来的。当前仍然面临几类核心挑战：</p>
-<ol>
-<li><p><strong>过度思考</strong>：简单问题也生成很长推理过程，导致延迟和成本上升。</p>
-<ol>
-<li>解决方向是 thinking budget、动态路由、快慢模式切换，让模型根据任务难度决定是否深度思考。</li>
-</ol>
-</li>
-<li><p><strong>推理幻觉</strong>：推理链看似严密，但事实、计算或逻辑可能是错的。</p>
-<ol>
-<li>解决方向是 verifier、工具调用、检索增强和结果校验，把“看起来合理”拉回到“结果正确”。</li>
-</ol>
-</li>
-<li><p><strong>奖励黑客</strong>：模型可能学会钻 reward 漏洞，而不是真正解决问题。</p>
-<ol>
-<li>解决方向是多 reward、过程监督、红队评测，避免模型只优化评分表面特征。</li>
-</ol>
-</li>
-<li><p><strong>训练成本高</strong>：RL、长推理轨迹、验证数据和多阶段训练都很贵。</p>
-<ol>
-<li>解决方向是蒸馏、样本筛选、小模型继承，把强模型的推理能力迁移到更低成本模型上。</li>
-</ol>
-</li>
-<li><p><strong>推理成本高</strong>：thinking token 越多，延迟和费用越高。</p>
-<ol>
-<li>解决方向是推理预算控制、早停机制、分层模型路由，让简单任务少想，复杂任务多想。</li>
-</ol>
-</li>
-<li><p><strong>可控性问题</strong>：长链推理可能带来不可预测输出，也可能暴露不该展示的中间过程。</p>
-<ol>
-<li>解决方向是隐式 reasoning、安全约束、输出边界控制，只把必要结论和可解释摘要暴露给用户。</li>
-</ol>
-</li>
-<li><p><strong>安全风险</strong>：更强推理能力也可能增强危险任务的规划和执行能力。</p>
-<ol>
-<li>解决方向是 deliberative alignment、安全 reward、风险分类器和场景化拒答策略。</li>
-</ol>
-</li>
-</ol>
-<p>这里最重要的判断是：推理模型不是让模型“凭空变聪明”，而是让模型学会在困难任务上投入更多计算，并把这些计算组织成可检查、可修正的过程。</p>
-<p>所以推理模型的核心权衡是：</p>
-<ul>
-<li>准确率 vs 延迟</li>
-<li>深度思考 vs 成本</li>
-<li>长链推理 vs 可控性</li>
-<li>能力增强 vs 安全风险</li>
-</ul>
-<p>推理模型真正难的地方，不只是让模型“想得更久”，而是让它知道 <strong>什么时候该想、想到什么程度、如何验证、何时停止</strong>。</p>
-<h2 id="未来演进与总结：从会思考到会行动"><a href="#未来演进与总结：从会思考到会行动" class="headerlink" title="未来演进与总结：从会思考到会行动"></a>未来演进与总结：从会思考到会行动</h2><p>推理模型的未来，不是简单生成更长的 CoT，而是构建更可靠的计算过程。真正重要的不是“想得更长”，而是“想得更对、能验证、能修正、能行动”。</p>
-<p><img src="/images/llm/llm-reasoning-model-06.png" alt="推理模型演进"></p>
-<p>未来趋势可以概括为五点：</p>
-<ol>
-<li>从 CoT 到可验证推理： 不只生成中间过程，还要验证结果是否正确；</li>
-<li>从固定深度到动态预算：简单任务快答，复杂任务分配更多 thinking token 和验证步骤；</li>
-<li>从文本推理到工具推理：搜索、代码执行、计算器、数据库等工具参与推理过程；</li>
-<li>从单模态到多模态推理：图像、表格、视频、屏幕状态进入推理链路；</li>
-<li>从回答到 Agentic Reasoning：模型不只给答案，还要计划、执行、观察、修正。</li>
-</ol>
-<p>可以看到，推理模型正在从 <strong><code>Question -&gt; Answer</code></strong> 走向 <strong><code>Goal -&gt; Think -&gt; Act -&gt; Observe -&gt; Verify -&gt; Revise -&gt; Result</code></strong>。</p>
-<p>也就是说，推理模型不是系列终点，而是 Agent 的能力底座。Agent 不是只需要会调用工具，更需要在多步任务中持续判断：下一步做什么、结果是否可信、是否需要修正计划、什么时候停止。</p>
-<p>总结一下，推理模型的本质，不是让模型说出更长的过程，而是把一次生成变成可分解、可验证、可修正、可行动的求解过程。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;如果说推理服务回答的是“模型如何更快、更便宜地生成 token”，那么推理模型回答的就是另一个更接近能力本质的问题：模型如何在复杂任务中不急着给出结论，而是先分解问题、展开推导、检查约束、验证结果，再输出更可靠的答案。&lt;/p&gt;
-&lt;p&gt;这里的“推理”不再是 &lt;strong&gt;Inference Serving&lt;/strong&gt;，而是 &lt;strong&gt;Reasoning&lt;/strong&gt;。前者关注系统效率：吞吐、延迟、KV Cache、batch 调度和单位 token 成本；后者关注能力机制：模型为什么愿意多想几步，为什么数学、代码、逻辑和规划任务需要更多 test-time compute，为什么 DeepSeek-R1、OpenAI o 系列、Qwen3 thinking mode 都把“思考过程”和“推理预算”变成核心能力。&lt;/p&gt;
     
     </summary>
     

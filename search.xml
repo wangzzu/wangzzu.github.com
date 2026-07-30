@@ -4,6 +4,168 @@
   
     
     <entry>
+      <title><![CDATA[具身智能（三）：从目标位姿到关节力矩]]></title>
+      <url>http://matt33.com/2026/07/31/embodied-intelligence-kinematics-dynamics-control/</url>
+      <content type="html"><![CDATA[<p>上一篇文章解决了机器人如何描述身体与世界：通过自由度、坐标系、旋转和 <code>SE(3)</code>，视觉系统能够将“图像中的目标”转换为机械臂可以理解的抓取位姿。但位姿只说明夹爪应该到达哪里、保持什么朝向，并没有告诉机器人身体应当怎样运动。</p>
+<p>要将几何目标变成真实动作，系统还需要求解关节配置，规划关节的速度与加速度，计算克服惯性、重力和接触所需的力矩，并根据执行误差持续纠偏。这条链路分别对应运动学、动力学与控制。</p>
+<a id="more"></a>
+<p>本文将沿着“目标位姿到关节力矩”的主线，介绍 FK、IK、Jacobian、机器人动力学方程，以及 PID、阻抗控制和 MPC 的基本原理。我们暂不展开完整数学推导，而是重点理解这些技术各自解决什么问题，以及它们如何共同将具身模型生成的动作目标转化为稳定、可执行的身体运动。</p>
+<h2 id="从目标位姿到机器人执行"><a href="#从目标位姿到机器人执行" class="headerlink" title="从目标位姿到机器人执行"></a>从目标位姿到机器人执行</h2><p>设目标末端位姿为：$\mathbf{T}_{d}\in\mathrm{SE}(3)$。它描述夹爪最终应该到达的位置与方向，但只是一个<strong>静态的几何目标</strong>。机器人还不知道哪些关节配置能够到达目标、运动过程应该多快，以及每个关节需要施加多大力矩。</p>
+<p>从目标位姿到真实动作，还需要解决四类问题：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>需要回答的问题</strong></th>
+<th><strong>典型输出</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>运动学</td>
+<td>哪些关节配置能够到达目标</td>
+<td>目标关节配置 $\mathbf{q}_{d}$</td>
+</tr>
+<tr>
+<td>轨迹生成</td>
+<td>关节如何连续、平滑地运动</td>
+<td>$\mathbf{q}<em>{d}(t)$、$\dot{\mathbf{q}}</em>{d}(t)$、$\ddot{\mathbf{q}}_{d}(t)$</td>
+</tr>
+<tr>
+<td>动力学</td>
+<td>克服惯性、重力和接触需要多大力</td>
+<td>前馈关节力矩</td>
+</tr>
+<tr>
+<td>反馈控制</td>
+<td>出现误差和扰动时如何修正</td>
+<td>实时更新的控制指令</td>
+</tr>
+</tbody>
+</table>
+<p>实际系统通常存在两条主要执行路线。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-01.png" alt="关节空间中的目标位姿到关节力矩"></p>
+<p>关节空间路线先通过 IK 求出目标关节配置，再生成满足速度、加速度、关节限位和连续性要求的轨迹，最后由控制器跟踪轨迹。这条路线结构清晰，适合自由空间运动和精确轨迹跟踪。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-02.png" alt="任务空间中的位姿误差到关节力矩"></p>
+<p>任务空间路线直接在末端空间中处理位置、方向和接触误差。在常见的任务空间力矩控制中，控制器根据误差计算期望的末端 Wrench，也就是期望由机器人产生的末端力与力矩，再通过 $\mathbf J^\mathsf T$ 转换为关节力矩。这条路线可以不先求出一组完整的静态 IK 解，常用于阻抗控制、接触操作和人机协作。</p>
+<p>两条路线并不互斥。真实系统通常先用 IK 求解关节目标，再由轨迹规划或 MPC 生成参考运动，接触时通过阻抗控制调整动作，最后交给底层伺服器执行。</p>
+<p>机器人对外可能只提供位置或速度接口，但内部仍需将跟踪误差转换为电机电流和关节力矩，最终驱动身体运动。</p>
+<h2 id="运动学：连接关节与末端"><a href="#运动学：连接关节与末端" class="headerlink" title="运动学：连接关节与末端"></a>运动学：连接关节与末端</h2><p>运动学研究关节运动与机器人姿态之间的关系，不考虑质量、惯性和力。其中，FK 用关节配置计算末端位姿，IK 根据目标位姿反求关节配置，Jacobian 则描述两者在当前位置附近的运动关系。</p>
+<h3 id="FK-与-IK"><a href="#FK-与-IK" class="headerlink" title="FK 与 IK"></a>FK 与 IK</h3><p><strong>正向运动学（Forward Kinematics，FK）</strong>回答的问题是：已知各个关节的角度或位移，末端执行器在哪里？</p>
+<p>对于具有 $n$ 个关节的机械臂：</p>
+<span>$$\displaystyle
+\mathbf{T}=f(\mathbf{q}),\qquad\mathbf{q}=[q_1,\ldots,q_n]^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>其中，$\mathbf q$ 是关节配置，$\mathbf T$ 是末端位姿。机器人结构确定后，每组关节配置都对应一个确定的末端位姿。以平面二连杆机械臂为例：</p>
+<span>$$\displaystyle
+\begin{aligned}x &amp;= l_{1}\cos q_{1}+l_{2}\cos(q_{1}+q_{2})\\y &amp;= l_{1}\sin q_{1}+l_{2}\sin(q_{1}+q_{2})\end{aligned}$$</span><!-- Has MathJax -->
+<p>它的本质是沿机械臂从基座到末端，依次计算并组合每段连杆的位姿变换。</p>
+<p><strong>逆向运动学（Inverse Kinematics，IK）</strong>解决相反的问题：已知目标位姿 $\mathbf T_d$，寻找能够到达目标的关节配置。</p>
+<span>$$\displaystyle
+f(\mathbf{q}^{\ast})=\mathbf{T}_{d}$$</span><!-- Has MathJax -->
+<p>IK 不一定只有一个答案。同一个末端目标可能对应多组关节配置或身体姿态，也可能超出机器人的工作空间而无解。对于冗余机械臂，还需要根据关节限位、避障和运动距离，从多组解中选择更合适的一组。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-03.png" alt="正向运动学与逆向运动学"></p>
+<p>复杂机械臂通常使用数值方法求解 IK。它从一个初始姿态出发，反复执行三个步骤：</p>
+<ol>
+<li>使用 FK 计算当前末端位姿；</li>
+<li>计算当前位姿与目标位姿之间的误差；</li>
+<li>将末端误差转换为关节调整量并更新关节。</li>
+</ol>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-04.png" alt="数值逆向运动学的迭代过程"></p>
+<p>这个过程可以简化表示为：</p>
+<span>$$\displaystyle
+\begin{aligned}\Delta\mathbf{q} &amp;= \mathbf{J}^{\dagger}\mathbf{e}\\\mathbf{q}_{k+1} &amp;= \mathbf{q}_{k}+\alpha\Delta\mathbf{q}\end{aligned}$$</span><!-- Has MathJax -->
+<p>其中，$\mathbf e$ 是末端的局部六维位姿误差，$\mathbf J^\dagger$ 是 Jacobian 的伪逆，$\alpha$ 控制每次调整的步长。位姿误差与 Jacobian 必须采用一致的坐标表达：误差在末端坐标系中表示时使用 Body Jacobian，在基座或空间坐标系中表示时使用 Space Jacobian。算法不断迭代，直到末端足够接近目标。</p>
+<p>数值 IK 最终得到的是目标关节配置，它只描述运动的终点，并没有规定机器人怎样从当前配置运动过去。系统还需要先确定经过哪些关节配置，再为这条路径分配时间，生成 $\mathbf q_d(t)$、$\dot{\mathbf q}_d(t)$ 和 $\ddot{\mathbf q}_d(t)$，同时满足关节位置、速度和加速度限制。这就是轨迹生成，它产生的参考运动将进一步交给动力学模型和控制器执行。</p>
+<h3 id="Jacobian：描述瞬时运动"><a href="#Jacobian：描述瞬时运动" class="headerlink" title="Jacobian：描述瞬时运动"></a>Jacobian：描述瞬时运动</h3><p>FK 描述关节配置与末端位姿的整体关系，Jacobian 则描述当前位置附近的瞬时运动：</p>
+<span>$$\displaystyle
+\mathbf{V}=\mathbf{J}(\mathbf{q})\dot{\mathbf{q}}$$</span><!-- Has MathJax -->
+<p>其中，$\dot{\mathbf q}$ 是关节速度，$\mathbf V$ 是末端的线速度和角速度。Jacobian 的每一列表示一个关节运动对末端速度的影响。Jacobian 的转置还可以把末端受到的力和力矩转换为等效的关节力矩：</p>
+<span>$$\displaystyle
+\boldsymbol{\tau}_{\mathrm{ext}}=\mathbf{J}(\mathbf{q})^{\mathsf{T}}\mathbf{F}_{\mathrm{ext}}$$</span><!-- Has MathJax -->
+<p>因此，Jacobian 不仅连接关节运动与末端运动，也连接末端受力与关节受力。末端 Wrench 必须与对应的 Jacobian 在同一坐标系中表达，才能通过 $\mathbf J^\mathsf T$ 正确映射为关节力矩。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-05.png" alt="Jacobian 连接关节速度末端速度末端外力与关节力矩"></p>
+<p>当 Jacobian 丢失某些运动方向时，机器人进入<strong>奇异位形</strong>。例如，二连杆机械臂完全伸直后，末端可以沿切线方向移动，却难以在伸展方向继续运动。此时，微小的末端运动可能需要很大的关节速度，数值 IK 也容易变得不稳定。</p>
+<p>简单来说，FK 回答“当前关节配置让末端在哪里”，IK 回答“到达目标需要怎样调整关节”，Jacobian 则回答“关节的微小运动会怎样传递到末端”。三者共同完成从目标位姿到关节运动的几何转换。</p>
+<h2 id="动力学：运动需要多大力矩"><a href="#动力学：运动需要多大力矩" class="headerlink" title="动力学：运动需要多大力矩"></a>动力学：运动需要多大力矩</h2><p>运动学描述机器人应该怎样运动，动力学进一步解释：要产生这样的运动，执行器需要提供多大的力或力矩。</p>
+<h3 id="动力学方程"><a href="#动力学方程" class="headerlink" title="动力学方程"></a>动力学方程</h3><p>刚性机械臂通常使用下面的关节空间动力学方程描述。这里约定 $\mathbf F_{\mathrm{ext}}$ 表示环境施加在机器人末端的 Wrench；如果将其定义为机器人施加给环境的 Wrench，方程中的外力项应取反。</p>
+<span>$$\displaystyle
+\mathbf{M}(\mathbf{q})\ddot{\mathbf{q}}+\mathbf{C}(\mathbf{q},\dot{\mathbf{q}})\dot{\mathbf{q}}+\mathbf{g}(\mathbf{q})+\boldsymbol{\tau}_{f}=\boldsymbol{\tau}+\mathbf{J}(\mathbf{q})^{\mathsf{T}}\mathbf{F}_{\mathrm{ext}}$$</span><!-- Has MathJax -->
+<p>其中：</p>
+<ul>
+<li>$\mathbf M(\mathbf q)\ddot{\mathbf q}$：改变机器人运动速度所需的惯性力矩；</li>
+<li>$\mathbf C(\mathbf q,\dot{\mathbf q})\dot{\mathbf q}$：运动过程中产生的科里奥利和离心效应；</li>
+<li>$\mathbf g(\mathbf q)$：抵抗重力所需的关节力矩；</li>
+<li>$\boldsymbol\tau_f$：关节摩擦；</li>
+<li>$\boldsymbol\tau$：执行器产生的关节力矩；</li>
+<li>$\mathbf J^\mathsf T\mathbf F_{\text{ext}}$：末端接触力在关节上的等效力矩。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-06.png" alt="机械臂动力学中的惯性重力摩擦与接触"></p>
+<p>这条方程可以理解为一个“力矩账本”：执行器力矩与外部接触力共同作用，用于改变机器人的运动，并克服重力、摩擦和速度相关效应。</p>
+<p>这些动力学量会随机器人姿态和运动方向变化。当负载相对某个关节的力臂增大时，该关节承受的重力力矩通常也会增大；配置变化还会改变质量矩阵，因此相同的关节加速度在不同姿态下可能需要不同的驱动力矩。</p>
+<h3 id="正向与逆向动力学"><a href="#正向与逆向动力学" class="headerlink" title="正向与逆向动力学"></a>正向与逆向动力学</h3><p>同一套动力学模型可以沿两个方向使用：</p>
+<ul>
+<li><strong>正向动力学</strong>：已知当前状态和执行器力矩，预测机器人接下来产生的关节加速度。继续对加速度积分，就能得到速度和位置，常用于仿真、预测和 MPC；</li>
+<li><strong>逆向动力学</strong>：已知当前状态和期望加速度，计算完成这段运动需要的关节力矩。它常用于轨迹跟踪中的前馈补偿。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-07.png" alt="正向动力学与逆向动力学"></p>
+<p>可以简单理解为：</p>
+<ol>
+<li>施加力矩 -&gt; 正向动力学 -&gt; 实际运动；</li>
+<li>期望运动 -&gt; 逆向动力学 -&gt; 所需力矩。</li>
+</ol>
+<p>真实机器人的质量、摩擦、负载和接触状态很难被精确建模。因此，动力学模型可以提前计算大部分所需力矩，但不能完全依赖开环预测，仍然需要反馈控制持续修正误差。</p>
+<h2 id="控制器：让机器人稳定执行"><a href="#控制器：让机器人稳定执行" class="headerlink" title="控制器：让机器人稳定执行"></a>控制器：让机器人稳定执行</h2><p>动力学模型可以估算所需力矩，但真实机器人的质量、摩擦和外部负载始终存在误差。控制器需要不断读取状态、比较目标与实际结果，并根据误差调整控制指令。</p>
+<h3 id="PID：根据误差持续纠偏"><a href="#PID：根据误差持续纠偏" class="headerlink" title="PID：根据误差持续纠偏"></a>PID：根据误差持续纠偏</h3><p>PID 是 <strong>Proportional-Integral-Derivative</strong> 的缩写，即比例、积分、微分控制。它是一种经典反馈控制方法：控制器不断比较目标状态与实际状态，再根据误差的当前大小、历史累积和变化趋势修正控制输入。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-08.png" alt="PID 反馈控制闭环"></p>
+<p>PID 不要求动力学模型完全准确，因此结构简单、计算速度快。在机器人中，它常用于每个关节的位置或速度控制。以关节力矩控制为例，设目标关节配置为 $\mathbf q_d$，当前配置为 $\mathbf q$，误差为：</p>
+<span>$$\displaystyle
+\mathbf{e}=\mathbf{q}_{d}-\mathbf{q}$$</span><!-- Has MathJax -->
+<p>纯 PID 反馈由三部分组成。实际系统还可以加入动力学前馈：</p>
+<span>$$\displaystyle
+\boldsymbol{\tau}_{\mathrm{cmd}}=\boldsymbol{\tau}_{\mathrm{ff}}+\mathbf{K}_{p}\mathbf{e}+\mathbf{K}_{i}\int\mathbf{e}\,\mathrm{d}t+\mathbf{K}_{d}\dot{\mathbf{e}}$$</span><!-- Has MathJax -->
+<p>其中：</p>
+<ul>
+<li><strong>P 项</strong>根据当前误差纠偏，误差越大，修正作用越强；</li>
+<li><strong>I 项</strong>累积历史误差，用于消除长期存在的稳定偏差；</li>
+<li><strong>D 项</strong>根据误差变化趋势抑制过冲和振荡；</li>
+<li><strong>前馈项</strong>不属于 PID 本身，用于提前补偿重力、惯性等已知影响。</li>
+</ul>
+<p>机器人中常见的是“重力或动力学前馈 + PD 反馈”。积分项使用不当会在执行器饱和时持续累积，因此通常需要控制积分范围，并加入积分抗饱和机制（Anti-windup）。</p>
+<h3 id="阻抗控制：让机器人柔顺接触"><a href="#阻抗控制：让机器人柔顺接触" class="headerlink" title="阻抗控制：让机器人柔顺接触"></a>阻抗控制：让机器人柔顺接触</h3><p>位置控制强调末端必须到达哪里，但在抓取、装配和擦拭等接触任务中，位置稍有偏差就可能产生很大的碰撞力。阻抗控制不要求机器人严格停在某个位置，而是规定末端受到外力后应该怎样移动。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-09.png" alt="阻抗控制中的虚拟惯性阻尼与刚度"></p>
+<p>对于简化的平移任务，可以将末端设计成一个虚拟的质量、弹簧和阻尼系统：</p>
+<span>$$\displaystyle
+\mathbf{M}_{x}\Delta\ddot{\mathbf{x}}+\mathbf{D}_{x}\Delta\dot{\mathbf{x}}+\mathbf{K}_{x}\Delta\mathbf{x}=\mathbf{F}_{\mathrm{ext}}$$</span><!-- Has MathJax -->
+<p>其中，$\Delta\mathbf x=\mathbf x-\mathbf x_d$，$\mathbf M_x$、$\mathbf D_x$ 和 $\mathbf K_x$ 分别表示期望惯性、阻尼和刚度：</p>
+<ul>
+<li>刚度越高，机器人越接近精确位置控制；</li>
+<li>刚度越低，机器人越容易顺应外部环境；</li>
+<li>阻尼用于减少接触后的振荡；</li>
+<li>期望质量决定机器人对外力的加速响应。</li>
+</ul>
+<p>控制器计算出期望的末端 Wrench 后，可以通过 Jacobian 转换为关节力矩：</p>
+<span>$$\displaystyle
+\boldsymbol{\tau}_{\mathrm{cmd}}\approx\mathbf{J}^{\mathsf{T}}\mathbf{F}_{\mathrm{cmd}}+\boldsymbol{\tau}_{\mathrm{comp}}$$</span><!-- Has MathJax -->
+<p>完整的六维末端位姿实现需要使用 SE(3) 位姿误差，不能直接对欧拉角做减法。</p>
+<h3 id="MPC：预测未来再选择动作"><a href="#MPC：预测未来再选择动作" class="headerlink" title="MPC：预测未来再选择动作"></a>MPC：预测未来再选择动作</h3><p>MPC 是 <strong>Model Predictive Control</strong> 的缩写，即模型预测控制。它在每个控制周期利用动力学模型预测未来 $N$ 步，并通过在线优化选择一组控制输入。与 PID 主要根据误差直接纠偏不同，MPC 会同时考虑未来运动、控制代价和系统约束。</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-10.png" alt="MPC 的预测优化执行与滚动更新"></p>
+<p>其工作过程可以概括如下（也如上图所示）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">读取当前状态</span><br><span class="line">    -&gt; 预测未来运动</span><br><span class="line">    -&gt; 优化控制序列</span><br><span class="line">    -&gt; 执行第一个动作</span><br><span class="line">    -&gt; 读取新状态并重新优化</span><br></pre></td></tr></table></figure>
+<p>机器人不会一次执行完整的控制序列，而是只执行第一步，再根据最新状态重新预测。这种不断向前移动预测窗口的方式称为<strong>滚动时域控制（Receding Horizon Control）</strong>，也使 MPC 成为一种反馈控制方法，而不是一次性的轨迹规划。</p>
+<p>优化过程中可以同时考虑目标误差、能耗、关节限位、速度与力矩限制以及避障要求。MPC 的优势是能够预测未来并显式处理约束，代价是需要频繁求解优化问题，对模型精度和计算速度要求较高。</p>
+<h2 id="总结：从目标到真实动作"><a href="#总结：从目标到真实动作" class="headerlink" title="总结：从目标到真实动作"></a>总结：从目标到真实动作</h2><p>从目标位姿到机器人执行，可以归纳为三个层次：</p>
+<ol>
+<li><strong>运动学</strong>解决几何关系：FK 从关节配置计算末端位姿，IK 根据目标位姿反求关节配置，Jacobian 描述关节与末端之间的局部运动关系。</li>
+<li><strong>动力学</strong>解决力的关系：根据期望运动、机器人惯性、重力和外部接触，计算执行器需要提供的力矩。</li>
+<li><strong>控制</strong>形成反馈闭环：PID 根据误差纠偏，阻抗控制调节接触行为，MPC 通过预测和优化处理约束。</li>
+</ol>
+<p>整体链路可以概括如下图所示：</p>
+<p><img src="/images/embodied-ai/embodied-ai-kinematics-dynamics-control-11.png" alt="从目标位姿到身体运动的反馈闭环"></p>
+<p>VLA 或策略模型可以决定机器人应该抓哪里、怎样移动，但这些动作仍要满足身体结构、动力学、执行器和安全约束。只有经过运动学、动力学与控制闭环，模型生成的动作才能稳定地转化为真实世界中的行为。</p>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[具身智能（二）：机器人如何描述身体与世界]]></title>
       <url>http://matt33.com/2026/07/29/embodied-intelligence-body-spatial-math/</url>
       <content type="html"><![CDATA[<p>上一篇文章从 Observation、State 与 Action 出发，建立了具身智能的整体框架：机器人通过执行闭环完成当前任务，再通过学习闭环将交互经验转化为新的能力。但当这些抽象概念落到真实机器人上，首先要解决一个更基础的问题：如何把机器人的身体、周围物体以及二者之间的空间关系，表示成可以计算和执行的数据。</p>
