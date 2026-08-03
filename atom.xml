@@ -5,7 +5,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="http://matt33.com/"/>
-  <updated>2026-07-30T16:28:45.000Z</updated>
+  <updated>2026-08-03T16:27:48.000Z</updated>
   <id>http://matt33.com/</id>
   
   <author>
@@ -14,6 +14,135 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>具身智能（四）：从传感器到世界状态</title>
+    <link href="http://matt33.com/2026/08/04/embodied-intelligence-perception-state-estimation/"/>
+    <id>http://matt33.com/2026/08/04/embodied-intelligence-perception-state-estimation/</id>
+    <published>2026-08-03T16:27:48.000Z</published>
+    <updated>2026-08-03T16:27:48.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>上一篇文章介绍了机器人如何通过运动学、动力学与控制，将目标位姿转化为身体运动。但在行动之前，机器人首先要知道自己在哪里、周围有什么，以及环境正在怎样变化。相机、深度传感器、IMU 和编码器提供的只是带有噪声的原始观测，还不能直接成为规划与控制所需的世界状态。</p>
+<p>本文沿着“传感器观测到世界状态”的链路，介绍相机模型与标定、RGB-D 与点云、物体位姿估计、滤波融合和 SLAM 的基本原理，理解机器人如何从离散的传感器信号中恢复空间关系，并形成连续、可信的状态估计。</p>
+<a id="more"></a>
+<h2 id="观测为什么不等于状态"><a href="#观测为什么不等于状态" class="headerlink" title="观测为什么不等于状态"></a>观测为什么不等于状态</h2><p>传感器只能测量物理世界的某个侧面。<strong>RGB 相机</strong>通过红、绿、蓝三个通道记录可见光，生成二维彩色图像；<strong>深度相机</strong>通过双目、结构光或飞行时间等方式测量物体表面距离，生成深度图；<strong>IMU</strong>通常由陀螺仪和加速度计组成，直接测量角速度与比力；<strong>编码器</strong>安装在电机或关节上，用于测量转角或线性位移。</p>
+<p>这些传感器读数共同构成 <strong>Observation（观测）</strong>，但它们只是对机器人与环境的局部测量。机器人真正决策时需要的 <strong>State（状态）</strong>，还要通过标定、坐标变换和状态估计从观测中推断出来。</p>
+<p>状态并不是对真实世界的完整复刻，而是机器人根据任务需要，从观测中提取和估计出的关键信息。例如：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>原始观测</th>
+<th>任务需要的状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>机械臂抓取</td>
+<td>RGB-D 图像、关节角、夹爪读数</td>
+<td>杯子六维位姿、末端位姿、抓取是否稳定</td>
+</tr>
+<tr>
+<td>移动机器人导航</td>
+<td>相机、激光雷达、IMU、轮速</td>
+<td>机器人位姿、速度、可通行区域和障碍物</td>
+</tr>
+<tr>
+<td>人形机器人行走</td>
+<td>编码器、IMU、足底力传感器</td>
+<td>基座姿态、质心运动、双脚接触状态</td>
+</tr>
+</tbody>
+</table>
+<p>从观测到状态通常需要经过一条连续处理链：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">传感器采样</span><br><span class="line">    -&gt; 时间同步与标定</span><br><span class="line">    -&gt; 图像和深度预处理</span><br><span class="line">    -&gt; 几何与语义感知</span><br><span class="line">    -&gt; 数据关联与目标跟踪</span><br><span class="line">    -&gt; 滤波融合或 SLAM</span><br><span class="line">    -&gt; 带时间戳和不确定性的任务状态</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-01.png" alt="从传感器观测到世界状态"></p>
+<p>其中，<strong>感知</strong>主要从观测中提取物体、深度、特征和空间关系；<strong>状态估计</strong>进一步结合历史观测与运动模型，推断当前最可能的状态。二者没有绝对边界，但可以用一句话区分：感知回答“这一帧看到了什么”，状态估计回答“综合过去和现在，世界目前最可能是什么样”。</p>
+<p>现代 VLA 可以直接从图像生成动作，但这并不意味着状态消失了。状态可能由独立模块显式维护，也可能编码在模型的隐表示和观察历史中。只要机器人需要处理遮挡、延迟、接触和连续运动，就必须以某种形式记住环境如何变化。</p>
+<h2 id="相机如何获得空间含义"><a href="#相机如何获得空间含义" class="headerlink" title="相机如何获得空间含义"></a>相机如何获得空间含义</h2><p>相机是具身系统最常见的外部传感器。它能提供丰富的颜色、纹理和语义信息，但图像本质上是三维世界在二维平面上的投影。要根据像素恢复空间关系，首先要理解相机模型，并通过标定确定模型参数。</p>
+<h3 id="针孔相机模型"><a href="#针孔相机模型" class="headerlink" title="针孔相机模型"></a>针孔相机模型</h3><p>针孔相机模型用一个理想的小孔近似成像过程。设三维点在相机坐标系中的坐标为 $(X_C,Y_C,Z_C)$，投影后的像素为 $(u,v)$，则有：</p>
+<span>$$\displaystyle
+Z_C\begin{bmatrix}u\\v\\1\end{bmatrix}=\mathbf K\begin{bmatrix}X_C\\Y_C\\Z_C\end{bmatrix},\qquad\mathbf K=\begin{bmatrix}f_x&amp;0&amp;c_x\\0&amp;f_y&amp;c_y\\0&amp;0&amp;1\end{bmatrix}$$</span><!-- Has MathJax -->
+<p>展开后可以得到：</p>
+<span>$$\displaystyle
+u=f_x\frac{X_C}{Z_C}+c_x,\qquad v=f_y\frac{Y_C}{Z_C}+c_y$$</span><!-- Has MathJax -->
+<p>$f_x$ 和 $f_y$ 是以像素为单位的焦距，$(c_x,c_y)$ 是主点，通常接近图像中心。机器人领域常用的相机光学坐标系约定是：$x$ 轴指向图像右侧，$y$ 轴指向图像下方，$z$ 轴沿光轴向前。</p>
+<p>这个模型揭示了两个关键事实。第一，相机记录的是方向而不是完整三维位置：同一条视线上的多个点可能投影到同一个像素。第二，物体越远，投影尺寸越小，因此单张普通 RGB 图像通常无法仅靠几何关系确定绝对深度。</p>
+<h3 id="标定确定相机与机器人的关系"><a href="#标定确定相机与机器人的关系" class="headerlink" title="标定确定相机与机器人的关系"></a>标定确定相机与机器人的关系</h3><p>真实镜头并不完全符合理想针孔模型，广角镜头尤其会出现径向畸变，镜头装配还会带来切向畸变。因此，相机标定通常需要估计三类参数：</p>
+<ul>
+<li><strong>内参</strong>：$f_x$、$f_y$、$c_x$、$c_y$ 等成像参数；</li>
+<li><strong>畸变参数</strong>：描述直线在图像边缘发生弯曲的程度；</li>
+<li><strong>外参</strong>：相机坐标系与机器人基座、末端或世界坐标系之间的刚体变换。</li>
+</ul>
+<p>常见内参标定方法会从多个角度拍摄尺寸已知的棋盘格或 ChArUco 标定板，建立标定板三维点与图像二维点的对应关系，再优化相机参数，使预测投影与实际检测点之间的<strong>重投影误差</strong>尽可能小。</p>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-02.png" alt="相机内参与外参标定"></p>
+<p>外参解决的是“相机安装在哪里”。固定在工作区上方的相机通常需要估计 ${}^{B}\mathbf T_C$，将相机观测转换到机器人基座坐标系；安装在机械臂腕部的相机则需要通过手眼标定估计 ${}^{E}\mathbf T_C$。相机移动后，世界位姿会变化，但相机与末端之间的安装关系通常保持不变。</p>
+<p>标定不仅是离线求出一组矩阵。图像分辨率、镜头焦距或安装位置改变后，原有参数可能失效；多相机、相机与 IMU 组合还需要校准传感器之间的时间偏移。空间外参正确但时间不同步，同样会让运动中的物体出现位置偏差。</p>
+<h2 id="RGB-D-与点云如何恢复三维结构"><a href="#RGB-D-与点云如何恢复三维结构" class="headerlink" title="RGB-D 与点云如何恢复三维结构"></a>RGB-D 与点云如何恢复三维结构</h2><p>普通 RGB 图像告诉机器人物体“看起来是什么”，深度图则为每个有效像素提供距离信息。将二者对齐后，就得到 RGB-D 观察：RGB 负责颜色与语义，Depth 负责空间距离。</p>
+<h3 id="从深度像素到三维点"><a href="#从深度像素到三维点" class="headerlink" title="从深度像素到三维点"></a>从深度像素到三维点</h3><p>深度可以由双目视差、结构光、主动双目或飞行时间等方式获得。不同方案的测量原理不同，但输出通常可以表示为深度图 $D(u,v)$。设像素 $(u,v)$ 的深度为 $Z=D(u,v)$，结合相机内参即可将它反投影到相机坐标系：</p>
+<span>$$\displaystyle
+X_C=\frac{(u-c_x)Z}{f_x},\qquad Y_C=\frac{(v-c_y)Z}{f_y},\qquad Z_C=Z$$</span><!-- Has MathJax -->
+<p>对所有有效深度像素执行这个计算，就能得到三维点集合。这里假设 $D(u,v)$ 表示点在相机 $z$ 轴方向上的坐标；如果传感器接口输出的是沿视线方向的量程，还需要先转换为轴向深度。比如：Open3D 的<a href="https://www.open3d.org/html/python_api/open3d.geometry.PointCloud.html" target="_blank" rel="external">RGB-D 点云接口</a>使用的也是这组反投影关系。</p>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-03.png" alt="RGB 深度图与三维点云"></p>
+<p>深度图并不天然可靠。透明、镜面和吸光材料可能导致深度缺失，物体边缘容易混入前后两个表面的测量，测量噪声通常还会随距离增大。RGB 与深度也可能来自两个不同光心，必须通过相机间外参完成配准，才能确保颜色像素与深度像素对应同一条空间射线。</p>
+<h3 id="点云如何进入机器人坐标系"><a href="#点云如何进入机器人坐标系" class="headerlink" title="点云如何进入机器人坐标系"></a>点云如何进入机器人坐标系</h3><p>点云是许多三维点的集合，每个点至少包含 $(x,y,z)$，还可以附带颜色、法向量和置信度。它比深度图更直接地表达空间几何，但本身通常没有明确的表面连接关系，也不会自动告诉机器人哪些点属于杯子、桌面或障碍物。</p>
+<p>由深度相机生成的点云首先位于相机坐标系。若标定已知相机到世界坐标系的变换，则每个点可以通过齐次变换进入统一参考系：</p>
+<span>$$\displaystyle
+{}^{W}\tilde{\mathbf p} = {}^{W}\mathbf T_C {}^{C}\tilde{\mathbf p}, \qquad \tilde{\mathbf p}=[x,y,z,1]^\mathsf T$$</span><!-- Has MathJax -->
+<p>当相机装在机械臂腕部时，${}^{W}\mathbf T_C$ 会随关节运动变化，需要结合正向运动学和手眼标定实时计算。只有把不同时刻、不同传感器的点转换到一致坐标系，机器人才能比较它们是否属于同一个物体或表面。</p>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-04.png" alt="点云从相机坐标系进入世界坐标系"></p>
+<p>实际处理还常包含体素降采样、离群点去除、法向估计、平面分割和聚类。它们的目标不是让点云“更漂亮”，而是降低噪声与计算量，并提取规划真正需要的结构，例如桌面平面、可抓取物体和可通行区域。</p>
+<h2 id="从单帧感知到连续世界状态"><a href="#从单帧感知到连续世界状态" class="headerlink" title="从单帧感知到连续世界状态"></a>从单帧感知到连续世界状态</h2><p>单帧图像或点云只能描述某一瞬间。机器人运动、物体被遮挡或传感器短暂失效后，系统还需要维持连续估计。本章把位姿估计、滤波融合与 SLAM 看成三个逐步扩大的问题：先确定物体相对相机的位置，再融合时间上的多次观测，最后同时估计机器人轨迹与环境地图。</p>
+<h3 id="位姿估计确定物体在哪里"><a href="#位姿估计确定物体在哪里" class="headerlink" title="位姿估计确定物体在哪里"></a>位姿估计确定物体在哪里</h3><p>检测框只能说明物体位于图像中的哪个区域；机器人抓取通常还需要物体的六维位姿，也就是三维位置和三维方向。设物体坐标系为 $O$、相机坐标系为 $C$，位姿估计的目标是求出物体相对于相机的变换 ${}^{C}\mathbf T_O$。</p>
+<p>常见方法可以分为两类：</p>
+<ul>
+<li><strong>PnP（Perspective-n-Point）</strong>：根据物体模型上的若干三维点，以及这些点在图像中的二维像素位置，结合相机内参，求解物体相对于相机的旋转和平移。简单来说，PnP 是将“模型上的三维关键点”与“图像中的二维关键点”对齐，常与 RANSAC 配合排除错误匹配。</li>
+<li><strong>ICP（Iterative Closest Point）</strong>：用于对齐两组具有重叠区域的三维点云。它反复寻找两组点云中的对应点，再计算使对应点距离最小的旋转和平移，直到结果收敛。ICP 依赖较好的初始位姿和足够的点云重叠，容易受到遮挡、噪声、重复结构和局部最优的影响。</li>
+</ul>
+<p>可以简单理解为：<strong>PnP 解决三维模型与二维图像的对齐，ICP 解决两组三维点云的对齐。</strong></p>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-05.png" alt="PnP 与 ICP 位姿估计"></p>
+<p>学习模型可以直接预测关键点、对应关系或位姿分布，但几何约束仍然存在：输出必须明确参考坐标系、长度单位和旋转表示。对于圆杯、瓶子等对称物体，多个方向可能在视觉和任务上等价，因此评测也不能简单使用普通角度差。</p>
+<h3 id="滤波与融合让状态保持连续"><a href="#滤波与融合让状态保持连续" class="headerlink" title="滤波与融合让状态保持连续"></a>滤波与融合让状态保持连续</h3><p>同一个静止杯子的位姿在相邻帧中也可能轻微跳动。原因包括像素噪声、深度误差、遮挡和模型输出波动。状态估计不会简单平均所有测量，而是结合两类信息：</p>
+<ol>
+<li><strong>运动模型</strong>根据上一时刻的状态和控制输入，预测当前状态；</li>
+<li><strong>观测模型</strong>判断当前传感器测量与预测状态是否一致，并修正预测。</li>
+</ol>
+<p>这一过程可以概括为“预测再更新”。若用 $\mathbf{x}<em>{t}$ 表示状态、$\mathbf{z}</em>{t}$ 表示观测，则贝叶斯滤波的核心关系是：</p>
+<span>$$\displaystyle
+\begin{aligned}\overline{\mathrm{bel}}(\mathbf{x}_{t})&amp;=\int p(\mathbf{x}_{t}\mid\mathbf{x}_{t-1},\mathbf{u}_{t-1})\,\mathrm{bel}(\mathbf{x}_{t-1})\,\mathrm{d}\mathbf{x}_{t-1}\\\mathrm{bel}(\mathbf{x}_{t})&amp;=\eta\,p(\mathbf{z}_{t}\mid\mathbf{x}_{t})\,\overline{\mathrm{bel}}(\mathbf{x}_{t})\end{aligned}$$</span><!-- Has MathJax -->
+<p>直观地说，系统先根据运动规律给出一个带不确定性的预测，再根据新测量修正预测。测量稳定时，估计会更多相信传感器；测量噪声较大或暂时丢失时，估计会更多依赖运动模型，同时让不确定性逐渐增大。</p>
+<p>卡尔曼滤波适用于线性模型和高斯噪声；扩展卡尔曼滤波（EKF）通过在当前估计附近线性化，用于处理常见的非线性机器人模型；当分布明显非高斯或存在多个可能状态时，还可以使用粒子滤波等方法。它们的共同重点不是输出一条绝对正确的轨迹，而是同时维护状态估计和不确定性。</p>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-06.png" alt="状态预测观测更新与不确定性"></p>
+<p>多传感器融合利用的是不同传感器的互补性。IMU 频率高，直接测量角速度和比力，适合捕捉快速运动，但积分会产生漂移；相机、激光雷达和轮速可以提供环境或运动约束，却可能频率较低或受场景影响。融合之前必须统一坐标系、时间戳、单位和噪声模型，否则增加传感器反而可能让结果更差。</p>
+<h3 id="SLAM-同时估计位置与地图"><a href="#SLAM-同时估计位置与地图" class="headerlink" title="SLAM 同时估计位置与地图"></a>SLAM 同时估计位置与地图</h3><p>移动机器人进入未知环境时，会遇到一个相互依赖的问题：要把传感器数据放进地图，必须知道机器人在哪里；要根据地图定位机器人，又必须先有一张地图。<strong>SLAM（Simultaneous Localization and Mapping）</strong>就是在运动过程中同时估计机器人轨迹与环境地图。一个典型 SLAM 系统可以分为三个部分：</p>
+<ul>
+<li><strong>前端</strong>：从连续图像、点云或激光扫描中提取特征，完成数据关联，并估计相邻时刻的局部运动；</li>
+<li><strong>后端</strong>：将机器人位姿、地图路标和观测关系组织成优化问题，获得整体更一致的轨迹与地图；</li>
+<li><strong>回环检测</strong>：识别机器人重新到达曾经访问过的位置，加入跨越较长时间的约束，修正长期累积漂移。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-07.png" alt="SLAM 局部建图与回环校正"></p>
+<p>主要利用近期观测或局部地图连续估计增量运动，通常称为视觉里程计或激光里程计。它能够提供局部连续轨迹，但缺少全局约束时误差仍会逐渐累积。SLAM 通过地图约束、全局优化和回环检测提高长期一致性。Google Cartographer 的<a href="https://google-cartographer-ros.readthedocs.io/en/latest/algo_walkthrough.html" target="_blank" rel="external">算法说明</a>将系统区分为构建局部子图的 Local SLAM 和处理回环约束的 Global SLAM；<a href="https://arxiv.org/abs/2007.11898" target="_blank" rel="external">ORB-SLAM3</a>则展示了单目、双目、RGB-D 与视觉惯性等多种视觉 SLAM 配置。</p>
+<p>地图也不是唯一形式。导航系统可能使用二维占据栅格，视觉 SLAM 常维护稀疏特征点，三维重建可能使用稠密点云、体素或表面模型，具身操作还需要在几何地图上叠加物体类别、位姿和可供性。SLAM 通常更擅长估计静态环境与机器人自身位姿，运动的人和物体仍需单独检测、跟踪并写入动态世界状态。</p>
+<h2 id="总结：从观测到世界状态"><a href="#总结：从观测到世界状态" class="headerlink" title="总结：从观测到世界状态"></a>总结：从观测到世界状态</h2><p>本文沿着“传感器观测到世界状态”的主线，介绍了机器人如何为原始信号赋予空间和时间含义：相机模型建立三维空间与二维像素的投影关系，标定连接不同传感器和机器人坐标系，RGB-D 与点云恢复环境几何，位姿估计确定物体的位置与方向，滤波和跟踪维持状态的时间连续性，SLAM 则为移动机器人提供长期一致的自身位姿与环境地图。</p>
+<p>以“抓取杯子”为例，完整的状态生成过程可以概括为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">RGB-D 观测</span><br><span class="line">    -&gt; 标定与深度反投影</span><br><span class="line">    -&gt; 杯子分割与点云提取</span><br><span class="line">    -&gt; 估计相机坐标系中的杯子位姿</span><br><span class="line">    -&gt; 转换到机器人或世界坐标系</span><br><span class="line">    -&gt; 结合历史观测进行滤波与跟踪</span><br><span class="line">    -&gt; 输出结构化杯子状态</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-perception-state-estimation-08.png" alt="杯子状态的完整感知链路"></p>
+<p>从传感器观测到世界状态，机器人需要通过标定、坐标变换、位姿估计、滤波和 SLAM，将离散且带噪声的信号转化为包含参考坐标系、时间戳和不确定性的连续状态。VLA 可以将部分感知与状态估计能力吸收到模型内部，但无法绕过空间几何、时间同步和物理约束；机器人只有持续判断自己在哪里、目标在哪里以及环境如何变化，才能安全地规划下一步动作。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;上一篇文章介绍了机器人如何通过运动学、动力学与控制，将目标位姿转化为身体运动。但在行动之前，机器人首先要知道自己在哪里、周围有什么，以及环境正在怎样变化。相机、深度传感器、IMU 和编码器提供的只是带有噪声的原始观测，还不能直接成为规划与控制所需的世界状态。&lt;/p&gt;
+&lt;p&gt;本文沿着“传感器观测到世界状态”的链路，介绍相机模型与标定、RGB-D 与点云、物体位姿估计、滤波融合和 SLAM 的基本原理，理解机器人如何从离散的传感器信号中恢复空间关系，并形成连续、可信的状态估计。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="具身智能" scheme="http://matt33.com/tags/%E5%85%B7%E8%BA%AB%E6%99%BA%E8%83%BD/"/>
+    
+  </entry>
   
   <entry>
     <title>具身智能（三）：从目标位姿到关节力矩</title>
@@ -8157,201 +8286,6 @@ f(\mathbf{q}^{\ast})=\mathbf{T}_{d}$$</span><!-- Has MathJax -->
     
       &lt;p&gt;前面几篇我们已经把 LLM 的几条主线串起来了：从 AI 到 LLM，理解大模型为什么会出现；从数学、算法、Transformer 到 Dense/MoE，理解模型结构和学习机制；再到预训练、后训练、分布式训练、推理服务和长上下文，理解一套大模型系统如何被训练出来、部署出去。到了这里，还有一个更底层的问题需要单独展开：模型训练时，究竟吃了什么？&lt;/p&gt;
 &lt;p&gt;很多人讨论大模型时，容易把注意力放在参数量、GPU 数量、训练框架、Attention 结构、MoE 路由和推理加速上。但如果把大模型训练看成一条生产线，数据才是最早进入系统的原材料。没有好的数据，再大的模型也只是在更大规模地学习噪声；没有合理的数据配比，模型就会偏科；没有去重和去污染，模型可能只是记住了训练集和评测答案；没有隐私、安全、版权和版本治理，模型能力越强，风险也越难控制。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (十一)：长上下文：大模型如何读懂更长的信息</title>
-    <link href="http://matt33.com/2026/07/01/llm-long-context/"/>
-    <id>http://matt33.com/2026/07/01/llm-long-context/</id>
-    <published>2026-07-01T12:10:00.000Z</published>
-    <updated>2026-07-01T12:10:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>过去我们使用大模型时，常常会遇到一个很直观的限制：输入太长，模型放不下。一篇几十页的论文、一份完整的技术文档、一个代码仓库、一次持续很久的多轮对话，都可能超过模型能够处理的上下文窗口。</p>
-<p>随着模型上下文长度从早期常见的 4K token，扩展到今天的 1M token 级别（例如 Gemini 1.5 Pro，以及后续部分 Claude / GPT / Gemini 系列模型），LLM 的使用方式也开始发生变化。它不再只是回答一个短问题，而是可以阅读完整资料、分析复杂代码、理解长期对话，甚至支撑 Agent 执行长程任务。</p>
-<a id="more"></a>
-<p>但长上下文并不只是“把窗口调大”。上下文越长，Attention 计算越重，KV Cache 越占显存，模型也越容易忽略中间信息，或者被大量无关内容干扰。真正的长上下文能力，不只是能放下更多 token，而是能在更长、更复杂的信息中找到关键内容，建立远距离关系，并以可承受的成本完成推理。</p>
-<h2 id="长上下文为什么重要"><a href="#长上下文为什么重要" class="headerlink" title="长上下文为什么重要"></a>长上下文为什么重要</h2><p>长上下文的重要性，不只是“能输入更多内容”，而是它改变了 LLM 能处理的问题类型。在短上下文阶段，模型更像一个问答工具：用户提出一个问题，模型基于当前 prompt 给出回答。它适合解释概念、生成短文本、写一段代码，但很难真正处理完整资料、长期对话和复杂任务过程。当上下文窗口变长后，模型可以看到更完整的信息，应用形态也随之变化：从“基于一句话回答问题”，走向“基于一组资料完成任务”。</p>
-<p><img src="/images/llm/llm-long-context-01.png" alt="长上下文让模型从短问答走向复杂任务处理"></p>
-<p>典型变化包括：</p>
-<ol>
-<li><strong>长文档问答：</strong>短上下文通常只能放摘要或片段，而长上下文可以让模型阅读完整论文、合同、报告，再基于完整材料回答问题。</li>
-<li><strong>代码仓库分析：</strong>短上下文往往只能看单个文件，而长上下文可以把多个文件、模块关系、调用链和配置一起放进来，帮助模型理解工程结构。</li>
-<li><strong>多轮对话记忆：</strong>短上下文容易丢失早期历史，而长上下文可以保留更长的用户意图、约束条件和任务状态，让对话更连续。</li>
-<li><strong>Agent 任务执行：</strong>Agent 在执行任务时会产生计划、工具调用结果、中间状态和错误修正记录。长上下文可以帮助模型维持完整任务轨迹。</li>
-<li><strong>多模态信息处理：</strong>图像、音频、视频都会被转换成大量 token。长上下文让模型有机会处理更完整的信息流，而不是只看局部片段。</li>
-</ol>
-<p>从模型角度看，语言模型的输入可以简化为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">context = [token_1, token_2, ..., token_n]</span><br><span class="line"></span><br><span class="line">model(context) -&gt; P(next token | context)</span><br></pre></td></tr></table></figure>
-<p>这里的 <code>context</code> 就是模型当前能看到的上下文，<code>n</code> 表示上下文中的 token 数量。</p>
-<p>当 <code>n</code> 只有几千时，模型主要处理的是一个问题、一段材料、一次短任务；当 <code>n</code> 扩展到几十万甚至百万级时，模型面对的就不再是“短文本生成”，而是完整资料理解和复杂信息组织。</p>
-<p>但这也带来一个新的要求：模型不仅要“看见”更多 token，还要知道哪些 token 重要，哪些可以忽略，哪些信息需要跨很远的位置建立关系。</p>
-<p>所以，长上下文不是一个单独功能，而是模型结构、训练数据、推理系统和评估方式共同升级后的结果。它让 LLM 从“会回答问题”，进一步走向“能处理复杂信息任务”。</p>
-<h2 id="长上下文难在哪里"><a href="#长上下文难在哪里" class="headerlink" title="长上下文难在哪里"></a>长上下文难在哪里</h2><p>长上下文真正困难的地方，不是把 <code>max context length</code> 这个参数调大，而是当序列变长后，模型和系统都会同时承受更大的压力。可以把它拆成四类问题，如下图所示：</p>
-<p><img src="/images/llm/llm-long-context-02.png" alt="长上下文的核心挑战"></p>
-<h3 id="Attention-计算成本会快速上升"><a href="#Attention-计算成本会快速上升" class="headerlink" title="Attention 计算成本会快速上升"></a>Attention 计算成本会快速上升</h3><p>Transformer 的 Self-Attention 会让序列中的 token 彼此建立关系。对于长度为 <code>n</code> 的序列，标准 Attention 需要计算一个近似 <code>n × n</code> 的注意力矩阵，所以复杂度大致是：<strong><code>Attention 复杂度 ≈ O(n²)</code>。</strong>这意味着上下文长度不是线性变贵，而是会快速放大计算压力。举个直观例子（这里是举例说明，实际模型可能通过稀疏注意力、分块、滑动窗口等方式避免完整计算所有关系）：</p>
-<ol>
-<li><strong>4K 上下文：</strong>Attention 关系数量大约是 <code>4K × 4K</code>，约 1.6 千万。</li>
-<li><strong>32K 上下文：</strong>Attention 关系数量大约是 <code>32K × 32K</code>，约 10 亿。</li>
-<li><strong>128K 上下文</strong>：Attention 关系数量大约是 <code>128K × 128K</code>，约 160 亿。</li>
-<li><strong>1M 上下文</strong>：Attention 关系数量大约达到万亿级别。</li>
-</ol>
-<p>所以，当上下文长度扩大 10 倍时，Attention 计算可能接近扩大 100 倍。FlashAttention 可以显著减少 IO 开销和显存访问成本，让 Attention 算得更快、更省，但它并不会从理论上消除标准全量 Attention 的二次复杂度。</p>
-<h3 id="KV-Cache-会成为显存瓶颈"><a href="#KV-Cache-会成为显存瓶颈" class="headerlink" title="KV Cache 会成为显存瓶颈"></a>KV Cache 会成为显存瓶颈</h3><p>推理阶段还有一个很关键的成本：<strong>KV Cache</strong>。模型在生成新 token 时，需要参考历史上下文。为了避免每一步都重新计算历史 token 的 Key 和 Value，推理系统会把它们缓存起来，后续 decode 时直接复用。</p>
-<p><img src="/images/llm/llm-long-context-03.png" alt="KV Cache"></p>
-<p>KV Cache 可以粗略估算为：<strong><code>KV Cache ≈ 2 × layers × tokens × kv_heads × head_dim × bytes × batch_size</code></strong>。其中：</p>
-<ol>
-<li><code>2</code> 表示 Key 和 Value；</li>
-<li><code>layers</code> 表示模型层数；</li>
-<li><code>tokens</code> 表示上下文长度；</li>
-<li><code>kv_heads</code> 和 <code>head_dim</code> 表示 KV 的注意力头数量和维度；</li>
-<li><code>bytes</code> 表示每个数值占用的字节数；</li>
-<li><code>batch_size</code> 表示并发请求数量。</li>
-</ol>
-<p>这个公式说明：上下文越长，KV Cache 越大；并发越高，KV Cache 还会继续叠加。对于长上下文推理，瓶颈经常不是模型权重，而是缓存历史上下文所需的显存。</p>
-<h3 id="位置编码会遇到外推问题"><a href="#位置编码会遇到外推问题" class="headerlink" title="位置编码会遇到外推问题"></a>位置编码会遇到外推问题</h3><p>模型不只要看到 token，还要知道 token 的位置。否则，下面两句话在模型眼里就很难区分：</p>
-<ol>
-<li>张三打了李四；</li>
-<li>李四打了张三；</li>
-</ol>
-<p>现代 LLM 通常会使用<strong>位置编码</strong>来表达顺序关系，其中 <strong>RoPE</strong> 是非常常见的一种方案。问题在于：模型训练时见过的上下文长度通常是有限的。如果模型主要在 4K 或 8K 长度上训练，但推理时直接扩展到 128K，模型就会遇到位置外推问题：</p>
-<ol>
-<li>训练时只见过较短位置；</li>
-<li>推理时需要理解远超训练范围的位置。</li>
-</ol>
-<p>如果处理不好，模型可能在长距离关系上变差。例如：</p>
-<ol>
-<li>对靠后的内容理解变弱；</li>
-<li>对远距离引用关系判断不稳；</li>
-<li>前半段回答正常，后半段质量下降；</li>
-<li>长文档中的章节顺序、依赖关系出现混乱。</li>
-</ol>
-<p>所以，长上下文不仅是“放得下”，还要求模型在很远的位置上仍然保持稳定的位置感。</p>
-<h3 id="上下文利用率并不会自动提升"><a href="#上下文利用率并不会自动提升" class="headerlink" title="上下文利用率并不会自动提升"></a>上下文利用率并不会自动提升</h3><p>这是长上下文里最容易被忽略的问题：<strong>窗口变大，不代表模型真的会用好全部内容。</strong>即使一个模型支持 100K、1M token，它也可能没有稳定利用这些信息。常见问题包括：</p>
-<ol>
-<li><strong>中间信息被忽略</strong>：模型更关注开头和结尾，对中间内容不敏感；</li>
-<li><strong>关键信息找不到</strong>：答案明明在上下文里，但模型没有定位到；</li>
-<li><strong>相似信息互相干扰</strong>：长文档里存在多个相近概念或重复段落，模型可能混淆来源；</li>
-<li><strong>局部正确，全局错误</strong>：模型能理解某个片段，但无法把多个片段组合成正确结论；</li>
-<li><strong>约束记忆不稳定</strong>：前文已经给出的格式要求、业务规则或用户偏好，在后文生成时被遗忘。</li>
-</ol>
-<p>因此，长上下文能力真正要解决的是一条完整链路：<strong><code>放得下 -&gt; 找得到 -&gt; 看得全 -&gt; 推得对 -&gt; 答得稳</code>。</strong>其中“放得下”只是第一步。真正困难的是在长序列里保持稳定的信息检索、关系建模和推理能力。</p>
-<h2 id="长上下文的核心技术方案"><a href="#长上下文的核心技术方案" class="headerlink" title="长上下文的核心技术方案"></a>长上下文的核心技术方案</h2><p>长上下文不是一个单点优化，而是一组技术组合。它既涉及模型结构，也涉及训练数据、推理系统和应用架构。如果简单拆开看，长上下文主要依赖五类能力：</p>
-<p><img src="/images/llm/llm-long-context-04.png" alt="长上下文"></p>
-<h3 id="位置编码扩展：让模型理解更远的位置"><a href="#位置编码扩展：让模型理解更远的位置" class="headerlink" title="位置编码扩展：让模型理解更远的位置"></a>位置编码扩展：让模型理解更远的位置</h3><p>模型不仅要看到 token，还要知道 token 在哪里。位置编码解决的就是顺序和距离问题。很多现代 LLM 使用 <strong>RoPE</strong>，也就是 Rotary Position Embedding。RoPE 能把位置信息融入 Attention 的 Query 和 Key 中，让模型更好地理解相对位置关系。</p>
-<p>但问题在于：模型训练时见过的上下文长度通常是有限的。如果模型主要在 4K、8K 或 32K 长度上训练，推理时直接拉到 128K、1M，模型不一定能自然适应。所以，长上下文首先需要解决位置外推问题：</p>
-<ol>
-<li>训练时见过较短位置；</li>
-<li>推理时需要理解更远位置；</li>
-</ol>
-<p>常见方法包括：</p>
-<ol>
-<li><strong>RoPE Scaling</strong>：通过调整 RoPE 的频率尺度，把原本较短的位置空间拉伸到更长范围，让模型能处理更长序列。</li>
-<li><strong>NTK-aware Scaling</strong>：在 RoPE Scaling 的基础上更精细地调整频率分布，让模型在长距离位置上更稳定。</li>
-<li><strong>YaRN</strong>：通过更平滑的位置插值和外推方式，降低上下文扩展后的质量退化。</li>
-<li><strong>ALiBi</strong>：不直接使用传统位置 embedding，而是在 Attention score 中加入和距离相关的 bias，让模型天然感知距离。</li>
-</ol>
-<p>这些方法的核心目标是一致的：<strong>让模型在更远的位置上仍然保持稳定的位置感</strong>。如果位置编码处理不好，模型即使能接收很长输入，也可能无法稳定理解远距离关系。</p>
-<h3 id="Attention-优化：降低长序列计算压力"><a href="#Attention-优化：降低长序列计算压力" class="headerlink" title="Attention 优化：降低长序列计算压力"></a>Attention 优化：降低长序列计算压力</h3><p>长上下文第二个核心问题，是 Attention 太贵。标准 Self-Attention 会计算 token 之间的两两关系，复杂度近似是 <code>O(n²)</code>。当上下文从 4K 扩展到 128K、1M 时，全量 Attention 的计算和显存压力都会急剧上升。因此，长上下文模型通常需要 Attention 层面的优化。常见方向包括：</p>
-<ol>
-<li><strong>FlashAttention</strong>：它不改变 Attention 的数学形式，而是优化计算过程中的显存读写和 IO 开销。可以理解为：同样做全量 Attention，但算得更快、更省显存。</li>
-<li><strong>Sparse Attention</strong>：不再让每个 token 都关注所有 token，而是只关注一部分重要位置，从而减少计算量。</li>
-<li><strong>Sliding Window Attention</strong>：每个 token 主要关注附近窗口内的 token，适合长文本、长对话这类局部连续性较强的任务。</li>
-<li><strong>Global + Local Attention</strong>：大部分 token 只做局部 Attention，少数特殊 token 负责全局信息汇聚。</li>
-<li><strong>Block Attention</strong>：把长序列切成多个 block，以块为单位组织计算，更适合工程实现和并行优化。</li>
-<li><strong>Context Parallel / Ring Attention</strong>：当序列太长，单卡放不下时，可以把序列维度拆到多张 GPU 上，让多卡共同处理一个长上下文。</li>
-</ol>
-<p>可以简单理解为：</p>
-<ol>
-<li>FlashAttention：全量 Attention 仍然做，但算得更高效；</li>
-<li>Sparse / Sliding Window：减少需要计算的 token 关系；</li>
-<li>Context Parallel：把超长序列拆到多卡上处理；</li>
-</ol>
-<p>这些方法解决的是同一个问题：<strong>让长上下文在计算上变得可承受</strong>。</p>
-<h3 id="KV-Cache-优化：让长上下文推理跑得起来"><a href="#KV-Cache-优化：让长上下文推理跑得起来" class="headerlink" title="KV Cache 优化：让长上下文推理跑得起来"></a>KV Cache 优化：让长上下文推理跑得起来</h3><p>训练阶段关注 Attention 计算，推理阶段还要重点关注 KV Cache。KV Cache 的问题是：上下文越长，缓存越大；并发越高，缓存还会叠加。常见优化方法包括：</p>
-<ol>
-<li><strong>GQA / MQA</strong>：标准 Multi-Head Attention 中，每个 Query head 通常都有自己的 Key / Value。GQA 和 MQA 会减少 KV head 数量，让多个 Query head 共享 Key / Value，从而显著降低 KV Cache（MHA：多个 Q head，各自配 K/V，GQA：多个 Q head 共享一组 K/V，MQA：所有 Q head 共享一组 K/V）。</li>
-<li><strong>PagedAttention</strong>：像操作系统分页一样管理 KV Cache。它不要求每个请求的缓存连续存放，而是拆成固定大小的 block，减少显存碎片。</li>
-<li><strong>KV Cache 量化</strong>：用 INT8、INT4 等低精度格式存储 KV，降低显存占用。代价是可能带来一定精度损失。</li>
-<li><strong>Prefix Cache</strong>：如果多个请求共享相同前缀，比如系统提示词、固定文档开头、多轮对话历史，就可以复用这部分 KV Cache，减少重复 prefill。</li>
-<li><strong>Chunked Prefill</strong>：把长 prompt 拆成多个 chunk 分块处理，避免超长 prefill 阻塞其他请求的 decode。</li>
-<li><strong>KV Cache 压缩</strong>：对历史 token 的 KV 进行筛选、聚合或压缩，保留更重要的信息，减少长期上下文缓存成本。</li>
-</ol>
-<p>KV Cache 优化的本质是：用更少显存、保存更长历史、服务更多并发、维持更低延迟。</p>
-<p>对于长上下文推理来说，KV Cache 往往比模型参数本身更容易成为瓶颈。</p>
-<h3 id="长上下文训练：让模型真的学会使用长信息"><a href="#长上下文训练：让模型真的学会使用长信息" class="headerlink" title="长上下文训练：让模型真的学会使用长信息"></a>长上下文训练：让模型真的学会使用长信息</h3><p>只在推理时把窗口拉大是不够的。模型还需要在训练阶段见过足够多的长序列，并且学会如何利用长序列中的信息。否则模型可能只是“能接收长输入”，但并不会稳定利用长输入。长上下文训练通常包括几类数据和任务：</p>
-<ol>
-<li><strong>长序列继续预训练</strong>：在基础模型上继续使用更长序列训练，让模型适应长上下文分布。</li>
-<li><strong>长文档数据</strong>：使用论文、书籍、技术文档、代码仓库、法律文本、财报等真实长文本材料。</li>
-<li><strong>长距离检索任务</strong>：把关键信息放在很远的位置，让模型学会在长上下文中定位目标内容。</li>
-<li><strong>Needle in a Haystack 任务</strong>：在大量无关文本中插入一条关键信息，训练模型从长上下文中找出“针”。</li>
-<li><strong>多跳推理数据</strong>：答案不能只依赖一个片段，而要综合多个远距离片段才能得到。</li>
-<li><strong>长上下文 SFT</strong>：使用长文档问答、长代码分析、多轮对话总结等指令数据，让模型学会按用户任务处理长材料。</li>
-</ol>
-<p>这里有一个关键点：<strong>长上下文训练不是把短文本简单拼起来</strong>。</p>
-<p>如果只是把很多短样本拼成一个长样本，模型可能学到的只是“上下文变长了”，但没有学会远距离依赖、干扰过滤和全局结构理解。真正有效的长上下文训练，要让模型面对这些问题：</p>
-<ol>
-<li>关键信息很远；</li>
-<li>干扰信息很多；</li>
-<li>多个片段互相关联；</li>
-<li>答案需要跨段落推理；</li>
-<li>输出需要保持全局一致。</li>
-</ol>
-<p>这样模型才会从“能放下长文本”，走向“能读懂长文本”。</p>
-<h3 id="长上下文与-RAG：不是替代，而是组合"><a href="#长上下文与-RAG：不是替代，而是组合" class="headerlink" title="长上下文与 RAG：不是替代，而是组合"></a>长上下文与 RAG：不是替代，而是组合</h3><p>长上下文出现后，一个常见误解是：既然模型能放下更多内容，是不是就不需要 RAG 了？答案是否定的。长上下文和 RAG 不是替代关系，而是互补关系。</p>
-<p><img src="/images/llm/llm-long-context-05.png" alt="长上下文流程与 RAG 的结合"></p>
-<p>长上下文的优势是信息更完整，模型可以在更大范围内综合理解。但它也有代价：成本高、噪声多、推理慢。RAG 的优势是<strong>可以先筛选信息，把最相关的资料交给模型</strong>。它能降低成本，也能让知识更新更灵活。但它依赖检索质量，如果召回不到关键材料，模型后面也很难答对。</p>
-<p>所以更合理的架构是：</p>
-<ol>
-<li>RAG 负责找资料、长上下文负责读资料；</li>
-<li>模型负责综合推理、引用系统负责提供证据。</li>
-</ol>
-<p>未来更常见的形态可能是：<strong><code>短期上下文 + 长上下文 + 外部记忆 + RAG + 工具调用</code></strong>。简单来说：长上下文解决“模型一次能读多少”，RAG 解决“应该让模型读什么”，外部记忆和工具调用解决“信息如何长期保存和动态获取”。</p>
-<h2 id="如何评估长上下文能力"><a href="#如何评估长上下文能力" class="headerlink" title="如何评估长上下文能力"></a>如何评估长上下文能力</h2><p>长上下文不能只看“最大支持多少 token”。真正重要的是：模型能否在长输入里稳定找到信息、理解关系，并给出可靠答案。</p>
-<p><img src="/images/llm/llm-long-context-06.png" alt="长上下文评估"></p>
-<p>常见评估方向可以分成五类：</p>
-<ol>
-<li><strong>信息检索能力</strong>：典型方法是 Needle in a Haystack：在大量文本中插入一条关键信息，再观察模型能否准确找出来。但真实任务往往更复杂，需要支持多条关键信息、多位置分布和相似内容干扰。</li>
-<li><strong>长文档理解能力</strong>：不只是回答某一句话在哪里，而是能否理解完整文档结构，比如章节关系、核心观点、约束条件、前后依赖和全局结论。</li>
-<li><strong>跨段落推理能力</strong>：很多答案不会直接出现在一个位置，而是需要综合多个段落、多份文档，甚至多个时间点的信息。这类能力更接近真实业务场景。</li>
-<li><strong>抗干扰与可追溯性</strong>：长上下文里经常有重复信息、无关信息和冲突信息。好的模型不仅要答对，还要说明依据来自哪里，哪些信息存在冲突，哪些地方证据不足。</li>
-<li><strong>系统成本指标</strong>：长上下文能力最终要落到生产系统里，所以还要看 prefill 延迟、decode 延迟、KV Cache 显存占用、并发吞吐和单位请求成本。</li>
-</ol>
-<p>生产环境里尤其要警惕一种情况：模型看起来<strong>读懂了大部分内容，但漏掉关键细节</strong>。比如合同问答中漏掉免责条款，代码分析中漏掉异常分支，这类错误比直接失败更危险。</p>
-<p>所以，长上下文评估最好和引用、证据链、可追溯性结合起来。模型不仅要给答案，还要尽量说明：答案依据来自哪里，引用了哪些段落，哪些信息存在不确定性。</p>
-<h2 id="未来演进：从更长窗口到记忆系统"><a href="#未来演进：从更长窗口到记忆系统" class="headerlink" title="未来演进：从更长窗口到记忆系统"></a>未来演进：从更长窗口到记忆系统</h2><p>未来长上下文不会只是比拼 128K、1M、10M 这类数字。更重要的方向，是提高有效利用率、降低推理成本，并把上下文能力融入更完整的记忆系统。</p>
-<p><img src="/images/llm/llm-long-context-07.png" alt="未来长上下文会成为 Agent 记忆系统的一部分"></p>
-<p>未来演进大致有五个方向：</p>
-<ol>
-<li><strong>更高效的 Attention</strong>：通过稀疏注意力、滑动窗口、块级注意力、上下文并行等方法，降低超长序列的计算压力。</li>
-<li><strong>更低成本的 KV Cache</strong>：通过 GQA/MQA、PagedAttention、KV 量化、缓存压缩和 Prefix Cache，让长上下文推理能承载更高并发。</li>
-<li><strong>更强的长程训练数据</strong>：模型需要见过真正有价值的长序列任务，而不是简单拼接短文本。未来训练会更强调长文档理解、多跳推理、干扰过滤和全局一致性。</li>
-<li><strong>上下文与 RAG 深度结合</strong>：RAG 负责“找资料”，长上下文负责“读资料”。更常见的系统不是把所有内容都塞进去，而是先检索、筛选、排序，再交给模型综合阅读。</li>
-<li><strong>Agent 分层记忆</strong>：Agent 不能无限堆上下文。更合理的方式是把记忆分层：短期上下文保存当前任务，工作记忆保存中间状态，长期记忆保存用户偏好和历史结论，外部知识库存放可检索资料。</li>
-</ol>
-<p>多模态也会进一步放大长上下文需求。一段视频、一场会议、一个设计稿、一组系统日志，都可能产生大量 token。未来模型处理的不会只是长文本，而是更长、更复杂的信息流。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>长上下文是 LLM 从聊天工具走向复杂任务系统的关键能力。它让模型可以处理完整文档、代码仓库、多轮对话、Agent 轨迹和多模态资料。但长上下文不是简单把窗口调大。它至少涉及五类问题：</p>
-<ol>
-<li>Attention 计算如何承受更长序列；</li>
-<li>KV Cache 如何控制显存成本；</li>
-<li>位置编码如何泛化到更远位置；</li>
-<li>模型如何真正利用长上下文信息；</li>
-<li>系统如何在成本、延迟和准确率之间取得平衡。</li>
-</ol>
-<p>简单总结：长上下文的目标，不是让模型机械地塞进更多 token，而是让模型在更长、更复杂的信息中，稳定找到关键内容，理解远距离关系，并以可承受的成本完成推理。这也是大模型从“会回答问题”，走向“能处理复杂信息任务”的重要一步。</p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;过去我们使用大模型时，常常会遇到一个很直观的限制：输入太长，模型放不下。一篇几十页的论文、一份完整的技术文档、一个代码仓库、一次持续很久的多轮对话，都可能超过模型能够处理的上下文窗口。&lt;/p&gt;
-&lt;p&gt;随着模型上下文长度从早期常见的 4K token，扩展到今天的 1M token 级别（例如 Gemini 1.5 Pro，以及后续部分 Claude / GPT / Gemini 系列模型），LLM 的使用方式也开始发生变化。它不再只是回答一个短问题，而是可以阅读完整资料、分析复杂代码、理解长期对话，甚至支撑 Agent 执行长程任务。&lt;/p&gt;
     
     </summary>
     
