@@ -4,6 +4,278 @@
   
     
     <entry>
+      <title><![CDATA[具身智能（五）：从任务目标到可执行轨迹]]></title>
+      <url>http://matt33.com/2026/08/06/embodied-intelligence-planning-grasping-manipulation/</url>
+      <content type="html"><![CDATA[<p>上一篇文章介绍了机器人如何从传感器观测中估计自身与环境状态。但即使知道杯子和托盘的准确位姿，“把杯子放进托盘”仍不是一条可直接执行的指令：机器人还要确定动作顺序和抓取方式，规划无碰撞路径，并将路径转换为满足关节与速度约束的运动轨迹。</p>
+<p>本文沿着“任务目标到可执行轨迹”的链路，介绍任务规划、抓取规划、运动规划、碰撞检测、轨迹优化与在线重规划的基本原理，理解机器人如何在身体约束和环境变化中，将抽象目标转化为能够被控制器执行并持续修正的动作。</p>
+<a id="more"></a>
+<h2 id="目标如何变成动作"><a href="#目标如何变成动作" class="headerlink" title="目标如何变成动作"></a>目标如何变成动作</h2><p>“把红色杯子放进左边托盘”只描述了期望结果，没有说明机器人应该先做什么、从哪里抓取、怎样绕开障碍物，也没有给出各关节随时间的运动方式。要让抽象目标真正驱动机器人，还需要逐层解决任务分解、空间可达和物理执行问题。</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>核心问题</strong></th>
+<th><strong>典型输出</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>任务规划</td>
+<td>应该按照什么顺序完成任务</td>
+<td>接近、抓取、移动、放置</td>
+</tr>
+<tr>
+<td>抓取规划</td>
+<td>夹爪应该从哪里接触物体</td>
+<td>抓取位姿、接近方向、夹爪宽度</td>
+</tr>
+<tr>
+<td>运动规划</td>
+<td>怎样到达目标且不发生碰撞</td>
+<td>关节空间或任务空间路径</td>
+</tr>
+<tr>
+<td>轨迹生成</td>
+<td>机器人应该怎样随时间运动</td>
+<td>关节位置、速度和加速度</td>
+</tr>
+<tr>
+<td>执行与重规划</td>
+<td>环境变化或动作失败后怎么办</td>
+<td>控制修正、局部调整或重新规划</td>
+</tr>
+</tbody>
+</table>
+<p>完整链路可以概括为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">任务目标 + 当前状态</span><br><span class="line">    -&gt; 任务规划</span><br><span class="line">    -&gt; 抓取规划</span><br><span class="line">    -&gt; 运动规划</span><br><span class="line">    -&gt; 时间轨迹</span><br><span class="line">    -&gt; 控制与执行</span><br><span class="line">    -&gt; 新观测</span><br><span class="line">    -&gt; 更新当前状态</span><br><span class="line">    -&gt; 检查并按需重新规划</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-01.png" alt="从任务目标到可执行轨迹"></p>
+<blockquote>
+<p><code>Initial state</code> 只表示任务开始时的状态。机器人每次执行后都会根据新观测生成 <code>Updated state</code>，再将它与既定目标比较；任务尚未完成或原计划失效时，系统才使用更新后的状态重新规划。</p>
+</blockquote>
+<p>这些能力不一定由完全独立的模块实现。传统系统通常依次调用任务规划、抓取规划和运动规划器，TAMP 会联合搜索任务步骤与运动方案，VLA 则可能直接生成末端动作或一段动作序列。但无论采用哪种路线，最终方案都必须满足三类约束：</p>
+<ul>
+<li><strong>任务约束</strong>：动作顺序能否实现目标；</li>
+<li><strong>几何约束</strong>：目标是否可达，机器人是否会发生碰撞；</li>
+<li><strong>执行约束</strong>：运动是否满足关节、速度、加速度和执行器限制。</li>
+</ul>
+<p>因此，规划的核心不是生成一段合理的动作描述，而是在当前身体与环境约束下，找到能够安全执行并根据反馈持续调整的运动方案。</p>
+<h2 id="任务规划决定做什么"><a href="#任务规划决定做什么" class="headerlink" title="任务规划决定做什么"></a>任务规划决定做什么</h2><p>任务规划解决的是离散决策问题：根据当前状态和任务目标，确定需要执行哪些动作，以及这些动作的先后顺序。它通常不直接计算机械臂轨迹，而是生成可以继续交给抓取规划和运动规划处理的技能序列。</p>
+<h3 id="从状态到动作序列"><a href="#从状态到动作序列" class="headerlink" title="从状态到动作序列"></a>从状态到动作序列</h3><p>在常见的符号规划中，机器人会将连续的世界状态简化为与任务有关的事实。例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">杯子在桌面上</span><br><span class="line">夹爪为空</span><br><span class="line">托盘可以放置</span><br><span class="line">机器人靠近杯子</span><br></pre></td></tr></table></figure>
+<p>每个动作包含两类信息：</p>
+<ul>
+<li><strong>前置条件</strong>：执行动作前必须满足什么；</li>
+<li><strong>执行效果</strong>：动作成功后，状态会发生什么变化。</li>
+</ul>
+<p>以抓取杯子为例：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">动作 pick(cup)</span><br><span class="line"></span><br><span class="line">前置条件</span><br><span class="line">  cup_on_table</span><br><span class="line">  cup_reachable</span><br><span class="line">  gripper_empty</span><br><span class="line">  grasp_available</span><br><span class="line"></span><br><span class="line">执行结果</span><br><span class="line">  holding(cup)</span><br><span class="line">  not cup_on_table</span><br><span class="line">  not gripper_empty</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-02.png" alt="任务规划中的状态动作与目标"></p>
+<p>规划器从初始状态出发，搜索一组能够让目标条件成立的动作：</p>
+<span>$$\displaystyle
+\pi_{\mathrm{task}}=\left[\operatorname{approach}(\mathrm{cup}),\operatorname{pick}(\mathrm{cup}),\operatorname{move}(\mathrm{tray}),\operatorname{place}(\mathrm{cup},\mathrm{tray})\right]$$</span><!-- Has MathJax -->
+<p>任务规划关注动作之间的逻辑关系：机器人需要先靠近杯子才能抓取，只有持有杯子后才能放置。如果托盘被占用，计划中还可能增加清理托盘的动作。</p>
+<p>不过，这条计划只说明“做什么”，没有说明夹爪从哪里抓、机械臂怎样移动。<code>pick(cup)</code> 在逻辑上成立，也可能因为目标不可达或存在碰撞而无法执行。</p>
+<h3 id="任务规划如何连接物理执行"><a href="#任务规划如何连接物理执行" class="headerlink" title="任务规划如何连接物理执行"></a>任务规划如何连接物理执行</h3><p>单纯的任务规划可能产生逻辑正确但物理上不可执行的计划。运动规划器则只负责寻找路径，不知道机器人应该先抓杯子还是先移动障碍物。<strong>任务与运动规划（Task and Motion Planning，TAMP）</strong> 将这两个层次连接起来：</p>
+<ol>
+<li>任务规划器提出候选动作，例如 <code>pick(cup)</code>；</li>
+<li>几何模块生成具体的抓取位姿；</li>
+<li>IK 检查机械臂能否到达；</li>
+<li>碰撞检测和运动规划检查是否存在可行路径；</li>
+<li>检查失败后，更换抓取方式，必要时返回任务层修改动作顺序。</li>
+</ol>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-03.png" alt="任务规划与运动可行性检查"></p>
+<p>例如，从杯子上方抓取可能会碰到隔板。系统可以先尝试侧向抓取；如果所有方向都不可行，再考虑先移开障碍物。一次检查失败通常只代表当前抓取或路径候选不可行，并不意味着整个任务无解。</p>
+<p>因此，TAMP 的结果不只是一串动作名称，还包括让动作能够执行的抓取位姿、机器人配置和无碰撞路径。大语言模型可以提出候选任务步骤，但这些步骤仍需要经过 IK、碰撞检测和运动规划验证，才能真正交给机器人执行。</p>
+<h2 id="抓取与运动规划"><a href="#抓取与运动规划" class="headerlink" title="抓取与运动规划"></a>抓取与运动规划</h2><p>任务规划确定 <code>pick(cup)</code> 之后，机器人还要解决两个连续空间问题：夹爪应该以什么姿态接触杯子，以及机械臂怎样运动到该姿态而不发生碰撞。</p>
+<h3 id="抓取规划确定末端目标"><a href="#抓取规划确定末端目标" class="headerlink" title="抓取规划确定末端目标"></a>抓取规划确定末端目标</h3><p>抓取不是简单地把夹爪移动到物体中心。一个抓取方案通常需要确定：</p>
+<ul>
+<li>夹爪相对于物体的位置和方向；</li>
+<li>手指的开合宽度与接触位置；</li>
+<li>接近、闭合和抬升方向。</li>
+</ul>
+<p>设物体在世界坐标系中的位姿为 ${}^{W}\mathbf T_O$，候选抓取在物体坐标系中的位姿为 ${}^{O}\mathbf T_G$，则夹爪的目标位姿为：</p>
+<span>$$\displaystyle
+{}^{W}\mathbf{T}_{G}={}^{W}\mathbf{T}_{O}\,{}^{O}\mathbf{T}_{G}$$</span><!-- Has MathJax -->
+<p>同一个物体通常存在多个候选抓取。规划器需要从中选择既稳定又可执行的方案：</p>
+<table>
+<thead>
+<tr>
+<th><strong>检查项</strong></th>
+<th><strong>核心问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>可达性</td>
+<td>机械臂能否通过 IK 到达目标位姿</td>
+</tr>
+<tr>
+<td>碰撞</td>
+<td>夹爪和手臂是否会碰到桌面或障碍物</td>
+</tr>
+<tr>
+<td>接近空间</td>
+<td>夹爪能否沿接近方向移动到抓取位置</td>
+</tr>
+<tr>
+<td>接触稳定性</td>
+<td>手指闭合后能否稳定夹住物体</td>
+</tr>
+<tr>
+<td>任务适配</td>
+<td>这种抓法是否方便后续搬运和放置</td>
+</tr>
+</tbody>
+</table>
+<p>对于平行夹爪，常用的抓取启发式是寻找近似共线的对向接触点，使两侧可能产生的接触力分别落在对应的摩擦锥内，从而降低物体滑动或转动的风险。它是一种常用的稳定性判断方式，但不代表在所有载荷和扰动下都一定稳定。</p>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-04.png" alt="平行夹爪的对向接触与摩擦锥"></p>
+<p>抓取还需要考虑后续任务。例如，抓住杯口可能妨碍向杯中倒水；把杯子放进狭窄托盘时，也需要预留合适的放置方向。因此，最容易抓住的位置不一定是最适合完成整个任务的位置。</p>
+<h3 id="运动规划搜索无碰路径"><a href="#运动规划搜索无碰路径" class="headerlink" title="运动规划搜索无碰路径"></a>运动规划搜索无碰路径</h3><p>抓取规划得到夹爪目标位姿后，IK 会进一步求出一个或多个目标关节配置。机械臂的关节配置可以表示为：</p>
+<span>$$\displaystyle
+\mathbf{q}=[q_1,q_2,\ldots,q_n]^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>所有可能的关节配置组成<strong>配置空间（Configuration Space，C-space）</strong>。其中：</p>
+<ul>
+<li>$\mathcal C_{\text{free}}$ 表示不会发生碰撞的配置；</li>
+<li>$\mathcal C_{\text{obs}}$ 表示会让机器人与环境或自身发生碰撞的配置。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-05.png" alt="固定基座机械臂与配置空间路径"></p>
+<p>运动规划需要从当前配置 $\mathbf q_s$ 到目标配置 $\mathbf q_g$ 找到一条连续路径，并保证路径始终位于无碰区域：</p>
+<span>$$\displaystyle
+\boldsymbol{\sigma}\colon[0,1]\rightarrow\mathcal{C}_{\mathrm{free}},\qquad\boldsymbol{\sigma}(0)=\mathbf{q}_{s},\qquad\boldsymbol{\sigma}(1)=\mathbf{q}_{g}$$</span><!-- Has MathJax -->
+<p>配置空间的意义在于，规划器检查的是整台机器人的形态，而不只是夹爪位置。即使末端执行器绕开了障碍物，机械臂的肘部或其他连杆仍然可能发生碰撞。</p>
+<p>常见运动规划方法可以分为三类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>基本原理</strong></th>
+<th><strong>主要特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>图搜索</td>
+<td>将空间离散成图，再搜索起点到终点</td>
+<td>直观，但高维空间的节点数量会迅速增加</td>
+</tr>
+<tr>
+<td>采样规划</td>
+<td>随机采样无碰配置并尝试连接</td>
+<td>适合高维机械臂，典型方法包括 RRT 和 PRM</td>
+</tr>
+<tr>
+<td>优化方法</td>
+<td>从初始路径出发，降低碰撞和平滑代价</td>
+<td>容易加入连续约束，但依赖初始路径</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-06.png" alt="图搜索采样规划与路径优化"></p>
+<p>RRT 通过不断扩展搜索树寻找可行路径，PRM 则先建立可以重复查询的路线图。工程系统常先用采样方法找到一条可行但不够平滑的路径，再进行捷径化或轨迹优化。</p>
+<h3 id="碰撞检测验证路径"><a href="#碰撞检测验证路径" class="headerlink" title="碰撞检测验证路径"></a>碰撞检测验证路径</h3><p>运动规划器需要反复检查当前配置以及配置之间的运动是否安全。检查范围包括：</p>
+<ul>
+<li>机器人与环境之间的碰撞；</li>
+<li>机器人连杆之间的自碰撞；</li>
+<li>被抓物体与机器人或环境之间的碰撞。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-07.png" alt="机器人运动中的碰撞检测"></p>
+<p>为了提高速度，系统通常先用包围盒进行<strong>粗检测（Broad Phase）</strong>，快速排除相距较远的物体；再对可能接触的几何体进行<strong>精检测（Narrow Phase）</strong>，计算是否相交以及最小距离。</p>
+<p>只检查路径上的少量离散配置可能漏掉两个配置之间的碰撞。因此，规划器还需要对路径进行插值检查，或者使用连续碰撞检测分析整段运动扫过的空间。实际系统通常会保留一定的安全距离：</p>
+<span>$$\displaystyle
+d(\mathbf{q})\geq d_{\mathrm{safe}}$$</span><!-- Has MathJax -->
+<p>其中，$d(\mathbf q)$ 表示当前配置下机器人与障碍物的最小距离。安全余量用于应对几何模型、标定、状态估计和轨迹跟踪中的误差。</p>
+<h2 id="轨迹优化与重规划"><a href="#轨迹优化与重规划" class="headerlink" title="轨迹优化与重规划"></a>轨迹优化与重规划</h2><p>许多运动规划器输出的是一条无碰撞的几何路径，但控制器需要的是随时间变化的参考轨迹。机器人还要持续检查环境和执行结果，在原方案失效时及时停止、修复轨迹或重新规划。</p>
+<h3 id="从几何路径到时间轨迹"><a href="#从几何路径到时间轨迹" class="headerlink" title="从几何路径到时间轨迹"></a>从几何路径到时间轨迹</h3><p><strong>路径（Path）</strong>只描述机器人经过哪些配置；<strong>轨迹（Trajectory）</strong>还规定机器人在什么时刻到达这些配置：</p>
+<table>
+<thead>
+<tr>
+<th><strong>表示</strong></th>
+<th><strong>回答的问题</strong></th>
+<th><strong>典型形式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>路径</td>
+<td>机器人经过哪里</td>
+<td>$\mathbf{q}(s)$</td>
+</tr>
+<tr>
+<td>轨迹</td>
+<td>机器人何时到达哪里</td>
+<td>$\mathbf{q}(t),\qquad\dot{\mathbf{q}}(t),\qquad\ddot{\mathbf{q}}(t)$</td>
+</tr>
+</tbody>
+</table>
+<p>一条路径即使没有碰撞，也可能包含尖锐转折。机器人若不停下来，就无法在转折处瞬间改变速度，因此还需要进行以下处理：</p>
+<ul>
+<li><strong>路径平滑</strong>：减少不必要的转折，同时保持无碰撞；</li>
+<li><strong>时间参数化</strong>：在路径不变的情况下分配速度和时间；</li>
+<li><strong>轨迹优化</strong>：进一步调整运动，使其更平滑、更安全或更省控制量。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-08.png" alt="配置空间路径与关节时间轨迹"></p>
+<p>对每个关节 $i$，生成的轨迹需要满足位置、速度和加速度限制：</p>
+<span>$$\displaystyle
+\begin{aligned}q_{i,\min}&amp;\leq q_i(t)\leq q_{i,\max}\\\left|\dot{q}_i(t)\right|&amp;\leq \dot{q}_{i,\max},\qquad\left|\ddot{q}_i(t)\right|\leq \ddot{q}_{i,\max}\end{aligned}$$</span><!-- Has MathJax -->
+<p>对于搬运液体、降低机械冲击等任务，还可能限制加速度的变化率，也就是 <strong>Jerk</strong>。</p>
+<p>轨迹优化可以将多个目标组合起来：</p>
+<span>$$\displaystyle
+\min_{\mathbf{q}_{0:T}}\quad w_g J_{\mathrm{goal}}+w_s J_{\mathrm{smooth}}+w_c J_{\mathrm{collision}}+w_e J_{\mathrm{effort}}$$</span><!-- Has MathJax -->
+<p>其中，目标代价保证机器人到达终点，平滑代价减少剧烈变化，碰撞代价让轨迹远离障碍物，控制代价则限制不必要的运动。代价函数只能表达优化偏好，最终结果仍需要通过关节限制和碰撞检测等约束进行验证。</p>
+<p>不同系统的实现方式并不相同。有些系统先找到无碰路径，再进行平滑和时间参数化；有些系统则直接优化整段轨迹。最终目标都是得到控制器可以跟踪的安全运动。</p>
+<h3 id="重规划处理环境变化"><a href="#重规划处理环境变化" class="headerlink" title="重规划处理环境变化"></a>重规划处理环境变化</h3><p>规划使用的是某一时刻的状态，但执行过程中可能出现目标移动、新障碍物进入、抓取滑动或轨迹跟踪偏差。因此，机器人需要持续运行：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">读取最新状态</span><br><span class="line">    -&gt; 检查当前轨迹是否仍然有效</span><br><span class="line">    -&gt; 执行并监控运动</span><br><span class="line">    -&gt; 必要时停止修复或重新规划</span><br></pre></td></tr></table></figure>
+<p>不同程度的问题需要不同层次的处理：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>处理的问题</strong></th>
+<th><strong>典型方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>控制反馈</td>
+<td>小幅轨迹跟踪误差</td>
+<td>调整位置速度或力矩</td>
+</tr>
+<tr>
+<td>局部轨迹修复</td>
+<td>后续路径受到局部影响</td>
+<td>修改尚未执行的轨迹</td>
+</tr>
+<tr>
+<td>运动重规划</td>
+<td>当前路径已经不可行</td>
+<td>重新搜索无碰路径</td>
+</tr>
+<tr>
+<td>操作恢复</td>
+<td>抓取滑落或放置失败</td>
+<td>重新观察抓取或放置</td>
+</tr>
+<tr>
+<td>任务重规划</td>
+<td>原有动作顺序无法完成目标</td>
+<td>修改技能序列</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-09.png" alt="动态环境中的在线重规划"></p>
+<p>控制器通常以较高频率纠正连续误差，规划器则在路径或任务条件改变时更新后续动作。如果人员进入危险区域，安全系统应先减速或停止机器人，再决定是否重新规划，不能在继续运动的同时等待规划结果。</p>
+<p>重新规划也不意味着每次都从头计算。机器人可以保留尚未失效的部分，只修改受影响的后续轨迹；只有当前抓取方式或任务步骤无法继续时，才需要返回更高层重新选择方案。</p>
+<h3 id="完整规划链路"><a href="#完整规划链路" class="headerlink" title="完整规划链路"></a>完整规划链路</h3><p>“把红色杯子放进左边托盘”的规划过程可以概括为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">任务目标与世界状态</span><br><span class="line">    -&gt; 生成抓取和放置步骤</span><br><span class="line">    -&gt; 选择可达且稳定的抓取</span><br><span class="line">    -&gt; 规划无碰撞路径</span><br><span class="line">    -&gt; 生成满足约束的时间轨迹</span><br><span class="line">    -&gt; 控制执行并持续更新状态</span><br><span class="line">    -&gt; 失败或环境变化时重新规划</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-10.png" alt="杯子抓取与放置的规划闭环"></p>
+<p>VLA 或其他策略模型可以提出技能、预测抓取位姿或生成短时间动作片段，但输出仍要满足可达性、碰撞、关节和安全约束。端到端模型可以改变这些能力的实现方式，却不能消除物理可执行性。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>从任务目标到机器人动作，可以概括为一条由离散决策逐步落到连续运动的链路：</p>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-11.png" alt="从任务目标到机器人动作"></p>
+<p>任务规划决定做什么，抓取与运动规划解决怎样到达，轨迹生成与控制负责把方案落到机器人身体上，反馈和重规划则保证方案在环境变化后仍然有效。可靠的具身系统不仅要生成计划，还要验证、执行并在失败后恢复。</p>
+]]></content>
+    </entry>
+    
+    <entry>
       <title><![CDATA[具身智能（四）：从传感器到世界状态]]></title>
       <url>http://matt33.com/2026/08/04/embodied-intelligence-perception-state-estimation/</url>
       <content type="html"><![CDATA[<p>上一篇文章介绍了机器人如何通过运动学、动力学与控制，将目标位姿转化为身体运动。但在行动之前，机器人首先要知道自己在哪里、周围有什么，以及环境正在怎样变化。相机、深度传感器、IMU 和编码器提供的只是带有噪声的原始观测，还不能直接成为规划与控制所需的世界状态。</p>

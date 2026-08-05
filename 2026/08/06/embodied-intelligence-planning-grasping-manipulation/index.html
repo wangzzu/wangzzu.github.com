@@ -1,0 +1,308 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>具身智能（五）：从任务目标到可执行轨迹 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">具身智能（五）：从任务目标到可执行轨迹</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">具身智能（五）：从任务目标到可执行轨迹</h1><div class="post-meta">Aug 6, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">4,080</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/08/06/embodied-intelligence-planning-grasping-manipulation/" href="/2026/08/06/embodied-intelligence-planning-grasping-manipulation/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#目标如何变成动作"><span class="toc-number">1.</span> <span class="toc-text">目标如何变成动作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#任务规划决定做什么"><span class="toc-number">2.</span> <span class="toc-text">任务规划决定做什么</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#从状态到动作序列"><span class="toc-number">2.1.</span> <span class="toc-text">从状态到动作序列</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#任务规划如何连接物理执行"><span class="toc-number">2.2.</span> <span class="toc-text">任务规划如何连接物理执行</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#抓取与运动规划"><span class="toc-number">3.</span> <span class="toc-text">抓取与运动规划</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#抓取规划确定末端目标"><span class="toc-number">3.1.</span> <span class="toc-text">抓取规划确定末端目标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#运动规划搜索无碰路径"><span class="toc-number">3.2.</span> <span class="toc-text">运动规划搜索无碰路径</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#碰撞检测验证路径"><span class="toc-number">3.3.</span> <span class="toc-text">碰撞检测验证路径</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#轨迹优化与重规划"><span class="toc-number">4.</span> <span class="toc-text">轨迹优化与重规划</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#从几何路径到时间轨迹"><span class="toc-number">4.1.</span> <span class="toc-text">从几何路径到时间轨迹</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#重规划处理环境变化"><span class="toc-number">4.2.</span> <span class="toc-text">重规划处理环境变化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#完整规划链路"><span class="toc-number">4.3.</span> <span class="toc-text">完整规划链路</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><p>上一篇文章介绍了机器人如何从传感器观测中估计自身与环境状态。但即使知道杯子和托盘的准确位姿，“把杯子放进托盘”仍不是一条可直接执行的指令：机器人还要确定动作顺序和抓取方式，规划无碰撞路径，并将路径转换为满足关节与速度约束的运动轨迹。</p>
+<p>本文沿着“任务目标到可执行轨迹”的链路，介绍任务规划、抓取规划、运动规划、碰撞检测、轨迹优化与在线重规划的基本原理，理解机器人如何在身体约束和环境变化中，将抽象目标转化为能够被控制器执行并持续修正的动作。</p>
+<a id="more"></a>
+<h2 id="目标如何变成动作"><a href="#目标如何变成动作" class="headerlink" title="目标如何变成动作"></a>目标如何变成动作</h2><p>“把红色杯子放进左边托盘”只描述了期望结果，没有说明机器人应该先做什么、从哪里抓取、怎样绕开障碍物，也没有给出各关节随时间的运动方式。要让抽象目标真正驱动机器人，还需要逐层解决任务分解、空间可达和物理执行问题。</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>核心问题</strong></th>
+<th><strong>典型输出</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>任务规划</td>
+<td>应该按照什么顺序完成任务</td>
+<td>接近、抓取、移动、放置</td>
+</tr>
+<tr>
+<td>抓取规划</td>
+<td>夹爪应该从哪里接触物体</td>
+<td>抓取位姿、接近方向、夹爪宽度</td>
+</tr>
+<tr>
+<td>运动规划</td>
+<td>怎样到达目标且不发生碰撞</td>
+<td>关节空间或任务空间路径</td>
+</tr>
+<tr>
+<td>轨迹生成</td>
+<td>机器人应该怎样随时间运动</td>
+<td>关节位置、速度和加速度</td>
+</tr>
+<tr>
+<td>执行与重规划</td>
+<td>环境变化或动作失败后怎么办</td>
+<td>控制修正、局部调整或重新规划</td>
+</tr>
+</tbody>
+</table>
+<p>完整链路可以概括为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">任务目标 + 当前状态</span><br><span class="line">    -&gt; 任务规划</span><br><span class="line">    -&gt; 抓取规划</span><br><span class="line">    -&gt; 运动规划</span><br><span class="line">    -&gt; 时间轨迹</span><br><span class="line">    -&gt; 控制与执行</span><br><span class="line">    -&gt; 新观测</span><br><span class="line">    -&gt; 更新当前状态</span><br><span class="line">    -&gt; 检查并按需重新规划</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-01.png" alt="从任务目标到可执行轨迹"></p>
+<blockquote>
+<p><code>Initial state</code> 只表示任务开始时的状态。机器人每次执行后都会根据新观测生成 <code>Updated state</code>，再将它与既定目标比较；任务尚未完成或原计划失效时，系统才使用更新后的状态重新规划。</p>
+</blockquote>
+<p>这些能力不一定由完全独立的模块实现。传统系统通常依次调用任务规划、抓取规划和运动规划器，TAMP 会联合搜索任务步骤与运动方案，VLA 则可能直接生成末端动作或一段动作序列。但无论采用哪种路线，最终方案都必须满足三类约束：</p>
+<ul>
+<li><strong>任务约束</strong>：动作顺序能否实现目标；</li>
+<li><strong>几何约束</strong>：目标是否可达，机器人是否会发生碰撞；</li>
+<li><strong>执行约束</strong>：运动是否满足关节、速度、加速度和执行器限制。</li>
+</ul>
+<p>因此，规划的核心不是生成一段合理的动作描述，而是在当前身体与环境约束下，找到能够安全执行并根据反馈持续调整的运动方案。</p>
+<h2 id="任务规划决定做什么"><a href="#任务规划决定做什么" class="headerlink" title="任务规划决定做什么"></a>任务规划决定做什么</h2><p>任务规划解决的是离散决策问题：根据当前状态和任务目标，确定需要执行哪些动作，以及这些动作的先后顺序。它通常不直接计算机械臂轨迹，而是生成可以继续交给抓取规划和运动规划处理的技能序列。</p>
+<h3 id="从状态到动作序列"><a href="#从状态到动作序列" class="headerlink" title="从状态到动作序列"></a>从状态到动作序列</h3><p>在常见的符号规划中，机器人会将连续的世界状态简化为与任务有关的事实。例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">杯子在桌面上</span><br><span class="line">夹爪为空</span><br><span class="line">托盘可以放置</span><br><span class="line">机器人靠近杯子</span><br></pre></td></tr></table></figure>
+<p>每个动作包含两类信息：</p>
+<ul>
+<li><strong>前置条件</strong>：执行动作前必须满足什么；</li>
+<li><strong>执行效果</strong>：动作成功后，状态会发生什么变化。</li>
+</ul>
+<p>以抓取杯子为例：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">动作 pick(cup)</span><br><span class="line"></span><br><span class="line">前置条件</span><br><span class="line">  cup_on_table</span><br><span class="line">  cup_reachable</span><br><span class="line">  gripper_empty</span><br><span class="line">  grasp_available</span><br><span class="line"></span><br><span class="line">执行结果</span><br><span class="line">  holding(cup)</span><br><span class="line">  not cup_on_table</span><br><span class="line">  not gripper_empty</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-02.png" alt="任务规划中的状态动作与目标"></p>
+<p>规划器从初始状态出发，搜索一组能够让目标条件成立的动作：</p>
+<span>$$\displaystyle
+\pi_{\mathrm{task}}=\left[\operatorname{approach}(\mathrm{cup}),\operatorname{pick}(\mathrm{cup}),\operatorname{move}(\mathrm{tray}),\operatorname{place}(\mathrm{cup},\mathrm{tray})\right]$$</span><!-- Has MathJax -->
+<p>任务规划关注动作之间的逻辑关系：机器人需要先靠近杯子才能抓取，只有持有杯子后才能放置。如果托盘被占用，计划中还可能增加清理托盘的动作。</p>
+<p>不过，这条计划只说明“做什么”，没有说明夹爪从哪里抓、机械臂怎样移动。<code>pick(cup)</code> 在逻辑上成立，也可能因为目标不可达或存在碰撞而无法执行。</p>
+<h3 id="任务规划如何连接物理执行"><a href="#任务规划如何连接物理执行" class="headerlink" title="任务规划如何连接物理执行"></a>任务规划如何连接物理执行</h3><p>单纯的任务规划可能产生逻辑正确但物理上不可执行的计划。运动规划器则只负责寻找路径，不知道机器人应该先抓杯子还是先移动障碍物。<strong>任务与运动规划（Task and Motion Planning，TAMP）</strong> 将这两个层次连接起来：</p>
+<ol>
+<li>任务规划器提出候选动作，例如 <code>pick(cup)</code>；</li>
+<li>几何模块生成具体的抓取位姿；</li>
+<li>IK 检查机械臂能否到达；</li>
+<li>碰撞检测和运动规划检查是否存在可行路径；</li>
+<li>检查失败后，更换抓取方式，必要时返回任务层修改动作顺序。</li>
+</ol>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-03.png" alt="任务规划与运动可行性检查"></p>
+<p>例如，从杯子上方抓取可能会碰到隔板。系统可以先尝试侧向抓取；如果所有方向都不可行，再考虑先移开障碍物。一次检查失败通常只代表当前抓取或路径候选不可行，并不意味着整个任务无解。</p>
+<p>因此，TAMP 的结果不只是一串动作名称，还包括让动作能够执行的抓取位姿、机器人配置和无碰撞路径。大语言模型可以提出候选任务步骤，但这些步骤仍需要经过 IK、碰撞检测和运动规划验证，才能真正交给机器人执行。</p>
+<h2 id="抓取与运动规划"><a href="#抓取与运动规划" class="headerlink" title="抓取与运动规划"></a>抓取与运动规划</h2><p>任务规划确定 <code>pick(cup)</code> 之后，机器人还要解决两个连续空间问题：夹爪应该以什么姿态接触杯子，以及机械臂怎样运动到该姿态而不发生碰撞。</p>
+<h3 id="抓取规划确定末端目标"><a href="#抓取规划确定末端目标" class="headerlink" title="抓取规划确定末端目标"></a>抓取规划确定末端目标</h3><p>抓取不是简单地把夹爪移动到物体中心。一个抓取方案通常需要确定：</p>
+<ul>
+<li>夹爪相对于物体的位置和方向；</li>
+<li>手指的开合宽度与接触位置；</li>
+<li>接近、闭合和抬升方向。</li>
+</ul>
+<p>设物体在世界坐标系中的位姿为 ${}^{W}\mathbf T_O$，候选抓取在物体坐标系中的位姿为 ${}^{O}\mathbf T_G$，则夹爪的目标位姿为：</p>
+<span>$$\displaystyle
+{}^{W}\mathbf{T}_{G}={}^{W}\mathbf{T}_{O}\,{}^{O}\mathbf{T}_{G}$$</span><!-- Has MathJax -->
+<p>同一个物体通常存在多个候选抓取。规划器需要从中选择既稳定又可执行的方案：</p>
+<table>
+<thead>
+<tr>
+<th><strong>检查项</strong></th>
+<th><strong>核心问题</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>可达性</td>
+<td>机械臂能否通过 IK 到达目标位姿</td>
+</tr>
+<tr>
+<td>碰撞</td>
+<td>夹爪和手臂是否会碰到桌面或障碍物</td>
+</tr>
+<tr>
+<td>接近空间</td>
+<td>夹爪能否沿接近方向移动到抓取位置</td>
+</tr>
+<tr>
+<td>接触稳定性</td>
+<td>手指闭合后能否稳定夹住物体</td>
+</tr>
+<tr>
+<td>任务适配</td>
+<td>这种抓法是否方便后续搬运和放置</td>
+</tr>
+</tbody>
+</table>
+<p>对于平行夹爪，常用的抓取启发式是寻找近似共线的对向接触点，使两侧可能产生的接触力分别落在对应的摩擦锥内，从而降低物体滑动或转动的风险。它是一种常用的稳定性判断方式，但不代表在所有载荷和扰动下都一定稳定。</p>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-04.png" alt="平行夹爪的对向接触与摩擦锥"></p>
+<p>抓取还需要考虑后续任务。例如，抓住杯口可能妨碍向杯中倒水；把杯子放进狭窄托盘时，也需要预留合适的放置方向。因此，最容易抓住的位置不一定是最适合完成整个任务的位置。</p>
+<h3 id="运动规划搜索无碰路径"><a href="#运动规划搜索无碰路径" class="headerlink" title="运动规划搜索无碰路径"></a>运动规划搜索无碰路径</h3><p>抓取规划得到夹爪目标位姿后，IK 会进一步求出一个或多个目标关节配置。机械臂的关节配置可以表示为：</p>
+<span>$$\displaystyle
+\mathbf{q}=[q_1,q_2,\ldots,q_n]^{\mathsf{T}}$$</span><!-- Has MathJax -->
+<p>所有可能的关节配置组成<strong>配置空间（Configuration Space，C-space）</strong>。其中：</p>
+<ul>
+<li>$\mathcal C_{\text{free}}$ 表示不会发生碰撞的配置；</li>
+<li>$\mathcal C_{\text{obs}}$ 表示会让机器人与环境或自身发生碰撞的配置。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-05.png" alt="固定基座机械臂与配置空间路径"></p>
+<p>运动规划需要从当前配置 $\mathbf q_s$ 到目标配置 $\mathbf q_g$ 找到一条连续路径，并保证路径始终位于无碰区域：</p>
+<span>$$\displaystyle
+\boldsymbol{\sigma}\colon[0,1]\rightarrow\mathcal{C}_{\mathrm{free}},\qquad\boldsymbol{\sigma}(0)=\mathbf{q}_{s},\qquad\boldsymbol{\sigma}(1)=\mathbf{q}_{g}$$</span><!-- Has MathJax -->
+<p>配置空间的意义在于，规划器检查的是整台机器人的形态，而不只是夹爪位置。即使末端执行器绕开了障碍物，机械臂的肘部或其他连杆仍然可能发生碰撞。</p>
+<p>常见运动规划方法可以分为三类：</p>
+<table>
+<thead>
+<tr>
+<th><strong>方法</strong></th>
+<th><strong>基本原理</strong></th>
+<th><strong>主要特点</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>图搜索</td>
+<td>将空间离散成图，再搜索起点到终点</td>
+<td>直观，但高维空间的节点数量会迅速增加</td>
+</tr>
+<tr>
+<td>采样规划</td>
+<td>随机采样无碰配置并尝试连接</td>
+<td>适合高维机械臂，典型方法包括 RRT 和 PRM</td>
+</tr>
+<tr>
+<td>优化方法</td>
+<td>从初始路径出发，降低碰撞和平滑代价</td>
+<td>容易加入连续约束，但依赖初始路径</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-06.png" alt="图搜索采样规划与路径优化"></p>
+<p>RRT 通过不断扩展搜索树寻找可行路径，PRM 则先建立可以重复查询的路线图。工程系统常先用采样方法找到一条可行但不够平滑的路径，再进行捷径化或轨迹优化。</p>
+<h3 id="碰撞检测验证路径"><a href="#碰撞检测验证路径" class="headerlink" title="碰撞检测验证路径"></a>碰撞检测验证路径</h3><p>运动规划器需要反复检查当前配置以及配置之间的运动是否安全。检查范围包括：</p>
+<ul>
+<li>机器人与环境之间的碰撞；</li>
+<li>机器人连杆之间的自碰撞；</li>
+<li>被抓物体与机器人或环境之间的碰撞。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-07.png" alt="机器人运动中的碰撞检测"></p>
+<p>为了提高速度，系统通常先用包围盒进行<strong>粗检测（Broad Phase）</strong>，快速排除相距较远的物体；再对可能接触的几何体进行<strong>精检测（Narrow Phase）</strong>，计算是否相交以及最小距离。</p>
+<p>只检查路径上的少量离散配置可能漏掉两个配置之间的碰撞。因此，规划器还需要对路径进行插值检查，或者使用连续碰撞检测分析整段运动扫过的空间。实际系统通常会保留一定的安全距离：</p>
+<span>$$\displaystyle
+d(\mathbf{q})\geq d_{\mathrm{safe}}$$</span><!-- Has MathJax -->
+<p>其中，$d(\mathbf q)$ 表示当前配置下机器人与障碍物的最小距离。安全余量用于应对几何模型、标定、状态估计和轨迹跟踪中的误差。</p>
+<h2 id="轨迹优化与重规划"><a href="#轨迹优化与重规划" class="headerlink" title="轨迹优化与重规划"></a>轨迹优化与重规划</h2><p>许多运动规划器输出的是一条无碰撞的几何路径，但控制器需要的是随时间变化的参考轨迹。机器人还要持续检查环境和执行结果，在原方案失效时及时停止、修复轨迹或重新规划。</p>
+<h3 id="从几何路径到时间轨迹"><a href="#从几何路径到时间轨迹" class="headerlink" title="从几何路径到时间轨迹"></a>从几何路径到时间轨迹</h3><p><strong>路径（Path）</strong>只描述机器人经过哪些配置；<strong>轨迹（Trajectory）</strong>还规定机器人在什么时刻到达这些配置：</p>
+<table>
+<thead>
+<tr>
+<th><strong>表示</strong></th>
+<th><strong>回答的问题</strong></th>
+<th><strong>典型形式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>路径</td>
+<td>机器人经过哪里</td>
+<td>$\mathbf{q}(s)$</td>
+</tr>
+<tr>
+<td>轨迹</td>
+<td>机器人何时到达哪里</td>
+<td>$\mathbf{q}(t),\qquad\dot{\mathbf{q}}(t),\qquad\ddot{\mathbf{q}}(t)$</td>
+</tr>
+</tbody>
+</table>
+<p>一条路径即使没有碰撞，也可能包含尖锐转折。机器人若不停下来，就无法在转折处瞬间改变速度，因此还需要进行以下处理：</p>
+<ul>
+<li><strong>路径平滑</strong>：减少不必要的转折，同时保持无碰撞；</li>
+<li><strong>时间参数化</strong>：在路径不变的情况下分配速度和时间；</li>
+<li><strong>轨迹优化</strong>：进一步调整运动，使其更平滑、更安全或更省控制量。</li>
+</ul>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-08.png" alt="配置空间路径与关节时间轨迹"></p>
+<p>对每个关节 $i$，生成的轨迹需要满足位置、速度和加速度限制：</p>
+<span>$$\displaystyle
+\begin{aligned}q_{i,\min}&amp;\leq q_i(t)\leq q_{i,\max}\\\left|\dot{q}_i(t)\right|&amp;\leq \dot{q}_{i,\max},\qquad\left|\ddot{q}_i(t)\right|\leq \ddot{q}_{i,\max}\end{aligned}$$</span><!-- Has MathJax -->
+<p>对于搬运液体、降低机械冲击等任务，还可能限制加速度的变化率，也就是 <strong>Jerk</strong>。</p>
+<p>轨迹优化可以将多个目标组合起来：</p>
+<span>$$\displaystyle
+\min_{\mathbf{q}_{0:T}}\quad w_g J_{\mathrm{goal}}+w_s J_{\mathrm{smooth}}+w_c J_{\mathrm{collision}}+w_e J_{\mathrm{effort}}$$</span><!-- Has MathJax -->
+<p>其中，目标代价保证机器人到达终点，平滑代价减少剧烈变化，碰撞代价让轨迹远离障碍物，控制代价则限制不必要的运动。代价函数只能表达优化偏好，最终结果仍需要通过关节限制和碰撞检测等约束进行验证。</p>
+<p>不同系统的实现方式并不相同。有些系统先找到无碰路径，再进行平滑和时间参数化；有些系统则直接优化整段轨迹。最终目标都是得到控制器可以跟踪的安全运动。</p>
+<h3 id="重规划处理环境变化"><a href="#重规划处理环境变化" class="headerlink" title="重规划处理环境变化"></a>重规划处理环境变化</h3><p>规划使用的是某一时刻的状态，但执行过程中可能出现目标移动、新障碍物进入、抓取滑动或轨迹跟踪偏差。因此，机器人需要持续运行：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">读取最新状态</span><br><span class="line">    -&gt; 检查当前轨迹是否仍然有效</span><br><span class="line">    -&gt; 执行并监控运动</span><br><span class="line">    -&gt; 必要时停止修复或重新规划</span><br></pre></td></tr></table></figure>
+<p>不同程度的问题需要不同层次的处理：</p>
+<table>
+<thead>
+<tr>
+<th><strong>层次</strong></th>
+<th><strong>处理的问题</strong></th>
+<th><strong>典型方式</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>控制反馈</td>
+<td>小幅轨迹跟踪误差</td>
+<td>调整位置速度或力矩</td>
+</tr>
+<tr>
+<td>局部轨迹修复</td>
+<td>后续路径受到局部影响</td>
+<td>修改尚未执行的轨迹</td>
+</tr>
+<tr>
+<td>运动重规划</td>
+<td>当前路径已经不可行</td>
+<td>重新搜索无碰路径</td>
+</tr>
+<tr>
+<td>操作恢复</td>
+<td>抓取滑落或放置失败</td>
+<td>重新观察抓取或放置</td>
+</tr>
+<tr>
+<td>任务重规划</td>
+<td>原有动作顺序无法完成目标</td>
+<td>修改技能序列</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-09.png" alt="动态环境中的在线重规划"></p>
+<p>控制器通常以较高频率纠正连续误差，规划器则在路径或任务条件改变时更新后续动作。如果人员进入危险区域，安全系统应先减速或停止机器人，再决定是否重新规划，不能在继续运动的同时等待规划结果。</p>
+<p>重新规划也不意味着每次都从头计算。机器人可以保留尚未失效的部分，只修改受影响的后续轨迹；只有当前抓取方式或任务步骤无法继续时，才需要返回更高层重新选择方案。</p>
+<h3 id="完整规划链路"><a href="#完整规划链路" class="headerlink" title="完整规划链路"></a>完整规划链路</h3><p>“把红色杯子放进左边托盘”的规划过程可以概括为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">任务目标与世界状态</span><br><span class="line">    -&gt; 生成抓取和放置步骤</span><br><span class="line">    -&gt; 选择可达且稳定的抓取</span><br><span class="line">    -&gt; 规划无碰撞路径</span><br><span class="line">    -&gt; 生成满足约束的时间轨迹</span><br><span class="line">    -&gt; 控制执行并持续更新状态</span><br><span class="line">    -&gt; 失败或环境变化时重新规划</span><br></pre></td></tr></table></figure>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-10.png" alt="杯子抓取与放置的规划闭环"></p>
+<p>VLA 或其他策略模型可以提出技能、预测抓取位姿或生成短时间动作片段，但输出仍要满足可达性、碰撞、关节和安全约束。端到端模型可以改变这些能力的实现方式，却不能消除物理可执行性。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>从任务目标到机器人动作，可以概括为一条由离散决策逐步落到连续运动的链路：</p>
+<p><img src="/images/embodied-ai/embodied-ai-planning-grasping-manipulation-11.png" alt="从任务目标到机器人动作"></p>
+<p>任务规划决定做什么，抓取与运动规划解决怎样到达，轨迹生成与控制负责把方案落到机器人身体上，反馈和重规划则保证方案在环境变化后仍然有效。可靠的具身系统不仅要生成计划，还要验证、执行并在失败后恢复。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/08/06/embodied-intelligence-planning-grasping-manipulation/" data-id="cmsgblmyv0000lklw98l4cao3" class="article-share-link">分享到</a><div class="tags"><a href="/tags/具身智能/">具身智能</a></div><div class="post-nav"><a href="/2026/08/04/embodied-intelligence-perception-state-estimation/" class="next">具身智能（四）：从传感器到世界状态</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/08/06/embodied-intelligence-planning-grasping-manipulation/';
+var disqus_title = '具身智能（五）：从任务目标到可执行轨迹';
+var disqus_url = 'http://matt33.com/2026/08/06/embodied-intelligence-planning-grasping-manipulation/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/bigdata/" style="font-size: 15px;">bigdata</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/数据湖/" style="font-size: 15px;">数据湖</a> <a href="/tags/具身智能/" style="font-size: 15px;">具身智能</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/08/06/embodied-intelligence-planning-grasping-manipulation/">具身智能（五）：从任务目标到可执行轨迹</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/08/04/embodied-intelligence-perception-state-estimation/">具身智能（四）：从传感器到世界状态</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/31/embodied-intelligence-kinematics-dynamics-control/">具身智能（三）：从目标位姿到关节力矩</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/29/embodied-intelligence-body-spatial-math/">具身智能（二）：机器人如何描述身体与世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/21/embodied-intelligence-overview/">具身智能（一）：物理世界中的智能闭环</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/19/ai-data-lake-hudi/">数据湖架构演进（一）：Hudi 的增量数据内核</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/15/llm-to-agi/">LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/14/llm-ai-coding/">LLM 系列 (二十五)：AI Coding，大模型如何改变软件开发</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/11/llm-personalization-memory/">LLM 系列 (二十四)：个性化与记忆，大模型如何理解每一个用户</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/11/llm-data-flywheel/">LLM 系列 (二十三)：数据飞轮，大模型能力如何持续进化</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/x-mathjax-config">MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+  });
+</script><script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML" async></script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
