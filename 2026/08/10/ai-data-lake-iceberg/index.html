@@ -1,0 +1,302 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>数据湖架构演进（二）：Iceberg 的快照表内核 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">数据湖架构演进（二）：Iceberg 的快照表内核</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">数据湖架构演进（二）：Iceberg 的快照表内核</h1><div class="post-meta">Aug 10, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">5,251</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/08/10/ai-data-lake-iceberg/" href="/2026/08/10/ai-data-lake-iceberg/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Iceberg-为什么诞生"><span class="toc-number">1.</span> <span class="toc-text">Iceberg 为什么诞生</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Hive-表模型的扩展瓶颈"><span class="toc-number">1.1.</span> <span class="toc-text">Hive 表模型的扩展瓶颈</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#从“目录即表”到“元数据定义表”"><span class="toc-number">1.2.</span> <span class="toc-text">从“目录即表”到“元数据定义表”</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Iceberg-的整体架构"><span class="toc-number">2.</span> <span class="toc-text">Iceberg 的整体架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#三层逻辑架构"><span class="toc-number">2.1.</span> <span class="toc-text">三层逻辑架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reader-如何找到需要读取的文件"><span class="toc-number">2.2.</span> <span class="toc-text">Reader 如何找到需要读取的文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Writer-如何原子发布新版本"><span class="toc-number">2.3.</span> <span class="toc-text">Writer 如何原子发布新版本</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Iceberg-的核心技术原理"><span class="toc-number">3.</span> <span class="toc-text">Iceberg 的核心技术原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Snapshot：用不可变元数据实现-MVCC"><span class="toc-number">3.1.</span> <span class="toc-text">Snapshot：用不可变元数据实现 MVCC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Manifest-Tree：如何规划百万级文件"><span class="toc-number">3.2.</span> <span class="toc-text">Manifest Tree：如何规划百万级文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Catalog-Commit-与乐观并发控制"><span class="toc-number">3.3.</span> <span class="toc-text">Catalog Commit 与乐观并发控制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Schema-与-Partition-Evolution"><span class="toc-number">3.4.</span> <span class="toc-text">Schema 与 Partition Evolution</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Update-与-Delete：不可变文件如何支持行级变化"><span class="toc-number">3.5.</span> <span class="toc-text">Update 与 Delete：不可变文件如何支持行级变化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Iceberg-与-Hudi-的架构差异"><span class="toc-number">4.</span> <span class="toc-text">Iceberg 与 Hudi 的架构差异</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#生产实践与工业界应用"><span class="toc-number">5.</span> <span class="toc-text">生产实践与工业界应用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#典型生产场景：实时事件表的多引擎共享"><span class="toc-number">5.1.</span> <span class="toc-text">典型生产场景：实时事件表的多引擎共享</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#工业界应用现状"><span class="toc-number">5.2.</span> <span class="toc-text">工业界应用现状</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#总结与后续"><span class="toc-number">5.3.</span> <span class="toc-text">总结与后续</span></a></li></ol></li></ol></div></div><div class="post-content"><p>Hive 通过目录、分区和 Metastore 管理大规模数据，但当数据进入对象存储、单表扩展到数百万个文件，并由多个计算引擎并发读写时，目录 Listing、非原子 Rename、分区耦合和 Schema 演进等问题逐渐成为系统瓶颈。Iceberg 最初诞生于 Netflix，核心目标正是重新定义超大规模分析表的状态管理方式。</p>
+<p>Iceberg 不再通过目录推断表中包含哪些文件，而是使用 Catalog、Snapshot、Manifest List 和 Manifest 构建不可变的元数据树，将一次表变更原子发布为新的快照。这套架构为数据湖补充了快照隔离、乐观并发控制、快速查询规划、时间旅行以及安全的 Schema 和 Partition Evolution。</p>
+<a id="more"></a>
+<p>本文将从 Iceberg 的诞生背景出发，深入分析其元数据结构、读写与提交路径、Manifest 裁剪、并发控制和行级更新机制，并结合 Hudi 的增量架构进行对比，讨论两者的场景差异以及 Iceberg 当前在工业界的应用现状。</p>
+<h2 id="Iceberg-为什么诞生"><a href="#Iceberg-为什么诞生" class="headerlink" title="Iceberg 为什么诞生"></a>Iceberg 为什么诞生</h2><p>上一篇介绍的 Hudi 从“记录如何持续变化”出发，通过 Record Key、Index、File Group 和 Timeline，为数据湖补充了高效 Upsert 与增量处理能力。Iceberg 的出发点不同：当一张分析表包含数百万个文件，并被 Spark、Flink、Trino 等多个计算引擎同时读写时，系统如何准确、高效地确定某一时刻的完整表状态？</p>
+<h3 id="Hive-表模型的扩展瓶颈"><a href="#Hive-表模型的扩展瓶颈" class="headerlink" title="Hive 表模型的扩展瓶颈"></a>Hive 表模型的扩展瓶颈</h3><p>传统 Hive 表通常通过 Metastore、分区目录和数据文件共同组织数据：</p>
+<ul>
+<li>Metastore 保存表结构、分区和存储位置；</li>
+<li>目录名称表达分区值；</li>
+<li>目录中的文件共同构成表数据。</li>
+</ul>
+<p><img src="/images/ai-data/data-lake-iceberg-01.png" alt="Hive Metastore 与分区文件映射"></p>
+<p>这套模型在 HDFS 和批处理数仓中简单有效：Metastore 定位分区目录，Reader 再通过 Listing 获取数据文件。但当表迁移到对象存储、文件规模达到百万级，并由多个计算引擎并发写入时，以目录表达表状态逐渐暴露出三个问题：</p>
+<ol>
+<li>原子提交困难：任务失败可能在存储中留下部分文件，而 Listing 无法判断这些文件是否已经提交。对象存储通常也不支持原子目录 Rename，传统的临时目录发布方式难以直接复用；</li>
+<li>元数据扩展受限：Reader 需要遍历分区和目录来枚举文件。文件数量持续增长后，Listing、查询规划以及 NameNode 或对象存储请求都会成为瓶颈；</li>
+<li>表演进与并发受限：分区方式与目录结构耦合，Schema Rename、Drop 和名称复用容易产生错误；多个引擎也缺少统一的表级提交协议，难以安全地并发执行 Append、Overwrite、Delete 和 Compaction。</li>
+</ol>
+<p>Iceberg 最初由 Netflix 开发，目标正是改进 Hive、Spark 和 Presto 使用的 Hive Table Layout。Apache 孵化提案记录的 Netflix Atlas 表包含约 270 万个文件和 2688 个分区，Hive 仅查询规划就需要约 9.6 分钟；Iceberg 通过显式管理文件列表，并利用分区和列统计信息裁剪文件，大幅降低了超大规模表的查询规划成本。</p>
+<h3 id="从“目录即表”到“元数据定义表”"><a href="#从“目录即表”到“元数据定义表”" class="headerlink" title="从“目录即表”到“元数据定义表”"></a>从“目录即表”到“元数据定义表”</h3><p>传统 Hive Table Layout 的核心假设可以近似表示为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Metastore 中的分区</span><br><span class="line">        +</span><br><span class="line">分区目录中当前存在的文件</span><br><span class="line">        =</span><br><span class="line">当前表状态</span><br></pre></td></tr></table></figure>
+<p>问题在于，文件存在只是一种存储事实，并不代表它已经成功加入表中。文件系统知道对象是否存在，却不知道多个文件是否属于同一次提交，也不知道失败任务生成的文件是否应该被 Reader 看见。</p>
+<p>Iceberg 将表状态的判断依据从目录切换为显式、版本化的元数据：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Hive：</span><br><span class="line">通过分区目录和文件 Listing 推断表状态</span><br><span class="line"></span><br><span class="line">Iceberg：</span><br><span class="line">通过当前 Snapshot 明确定义表状态</span><br></pre></td></tr></table></figure>
+<p>其中，Snapshot 表示一个不可变的表版本，并通过 Manifest 记录该版本包含的完整 Data File 和 Delete File 集合。只有被当前 Snapshot 引用的文件，才属于当前表状态。</p>
+<p><img src="/images/ai-data/data-lake-iceberg-02.png" alt="Hive Table Layout 与 Iceberg 表格式"></p>
+<p>在 Iceberg 中，对象存储只负责持久化不可变的数据文件和元数据文件：</p>
+<ul>
+<li>文件是否属于表，由 Snapshot 决定；</li>
+<li>一批文件何时对外可见，由 Catalog Commit 决定；</li>
+<li>文件在哪个版本加入或删除，由 Manifest 记录；</li>
+<li>Catalog 中的 Metadata Pointer 定位当前 Table Metadata，<code>current-snapshot-id</code> 或 Branch/Tag 再确定 Reader 使用的 Snapshot。</li>
+</ul>
+<p>因此，Iceberg 的关键创新并不是改变 Parquet 如何保存数据，而是改变了表状态的事实来源：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">从依赖文件系统命名空间推断表状态，</span><br><span class="line">演进为通过版本化元数据显式定义表状态。</span><br></pre></td></tr></table></figure>
+<p>后续 Iceberg 的 Snapshot Isolation、Time Travel、Manifest Pruning、Schema Evolution 和乐观并发控制，都是建立在这一转变之上的。</p>
+<h2 id="Iceberg-的整体架构"><a href="#Iceberg-的整体架构" class="headerlink" title="Iceberg 的整体架构"></a>Iceberg 的整体架构</h2><p>理解 Iceberg，首先要区分三类对象：计算引擎负责执行读写任务，Catalog 负责定位并原子发布表元数据，底层存储则保存不可变的元数据文件和数据文件。Iceberg 的核心思想可以概括为：</p>
+<p><img src="/images/ai-data/data-lake-iceberg-03.png" alt="Iceberg 元数据定义表状态"></p>
+<h3 id="三层逻辑架构"><a href="#三层逻辑架构" class="headerlink" title="三层逻辑架构"></a>三层逻辑架构</h3><p>Iceberg 可以拆成三个逻辑层次：</p>
+<p><img src="/images/ai-data/data-lake-iceberg-04.png" alt="Iceberg 三层逻辑架构"></p>
+<p>三层架构分别承担以下职责：</p>
+<ul>
+<li>计算与访问层：调用 Iceberg API 完成查询规划、数据读写和表维护，但不保存最终表状态；</li>
+<li>Catalog 与提交层：将表名解析为当前 Metadata Location，并原子发布新的元数据版本；</li>
+<li>存储层：保存不可变的 Table Metadata、Manifest List、Manifest、Data File 和 Delete File。</li>
+</ul>
+<p>Snapshot 通常不是独立文件，而是 Table Metadata JSON 中的一条记录，包含 Snapshot ID、Sequence Number、Manifest List 路径和 Summary；本次提交的操作类型保存在 <code>summary.operation</code> 中。各类元数据的关系如下：</p>
+<ul>
+<li>Table Metadata：保存 Schema、Partition Spec、Sort Order、表属性、Snapshot 历史、Branch/Tag 和当前 Snapshot ID；</li>
+<li>Snapshot：表示某个时刻的表版本，并指向对应的 Manifest List；</li>
+<li>Manifest List：列出该 Snapshot 使用的 Manifest，并保存分区范围和文件数量等摘要；</li>
+<li>Manifest：不可变的 Avro 文件，记录一组 Data File 或 Delete File，以及分区值、列统计和版本信息；</li>
+<li>Data/Delete File：承载实际表数据或行级删除信息。</li>
+</ul>
+<p>一个 Manifest 只能描述 Data File 或 Delete File，不能混合两类内容。没有变化的 Manifest 可以被多个 Snapshot 复用，避免每次提交都重写整棵元数据树。</p>
+<p>Catalog 的“原子提交”是一种逻辑语义，不要求所有实现使用相同的 CAS 接口。它可以通过数据库事务、Metastore 条件更新、REST Commit 或文件系统原子 Rename 实现，但都必须保证：新的 Metadata Version 要么完整发布，要么完全不可见。</p>
+<h3 id="Reader-如何找到需要读取的文件"><a href="#Reader-如何找到需要读取的文件" class="headerlink" title="Reader 如何找到需要读取的文件"></a>Reader 如何找到需要读取的文件</h3><p>Reader 不再 Listing 表目录，而是从 Catalog 获取一个确定的 Metadata Version，再沿着元数据树查找文件：</p>
+<p><img src="/images/ai-data/data-lake-iceberg-05.png" alt="Iceberg Reader 文件发现流程"></p>
+<p>一次读取可以概括为五步：</p>
+<ol>
+<li>Catalog 返回当前 Table Metadata 的位置；</li>
+<li>Reader 从 Metadata 中选择当前或指定的历史 Snapshot、Branch、Tag；</li>
+<li>读取 Manifest List，根据分区摘要裁剪 Manifest；</li>
+<li>读取候选 Manifest，根据分区值和列统计裁剪 Data File 与 Delete File；</li>
+<li>为剩余文件生成 Scan Task，读取数据并应用匹配的 Delete。</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Query Predicate</span><br><span class="line">      ↓</span><br><span class="line">Manifest List：裁剪 Manifest</span><br><span class="line">      ↓</span><br><span class="line">Manifest：裁剪 Data/Delete File</span><br><span class="line">      ↓</span><br><span class="line">Parquet/ORC Statistics：裁剪 Row Group</span><br><span class="line">      ↓</span><br><span class="line">读取数据并应用 Delete</span><br></pre></td></tr></table></figure>
+<p>Manifest List 相当于 Manifest 层的索引，Manifest 则承担文件层的索引。Iceberg 借助这两级元数据完成查询规划，无需遍历表中的所有分区和文件。</p>
+<p>规划开始后，Reader 会固定使用同一个 Metadata Version 和 Snapshot。即使并发 Writer 发布了新版本，当前查询也不会切换，因此不会混合读取新旧表状态。</p>
+<h3 id="Writer-如何原子发布新版本"><a href="#Writer-如何原子发布新版本" class="headerlink" title="Writer 如何原子发布新版本"></a>Writer 如何原子发布新版本</h3><p>Iceberg 将一次写入拆成两个阶段：</p>
+<ol>
+<li>Prepare：生成新的文件和元数据；</li>
+<li>Commit：原子发布新的 Metadata Version。</li>
+</ol>
+<p>典型写入流程如下：</p>
+<p><img src="/images/ai-data/data-lake-iceberg-06.png" alt="Iceberg Writer 原子提交流程"></p>
+<p>一次写入可以概括为五步：</p>
+<ol>
+<li>Writer 读取当前 Metadata V10，作为本次操作的 Base Version；</li>
+<li>分布式任务生成新的 Data File 或 Delete File；</li>
+<li>Writer 汇总文件信息，写出 Manifest、Manifest List，以及包含新 Snapshot 的 Metadata V11；</li>
+<li>Catalog 检查当前 Metadata 是否仍为 V10；</li>
+<li>检查通过后，原子地将 Metadata Location 从 V10 更新为 V11。</li>
+</ol>
+<p>文件写出后，在 Catalog Commit 成功前仍然不可见；如果提交最终失败，并且这些文件没有被重试复用或任何 Snapshot 引用，它们才成为需要后续清理的 Orphan Files（见后续的 Catalog Commit 与乐观并发控制部分）。</p>
+<h2 id="Iceberg-的核心技术原理"><a href="#Iceberg-的核心技术原理" class="headerlink" title="Iceberg 的核心技术原理"></a>Iceberg 的核心技术原理</h2><p>Iceberg 的核心并不是某一种文件格式，而是通过 Snapshot、Manifest、Catalog Commit 和 Evolution 机制，在不可变文件之上构建可靠的表状态。</p>
+<h3 id="Snapshot：用不可变元数据实现-MVCC"><a href="#Snapshot：用不可变元数据实现-MVCC" class="headerlink" title="Snapshot：用不可变元数据实现 MVCC"></a>Snapshot：用不可变元数据实现 MVCC</h3><p>Snapshot 不是数据副本，也不是独立文件，而是 Table Metadata JSON 中的一条表版本记录：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Snapshot = &#123;</span><br><span class="line">    snapshot_id,</span><br><span class="line">    parent_snapshot_id?,</span><br><span class="line">    sequence_number,</span><br><span class="line">    timestamp_ms,</span><br><span class="line">    schema_id?,</span><br><span class="line">    manifest_list,</span><br><span class="line">    summary: &#123;</span><br><span class="line">        operation,</span><br><span class="line">        ...</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<ul>
+<li>Snapshot ID：唯一标识一个 Snapshot，但不表示提交顺序；</li>
+<li>Sequence Number：V2 引入的单调递增序号，表示提交的逻辑顺序，并用于判断 Data File 与 Delete File 的相对新旧；</li>
+<li>Manifest List：定义该 Snapshot 使用的 Manifest 集合。</li>
+</ul>
+<p>Table Metadata 中的 <code>current-snapshot-id</code> 指向主分支当前 Snapshot。Reader 加载表后固定读取该 Snapshot，即使并发 Writer 发布新版本，当前查询也不会切换，因此能够获得一致的表视图。</p>
+<p><img src="/images/ai-data/data-lake-iceberg-07.png" alt="Iceberg Metadata 与 Snapshot 演进关系"></p>
+<p>新 Snapshot 可以复用旧 Manifest，只记录发生变化的文件。Iceberg 同时维护：</p>
+<ul>
+<li>Snapshot Log：记录 Current Snapshot 的切换历史，用于时间旅行；</li>
+<li>Metadata Log：记录此前的 Metadata JSON 文件；</li>
+<li>Branch/Tag：为 Snapshot 建立命名引用，用于独立写入、审计和长期保留。</li>
+</ul>
+<p>训练任务可以固定 Snapshot ID 或 Tag，从而复现完全相同的数据集，但前提是该 Snapshot 尚未被过期清理。</p>
+<h3 id="Manifest-Tree：如何规划百万级文件"><a href="#Manifest-Tree：如何规划百万级文件" class="headerlink" title="Manifest Tree：如何规划百万级文件"></a>Manifest Tree：如何规划百万级文件</h3><p>Iceberg 不通过 Listing 遍历所有文件，而是进行多级裁剪：</p>
+<p><img src="/images/ai-data/data-lake-iceberg-08.png" alt="Iceberg 多层元数据裁剪"></p>
+<p>以时间范围和 <code>user_id</code> 查询为例，规划过程如下：</p>
+<ol>
+<li>将业务字段谓词投影到隐藏分区字段；</li>
+<li>使用 Manifest List 的分区摘要排除无关 Manifest；</li>
+<li>使用 Manifest Entry 的分区值和列统计排除 Data File 与 Delete File；</li>
+<li>使用 Parquet/ORC 统计进一步裁剪 Row Group；</li>
+<li>为剩余文件生成 Scan Task。</li>
+</ol>
+<p>Manifest List 相当于 Manifest 层的索引，Manifest 则是 Data File 和 Delete File 层的索引。分区投影采用 Inclusive Projection，可能保留少量不匹配文件，因此最终查询条件仍需在数据读取阶段执行。</p>
+<h3 id="Catalog-Commit-与乐观并发控制"><a href="#Catalog-Commit-与乐观并发控制" class="headerlink" title="Catalog Commit 与乐观并发控制"></a>Catalog Commit 与乐观并发控制</h3><p>Iceberg 的事务原子性不是由对象存储提供，而是来自 Catalog 对 Metadata Location 的原子更新。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">读取 Base Metadata</span><br><span class="line">      ↓</span><br><span class="line">生成 Data/Delete File</span><br><span class="line">      ↓</span><br><span class="line">生成 Manifest、Manifest List 和新 Metadata</span><br><span class="line">      ↓</span><br><span class="line">验证提交条件</span><br><span class="line">      ↓</span><br><span class="line">原子发布新 Metadata Location</span><br></pre></td></tr></table></figure>
+<p>如果其他 Writer 已先提交新版本，当前 Writer 不会立即失败，而是刷新表状态并重新验证：</p>
+<ul>
+<li>并发 Append 没有破坏提交前提，通常可以重试；</li>
+<li>Compaction 的源文件仍然有效，可以重新提交；</li>
+<li>待删除、覆盖或重写的文件已被修改，则提交失败。</li>
+</ul>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">版本变化</span><br><span class="line">    ↓</span><br><span class="line">刷新最新状态</span><br><span class="line">    ↓</span><br><span class="line">验证操作前提</span><br><span class="line">    ↓</span><br><span class="line">兼容则重试，冲突则失败</span><br></pre></td></tr></table></figure>
+<p>因此，Iceberg 的 OCC 不只是比较版本号，而是检查当前表状态是否仍满足本次操作的假设。</p>
+<p>只有 Catalog 成功发布新 Metadata，新文件才对 Reader 可见。提交失败后未被任何 Snapshot 引用的文件属于 Orphan Files，需要后续清理。</p>
+<h3 id="Schema-与-Partition-Evolution"><a href="#Schema-与-Partition-Evolution" class="headerlink" title="Schema 与 Partition Evolution"></a>Schema 与 Partition Evolution</h3><p>Iceberg 使用永不复用的 Field ID 标识字段，而不是只依赖名称或物理位置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Schema V1:</span><br><span class="line">1: user_id</span><br><span class="line">2: username</span><br><span class="line"></span><br><span class="line">Schema V2:</span><br><span class="line">1: user_id</span><br><span class="line">2: display_name</span><br><span class="line">3: username</span><br></pre></td></tr></table></figure>
+<p>原来的 <code>username</code> Rename 为 <code>display_name</code> 后仍使用 Field ID 2。以后重新创建的 <code>username</code> 获得 Field ID 3，因此不会错误读取旧字段的数据。</p>
+<p>Partition Spec 也有独立的 Spec ID：</p>
+<p><img src="/images/ai-data/data-lake-iceberg-09.png" alt="Iceberg 分区演进与谓词投影"></p>
+<p>分区方式变化后：</p>
+<ul>
+<li>旧文件继续使用旧 Spec；</li>
+<li>新文件使用新的默认 Spec；</li>
+<li>Reader 根据每个 Manifest 的 Spec ID 分别投影谓词；</li>
+<li>用户仍然查询业务字段，无需感知物理分区变化。</li>
+</ul>
+<p>Schema 和 Partition Evolution 都是元数据变更，不要求立即重写历史文件。</p>
+<h3 id="Update-与-Delete：不可变文件如何支持行级变化"><a href="#Update-与-Delete：不可变文件如何支持行级变化" class="headerlink" title="Update 与 Delete：不可变文件如何支持行级变化"></a>Update 与 Delete：不可变文件如何支持行级变化</h3><p>Iceberg 不会原地修改已经发布的 Data File。引擎可以选择：</p>
+<ul>
+<li>Copy-on-Write：重写受影响的 Data File；</li>
+<li>Merge-on-Read：保留原文件，新增 Delete 信息和更新后的数据。</li>
+</ul>
+<p>从逻辑上看：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">UPDATE = Delete Old Row + Insert New Row</span><br></pre></td></tr></table></figure>
+<p>Iceberg V2 定义了两类 Delete File：</p>
+<ul>
+<li>Position Delete：通过 <code>file_path + row_position</code> 精确删除一行；</li>
+<li>Equality Delete：通过一个或多个字段的 Field ID 和字段值匹配记录。</li>
+</ul>
+<p>Iceberg V3 进一步引入 Deletion Vector，使用 Bitmap 记录单个 Data File 中被删除的行。V3 不再新增 Position Delete File，但仍需兼容读取历史 Position Delete；Equality Delete 继续保留。</p>
+<p>Delete 不能无条件应用到所有 Data File，还需要结合分区和 Sequence Number：</p>
+<table>
+<thead>
+<tr>
+<th><strong>Delete 类型</strong></th>
+<th><strong>主要匹配条件</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Position Delete</td>
+<td>文件路径、行位置、分区和 Sequence Number</td>
+</tr>
+<tr>
+<td>Equality Delete</td>
+<td>字段值、分区，且 Data File 逻辑上早于 Delete</td>
+</tr>
+<tr>
+<td>Deletion Vector</td>
+<td>引用同一个 Data File，并满足分区和 Sequence Number 条件</td>
+</tr>
+</tbody>
+</table>
+<p>V2 还区分两个序号：</p>
+<ul>
+<li>Data Sequence Number：表示文件内容的逻辑年龄，用于判断 Delete 是否适用；</li>
+<li>File Sequence Number：表示物理文件在哪次提交中加入表。</li>
+</ul>
+<p>Compaction 生成新文件时，既要物化已经生效的 Delete，也要维持正确的 Data Sequence Number，否则可能导致删除记录重新出现，或者旧 Delete 错误作用于新数据。</p>
+<h2 id="Iceberg-与-Hudi-的架构差异"><a href="#Iceberg-与-Hudi-的架构差异" class="headerlink" title="Iceberg 与 Hudi 的架构差异"></a>Iceberg 与 Hudi 的架构差异</h2><p>Hudi 与 Iceberg 都在开放存储之上提供事务、版本管理和并发控制，但两者的设计起点不同：Hudi 优先解决高频 Upsert、CDC 与增量处理；Iceberg 优先解决超大规模分析表的状态管理、查询规划和多引擎一致性。这是架构重心的差异，而不是能力上的先进与落后。</p>
+<table>
+<thead>
+<tr>
+<th><strong>对比维度</strong></th>
+<th><strong>Hudi</strong></th>
+<th><strong>Iceberg</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>核心问题</td>
+<td>一条记录发生变化后，如何定位、合并并增量传播</td>
+<td>哪些文件构成当前表版本，如何高效规划和原子发布</td>
+</tr>
+<tr>
+<td>状态模型</td>
+<td>Timeline → File Group → File Slice</td>
+<td>Table Metadata → Snapshot → Manifest List → Manifest</td>
+</tr>
+<tr>
+<td>更新定位</td>
+<td>Record Key 与 Index 将记录映射到 File Group</td>
+<td>表格式不维护全局主键索引，由计算引擎定位受影响文件</td>
+</tr>
+<tr>
+<td>更新方式</td>
+<td>COW 重写 Base File；MOR 追加 Log，再由 Compaction 合并</td>
+<td>COW 重写 Data File；MOR 写入 Delete File；V3 可使用 Deletion Vector，再由文件重写物化删除结果</td>
+</tr>
+<tr>
+<td>读取模型</td>
+<td>Snapshot、Read Optimized、Incremental 和 CDC Query</td>
+<td>Snapshot、Time Travel，以及基于 Manifest 的多级文件裁剪</td>
+</tr>
+<tr>
+<td>提交与并发</td>
+<td>Timeline 原子发布 Action，并围绕 File Group 处理写入冲突</td>
+<td>Catalog 原子切换 Metadata Pointer，通过验证与重试实现 OCC</td>
+</tr>
+<tr>
+<td>后台维护</td>
+<td>Compaction、Clustering、Cleaning 和 Indexing 是存储内核的重要组成</td>
+<td>Rewrite Data/Delete Files、Rewrite Manifests、Expire Snapshots 和 Orphan File Cleanup</td>
+</tr>
+<tr>
+<td>典型场景</td>
+<td>CDC 入湖、高频 Upsert、近实时明细表和增量数据管道</td>
+<td>多引擎分析、超大规模表、Schema/Partition Evolution 和可复现数据版本</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Hudi 的 Timeline、Record Index 和 File Group 围绕记录级变化构建，使增量查询与 COW/MOR 成为内核的一部分。</li>
+<li>Iceberg 则通过 Snapshot 与两级 Manifest 元数据树显式定义表状态，并利用分区摘要和文件统计完成大规模查询规划；行级更新建立在 Delete File、Deletion Vector 和文件重写机制之上。</li>
+</ul>
+<p>可以用两句话概括：</p>
+<ol>
+<li>Hudi 更关注一条记录如何持续变化，以及这些变化如何被低延迟写入和增量消费；</li>
+<li>Iceberg 更关注大量不可变文件如何组成一致、可演进且能被多引擎访问的表快照。</li>
+</ol>
+<p>两者的能力边界也在持续重叠：Hudi 已具备快照查询、时间旅行、多引擎访问和多种并发控制；Iceberg 也通过行级 Delete、Deletion Vector、流式写入和数据重写不断增强更新能力。因此，技术选型的关键不是比较功能数量，而是判断系统的主要矛盾究竟是“高频记录变化”，还是“超大规模分析表的统一管理”。</p>
+<h2 id="生产实践与工业界应用"><a href="#生产实践与工业界应用" class="headerlink" title="生产实践与工业界应用"></a>生产实践与工业界应用</h2><h3 id="典型生产场景：实时事件表的多引擎共享"><a href="#典型生产场景：实时事件表的多引擎共享" class="headerlink" title="典型生产场景：实时事件表的多引擎共享"></a>典型生产场景：实时事件表的多引擎共享</h3><p>Iceberg 的典型生产场景，是让多个计算引擎围绕对象存储中的同一张大规模分析表协同工作。以用户行为事件表为例，Flink 负责实时写入，Spark 执行历史回填、数据修复和文件重写，Trino 服务交互式分析，训练任务则读取固定的数据版本。</p>
+<p><img src="/images/ai-data/data-lake-iceberg-10.png" alt="Iceberg 多引擎生产架构"></p>
+<p>多引擎并发读写有一个重要前提：所有引擎必须通过同一个权威 Catalog 解析和提交表状态，并兼容目标表使用的 Iceberg Spec、行级 Delete 与提交语义。Iceberg 定义了统一协议，但事务保证最终仍依赖 Catalog 和各引擎的正确实现。</p>
+<p>Flink 与 Spark 先生成不可变的数据文件，再通过 Catalog 原子提交新的 Metadata Version。并发 Append 通常可以在刷新表状态后重试；如果 Backfill、Overwrite 或 Rewrite 修改了重叠文件，Iceberg 会重新验证提交前提，并在发生真实冲突时拒绝提交。</p>
+<p>Reader 在查询开始时固定使用一个 Snapshot。即使 Flink 发布新数据，或者 Spark 正在执行 Compaction，当前查询仍然读取原 Snapshot 对应的完整文件集合，不会混合新旧表状态。Compaction 只改变物理文件布局，不应改变表的逻辑结果。</p>
+<p>训练任务还可以固定 Snapshot ID，并通过 Tag 或保留策略保护对应版本，从而在训练、评估和问题回溯时重新获得相同的 Schema、Partition Spec 与文件集合。</p>
+<p>这个场景集中体现了 Iceberg 的核心价值：</p>
+<blockquote>
+<p>在统一 Catalog 和兼容引擎的基础上，让实时写入、批量修复、交互式分析和模型训练共享同一份数据，同时获得一致、可演进且可复现的表状态。</p>
+</blockquote>
+<h3 id="工业界应用现状"><a href="#工业界应用现状" class="headerlink" title="工业界应用现状"></a>工业界应用现状</h3><p>Iceberg 已经从开源 Table Format 演进为跨计算引擎和云数据平台的重要互操作协议：</p>
+<ul>
+<li>Apache Iceberg 直接维护 Spark、Flink 和 Hive 集成，Trino、Presto 等引擎也提供原生连接器。</li>
+<li>AWS Athena 支持读写 Iceberg V2 表及行级 DML，EMR 从 6.5.0 开始原生集成 Iceberg。</li>
+<li>BigQuery Iceberg Managed Tables 将数据保存在客户的 Cloud Storage 中，并自动执行 Compaction、Clustering 和 Garbage Collection。</li>
+<li>Snowflake 同时支持自身管理和外部 Catalog 管理的 Iceberg 表；Databricks Unity Catalog 则通过 Iceberg REST Catalog 向 Spark、Flink、Trino 等客户端开放表访问。</li>
+</ul>
+<p>Iceberg 的行业价值因此不再局限于 ACID，而是让不同平台能够围绕对象存储中的同一份数据，使用统一的快照、提交和表状态协议。</p>
+<p>需要注意，“支持 Iceberg”不代表支持全部语义。不同平台在 Spec 版本、行级 Delete、DML、Partition Evolution、Branch/Tag、增量读取和表维护等方面仍有差异。例如 Athena 只创建和操作 V2 表，行级 DML 固定使用 MOR，也不支持增量查询。因此，生产选型仍需检查具体版本的 Feature Matrix，而不能只看是否标注“支持 Iceberg”。</p>
+<h3 id="总结与后续"><a href="#总结与后续" class="headerlink" title="总结与后续"></a>总结与后续</h3><p>Hudi 与 Iceberg 都在不可变文件之上补回了数据库内核，但选择了不同的中心抽象：Hudi 通过 Record Key、File Group 和 Timeline 管理记录的持续变化；Iceberg 通过 Snapshot、Manifest 和 Catalog 管理大规模分析表的一致状态。</p>
+<p>当负载进一步转向高频主键更新和持续变更流时，Iceberg 以 Snapshot 和文件为中心的模型，会把更多更新定位、变更合并和 Compaction 成本交给计算引擎与表维护任务。下一篇将分析 Paimon 如何通过 Flink Checkpoint、Bucket 与 LSM Tree，将这些能力进一步下沉到实时湖存储内核；之后再讨论 Lance 如何面向 AI 数据重新设计列式存储、随机访问与索引。</p>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/08/10/ai-data-lake-iceberg/" data-id="cmsm0u3w3000037lwu6mooqdq" class="article-share-link">分享到</a><div class="tags"><a href="/tags/数据湖/">数据湖</a></div><div class="post-nav"><a href="/2026/08/06/embodied-intelligence-planning-grasping-manipulation/" class="next">具身智能（五）：从任务目标到可执行轨迹</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/08/10/ai-data-lake-iceberg/';
+var disqus_title = '数据湖架构演进（二）：Iceberg 的快照表内核';
+var disqus_url = 'http://matt33.com/2026/08/10/ai-data-lake-iceberg/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/bigdata/" style="font-size: 15px;">bigdata</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/数据湖/" style="font-size: 15px;">数据湖</a> <a href="/tags/具身智能/" style="font-size: 15px;">具身智能</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/08/10/ai-data-lake-iceberg/">数据湖架构演进（二）：Iceberg 的快照表内核</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/08/06/embodied-intelligence-planning-grasping-manipulation/">具身智能（五）：从任务目标到可执行轨迹</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/08/04/embodied-intelligence-perception-state-estimation/">具身智能（四）：从传感器到世界状态</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/31/embodied-intelligence-kinematics-dynamics-control/">具身智能（三）：从目标位姿到关节力矩</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/29/embodied-intelligence-body-spatial-math/">具身智能（二）：机器人如何描述身体与世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/21/embodied-intelligence-overview/">具身智能（一）：物理世界中的智能闭环</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/19/ai-data-lake-hudi/">数据湖架构演进（一）：Hudi 的增量数据内核</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/15/llm-to-agi/">LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/14/llm-ai-coding/">LLM 系列 (二十五)：AI Coding，大模型如何改变软件开发</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/11/llm-personalization-memory/">LLM 系列 (二十四)：个性化与记忆，大模型如何理解每一个用户</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
