@@ -16,7 +16,7 @@
   <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
-    <title>数据湖架构演进（二）：Iceberg 的快照表内核</title>
+    <title>数据湖（二）：Iceberg 如何定义表快照</title>
     <link href="http://matt33.com/2026/08/10/ai-data-lake-iceberg/"/>
     <id>http://matt33.com/2026/08/10/ai-data-lake-iceberg/</id>
     <published>2026-08-09T16:28:44.000Z</published>
@@ -1367,7 +1367,7 @@ f(\mathbf{q}^{\ast})=\mathbf{T}_{d}$$</span><!-- Has MathJax -->
   </entry>
   
   <entry>
-    <title>数据湖架构演进（一）：Hudi 的增量数据内核</title>
+    <title>数据湖（一）：Hudi 如何管理增量数据</title>
     <link href="http://matt33.com/2026/07/19/ai-data-lake-hudi/"/>
     <id>http://matt33.com/2026/07/19/ai-data-lake-hudi/</id>
     <published>2026-07-19T15:46:07.000Z</published>
@@ -1884,6 +1884,279 @@ f(\mathbf{q}^{\ast})=\mathbf{T}_{d}$$</span><!-- Has MathJax -->
     
     
       <category term="数据湖" scheme="http://matt33.com/tags/%E6%95%B0%E6%8D%AE%E6%B9%96/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>DeepSeek-R1：推理能力如何炼成</title>
+    <link href="http://matt33.com/2026/07/16/deepseek-r1/"/>
+    <id>http://matt33.com/2026/07/16/deepseek-r1/</id>
+    <published>2026-07-15T16:18:04.000Z</published>
+    <updated>2026-07-15T16:18:04.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>2025 年 1 月 20 日，DeepSeek 发布 R1，将高水平推理能力、开放权重和可直接使用的产品入口带到了一起。它受到关注，不只是因为模型能够输出更长的思考过程，更因为开发者终于可以下载、部署和研究一个具有较强推理能力的模型，并基于它训练自己的小模型（<a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">官方发布公告</a>）。</p>
+<p>理解 R1，首先要分清两件事：<strong>模型架构决定计算如何发生，训练方法决定模型学会怎样利用这些计算。</strong> R1 延续了 DeepSeek-V3-Base 的主体结构，主要突破发生在<strong>后训练</strong>阶段。MoE 与 MLA 提供了高效底座，强化学习、多阶段训练和蒸馏则把底座转化为推理模型及其衍生生态。</p>
+<a id="more"></a>
+<blockquote>
+<p>本文聚焦 <strong>2025 年 1 月首发版 DeepSeek-R1</strong>，以当时的论文和发布资料为依据，不混入 R1-0528 等后续版本的改进。</p>
+</blockquote>
+<h2 id="背景：从生成答案到学习解题"><a href="#背景：从生成答案到学习解题" class="headerlink" title="背景：从生成答案到学习解题"></a>背景：从生成答案到学习解题</h2><h3 id="为什么已有大模型还需要推理训练"><a href="#为什么已有大模型还需要推理训练" class="headerlink" title="为什么已有大模型还需要推理训练"></a>为什么已有大模型还需要推理训练</h3><p>预训练通过预测下一个 Token，让模型学习语言、知识和大量问题的解法；监督微调（SFT）通过示范答案，让模型更好地遵循指令。但在数学证明、复杂代码和多约束问题中，模型还需要连续完成拆解、计算、检查和修正。</p>
+<p>这类任务的困难在于：局部文本合理，不代表整条推导正确。一道题的中间步骤即使很流畅，也可能遗漏条件；一段程序即使语法正确，也可能无法通过边界测试。</p>
+<p>思维链（Chain of Thought，CoT）让模型在给出最终答案之前，先生成中间推导步骤，从而逐步完成复杂问题的求解。思维链提示方法由 Jason Wei 等人在 2022 年的论文 <a href="https://arxiv.org/abs/2201.11903" target="_blank" rel="external">《Chain-of-Thought Prompting Elicits Reasoning in Large Language Models》</a>中系统提出：在提示词中提供包含推导过程的示例，可以提升模型的推理表现。2024 年，OpenAI 发布的 <a href="https://openai.com/index/learning-to-reason-with-llms/" target="_blank" rel="external">o1</a> 进一步通过强化学习训练模型的推理能力，并展示了在推理阶段投入更多计算、生成更充分的推导过程，能够改善复杂任务的求解表现。</p>
+<ul>
+<li>R1 面对的核心问题是：<strong>能否利用可检查的任务结果，训练模型生成更有效的解题过程，并把这种能力开放给更多人？</strong></li>
+</ul>
+<p>这里的变化不只是让模型多输出一些文字，而是改变训练信号：除了模仿示范，还要根据最终结果，对模型自己生成的解法给予反馈。</p>
+<h3 id="R1-的创新究竟在哪里"><a href="#R1-的创新究竟在哪里" class="headerlink" title="R1 的创新究竟在哪里"></a>R1 的创新究竟在哪里</h3><p>这里可以把 R1 拆成三个层次：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>主要技术</th>
+<th>解决的问题</th>
+<th>与 R1 的关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型结构</td>
+<td>DeepSeekMoE、MLA</td>
+<td>大模型的计算量、KV Cache 与带宽压力</td>
+<td>主要继承自 V3 及更早工作</td>
+</tr>
+<tr>
+<td>后训练</td>
+<td>R1-Zero 实验、多阶段 SFT 与 RL</td>
+<td>如何训练有效推理，同时保持可读性和通用性</td>
+<td><strong>R1 的核心技术贡献</strong></td>
+</tr>
+<tr>
+<td>能力传播</td>
+<td>开放权重、推理数据蒸馏、API</td>
+<td>如何让研究者和应用团队使用推理能力</td>
+<td><strong>放大 R1 行业影响的关键</strong></td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/deepseek-r1-01.png" alt="R1 的三层设计：架构提供计算基础，后训练塑造推理行为，开放与蒸馏扩大使用范围"></p>
+<h2 id="模型架构：V3-为-R1-提供了什么"><a href="#模型架构：V3-为-R1-提供了什么" class="headerlink" title="模型架构：V3 为 R1 提供了什么"></a>模型架构：V3 为 R1 提供了什么</h2><p>R1 仍然是自回归 Decoder-only Transformer。输入经过 Embedding 和多层 Transformer Block，最后预测下一个 Token。它没有在网络里额外安装一个独立的“逻辑推理引擎”。</p>
+<p>官方配置仍使用 <code>DeepseekV3ForCausalLM</code>。主体有 61 层，前 3 层使用 Dense FFN，后续层使用 MoE；在每个 MoE 层中，有 1 个共享专家和 256 个路由专家，每个 Token 选择其中 8 个路由专家（<a href="https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/config.json" target="_blank" rel="external">官方配置文件</a>），如下图所示：</p>
+<p><img src="/images/llm/deepseek-r1-02.png" alt="R1 的架构示例图"></p>
+<h3 id="DeepSeekMoE：扩大容量，控制每-Token-的计算"><a href="#DeepSeekMoE：扩大容量，控制每-Token-的计算" class="headerlink" title="DeepSeekMoE：扩大容量，控制每 Token 的计算"></a>DeepSeekMoE：扩大容量，控制每 Token 的计算</h3><p>在 Dense FFN 中，每个 Token 的表示都经过同一组完整矩阵。扩大 FFN 宽度会直接增加每个 Token 的计算量。MoE 将这部分计算组织成多个专家网络，由 Router 根据当前 Token 的隐藏状态选择少数专家参与计算。</p>
+<p>DeepSeekMoE 有两个关键设计（<a href="https://arxiv.org/abs/2401.06066" target="_blank" rel="external">DeepSeekMoE 论文</a>）：<strong>细粒度路由专家提供更灵活的组合，共享专家承担共性表示，减少路由专家之间的重复学习。</strong> 专家是 FFN 子网络，不是多个完整聊天模型，也不是预先指定的“数学专家”“代码专家”。</p>
+<p>忽略残差连接和归一化，一个 MoE 层可以简化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">输出 = 共享专家(x) + Σ 路由权重_i × 专家_i(x)</span><br><span class="line">                         i 属于本层选中的 Top-K 专家</span><br></pre></td></tr></table></figure>
+<p>R1 完整模型约有 <strong>671B 总参数，每个 Token 激活约 37B 参数</strong>，通过稀疏激活在扩大模型容量的同时控制计算量。但未激活的专家仍需存储，分布式部署也存在通信和调度开销，因此不能按 37B 模型估算其部署成本。为改善专家负载分布，V3 主要通过动态路由偏置实现负载均衡，同时保留轻量的序列级约束，防止单条文本过度集中使用少数专家。</p>
+<h3 id="MLA：降低长序列的缓存压力"><a href="#MLA：降低长序列的缓存压力" class="headerlink" title="MLA：降低长序列的缓存压力"></a>MLA：降低长序列的缓存压力</h3><p>MLA，全称 Multi-head Latent Attention，多头潜在注意力，通过可学习的低秩投影，把 K/V 的信息联合压缩到较小的潜在表示中。实现时配合矩阵吸收，能够避免在每一步显式恢复全部历史 K/V；位置相关的 RoPE 分量则单独处理和缓存。</p>
+<blockquote>
+<p>自回归生成需要保存历史 Token 的 Key 和 Value。推理过程越长，KV Cache 越大；逐步生成时，还需要不断读取这些历史缓存。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">传统 MHA：缓存各个注意力头的历史 K 和 V</span><br><span class="line">MLA：缓存压缩后的 KV 潜在表示，以及解耦的位置分量</span><br></pre></td></tr></table></figure>
+<p>对 R1 而言，这项继承的架构尤其有价值：更长的解题过程意味着更多生成 Token，压低每个 Token 的缓存成本，可以减轻持续生成时的显存与带宽压力。<strong>MLA 降低缓存成本，但不会消除全量注意力随上下文增长的计算开销。</strong></p>
+<p><img src="/images/llm/deepseek-r1-03.png" alt="R1 的 MLA 与 MoE 架构"></p>
+<h3 id="架构效率与推理能力如何配合"><a href="#架构效率与推理能力如何配合" class="headerlink" title="架构效率与推理能力如何配合"></a>架构效率与推理能力如何配合</h3><p>V3 底座的效率不仅来自 MoE 和 MLA，还依赖训练目标与分布式系统的协同优化：</p>
+<ul>
+<li><strong>FP8 混合精度训练</strong>让适合低精度计算的矩阵运算使用 FP8，同时在数值敏感环节保留更高精度，以兼顾吞吐、显存占用和训练稳定性；</li>
+<li><strong>计算与通信重叠</strong>通过调度，让部分计算与专家间的数据传输同时进行，减少 GPU 等待通信的时间；</li>
+<li><strong>多 Token 预测（MTP）</strong>则在预测下一个 Token 的基础上增加后续 Token 的辅助预测目标，使每段训练文本提供更丰富的监督信号。这些技术分别改善计算效率、硬件利用率和数据利用效率，共同构成 R1 继承的高效底座。</li>
+</ul>
+<p>在此基础上，R1 的推理训练让模型学习如何利用更多生成步骤进行问题拆解、验证和修正。两者的配合可以理解为：<strong>底座优化每一步计算的成本，后训练提升这些计算对任务求解的价值。</strong> 其中，MoE 减少每个 Token 需要执行的 FFN 计算，MLA 降低历史信息的缓存与读取负担，但较低的单 Token 成本并不意味着每次任务都便宜。复杂问题可能产生很长的推理过程，持续占用计算和 KV Cache；实际服务成本还受到并发规模、专家通信和硬件利用率影响。因此，评估 R1 的效率，应结合任务成功率、端到端延迟和单次任务成本，而不能只看“每个 Token 激活 37B 参数”。</p>
+<h2 id="训练突破：从-R1-Zero-到-R1"><a href="#训练突破：从-R1-Zero-到-R1" class="headerlink" title="训练突破：从 R1-Zero 到 R1"></a>训练突破：从 R1-Zero 到 R1</h2><h3 id="R1-Zero：用结果反馈训练解题行为"><a href="#R1-Zero：用结果反馈训练解题行为" class="headerlink" title="R1-Zero：用结果反馈训练解题行为"></a>R1-Zero：用结果反馈训练解题行为</h3><p>R1-Zero 探索了一条直接的训练路线：从已经完成预训练的 V3-Base 出发，跳过前置监督微调，通过大规模强化学习提升推理能力。 这里的“Zero”指没有先用推理示范进行 SFT，而不是从零学习；模型仍依赖预训练获得的知识，以及训练题目、标准答案和验证规则。训练主要使用两类反馈：</p>
+<ul>
+<li><strong>正确性奖励</strong>检查任务是否完成，例如数学题的最终答案是否正确、生成的代码是否通过测试；</li>
+<li><strong>格式奖励</strong>约束推理过程的输出形式。</li>
+</ul>
+<p>模型先生成解题过程和答案，系统再根据验证结果计算奖励并更新参数。这使训练能够减少对人工编写完整推导过程的依赖，让模型探索不同解法，而不必逐步模仿一份标准答案。</p>
+<p>R1 的论文观察到，随着训练推进，R1-Zero 出现了更长的推导、自我检查和重新尝试等行为，展示了结果反馈对推理表现的促进作用。但它也存在语言混杂、表达不清等问题，说明提高解题正确率与获得良好的交互体验，仍然是不同的优化目标。</p>
+<p>结果奖励也有局限：答案正确不代表每一步推导都成立，通过测试也不代表代码不存在缺陷。因此，R1-Zero 的效果既取决于基模能力，也取决于题目质量和验证器的可靠性；模型生成的检查与修正过程，仍需要通过实际结果检验。</p>
+<h3 id="GRPO：通过组内比较优化生成策略"><a href="#GRPO：通过组内比较优化生成策略" class="headerlink" title="GRPO：通过组内比较优化生成策略"></a>GRPO：通过组内比较优化生成策略</h3><p>在强化学习中，语言模型可以看作一个“策略”：根据题目和已生成的内容，决定下一个 Token 的概率分布。训练的目标，是利用任务奖励调整模型参数，让它更倾向于生成能够正确完成任务的回答。</p>
+<ul>
+<li><strong>PPO（Proximal Policy Optimization，近端策略优化）：</strong>是一种常见的策略优化算法。在典型的语言模型 PPO 训练中，除了生成回答的策略模型，还需要训练一个 Critic（价值模型），估计当前生成状态下的预期回报。系统根据实际结果相对这一预期的好坏，决定如何调整生成策略，并通过概率比裁剪限制更新幅度；</li>
+<li><strong>GRPO（Group Relative Policy Optimization，组相对策略优化）：</strong>由 2024 年的 <a href="https://arxiv.org/html/2402.03300v3#S4.SS1" target="_blank" rel="external">DeepSeekMath 论文</a> 提出，后来被 R1 采用。它针对同一道题采样多个回答，用组内奖励统计构造比较基线，从而省去单独训练 Critic 的开销。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>对比维度</th>
+<th>典型 PPO 实现</th>
+<th>GRPO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>比较基线</td>
+<td>Critic 估计的预期回报</td>
+<td>同一道题多个回答的奖励均值</td>
+</tr>
+<tr>
+<td>优势估计</td>
+<td>根据奖励与价值估计计算</td>
+<td>根据组内奖励差异计算并归一化</td>
+</tr>
+<tr>
+<td>是否训练 Critic</td>
+<td>通常需要</td>
+<td>不需要</td>
+</tr>
+<tr>
+<td>主要开销</td>
+<td>生成、奖励计算、策略模型与 Critic 训练</td>
+<td>多回答采样、奖励计算与策略模型训练</td>
+</tr>
+</tbody>
+</table>
+<p>这里的 Critic 与奖励函数不是一回事：<strong>奖励函数评价回答结果，Critic 预测预期回报。GRPO 省去了后者，但仍然需要可靠的奖励。</strong>GRPO 中的“优势”，可以理解为一条回答比同组其他尝试好多少：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">A_i = (r_i - 组内奖励均值) / (组内奖励标准差 + ε)</span><br></pre></td></tr></table></figure>
+<p>其中，<code>r_i</code> 是第 i 个回答的奖励，<code>ε</code> 用于避免分母为零。假设同一道题生成了四条回答，只按正确性给予奖励：</p>
+<table>
+<thead>
+<tr>
+<th>回答</th>
+<th>奖励</th>
+<th>相对于均值 0.5</th>
+<th>奖励项的优化方向</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A：正确</td>
+<td>1</td>
+<td>高于平均，优势为正</td>
+<td>增强该回答的生成倾向</td>
+</tr>
+<tr>
+<td>B：错误</td>
+<td>0</td>
+<td>低于平均，优势为负</td>
+<td>减弱该回答的生成倾向</td>
+</tr>
+<tr>
+<td>C：正确</td>
+<td>1</td>
+<td>高于平均，优势为正</td>
+<td>增强该回答的生成倾向</td>
+</tr>
+<tr>
+<td>D：错误</td>
+<td>0</td>
+<td>低于平均，优势为负</td>
+<td>减弱该回答的生成倾向</td>
+</tr>
+</tbody>
+</table>
+<p>GRPO 的效果依赖组内比较是否有效：所有回答奖励相同时，该组无法提供相对优劣信号；验证器存在漏洞时，模型可能学会获取奖励，却没有真正完成任务。因此，题目难度、采样多样性和奖励质量都很关键。它减少了 Critic 带来的训练开销，但长回答采样、验证和参数更新仍然需要大量计算。</p>
+<p><img src="/images/llm/deepseek-r1-04.png" alt="GRPO 如何工作"></p>
+<h3 id="正式版-R1：探索与示范相互配合"><a href="#正式版-R1：探索与示范相互配合" class="headerlink" title="正式版 R1：探索与示范相互配合"></a>正式版 R1：探索与示范相互配合</h3><p>R1-Zero 展示了强化学习的潜力，但可用的助手还需要清晰表达、通用任务能力和行为约束。正式版 R1 因此采用了多阶段方案。</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>做了什么</th>
+<th>目的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>冷启动 SFT</td>
+<td>用少量长推理示范微调 V3-Base</td>
+<td>提供较好的初始表达和解题格式</td>
+</tr>
+<tr>
+<td>推理 RL</td>
+<td>根据结果奖励优化，并兼顾语言一致性</td>
+<td>提升可验证任务的推理表现</td>
+</tr>
+<tr>
+<td>拒绝采样与 SFT</td>
+<td>筛选推理样本，混合通用样本，重新微调 V3-Base</td>
+<td>把探索结果转为较稳定的监督训练数据</td>
+</tr>
+<tr>
+<td>综合 RL</td>
+<td>结合推理奖励与通用偏好奖励</td>
+<td>平衡推理、帮助性与安全性</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/deepseek-r1-05.png" alt="R1-Zero 与 R1 的训练路线"></p>
+<p>这套训练流程可以理解为：<strong>先让模型尝试解题，再把有效的解法整理成示范，用于后续训练。</strong> 强化学习让模型根据答案是否正确，调整生成解题过程的方式；筛选环节保留结果正确、表达清晰的样本；SFT 再用这些样本训练模型，使其更稳定地生成高质量的解题过程。这样，模型既能从自己的尝试中获得反馈，也能从筛选后的示范中学习。</p>
+<p>完成训练后，模型在回答问题时，会将已经生成的推导步骤作为后续生成的依据，逐步完成计算、检查或修正。<strong>这个过程使用的是训练好的固定参数，变化的是当前上下文，而不是模型权重。</strong> 更多中间步骤可以为复杂问题提供更充分的求解过程，但也可能延续错误，因此推导更长并不必然意味着答案更准确。</p>
+<h3 id="蒸馏：将推理能力传递给小模型"><a href="#蒸馏：将推理能力传递给小模型" class="headerlink" title="蒸馏：将推理能力传递给小模型"></a>蒸馏：将推理能力传递给小模型</h3><p>为了降低部署门槛，并验证推理能力能否迁移，R1 系列发布了基于 Qwen 和 Llama 的 6 个 Dense 蒸馏模型，覆盖 1.5B、7B、8B、14B、32B、70B。它们以已有模型的权重为起点，使用 R1 训练流程中整理的约 80 万条推理与通用样本进行 <strong>SFT（监督微调）</strong>，首发版本没有额外进行强化学习（<a href="https://arxiv.org/html/2501.12948v1#S2.SS4" target="_blank" rel="external">蒸馏训练说明</a>）。</p>
+<p>蒸馏传递的是<strong>经过筛选的答案与解题过程</strong>：学生保留自身的 Dense 架构，通过学习示范调整参数，而不是从完整 R1 中裁剪专家。论文中的 32B 对照实验显示，蒸馏模型在 AIME 2024 上达到 72.6%（<a href="https://arxiv.org/html/2501.12948v1#S4.SS1" target="_blank" rel="external">对照实验</a>），高于同一底座直接进行大规模 RL 后的 47.0%。这说明，在该实验设置下，学习强模型的解题经验，比让小模型独立探索更有效。</p>
+<p>这些模型让更多团队能够在有限资源下使用推理能力，但它们仍受学生模型的容量、知识和泛化能力约束。R1-Distill 提供的是不同成本与能力之间的选择，并非完整 R1 的等价缩小版。</p>
+<h2 id="行业影响：为什么-R1-引起了如此大的反响"><a href="#行业影响：为什么-R1-引起了如此大的反响" class="headerlink" title="行业影响：为什么 R1 引起了如此大的反响"></a>行业影响：为什么 R1 引起了如此大的反响</h2><h3 id="推理能力进入可下载、可比较的范围"><a href="#推理能力进入可下载、可比较的范围" class="headerlink" title="推理能力进入可下载、可比较的范围"></a>推理能力进入可下载、可比较的范围</h3><p>R1 首发评测给出了一个直接信号：开放权重模型已经能在多项推理任务上接近当时的领先闭源模型。</p>
+<table>
+<thead>
+<tr>
+<th>首发评测项目</th>
+<th>DeepSeek-V3</th>
+<th>DeepSeek-R1</th>
+<th>OpenAI o1-1217</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AIME 2024，pass@1</td>
+<td>39.2%</td>
+<td>79.8%</td>
+<td>79.2%</td>
+</tr>
+<tr>
+<td>MATH-500，pass@1</td>
+<td>90.2%</td>
+<td>97.3%</td>
+<td>96.4%</td>
+</tr>
+<tr>
+<td>GPQA Diamond，pass@1</td>
+<td>59.1%</td>
+<td>71.5%</td>
+<td>75.7%</td>
+</tr>
+<tr>
+<td>Aider-Polyglot，准确率</td>
+<td>49.6%</td>
+<td>53.3%</td>
+<td>61.7%</td>
+</tr>
+</tbody>
+</table>
+<p>以上来自 DeepSeek 官方发布的对比表，这些数据支持的是“部分推理任务达到相近水平”，而不是“全面超过 o1”。数学、知识问答和代码编辑之间仍有差异，真实业务还需要检查延迟、输出稳定性和任务成功率。</p>
+<h3 id="开放权重让能力能够被研究和扩散"><a href="#开放权重让能力能够被研究和扩散" class="headerlink" title="开放权重让能力能够被研究和扩散"></a>开放权重让能力能够被研究和扩散</h3><p>开放权重意味着团队可以自行评测、部署、适配和开展训练实验。配套的小模型又让资源不同的开发者都能参与，而不必全部承担完整模型的部署成本。</p>
+<p>R1 官方提供了 MIT 许可，并允许使用输出做蒸馏；具体蒸馏模型还需要结合 Qwen、Llama 等底座的许可条件理解（<a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">发布公告</a>/<a href="https://github.com/deepseek-ai/DeepSeek-R1#7-license" target="_blank" rel="external">官方许可说明</a>）。</p>
+<p>开放的边界也需要说清楚：<strong>首发开放了权重和技术路线，但没有同时提供完整训练数据和端到端训练代码。</strong> Hugging Face 在 2025 年 1 月 28 日启动 Open-R1，就是为了补足数据、训练配方和复现环节；次日，微软宣布 R1 进入 Azure AI Foundry 和 GitHub 的模型生态（<a href="https://huggingface.co/blog/open-r1" target="_blank" rel="external">Open-R1 项目说明</a>/<a href="https://azure.microsoft.com/en-us/blog/deepseek-r1-is-now-available-on-azure-ai-foundry-and-github/" target="_blank" rel="external">微软接入公告</a>）。</p>
+<p>这两类行动体现了不同的扩散路径：研究社区尝试理解和复现方法，产品平台则降低应用接入成本。R1 的影响由此超出了单个模型的榜单成绩。</p>
+<h3 id="成本讨论从模型规模转向有效计算"><a href="#成本讨论从模型规模转向有效计算" class="headerlink" title="成本讨论从模型规模转向有效计算"></a>成本讨论从模型规模转向有效计算</h3><p>R1 首发 API 定价为每百万输入 Token 0.55 美元（缓存未命中）、每百万输出 Token 2.19 美元，这是 2025 年 1 月的历史价格（<a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">首发定价</a>）。这一价格与开放部署选项降低了开发者的使用门槛，但 API 单价并不等于单次任务成本：长推理会增加 Token 消耗，自行部署完整模型也需要较大的基础设施投入。同样，V3 报告中的训练算力成本估算不能代表 R1 的全部研发成本，还需要区分基础模型训练、实验探索、数据处理和 R1 后训练等支出（<a href="https://arxiv.org/html/2412.19437v1#S1" target="_blank" rel="external">V3 成本口径</a>）。</p>
+<p>从这些技术与发布事实出发，可以将 R1 的影响理解为三方面的叠加：<strong>较强的推理表现、可参与的开放生态，以及更受关注的计算效率。</strong> 它让更多团队开始研究如何构造可验证任务、设计奖励和筛选推理数据，而不只关注继续扩大参数规模。</p>
+<p><img src="/images/llm/deepseek-r1-06.png" alt="R1 的影响如何扩散"></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>DeepSeek-R1 的价值，需要放在当时的技术背景下理解：o1 已经展示了强化学习和推理时计算扩展的潜力，R1 则通过自己的训练方案，在多项推理任务上达到了相近水平。<strong>这是能力上的对标，不能直接等同于对 o1 训练方法的复现。</strong></p>
+<p>R1 的贡献主要体现在已有技术的有效组合与规模化验证：MoE 和 MLA 提供高效底座，R1-Zero 探索直接通过强化学习改善推理行为，正式版再通过多阶段训练兼顾推理能力与可用性。它表明，强预训练模型之外，任务设计、奖励反馈和数据质量同样能够显著影响模型表现。</p>
+<p><strong>开放则进一步放大了这次技术实践的影响。</strong> 权重、技术报告和蒸馏模型，让接近当时领先水平的推理能力进入可部署、可检验、可继续研究的开放生态。虽然首发没有公开完整训练数据和端到端训练代码，但它为更多团队提供了参与的基础。R1 留下的重要启示是：模型发展的竞争不仅在于能力上限，也在于能否让这些能力以可接受的成本被广泛使用和持续改进。</p>
+<hr>
+<p><strong>主要参考资料</strong></p>
+<ul>
+<li><a href="https://arxiv.org/html/2501.12948v1" target="_blank" rel="external">DeepSeek-R1 原始论文，2025 年 1 月版本</a>：R1-Zero、正式版训练流程与蒸馏。</li>
+<li><a href="https://github.com/deepseek-ai/DeepSeek-R1" target="_blank" rel="external">DeepSeek-R1 官方仓库</a>：模型规格、评测与许可。</li>
+<li><a href="https://arxiv.org/html/2412.19437v1" target="_blank" rel="external">DeepSeek-V3 技术报告</a>：R1 继承的模型底座及训练工程。</li>
+<li><a href="https://arxiv.org/html/2405.04434v5" target="_blank" rel="external">DeepSeek-V2 论文</a>：MLA 与低秩 KV 压缩。</li>
+<li><a href="https://arxiv.org/abs/2401.06066" target="_blank" rel="external">DeepSeekMoE 论文</a>：细粒度专家和共享专家。</li>
+<li><a href="https://arxiv.org/html/2402.03300v3" target="_blank" rel="external">DeepSeekMath 论文</a>：GRPO 的原理与目标函数。</li>
+<li><a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">DeepSeek-R1 首发公告</a>：发布时间、开放策略与历史 API 定价。</li>
+<li><a href="https://huggingface.co/blog/open-r1" target="_blank" rel="external">Hugging Face Open-R1</a>：首发开放范围与社区复现行动。</li>
+</ul>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;2025 年 1 月 20 日，DeepSeek 发布 R1，将高水平推理能力、开放权重和可直接使用的产品入口带到了一起。它受到关注，不只是因为模型能够输出更长的思考过程，更因为开发者终于可以下载、部署和研究一个具有较强推理能力的模型，并基于它训练自己的小模型（&lt;a href=&quot;https://api-docs.deepseek.com/news/news250120/&quot;&gt;官方发布公告&lt;/a&gt;）。&lt;/p&gt;
+&lt;p&gt;理解 R1，首先要分清两件事：&lt;strong&gt;模型架构决定计算如何发生，训练方法决定模型学会怎样利用这些计算。&lt;/strong&gt; R1 延续了 DeepSeek-V3-Base 的主体结构，主要突破发生在&lt;strong&gt;后训练&lt;/strong&gt;阶段。MoE 与 MLA 提供了高效底座，强化学习、多阶段训练和蒸馏则把底座转化为推理模型及其衍生生态。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
     
   </entry>
   
@@ -6942,418 +7215,6 @@ f(\mathbf{q}^{\ast})=\mathbf{T}_{d}$$</span><!-- Has MathJax -->
       &lt;p&gt;过去的 LLM 主要围绕文本展开：用户输入一段文字，模型基于上下文生成回答。这个范式已经足够强大，可以支持问答、总结、写作、代码生成和复杂推理。&lt;/p&gt;
 &lt;p&gt;但真实世界的信息并不只以文本存在。技术文档里有表格、架构图和流程图；代码排障经常伴随截图、日志和监控曲线；会议内容包含语音、视频和演示材料；移动端 Agent 还需要理解界面布局、按钮位置和操作反馈。&lt;/p&gt;
 &lt;p&gt;如果模型只能处理文本，它看到的世界是不完整的。很多重要信息会在“转成文字”的过程中丢失，比如图像中的空间关系、图表中的趋势变化、视频中的动作过程，以及界面中的布局结构。这就是多模态要解决的问题。&lt;/p&gt;
-    
-    </summary>
-    
-      <category term="技术" scheme="http://matt33.com/categories/%E6%8A%80%E6%9C%AF/"/>
-    
-    
-      <category term="llm" scheme="http://matt33.com/tags/llm/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>LLM 系列 (十四)：Agent，大模型如何从对话走向行动</title>
-    <link href="http://matt33.com/2026/07/04/llm-agent/"/>
-    <id>http://matt33.com/2026/07/04/llm-agent/</id>
-    <published>2026-07-04T12:10:00.000Z</published>
-    <updated>2026-07-04T12:10:00.000Z</updated>
-    
-    <content type="html"><![CDATA[<p>大语言模型最初主要以对话式交互的形态被广泛使用：用户输入问题，模型基于上下文生成回答。在这一模式下，模型擅长完成信息解释、文本总结、代码生成、问题分析等任务，本质上仍然是一个以“生成答案”为核心的系统。</p>
-<p>但在真实业务场景中，很多任务并不止于生成一段文本。它们往往需要模型围绕一个目标，连续完成资料检索、文档阅读、接口调用、代码修改、测试执行、结果分析和错误修正等多个步骤。也就是说，系统需要的不只是语言生成能力，还需要任务分解、外部工具使用、状态维护和基于反馈持续调整的能力。这就是 Agent 要解决的问题。</p>
-<a id="more"></a>
-<p>Agent 不是一个单独的模型，也不是某个固定 Prompt，而是一类以大语言模型为核心的任务执行系统。它通过任务规划、工具调用、记忆机制、状态管理和反馈循环，让模型能够围绕目标持续推进任务。</p>
-<p>换句话说，Agent 的意义在于：将 LLM 从“对话生成系统”扩展为“任务执行系统”。</p>
-<h2 id="Agent-是什么"><a href="#Agent-是什么" class="headerlink" title="Agent 是什么"></a>Agent 是什么</h2><p>从系统形态看，Agent 不是一次性问答，而是围绕目标持续执行的闭环系统。它接收的不只是一个问题，而是一个任务目标；输出的也不只是一次回答，而是执行一组动作后的结果。</p>
-<ul>
-<li>普通 LLM 应用更接近“问答模式”：用户问题 -&gt; 模型回答；</li>
-<li>而 Agent 更接近“执行模式”：用户目标 -&gt; 理解任务 -&gt; 制定计划 -&gt; 调用工具 -&gt; 观察结果 -&gt; 更新状态 -&gt; 继续执行 -&gt; 交付结果。</li>
-</ul>
-<p>两者的关键区别在于：普通 LLM 主要生成答案，Agent 则允许模型在系统约束下连接外部环境，并根据反馈持续推进任务。</p>
-<p><img src="/images/llm/llm-agent-01.png" alt="普通 LLM 应用于 Agent 应用对比"></p>
-<p>从系统视角看，Agent 通常由几类能力组成：</p>
-<ol>
-<li><strong>LLM</strong>：理解任务、生成计划、选择动作、总结结果；</li>
-<li><strong>Tools</strong>：连接外部系统，例如搜索、数据库、浏览器、代码执行器、业务 API；</li>
-<li><strong>Memory / State</strong>：保存上下文、任务进展、中间结果和历史信息；</li>
-<li><strong>Controller</strong>：管理执行流程，决定下一步、重试或终止；</li>
-<li><strong>Guardrails</strong>：控制权限、安全、成本和风险。</li>
-</ol>
-<p>所以，Agent 不是“一个会自动做事的模型”，而是一套系统组合：LLM + 工具 + 记忆 / 状态 + 控制循环 + 安全边界。判断一个系统是否具备 Agent 形态，可以看三点：</p>
-<ol>
-<li>是否围绕目标持续执行，而不是只回答一次；</li>
-<li>是否能够调用外部工具，并接收环境反馈；</li>
-<li>是否维护任务状态，并根据结果调整下一步。</li>
-</ol>
-<p>因此，Agent 的核心不是让模型完全自主，而是让模型在可控系统中，把语言理解能力转化为任务执行能力。</p>
-<h2 id="Agent-如何工作"><a href="#Agent-如何工作" class="headerlink" title="Agent 如何工作"></a>Agent 如何工作</h2><p>Agent 的工作方式可以抽象成一个闭环：<strong>Plan -&gt; Act -&gt; Observe -&gt; Reflect。</strong>这个闭环的含义是：模型先根据目标形成计划，然后选择动作并调用工具；工具执行后返回结果，模型再根据结果判断任务是否推进、是否需要修正，或者是否应该结束。可以拆成四个阶段：</p>
-<ol>
-<li><strong>Plan</strong>：理解用户目标，拆解任务，决定下一步要做什么；</li>
-<li><strong>Act</strong>：选择合适的工具，并生成工具调用参数；</li>
-<li><strong>Observe</strong>：接收工具执行结果，例如搜索结果、日志、代码运行结果、接口返回值；</li>
-<li><strong>Reflect</strong>：基于结果判断是否成功，是否需要重试、调整计划或进入下一步。</li>
-</ol>
-<p><img src="/images/llm/llm-agent-02.png" alt="Agent 执行流程"></p>
-<p>这个循环是 Agent 和普通 LLM 应用的关键区别。普通 LLM 往往是在已有上下文里生成一次回答；Agent 则会在执行过程中不断获得新信息，并把这些信息作为下一步决策的依据。</p>
-<ul>
-<li>例如用户给出一个目标：帮我分析这个项目最近一次构建失败的原因，并给出修复建议。</li>
-</ul>
-<p>一个 Agent 可能会按下面的方式执行：</p>
-<ol>
-<li>读取最近一次构建日志；</li>
-<li>定位失败阶段和错误信息；</li>
-<li>搜索相关代码和配置；</li>
-<li>分析错误堆栈与最近改动；</li>
-<li>必要时运行局部测试；</li>
-<li>根据结果修正判断；</li>
-<li>汇总失败原因和修复建议。</li>
-</ol>
-<p>这背后不是一次生成，而是多轮“推理 + 工具调用 + 结果反馈”的过程。</p>
-<p><img src="/images/llm/llm-agent-03.png" alt="Agent 执行流程"></p>
-<p>在实际系统中，Agent 的工作方式通常有几种常见模式：</p>
-<table>
-<thead>
-<tr>
-<th><strong>模式</strong></th>
-<th><strong>核心思路</strong></th>
-<th><strong>适合场景</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>ReAct</td>
-<td>推理和行动交替进行，边想边做</td>
-<td>搜索、排障、探索型任务</td>
-</tr>
-<tr>
-<td>Plan-and-Execute</td>
-<td>先生成整体计划，再逐步执行</td>
-<td>流程较清晰的长任务</td>
-</tr>
-<tr>
-<td>Reflection</td>
-<td>执行后检查结果，再决定是否修正</td>
-<td>代码修改、报告生成、结果校验</td>
-</tr>
-<tr>
-<td>Workflow Agent</td>
-<td>流程相对固定，模型只负责关键判断</td>
-<td>企业生产系统、低风险自动化</td>
-</tr>
-</tbody>
-</table>
-<p>需要注意的是，生产环境里很少会让 Agent 完全自由行动。更常见的方式是：流程有边界，工具有权限，执行有终止条件，关键动作需要校验或人工确认。所以，Agent 的工作流程可以总结为：</p>
-<ul>
-<li>目标不是一次性回答，而是持续推进任务；</li>
-<li>动作不是凭空生成，而是通过工具连接外部环境；</li>
-<li>结果不是直接相信，而是根据反馈不断修正。</li>
-</ul>
-<h2 id="Agent-的核心能力：从模型调用到可控执行"><a href="#Agent-的核心能力：从模型调用到可控执行" class="headerlink" title="Agent 的核心能力：从模型调用到可控执行"></a>Agent 的核心能力：从模型调用到可控执行</h2><p>Agent 能不能真正可用，不只取决于模型本身的能力，更取决于系统是否把“规划、执行、记忆、校验、控制”这些能力组织好。可以把 Agent 看成一个围绕 LLM 构建的任务执行系统，如下图所示：</p>
-<p><img src="/images/llm/llm-agent-04.png" alt="Agent 执行闭环"></p>
-<p>Agent 通过规划、执行、反馈和校验形成闭环，当任务完成则交付结果，遇到高风险场景则转人工确认或终止。</p>
-<h3 id="工具调用：连接外部世界"><a href="#工具调用：连接外部世界" class="headerlink" title="工具调用：连接外部世界"></a>工具调用：连接外部世界</h3><p>工具调用是 Agent 从“生成文本”走向“执行任务”的关键。模型本身不能直接访问数据库、浏览器、代码仓库或业务系统，它需要通过工具接口间接连接外部环境。一个工具通常需要明确描述：</p>
-<table>
-<thead>
-<tr>
-<th><strong>配置项</strong></th>
-<th><strong>作用</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>工具名称</td>
-<td>告诉模型这个工具能做什么</td>
-</tr>
-<tr>
-<td>工具描述</td>
-<td>说明适用场景，帮助模型选择工具</td>
-</tr>
-<tr>
-<td>输入参数 schema</td>
-<td>约束参数类型、字段和必填项</td>
-</tr>
-<tr>
-<td>输出格式</td>
-<td>让模型理解工具返回结果</td>
-</tr>
-<tr>
-<td>权限范围</td>
-<td>限制工具能访问哪些资源</td>
-</tr>
-<tr>
-<td>失败处理</td>
-<td>定义超时、错误、空结果如何返回</td>
-</tr>
-<tr>
-<td>确认机制</td>
-<td>高风险操作是否需要用户确认</td>
-</tr>
-</tbody>
-</table>
-<p>例如一个文档检索工具可以定义成：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;name&quot;: &quot;search_docs&quot;,</span><br><span class="line">  &quot;description&quot;: &quot;在企业知识库中检索相关文档&quot;,</span><br><span class="line">  &quot;parameters&quot;: &#123;</span><br><span class="line">    &quot;query&quot;: &quot;string&quot;,</span><br><span class="line">    &quot;top_k&quot;: &quot;number&quot;,</span><br><span class="line">    &quot;source&quot;: &quot;wiki | code | ticket&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>模型生成的不是最终动作，而是一个工具调用请求：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;tool&quot;: &quot;search_docs&quot;,</span><br><span class="line">  &quot;input&quot;: &#123;</span><br><span class="line">    &quot;query&quot;: &quot;退款失败 ERR-7782 原因&quot;,</span><br><span class="line">    &quot;top_k&quot;: 5,</span><br><span class="line">    &quot;source&quot;: &quot;wiki&quot;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>真正的执行由系统完成。这样做的好处是：模型负责判断“该调用什么”，系统负责保证“能不能调用、怎么调用、是否安全”。工具调用的技术重点包括：</p>
-<ol>
-<li><strong>参数校验</strong>：防止模型生成非法字段或错误类型；</li>
-<li><strong>权限控制</strong>：不同用户只能调用自己有权限的工具和数据；</li>
-<li><strong>错误返回</strong>：工具失败时返回结构化错误，而不是只抛异常；</li>
-<li><strong>幂等设计</strong>：重复调用不会造成不可控副作用；</li>
-<li><strong>审计日志</strong>：记录谁在什么任务里调用了什么工具。</li>
-</ol>
-<h3 id="记忆与状态：让任务连续推进"><a href="#记忆与状态：让任务连续推进" class="headerlink" title="记忆与状态：让任务连续推进"></a>记忆与状态：让任务连续推进</h3><p>Agent 需要知道自己正在做什么、已经做了什么、下一步还要做什么。这里的“记忆”不只是聊天历史，而是任务执行过程中的状态管理。可以拆成几类：</p>
-<table>
-<thead>
-<tr>
-<th><strong>类型</strong></th>
-<th><strong>作用</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>短期上下文</td>
-<td>当前对话、最近工具结果、当前任务约束</td>
-</tr>
-<tr>
-<td>工作记忆</td>
-<td>当前计划、已完成步骤、待执行步骤、中间结论</td>
-</tr>
-<tr>
-<td>长期记忆</td>
-<td>用户偏好、历史任务结果、项目背景</td>
-</tr>
-<tr>
-<td>外部记忆</td>
-<td>RAG、数据库、文件系统、知识库</td>
-</tr>
-<tr>
-<td>执行轨迹</td>
-<td>每一步工具调用、输入输出、错误和重试记录</td>
-</tr>
-</tbody>
-</table>
-<p>如果没有状态管理，Agent 很容易出现问题：重复执行同一步、忘记原始目标、忽略工具结果、前后结论不一致，或者长任务中断后无法恢复。因此，生产级 Agent 往往会维护一个显式的任务状态对象，例如：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  &quot;goal&quot;: &quot;分析构建失败原因&quot;,</span><br><span class="line">  &quot;plan&quot;: [&quot;读取日志&quot;, &quot;定位错误&quot;, &quot;检查代码&quot;, &quot;给出修复建议&quot;],</span><br><span class="line">  &quot;completed_steps&quot;: [&quot;读取日志&quot;, &quot;定位错误&quot;],</span><br><span class="line">  &quot;current_step&quot;: &quot;检查代码&quot;,</span><br><span class="line">  &quot;observations&quot;: [</span><br><span class="line">    &quot;构建失败发生在 test 阶段&quot;,</span><br><span class="line">    &quot;错误来自 payment 模块的空指针异常&quot;</span><br><span class="line">  ],</span><br><span class="line">  &quot;next_action&quot;: &quot;搜索最近 payment 模块变更&quot;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这类状态对象可以让 Agent 不完全依赖上下文窗口，而是用结构化方式保存任务进展。</p>
-<h3 id="规划与控制：让模型会拆任务，但不失控"><a href="#规划与控制：让模型会拆任务，但不失控" class="headerlink" title="规划与控制：让模型会拆任务，但不失控"></a>规划与控制：让模型会拆任务，但不失控</h3><p>Agent 需要具备任务规划能力。面对复杂目标时，模型不能只生成一个最终答案，而要把目标拆成多个可执行步骤。常见规划方式有两类：</p>
-<table>
-<thead>
-<tr>
-<th><strong>方式</strong></th>
-<th><strong>特点</strong></th>
-<th><strong>适合场景</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>显式规划</td>
-<td>先生成完整计划，再逐步执行</td>
-<td>报告生成、数据分析、代码迁移</td>
-</tr>
-<tr>
-<td>动态规划</td>
-<td>每一步根据观察结果决定下一步</td>
-<td>故障排查、网页操作、资料调研</td>
-</tr>
-</tbody>
-</table>
-<p>但规划能力必须和控制机制配合使用。否则 Agent 很容易无限搜索、重复尝试，或者把一个简单任务拆得过于复杂。常见控制参数包括：</p>
-<ol>
-<li>最大执行轮数；</li>
-<li>最大工具调用次数；</li>
-<li>最大 token 成本；</li>
-<li>是否允许写操作；</li>
-<li>是否允许访问外部网络；</li>
-<li>是否需要人工确认；</li>
-<li>失败后是否重试；</li>
-<li>什么条件下终止任务。</li>
-</ol>
-<p>所以，Agent 的规划不是“让模型自由发挥”，而是让模型在明确边界内做决策。</p>
-<h3 id="反馈与校验：让结果可以被验证"><a href="#反馈与校验：让结果可以被验证" class="headerlink" title="反馈与校验：让结果可以被验证"></a>反馈与校验：让结果可以被验证</h3><p>Agent 每执行一步，都会得到一个观察结果。但工具返回结果不一定代表任务成功，模型生成的结论也不一定可靠。因此 Agent 需要校验机制。校验可以分为几层：</p>
-<table>
-<thead>
-<tr>
-<th><strong>校验层次</strong></th>
-<th><strong>例子</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>工具结果校验</td>
-<td>API 是否返回成功，字段是否完整</td>
-</tr>
-<tr>
-<td>任务结果校验</td>
-<td>测试是否通过，文件是否生成，数据是否匹配</td>
-</tr>
-<tr>
-<td>事实一致性校验</td>
-<td>回答是否有证据支持，引用是否准确</td>
-</tr>
-<tr>
-<td>规则校验</td>
-<td>是否违反权限、格式、安全策略</td>
-</tr>
-<tr>
-<td>人工确认</td>
-<td>高风险动作前让用户确认</td>
-</tr>
-</tbody>
-</table>
-<p>例如代码修复类 Agent，不应该在修改代码后直接输出“已修复”，而应该继续运行测试：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">修改代码 -&gt; 运行测试 -&gt; 测试通过 -&gt; 输出修复说明</span><br><span class="line">修改代码 -&gt; 运行测试 -&gt; 测试失败 -&gt; 重新分析错误</span><br></pre></td></tr></table></figure>
-<p>这也是 Agent 和普通生成式应用的重要区别：Agent 的结果最好能被环境反馈验证，而不是只依赖模型自我判断。</p>
-<h3 id="安全边界：让-Agent-可控"><a href="#安全边界：让-Agent-可控" class="headerlink" title="安全边界：让 Agent 可控"></a>安全边界：让 Agent 可控</h3><p>Agent 越能行动，风险也越高。一个能调用工具的模型，如果没有边界，可能会访问不该访问的数据，执行不该执行的操作，或者在错误判断下持续重试。因此，Agent 系统必须有安全边界：</p>
-<ol>
-<li>读操作和写操作分离；</li>
-<li>高风险操作需要人工确认；</li>
-<li>工具按用户权限动态开放；</li>
-<li>敏感数据进入模型前脱敏；</li>
-<li>所有工具调用都记录日志；</li>
-<li>失败和异常要能回滚或终止；</li>
-<li>不允许模型绕过系统直接执行危险动作。</li>
-</ol>
-<p>简单说，Agent 的核心能力可以总结为：</p>
-<table>
-<thead>
-<tr>
-<th><strong>能力</strong></th>
-<th><strong>解决的问题</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>工具调用</td>
-<td>让模型连接外部系统</td>
-</tr>
-<tr>
-<td>记忆与状态</td>
-<td>让任务可以连续推进</td>
-</tr>
-<tr>
-<td>规划与控制</td>
-<td>让复杂任务可以拆解执行</td>
-</tr>
-<tr>
-<td>反馈与校验</td>
-<td>让结果可以被验证</td>
-</tr>
-<tr>
-<td>安全边界</td>
-<td>让 Agent 在可控范围内行动</td>
-</tr>
-</tbody>
-</table>
-<p>Agent 真正的难点，不是让模型“想到下一步”，而是让每一步都能被执行、被记录、被验证、被约束。只有这些能力组合起来，Agent 才能从一个演示系统走向真实业务系统。</p>
-<h2 id="Agent-落地难在哪里"><a href="#Agent-落地难在哪里" class="headerlink" title="Agent 落地难在哪里"></a>Agent 落地难在哪里</h2><p>上一节讲的是 Agent 需要具备哪些核心能力：工具调用、状态管理、规划控制、结果校验和安全边界。这些能力从架构上看并不复杂，但在真实生产环境里，它们很容易失效。</p>
-<p>原因在于，Agent 面对的不是一次静态输入，而是一条动态执行链路。每一步都可能引入新的不确定性：模型可能理解错目标，工具可能返回异常，状态可能没有正确更新，前一步错误可能影响后续判断，高风险操作还可能对真实系统造成影响。所以，Agent 落地的难点，不是“有没有这些模块”，而是这些模块能否在真实任务中稳定协同。</p>
-<p>普通 LLM 应用的失败，通常只是“回答错了”；Agent 的失败可能会变成“执行错了”。一旦 Agent 连接了数据库、代码仓库、浏览器、业务 API 或自动化工具，错误就不再停留在文本层面，而可能影响真实系统。所以 Agent 落地的核心挑战，可以概括为三句话：</p>
-<ol>
-<li>模型输出具有不确定性，但任务执行需要<strong>稳定性</strong>；</li>
-<li>工具调用可能带来副作用，但业务系统需要<strong>可控性</strong>；</li>
-<li>多步骤链路会累积错误，但最终结果需要<strong>可验证性</strong>。</li>
-</ol>
-<p><img src="/images/llm/llm-agent-05.png" alt="Agent 落地挑战"></p>
-<p>Agent 落地不是单点模型问题，而是模型、工具、状态、安全和评估共同构成的系统问题。可以从几个典型问题来总结下：</p>
-<table>
-<thead>
-<tr>
-<th><strong>问题</strong></th>
-<th><strong>本质</strong></th>
-<th><strong>典型表现</strong></th>
-<th><strong>解决方向</strong></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>目标不清晰</td>
-<td>输入缺少任务边界</td>
-<td>Agent 自行猜测目标，执行方向偏离</td>
-<td>任务澄清、结构化任务描述、验收标准</td>
-</tr>
-<tr>
-<td>规划不稳定</td>
-<td>LLM 输出具有不确定性</td>
-<td>同一任务多次执行路径不同，步骤遗漏</td>
-<td>模板化 Workflow、阶段性计划、关键步骤确认</td>
-</tr>
-<tr>
-<td>工具调用错误</td>
-<td>模型可能选错工具或填错参数</td>
-<td>参数格式错误、重复调用、忽略工具失败</td>
-<td>Tool schema、参数校验、错误码、重试策略</td>
-</tr>
-<tr>
-<td>长链路错误累积</td>
-<td>多步任务中错误会传播</td>
-<td>前一步判断错，后续全部基于错误结果执行</td>
-<td>分阶段校验、checkpoint、Verifier</td>
-</tr>
-<tr>
-<td>状态丢失</td>
-<td>任务进展没有结构化记录</td>
-<td>重复执行、忘记约束、无法恢复</td>
-<td>状态机、任务日志、事件流、工作记忆</td>
-</tr>
-<tr>
-<td>结果不可验证</td>
-<td>模型输出缺少外部证据</td>
-<td>看似完成，实际没有依据或测试失败</td>
-<td>测试、引用、规则校验、人工审核</td>
-</tr>
-<tr>
-<td>安全风险</td>
-<td>工具连接真实系统</td>
-<td>删除数据、越权访问、误发消息</td>
-<td>权限隔离、沙箱、人工确认、审计日志</td>
-</tr>
-<tr>
-<td>成本不可控</td>
-<td>多轮调用放大 token 和工具成本</td>
-<td>执行慢、费用高、循环调用</td>
-<td>最大轮数、预算控制、缓存、模型路由</td>
-</tr>
-</tbody>
-</table>
-<p>这里最关键的是：<strong>Agent 系统不能只依赖模型自觉正确</strong>。生产系统必须把任务执行过程拆开，在关键节点加入约束和校验。一个更可靠的 Agent 架构，通常会采用“受控执行”的方式：</p>
-<p><img src="/images/llm/llm-agent-06.png" alt="Agent 分阶段落地"></p>
-<p>因此，Agent 落地时更推荐从低风险场景开始，而不是一上来就做完全自主系统：</p>
-<ol>
-<li><strong>先做只读型 Agent</strong>：例如文档检索、日志分析、代码阅读、数据分析建议；</li>
-<li><strong>再做建议型 Agent</strong>：模型给出操作建议，但由人确认后执行；</li>
-<li><strong>然后做半自动 Workflow</strong>：固定流程由系统控制，模型只负责局部判断；</li>
-<li><strong>最后再做可控自主执行</strong>：在明确权限、预算、终止条件和回滚机制下，让 Agent 执行多步任务。</li>
-</ol>
-<p>可以把自主程度分成几个阶段：</p>
-<p><img src="/images/llm/llm-agent-07.png" alt="图 7：Agent 落地通常从只读问答逐步走向可控自主执行。"></p>
-<p><em>图 7：Agent 落地通常从只读问答逐步走向可控自主执行。</em></p>
-<p>所以，生产级 Agent 的重点不是“让模型尽可能自由”，而是建立一套可控机制：</p>
-<ol>
-<li>目标要明确；</li>
-<li>工具要有边界；</li>
-<li>状态要可追踪；</li>
-<li>关键步骤要可验证；</li>
-<li>高风险动作要可确认；</li>
-<li>失败过程要可恢复；</li>
-<li>整个执行链路要可观测。</li>
-</ol>
-<p>一句话总结：Agent 落地的难点，不是让模型多走几步，而是让每一步都能被约束、被记录、被验证，并在出错时能够停止、回退或交给人处理。</p>
-<h2 id="未来演进与总结"><a href="#未来演进与总结" class="headerlink" title="未来演进与总结"></a>未来演进与总结</h2><p>Agent 是 LLM 从“生成内容”走向“完成任务”的关键形态。未来 Agent 大概率会沿着几个方向继续演进：</p>
-<ol>
-<li><strong>工具调用更标准化</strong>：模型能更稳定地理解工具 schema、生成参数、处理错误。</li>
-<li><strong>Computer Use 更成熟</strong>：模型不仅调用 API，还能操作浏览器、桌面软件和复杂界面。</li>
-<li><strong>记忆系统更完善</strong>：短期上下文、长期记忆、RAG、任务轨迹会逐渐融合。</li>
-<li><strong>多 Agent 协作</strong>：不同 Agent 分工处理规划、检索、代码、审查和执行。</li>
-<li><strong>安全与评估更重要</strong>：Agent 越能行动，越需要权限、审计、回滚和人工确认。</li>
-</ol>
-<p>简单总结：<strong>Agent 不是让大模型变成一个“完全自主的人”，而是把 LLM 放进一个有工具、有记忆、有状态、有反馈、有边界的系统里，让它能够围绕目标持续完成任务。</strong>如果说 RAG 解决的是“大模型如何连接外部知识”，那么 Agent 解决的就是：<strong>大模型如何连接外部世界，并把知识转化为行动。</strong></p>
-]]></content>
-    
-    <summary type="html">
-    
-      &lt;p&gt;大语言模型最初主要以对话式交互的形态被广泛使用：用户输入问题，模型基于上下文生成回答。在这一模式下，模型擅长完成信息解释、文本总结、代码生成、问题分析等任务，本质上仍然是一个以“生成答案”为核心的系统。&lt;/p&gt;
-&lt;p&gt;但在真实业务场景中，很多任务并不止于生成一段文本。它们往往需要模型围绕一个目标，连续完成资料检索、文档阅读、接口调用、代码修改、测试执行、结果分析和错误修正等多个步骤。也就是说，系统需要的不只是语言生成能力，还需要任务分解、外部工具使用、状态维护和基于反馈持续调整的能力。这就是 Agent 要解决的问题。&lt;/p&gt;
     
     </summary>
     

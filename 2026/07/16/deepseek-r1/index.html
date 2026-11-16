@@ -1,0 +1,289 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="物来顺应，未来不迎，当时不杂，既过不恋"><title>DeepSeek-R1：推理能力如何炼成 | Matt's Blog</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/4.2.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.0.0/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">DeepSeek-R1：推理能力如何炼成</h1><a id="logo" href="/.">Matt's Blog</a><p class="description">柳年思水</p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">DeepSeek-R1：推理能力如何炼成</h1><div class="post-meta">Jul 16, 2026<span> | </span><span class="category"><a href="/categories/技术/">技术</a></span><span> | </span><span class="post-count">5,257</span><span> 字</span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Times</span></span></div><a data-disqus-identifier="2026/07/16/deepseek-r1/" href="/2026/07/16/deepseek-r1/#disqus_thread" class="disqus-comment-count"></a><div class="clear"><div id="toc" class="toc-article"><div class="toc-title">文章目录</div><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#背景：从生成答案到学习解题"><span class="toc-number">1.</span> <span class="toc-text">背景：从生成答案到学习解题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#为什么已有大模型还需要推理训练"><span class="toc-number">1.1.</span> <span class="toc-text">为什么已有大模型还需要推理训练</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#R1-的创新究竟在哪里"><span class="toc-number">1.2.</span> <span class="toc-text">R1 的创新究竟在哪里</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#模型架构：V3-为-R1-提供了什么"><span class="toc-number">2.</span> <span class="toc-text">模型架构：V3 为 R1 提供了什么</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DeepSeekMoE：扩大容量，控制每-Token-的计算"><span class="toc-number">2.1.</span> <span class="toc-text">DeepSeekMoE：扩大容量，控制每 Token 的计算</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MLA：降低长序列的缓存压力"><span class="toc-number">2.2.</span> <span class="toc-text">MLA：降低长序列的缓存压力</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#架构效率与推理能力如何配合"><span class="toc-number">2.3.</span> <span class="toc-text">架构效率与推理能力如何配合</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#训练突破：从-R1-Zero-到-R1"><span class="toc-number">3.</span> <span class="toc-text">训练突破：从 R1-Zero 到 R1</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#R1-Zero：用结果反馈训练解题行为"><span class="toc-number">3.1.</span> <span class="toc-text">R1-Zero：用结果反馈训练解题行为</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#GRPO：通过组内比较优化生成策略"><span class="toc-number">3.2.</span> <span class="toc-text">GRPO：通过组内比较优化生成策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#正式版-R1：探索与示范相互配合"><span class="toc-number">3.3.</span> <span class="toc-text">正式版 R1：探索与示范相互配合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#蒸馏：将推理能力传递给小模型"><span class="toc-number">3.4.</span> <span class="toc-text">蒸馏：将推理能力传递给小模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#行业影响：为什么-R1-引起了如此大的反响"><span class="toc-number">4.</span> <span class="toc-text">行业影响：为什么 R1 引起了如此大的反响</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#推理能力进入可下载、可比较的范围"><span class="toc-number">4.1.</span> <span class="toc-text">推理能力进入可下载、可比较的范围</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#开放权重让能力能够被研究和扩散"><span class="toc-number">4.2.</span> <span class="toc-text">开放权重让能力能够被研究和扩散</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#成本讨论从模型规模转向有效计算"><span class="toc-number">4.3.</span> <span class="toc-text">成本讨论从模型规模转向有效计算</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="post-content"><p>2025 年 1 月 20 日，DeepSeek 发布 R1，将高水平推理能力、开放权重和可直接使用的产品入口带到了一起。它受到关注，不只是因为模型能够输出更长的思考过程，更因为开发者终于可以下载、部署和研究一个具有较强推理能力的模型，并基于它训练自己的小模型（<a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">官方发布公告</a>）。</p>
+<p>理解 R1，首先要分清两件事：<strong>模型架构决定计算如何发生，训练方法决定模型学会怎样利用这些计算。</strong> R1 延续了 DeepSeek-V3-Base 的主体结构，主要突破发生在<strong>后训练</strong>阶段。MoE 与 MLA 提供了高效底座，强化学习、多阶段训练和蒸馏则把底座转化为推理模型及其衍生生态。</p>
+<a id="more"></a>
+<blockquote>
+<p>本文聚焦 <strong>2025 年 1 月首发版 DeepSeek-R1</strong>，以当时的论文和发布资料为依据，不混入 R1-0528 等后续版本的改进。</p>
+</blockquote>
+<h2 id="背景：从生成答案到学习解题"><a href="#背景：从生成答案到学习解题" class="headerlink" title="背景：从生成答案到学习解题"></a>背景：从生成答案到学习解题</h2><h3 id="为什么已有大模型还需要推理训练"><a href="#为什么已有大模型还需要推理训练" class="headerlink" title="为什么已有大模型还需要推理训练"></a>为什么已有大模型还需要推理训练</h3><p>预训练通过预测下一个 Token，让模型学习语言、知识和大量问题的解法；监督微调（SFT）通过示范答案，让模型更好地遵循指令。但在数学证明、复杂代码和多约束问题中，模型还需要连续完成拆解、计算、检查和修正。</p>
+<p>这类任务的困难在于：局部文本合理，不代表整条推导正确。一道题的中间步骤即使很流畅，也可能遗漏条件；一段程序即使语法正确，也可能无法通过边界测试。</p>
+<p>思维链（Chain of Thought，CoT）让模型在给出最终答案之前，先生成中间推导步骤，从而逐步完成复杂问题的求解。思维链提示方法由 Jason Wei 等人在 2022 年的论文 <a href="https://arxiv.org/abs/2201.11903" target="_blank" rel="external">《Chain-of-Thought Prompting Elicits Reasoning in Large Language Models》</a>中系统提出：在提示词中提供包含推导过程的示例，可以提升模型的推理表现。2024 年，OpenAI 发布的 <a href="https://openai.com/index/learning-to-reason-with-llms/" target="_blank" rel="external">o1</a> 进一步通过强化学习训练模型的推理能力，并展示了在推理阶段投入更多计算、生成更充分的推导过程，能够改善复杂任务的求解表现。</p>
+<ul>
+<li>R1 面对的核心问题是：<strong>能否利用可检查的任务结果，训练模型生成更有效的解题过程，并把这种能力开放给更多人？</strong></li>
+</ul>
+<p>这里的变化不只是让模型多输出一些文字，而是改变训练信号：除了模仿示范，还要根据最终结果，对模型自己生成的解法给予反馈。</p>
+<h3 id="R1-的创新究竟在哪里"><a href="#R1-的创新究竟在哪里" class="headerlink" title="R1 的创新究竟在哪里"></a>R1 的创新究竟在哪里</h3><p>这里可以把 R1 拆成三个层次：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>主要技术</th>
+<th>解决的问题</th>
+<th>与 R1 的关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型结构</td>
+<td>DeepSeekMoE、MLA</td>
+<td>大模型的计算量、KV Cache 与带宽压力</td>
+<td>主要继承自 V3 及更早工作</td>
+</tr>
+<tr>
+<td>后训练</td>
+<td>R1-Zero 实验、多阶段 SFT 与 RL</td>
+<td>如何训练有效推理，同时保持可读性和通用性</td>
+<td><strong>R1 的核心技术贡献</strong></td>
+</tr>
+<tr>
+<td>能力传播</td>
+<td>开放权重、推理数据蒸馏、API</td>
+<td>如何让研究者和应用团队使用推理能力</td>
+<td><strong>放大 R1 行业影响的关键</strong></td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/deepseek-r1-01.png" alt="R1 的三层设计：架构提供计算基础，后训练塑造推理行为，开放与蒸馏扩大使用范围"></p>
+<h2 id="模型架构：V3-为-R1-提供了什么"><a href="#模型架构：V3-为-R1-提供了什么" class="headerlink" title="模型架构：V3 为 R1 提供了什么"></a>模型架构：V3 为 R1 提供了什么</h2><p>R1 仍然是自回归 Decoder-only Transformer。输入经过 Embedding 和多层 Transformer Block，最后预测下一个 Token。它没有在网络里额外安装一个独立的“逻辑推理引擎”。</p>
+<p>官方配置仍使用 <code>DeepseekV3ForCausalLM</code>。主体有 61 层，前 3 层使用 Dense FFN，后续层使用 MoE；在每个 MoE 层中，有 1 个共享专家和 256 个路由专家，每个 Token 选择其中 8 个路由专家（<a href="https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/config.json" target="_blank" rel="external">官方配置文件</a>），如下图所示：</p>
+<p><img src="/images/llm/deepseek-r1-02.png" alt="R1 的架构示例图"></p>
+<h3 id="DeepSeekMoE：扩大容量，控制每-Token-的计算"><a href="#DeepSeekMoE：扩大容量，控制每-Token-的计算" class="headerlink" title="DeepSeekMoE：扩大容量，控制每 Token 的计算"></a>DeepSeekMoE：扩大容量，控制每 Token 的计算</h3><p>在 Dense FFN 中，每个 Token 的表示都经过同一组完整矩阵。扩大 FFN 宽度会直接增加每个 Token 的计算量。MoE 将这部分计算组织成多个专家网络，由 Router 根据当前 Token 的隐藏状态选择少数专家参与计算。</p>
+<p>DeepSeekMoE 有两个关键设计（<a href="https://arxiv.org/abs/2401.06066" target="_blank" rel="external">DeepSeekMoE 论文</a>）：<strong>细粒度路由专家提供更灵活的组合，共享专家承担共性表示，减少路由专家之间的重复学习。</strong> 专家是 FFN 子网络，不是多个完整聊天模型，也不是预先指定的“数学专家”“代码专家”。</p>
+<p>忽略残差连接和归一化，一个 MoE 层可以简化为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">输出 = 共享专家(x) + Σ 路由权重_i × 专家_i(x)</span><br><span class="line">                         i 属于本层选中的 Top-K 专家</span><br></pre></td></tr></table></figure>
+<p>R1 完整模型约有 <strong>671B 总参数，每个 Token 激活约 37B 参数</strong>，通过稀疏激活在扩大模型容量的同时控制计算量。但未激活的专家仍需存储，分布式部署也存在通信和调度开销，因此不能按 37B 模型估算其部署成本。为改善专家负载分布，V3 主要通过动态路由偏置实现负载均衡，同时保留轻量的序列级约束，防止单条文本过度集中使用少数专家。</p>
+<h3 id="MLA：降低长序列的缓存压力"><a href="#MLA：降低长序列的缓存压力" class="headerlink" title="MLA：降低长序列的缓存压力"></a>MLA：降低长序列的缓存压力</h3><p>MLA，全称 Multi-head Latent Attention，多头潜在注意力，通过可学习的低秩投影，把 K/V 的信息联合压缩到较小的潜在表示中。实现时配合矩阵吸收，能够避免在每一步显式恢复全部历史 K/V；位置相关的 RoPE 分量则单独处理和缓存。</p>
+<blockquote>
+<p>自回归生成需要保存历史 Token 的 Key 和 Value。推理过程越长，KV Cache 越大；逐步生成时，还需要不断读取这些历史缓存。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">传统 MHA：缓存各个注意力头的历史 K 和 V</span><br><span class="line">MLA：缓存压缩后的 KV 潜在表示，以及解耦的位置分量</span><br></pre></td></tr></table></figure>
+<p>对 R1 而言，这项继承的架构尤其有价值：更长的解题过程意味着更多生成 Token，压低每个 Token 的缓存成本，可以减轻持续生成时的显存与带宽压力。<strong>MLA 降低缓存成本，但不会消除全量注意力随上下文增长的计算开销。</strong></p>
+<p><img src="/images/llm/deepseek-r1-03.png" alt="R1 的 MLA 与 MoE 架构"></p>
+<h3 id="架构效率与推理能力如何配合"><a href="#架构效率与推理能力如何配合" class="headerlink" title="架构效率与推理能力如何配合"></a>架构效率与推理能力如何配合</h3><p>V3 底座的效率不仅来自 MoE 和 MLA，还依赖训练目标与分布式系统的协同优化：</p>
+<ul>
+<li><strong>FP8 混合精度训练</strong>让适合低精度计算的矩阵运算使用 FP8，同时在数值敏感环节保留更高精度，以兼顾吞吐、显存占用和训练稳定性；</li>
+<li><strong>计算与通信重叠</strong>通过调度，让部分计算与专家间的数据传输同时进行，减少 GPU 等待通信的时间；</li>
+<li><strong>多 Token 预测（MTP）</strong>则在预测下一个 Token 的基础上增加后续 Token 的辅助预测目标，使每段训练文本提供更丰富的监督信号。这些技术分别改善计算效率、硬件利用率和数据利用效率，共同构成 R1 继承的高效底座。</li>
+</ul>
+<p>在此基础上，R1 的推理训练让模型学习如何利用更多生成步骤进行问题拆解、验证和修正。两者的配合可以理解为：<strong>底座优化每一步计算的成本，后训练提升这些计算对任务求解的价值。</strong> 其中，MoE 减少每个 Token 需要执行的 FFN 计算，MLA 降低历史信息的缓存与读取负担，但较低的单 Token 成本并不意味着每次任务都便宜。复杂问题可能产生很长的推理过程，持续占用计算和 KV Cache；实际服务成本还受到并发规模、专家通信和硬件利用率影响。因此，评估 R1 的效率，应结合任务成功率、端到端延迟和单次任务成本，而不能只看“每个 Token 激活 37B 参数”。</p>
+<h2 id="训练突破：从-R1-Zero-到-R1"><a href="#训练突破：从-R1-Zero-到-R1" class="headerlink" title="训练突破：从 R1-Zero 到 R1"></a>训练突破：从 R1-Zero 到 R1</h2><h3 id="R1-Zero：用结果反馈训练解题行为"><a href="#R1-Zero：用结果反馈训练解题行为" class="headerlink" title="R1-Zero：用结果反馈训练解题行为"></a>R1-Zero：用结果反馈训练解题行为</h3><p>R1-Zero 探索了一条直接的训练路线：从已经完成预训练的 V3-Base 出发，跳过前置监督微调，通过大规模强化学习提升推理能力。 这里的“Zero”指没有先用推理示范进行 SFT，而不是从零学习；模型仍依赖预训练获得的知识，以及训练题目、标准答案和验证规则。训练主要使用两类反馈：</p>
+<ul>
+<li><strong>正确性奖励</strong>检查任务是否完成，例如数学题的最终答案是否正确、生成的代码是否通过测试；</li>
+<li><strong>格式奖励</strong>约束推理过程的输出形式。</li>
+</ul>
+<p>模型先生成解题过程和答案，系统再根据验证结果计算奖励并更新参数。这使训练能够减少对人工编写完整推导过程的依赖，让模型探索不同解法，而不必逐步模仿一份标准答案。</p>
+<p>R1 的论文观察到，随着训练推进，R1-Zero 出现了更长的推导、自我检查和重新尝试等行为，展示了结果反馈对推理表现的促进作用。但它也存在语言混杂、表达不清等问题，说明提高解题正确率与获得良好的交互体验，仍然是不同的优化目标。</p>
+<p>结果奖励也有局限：答案正确不代表每一步推导都成立，通过测试也不代表代码不存在缺陷。因此，R1-Zero 的效果既取决于基模能力，也取决于题目质量和验证器的可靠性；模型生成的检查与修正过程，仍需要通过实际结果检验。</p>
+<h3 id="GRPO：通过组内比较优化生成策略"><a href="#GRPO：通过组内比较优化生成策略" class="headerlink" title="GRPO：通过组内比较优化生成策略"></a>GRPO：通过组内比较优化生成策略</h3><p>在强化学习中，语言模型可以看作一个“策略”：根据题目和已生成的内容，决定下一个 Token 的概率分布。训练的目标，是利用任务奖励调整模型参数，让它更倾向于生成能够正确完成任务的回答。</p>
+<ul>
+<li><strong>PPO（Proximal Policy Optimization，近端策略优化）：</strong>是一种常见的策略优化算法。在典型的语言模型 PPO 训练中，除了生成回答的策略模型，还需要训练一个 Critic（价值模型），估计当前生成状态下的预期回报。系统根据实际结果相对这一预期的好坏，决定如何调整生成策略，并通过概率比裁剪限制更新幅度；</li>
+<li><strong>GRPO（Group Relative Policy Optimization，组相对策略优化）：</strong>由 2024 年的 <a href="https://arxiv.org/html/2402.03300v3#S4.SS1" target="_blank" rel="external">DeepSeekMath 论文</a> 提出，后来被 R1 采用。它针对同一道题采样多个回答，用组内奖励统计构造比较基线，从而省去单独训练 Critic 的开销。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>对比维度</th>
+<th>典型 PPO 实现</th>
+<th>GRPO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>比较基线</td>
+<td>Critic 估计的预期回报</td>
+<td>同一道题多个回答的奖励均值</td>
+</tr>
+<tr>
+<td>优势估计</td>
+<td>根据奖励与价值估计计算</td>
+<td>根据组内奖励差异计算并归一化</td>
+</tr>
+<tr>
+<td>是否训练 Critic</td>
+<td>通常需要</td>
+<td>不需要</td>
+</tr>
+<tr>
+<td>主要开销</td>
+<td>生成、奖励计算、策略模型与 Critic 训练</td>
+<td>多回答采样、奖励计算与策略模型训练</td>
+</tr>
+</tbody>
+</table>
+<p>这里的 Critic 与奖励函数不是一回事：<strong>奖励函数评价回答结果，Critic 预测预期回报。GRPO 省去了后者，但仍然需要可靠的奖励。</strong>GRPO 中的“优势”，可以理解为一条回答比同组其他尝试好多少：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">A_i = (r_i - 组内奖励均值) / (组内奖励标准差 + ε)</span><br></pre></td></tr></table></figure>
+<p>其中，<code>r_i</code> 是第 i 个回答的奖励，<code>ε</code> 用于避免分母为零。假设同一道题生成了四条回答，只按正确性给予奖励：</p>
+<table>
+<thead>
+<tr>
+<th>回答</th>
+<th>奖励</th>
+<th>相对于均值 0.5</th>
+<th>奖励项的优化方向</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A：正确</td>
+<td>1</td>
+<td>高于平均，优势为正</td>
+<td>增强该回答的生成倾向</td>
+</tr>
+<tr>
+<td>B：错误</td>
+<td>0</td>
+<td>低于平均，优势为负</td>
+<td>减弱该回答的生成倾向</td>
+</tr>
+<tr>
+<td>C：正确</td>
+<td>1</td>
+<td>高于平均，优势为正</td>
+<td>增强该回答的生成倾向</td>
+</tr>
+<tr>
+<td>D：错误</td>
+<td>0</td>
+<td>低于平均，优势为负</td>
+<td>减弱该回答的生成倾向</td>
+</tr>
+</tbody>
+</table>
+<p>GRPO 的效果依赖组内比较是否有效：所有回答奖励相同时，该组无法提供相对优劣信号；验证器存在漏洞时，模型可能学会获取奖励，却没有真正完成任务。因此，题目难度、采样多样性和奖励质量都很关键。它减少了 Critic 带来的训练开销，但长回答采样、验证和参数更新仍然需要大量计算。</p>
+<p><img src="/images/llm/deepseek-r1-04.png" alt="GRPO 如何工作"></p>
+<h3 id="正式版-R1：探索与示范相互配合"><a href="#正式版-R1：探索与示范相互配合" class="headerlink" title="正式版 R1：探索与示范相互配合"></a>正式版 R1：探索与示范相互配合</h3><p>R1-Zero 展示了强化学习的潜力，但可用的助手还需要清晰表达、通用任务能力和行为约束。正式版 R1 因此采用了多阶段方案。</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>做了什么</th>
+<th>目的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>冷启动 SFT</td>
+<td>用少量长推理示范微调 V3-Base</td>
+<td>提供较好的初始表达和解题格式</td>
+</tr>
+<tr>
+<td>推理 RL</td>
+<td>根据结果奖励优化，并兼顾语言一致性</td>
+<td>提升可验证任务的推理表现</td>
+</tr>
+<tr>
+<td>拒绝采样与 SFT</td>
+<td>筛选推理样本，混合通用样本，重新微调 V3-Base</td>
+<td>把探索结果转为较稳定的监督训练数据</td>
+</tr>
+<tr>
+<td>综合 RL</td>
+<td>结合推理奖励与通用偏好奖励</td>
+<td>平衡推理、帮助性与安全性</td>
+</tr>
+</tbody>
+</table>
+<p><img src="/images/llm/deepseek-r1-05.png" alt="R1-Zero 与 R1 的训练路线"></p>
+<p>这套训练流程可以理解为：<strong>先让模型尝试解题，再把有效的解法整理成示范，用于后续训练。</strong> 强化学习让模型根据答案是否正确，调整生成解题过程的方式；筛选环节保留结果正确、表达清晰的样本；SFT 再用这些样本训练模型，使其更稳定地生成高质量的解题过程。这样，模型既能从自己的尝试中获得反馈，也能从筛选后的示范中学习。</p>
+<p>完成训练后，模型在回答问题时，会将已经生成的推导步骤作为后续生成的依据，逐步完成计算、检查或修正。<strong>这个过程使用的是训练好的固定参数，变化的是当前上下文，而不是模型权重。</strong> 更多中间步骤可以为复杂问题提供更充分的求解过程，但也可能延续错误，因此推导更长并不必然意味着答案更准确。</p>
+<h3 id="蒸馏：将推理能力传递给小模型"><a href="#蒸馏：将推理能力传递给小模型" class="headerlink" title="蒸馏：将推理能力传递给小模型"></a>蒸馏：将推理能力传递给小模型</h3><p>为了降低部署门槛，并验证推理能力能否迁移，R1 系列发布了基于 Qwen 和 Llama 的 6 个 Dense 蒸馏模型，覆盖 1.5B、7B、8B、14B、32B、70B。它们以已有模型的权重为起点，使用 R1 训练流程中整理的约 80 万条推理与通用样本进行 <strong>SFT（监督微调）</strong>，首发版本没有额外进行强化学习（<a href="https://arxiv.org/html/2501.12948v1#S2.SS4" target="_blank" rel="external">蒸馏训练说明</a>）。</p>
+<p>蒸馏传递的是<strong>经过筛选的答案与解题过程</strong>：学生保留自身的 Dense 架构，通过学习示范调整参数，而不是从完整 R1 中裁剪专家。论文中的 32B 对照实验显示，蒸馏模型在 AIME 2024 上达到 72.6%（<a href="https://arxiv.org/html/2501.12948v1#S4.SS1" target="_blank" rel="external">对照实验</a>），高于同一底座直接进行大规模 RL 后的 47.0%。这说明，在该实验设置下，学习强模型的解题经验，比让小模型独立探索更有效。</p>
+<p>这些模型让更多团队能够在有限资源下使用推理能力，但它们仍受学生模型的容量、知识和泛化能力约束。R1-Distill 提供的是不同成本与能力之间的选择，并非完整 R1 的等价缩小版。</p>
+<h2 id="行业影响：为什么-R1-引起了如此大的反响"><a href="#行业影响：为什么-R1-引起了如此大的反响" class="headerlink" title="行业影响：为什么 R1 引起了如此大的反响"></a>行业影响：为什么 R1 引起了如此大的反响</h2><h3 id="推理能力进入可下载、可比较的范围"><a href="#推理能力进入可下载、可比较的范围" class="headerlink" title="推理能力进入可下载、可比较的范围"></a>推理能力进入可下载、可比较的范围</h3><p>R1 首发评测给出了一个直接信号：开放权重模型已经能在多项推理任务上接近当时的领先闭源模型。</p>
+<table>
+<thead>
+<tr>
+<th>首发评测项目</th>
+<th>DeepSeek-V3</th>
+<th>DeepSeek-R1</th>
+<th>OpenAI o1-1217</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AIME 2024，pass@1</td>
+<td>39.2%</td>
+<td>79.8%</td>
+<td>79.2%</td>
+</tr>
+<tr>
+<td>MATH-500，pass@1</td>
+<td>90.2%</td>
+<td>97.3%</td>
+<td>96.4%</td>
+</tr>
+<tr>
+<td>GPQA Diamond，pass@1</td>
+<td>59.1%</td>
+<td>71.5%</td>
+<td>75.7%</td>
+</tr>
+<tr>
+<td>Aider-Polyglot，准确率</td>
+<td>49.6%</td>
+<td>53.3%</td>
+<td>61.7%</td>
+</tr>
+</tbody>
+</table>
+<p>以上来自 DeepSeek 官方发布的对比表，这些数据支持的是“部分推理任务达到相近水平”，而不是“全面超过 o1”。数学、知识问答和代码编辑之间仍有差异，真实业务还需要检查延迟、输出稳定性和任务成功率。</p>
+<h3 id="开放权重让能力能够被研究和扩散"><a href="#开放权重让能力能够被研究和扩散" class="headerlink" title="开放权重让能力能够被研究和扩散"></a>开放权重让能力能够被研究和扩散</h3><p>开放权重意味着团队可以自行评测、部署、适配和开展训练实验。配套的小模型又让资源不同的开发者都能参与，而不必全部承担完整模型的部署成本。</p>
+<p>R1 官方提供了 MIT 许可，并允许使用输出做蒸馏；具体蒸馏模型还需要结合 Qwen、Llama 等底座的许可条件理解（<a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">发布公告</a>/<a href="https://github.com/deepseek-ai/DeepSeek-R1#7-license" target="_blank" rel="external">官方许可说明</a>）。</p>
+<p>开放的边界也需要说清楚：<strong>首发开放了权重和技术路线，但没有同时提供完整训练数据和端到端训练代码。</strong> Hugging Face 在 2025 年 1 月 28 日启动 Open-R1，就是为了补足数据、训练配方和复现环节；次日，微软宣布 R1 进入 Azure AI Foundry 和 GitHub 的模型生态（<a href="https://huggingface.co/blog/open-r1" target="_blank" rel="external">Open-R1 项目说明</a>/<a href="https://azure.microsoft.com/en-us/blog/deepseek-r1-is-now-available-on-azure-ai-foundry-and-github/" target="_blank" rel="external">微软接入公告</a>）。</p>
+<p>这两类行动体现了不同的扩散路径：研究社区尝试理解和复现方法，产品平台则降低应用接入成本。R1 的影响由此超出了单个模型的榜单成绩。</p>
+<h3 id="成本讨论从模型规模转向有效计算"><a href="#成本讨论从模型规模转向有效计算" class="headerlink" title="成本讨论从模型规模转向有效计算"></a>成本讨论从模型规模转向有效计算</h3><p>R1 首发 API 定价为每百万输入 Token 0.55 美元（缓存未命中）、每百万输出 Token 2.19 美元，这是 2025 年 1 月的历史价格（<a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">首发定价</a>）。这一价格与开放部署选项降低了开发者的使用门槛，但 API 单价并不等于单次任务成本：长推理会增加 Token 消耗，自行部署完整模型也需要较大的基础设施投入。同样，V3 报告中的训练算力成本估算不能代表 R1 的全部研发成本，还需要区分基础模型训练、实验探索、数据处理和 R1 后训练等支出（<a href="https://arxiv.org/html/2412.19437v1#S1" target="_blank" rel="external">V3 成本口径</a>）。</p>
+<p>从这些技术与发布事实出发，可以将 R1 的影响理解为三方面的叠加：<strong>较强的推理表现、可参与的开放生态，以及更受关注的计算效率。</strong> 它让更多团队开始研究如何构造可验证任务、设计奖励和筛选推理数据，而不只关注继续扩大参数规模。</p>
+<p><img src="/images/llm/deepseek-r1-06.png" alt="R1 的影响如何扩散"></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>DeepSeek-R1 的价值，需要放在当时的技术背景下理解：o1 已经展示了强化学习和推理时计算扩展的潜力，R1 则通过自己的训练方案，在多项推理任务上达到了相近水平。<strong>这是能力上的对标，不能直接等同于对 o1 训练方法的复现。</strong></p>
+<p>R1 的贡献主要体现在已有技术的有效组合与规模化验证：MoE 和 MLA 提供高效底座，R1-Zero 探索直接通过强化学习改善推理行为，正式版再通过多阶段训练兼顾推理能力与可用性。它表明，强预训练模型之外，任务设计、奖励反馈和数据质量同样能够显著影响模型表现。</p>
+<p><strong>开放则进一步放大了这次技术实践的影响。</strong> 权重、技术报告和蒸馏模型，让接近当时领先水平的推理能力进入可部署、可检验、可继续研究的开放生态。虽然首发没有公开完整训练数据和端到端训练代码，但它为更多团队提供了参与的基础。R1 留下的重要启示是：模型发展的竞争不仅在于能力上限，也在于能否让这些能力以可接受的成本被广泛使用和持续改进。</p>
+<hr>
+<p><strong>主要参考资料</strong></p>
+<ul>
+<li><a href="https://arxiv.org/html/2501.12948v1" target="_blank" rel="external">DeepSeek-R1 原始论文，2025 年 1 月版本</a>：R1-Zero、正式版训练流程与蒸馏。</li>
+<li><a href="https://github.com/deepseek-ai/DeepSeek-R1" target="_blank" rel="external">DeepSeek-R1 官方仓库</a>：模型规格、评测与许可。</li>
+<li><a href="https://arxiv.org/html/2412.19437v1" target="_blank" rel="external">DeepSeek-V3 技术报告</a>：R1 继承的模型底座及训练工程。</li>
+<li><a href="https://arxiv.org/html/2405.04434v5" target="_blank" rel="external">DeepSeek-V2 论文</a>：MLA 与低秩 KV 压缩。</li>
+<li><a href="https://arxiv.org/abs/2401.06066" target="_blank" rel="external">DeepSeekMoE 论文</a>：细粒度专家和共享专家。</li>
+<li><a href="https://arxiv.org/html/2402.03300v3" target="_blank" rel="external">DeepSeekMath 论文</a>：GRPO 的原理与目标函数。</li>
+<li><a href="https://api-docs.deepseek.com/news/news250120/" target="_blank" rel="external">DeepSeek-R1 首发公告</a>：发布时间、开放策略与历史 API 定价。</li>
+<li><a href="https://huggingface.co/blog/open-r1" target="_blank" rel="external">Hugging Face Open-R1</a>：首发开放范围与社区复现行动。</li>
+</ul>
+</div><div class="copyright"><h2 id="版权说明"><a href="#版权说明" title="版权说明" class="headerlink">版权说明</a></h2><p><strong><big><a href="http://matt33.com/copyright/">博客版权说明</a></big></strong></p><p>所有文章以 <strong><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="external">知识共享署名 4.0 国际许可协议 </a></strong>进行授权，转载时请注明原文链接</p></div><div class="weixin"><h2 id="公众号"><a href="#公众号" title="公众号" class="headerlink">公众号</a></h2><p>个人公众号（柳年思水）已经上线，最新文章会同步在公众号发布，欢迎大家关注~</p><p></p><p><img src="/images/wangm92-3.png" style="text-align:center" width="600"></p></div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://matt33.com/2026/07/16/deepseek-r1/" data-id="cmwji5au80000v0lw1mulxyoh" class="article-share-link">分享到</a><div class="tags"><a href="/tags/llm/">llm</a></div><div class="post-nav"><a href="/2026/07/19/ai-data-lake-hudi/" class="pre">数据湖（一）：Hudi 如何管理增量数据</a><a href="/2026/07/15/llm-to-agi/" class="next">LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</a></div><div id="disqus_thread"><div class="btn_click_load"><button class="disqus_click_btn">阅读评论 「请确保 disqus.com 可以正常加载」</button></div><script>var disqus_shortname = 'http-matt33-com';
+var disqus_identifier = '2026/07/16/deepseek-r1/';
+var disqus_title = 'DeepSeek-R1：推理能力如何炼成';
+var disqus_url = 'http://matt33.com/2026/07/16/deepseek-r1/';
+$('.btn_click_load').click(function() {
+  (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+  })();
+  $('.btn_click_load').css('display','none');
+});
+$.ajax({
+  url: 'https://disqus.com/favicon.ico',
+  timeout: 3000,
+  type: 'GET',
+  success: (function() {
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    $('.btn_click_load').css('display','none');
+  })(),
+  error: function() {
+    $('.btn_click_load').css('display','block');
+  }
+});</script><script id="dsq-count-scr" src="//http-matt33-com.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget github-widget"><a href="https://github.com/wangzzu" target="_blank" rel="noopener noreferrer" class="github-profile"><i aria-hidden="true" class="fa fa-github github-icon"></i><span class="github-name">@wangzzu</span></a></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/书屋/">书屋</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/影如人生/">影如人生</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/技术/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/旅行/">旅行</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/转载/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/随笔/">随笔</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/思考/" style="font-size: 15px;">思考</a> <a href="/tags/storm/" style="font-size: 15px;">storm</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/kafka/" style="font-size: 15px;">kafka</a> <a href="/tags/转载/" style="font-size: 15px;">转载</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/maven/" style="font-size: 15px;">maven</a> <a href="/tags/travel/" style="font-size: 15px;">travel</a> <a href="/tags/learn/" style="font-size: 15px;">learn</a> <a href="/tags/bigdata/" style="font-size: 15px;">bigdata</a> <a href="/tags/algorithm/" style="font-size: 15px;">algorithm</a> <a href="/tags/hexo/" style="font-size: 15px;">hexo</a> <a href="/tags/zookeeper/" style="font-size: 15px;">zookeeper</a> <a href="/tags/database/" style="font-size: 15px;">database</a> <a href="/tags/rpc/" style="font-size: 15px;">rpc</a> <a href="/tags/thrift/" style="font-size: 15px;">thrift</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a> <a href="/tags/bug/" style="font-size: 15px;">bug</a> <a href="/tags/mac/" style="font-size: 15px;">mac</a> <a href="/tags/随笔/" style="font-size: 15px;">随笔</a> <a href="/tags/电影随想/" style="font-size: 15px;">电影随想</a> <a href="/tags/web/" style="font-size: 15px;">web</a> <a href="/tags/分布式系统/" style="font-size: 15px;">分布式系统</a> <a href="/tags/bk/" style="font-size: 15px;">bk</a> <a href="/tags/paper/" style="font-size: 15px;">paper</a> <a href="/tags/flink/" style="font-size: 15px;">flink</a> <a href="/tags/calcite/" style="font-size: 15px;">calcite</a> <a href="/tags/system/" style="font-size: 15px;">system</a> <a href="/tags/kubernetes/" style="font-size: 15px;">kubernetes</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/cv/" style="font-size: 15px;">cv</a> <a href="/tags/数据湖/" style="font-size: 15px;">数据湖</a> <a href="/tags/具身智能/" style="font-size: 15px;">具身智能</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2026/08/10/ai-data-lake-iceberg/">数据湖（二）：Iceberg 如何定义表快照</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/08/06/embodied-intelligence-planning-grasping-manipulation/">具身智能（五）：从任务目标到可执行轨迹</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/08/04/embodied-intelligence-perception-state-estimation/">具身智能（四）：从传感器到世界状态</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/31/embodied-intelligence-kinematics-dynamics-control/">具身智能（三）：从目标位姿到关节力矩</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/29/embodied-intelligence-body-spatial-math/">具身智能（二）：机器人如何描述身体与世界</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/21/embodied-intelligence-overview/">具身智能（一）：物理世界中的智能闭环</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/19/ai-data-lake-hudi/">数据湖（一）：Hudi 如何管理增量数据</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/16/deepseek-r1/">DeepSeek-R1：推理能力如何炼成</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/15/llm-to-agi/">LLM 系列 (二十六)：从 LLM 到 AGI，大模型未来会走向哪里</a></li><li class="post-list-item"><a class="post-list-link" href="/2026/07/14/llm-ai-coding/">LLM 系列 (二十五)：AI Coding，大模型如何改变软件开发</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="http://matt33.com/about/" title="个人公众号：柳年思水" target="_blank">个人公众号：柳年思水</a><ul></ul><a href="http://tech.meituan.com/" title="美团点评技术团队" target="_blank">美团点评技术团队</a><ul></ul><a href="http://jm.taobao.org/" title="阿里中间件团队博客" target="_blank">阿里中间件团队博客</a><ul></ul><a href="http://www.jianshu.com/" title="简书" target="_blank">简书</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">Matt's Blog 柳年思水.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><div class="analytics"><script>var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cspan id='cnzz_stat_icon_1256517224'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s95.cnzz.com/z_stat.php%3Fid%3D1256517224%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></div><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-64518924-1','auto');ga('send','pageview');
+</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "//hm.baidu.com/hm.js?5cf44757fa0d23bc7637935e44a9104a";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+  })();
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
